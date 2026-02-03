@@ -1,0 +1,28 @@
+.notification-popover {
+  width: 360px;
+  max-height: 420px;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.notification-popover__header {
+  padding: 12px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+.notification-popover__list {
+  overflow-y: auto;
+  max-height: 360px;
+}
+
+.notification-popover__row {
+  border-radius: 0;
+}

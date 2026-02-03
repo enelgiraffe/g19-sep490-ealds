@@ -1,0 +1,17 @@
+.asset-status-chart {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #f0f0f0;
+}
+
+.asset-status-chart__title {
+  margin-bottom: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.asset-status-chart__wrapper {
+  min-height: 280px;
+}
