@@ -1,0 +1,6 @@
+@g19_sep490_ealds.Server_HostAddress = http://localhost:5118
+
+GET {{g19_sep490_ealds.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
