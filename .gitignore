@@ -159,3 +159,6 @@ $RECYCLE.BIN/
 
 # Ignore local development config (contains DB connection string)
 appsettings.Development.json
+
+bin/
+obj/
