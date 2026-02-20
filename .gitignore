@@ -156,3 +156,6 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+
+# Ignore local development config (contains DB connection string)
+appsettings.Development.json

@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("g19-sep490-ealds.Server")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+29f556956fee97898a6d68a026582cac3096ccb7")]
 [assembly: System.Reflection.AssemblyProductAttribute("g19-sep490-ealds.Server")]
 [assembly: System.Reflection.AssemblyTitleAttribute("g19-sep490-ealds.Server")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
