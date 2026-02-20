@@ -6,7 +6,7 @@ public class AcceptanceRecordDTO
 {
     public int AcceptanceId { get; set; }
 
-    public int ProcurementId { get; set; }
+    public int ProcurementId { get; set; } 
 
     public DateTime AcceptanceDate { get; set; }
 
