@@ -1,0 +1,81 @@
+using System;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using g19_sep490_ealds.Server.Models;
+using g19_sep490_ealds.Server.Models.DTOs;
+
+namespace g19_sep490_ealds.Server.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class RepairRequestsController : ControllerBase
+{
+    private readonly EaldsDbContext _db;
+
+    public RepairRequestsController(EaldsDbContext db)
+    {
+        _db = db;
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> CreateRepairRequest([FromBody] RepairRequestDTO dto)
+    {
+        if (dto == null)
+            return BadRequest("Request body is required.");
+
+        if (string.IsNullOrWhiteSpace(dto.Reason))
+            return BadRequest("Reason is required.");
+
+        var title = dto.Title ?? $"Repair request for asset {dto.AssetId}";
+
+        var assetRequest = new AssetRequest
+        {
+            UserId = dto.CreatedBy,
+            RequestTypeId = dto.RequestTypeId,
+            AssetId = dto.AssetId,
+            Title = title,
+            Description = dto.Description ?? dto.Reason,
+            ProposedData = null,
+            Status = 0,
+            CreatedBy = dto.CreatedBy,
+            CreateDate = DateTime.UtcNow,
+            StepId = 0
+        };
+
+        _db.AssetRequests.Add(assetRequest);
+        await _db.SaveChangesAsync();
+
+        var repairTask = new RepairTask
+        {
+            AssetRequestId = assetRequest.AssetRequestId,
+            AssetId = dto.AssetId,
+            EstimatedCost = dto.EstimatedCost,
+            Reason = dto.Reason,
+            Status = 0
+        };
+
+        _db.RepairTasks.Add(repairTask);
+
+        var userRole = await _db.UserRoles.AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.CreatedBy);
+        var actionRoleId = userRole?.RoleId ?? 1;
+
+        var record = new AssetRequestRecord
+        {
+            AssetRequestId = assetRequest.AssetRequestId,
+            FromStatus = 0,
+            ToStatus = 0,
+            Action = 0,
+            ActionByUserId = dto.CreatedBy,
+            ActionRoleId = actionRoleId,
+            Comment = "Repair requested",
+            OccurredAt = DateTime.UtcNow
+        };
+
+        _db.AssetRequestRecords.Add(record);
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new { assetRequest.AssetRequestId, repairTask.TaskId });
+    }
+}
