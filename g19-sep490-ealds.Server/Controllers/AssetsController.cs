@@ -1,0 +1,191 @@
+using g19_sep490_ealds.Server.Models;
+using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace g19_sep490_ealds.Server.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class AssetsController : ControllerBase
+{
+    private readonly EaldsDbContext _context;
+
+    public AssetsController(EaldsDbContext context)
+    {
+        _context = context;
+    }
+
+    /// <summary>
+    /// GET /api/assets - Get all assets
+    /// </summary>
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<AssetResponseDTO>>> GetAll()
+    {
+        var assets = await _context.Assets
+            .Include(a => a.AssetType)
+            .Include(a => a.Warehouse)
+            .AsNoTracking()
+            .Select(a => ToResponseDTO(a))
+            .ToListAsync();
+        return Ok(assets);
+    }
+
+    /// <summary>
+    /// GET /api/assets/{id} - Get asset by id
+    /// </summary>
+    [HttpGet("{id:int}")]
+    public async Task<ActionResult<AssetResponseDTO>> GetById(int id)
+    {
+        var asset = await _context.Assets
+            .Include(a => a.AssetType)
+            .Include(a => a.Warehouse)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.AssetId == id);
+        if (asset == null)
+            return NotFound();
+        return Ok(ToResponseDTO(asset));
+    }
+
+    /// <summary>
+    /// POST /api/assets - Create asset with General info and Depreciation settings
+    /// </summary>
+    [HttpPost]
+    public async Task<ActionResult<AssetResponseDTO>> Create([FromBody] CreateAssetDTO dto)
+    {
+        if (await _context.Assets.AnyAsync(a => a.Code == dto.Code))
+            return BadRequest(new { message = "Asset code already exists." });
+
+        var asset = new Asset
+        {
+            Code = dto.Code,
+            Name = dto.Name,
+            AssetTypeId = dto.AssetTypeId,
+            PurchaseDate = dto.PurchaseDate,
+            OriginalPrice = dto.OriginalPrice,
+            CurrentValue = dto.CurrentValue,
+            Status = (int)AssetStatus.Available,
+            WarrantyEndDate = dto.WarrantyEndDate,
+            InUseDate = dto.InUseDate,
+            Unit = dto.Unit,
+            Quantity = dto.Quantity,
+            WarehouseId = dto.WarehouseId,
+            CreatedBy = dto.CreatedBy
+        };
+
+        _context.Assets.Add(asset);
+        await _context.SaveChangesAsync();
+
+        // Depreciation settings: link asset to policy via initial DrepreciationRecord
+        if (dto.DepreciationPolicyId.HasValue)
+        {
+            var policy = await _context.DepreciationPolicies.FindAsync(dto.DepreciationPolicyId.Value);
+            if (policy != null)
+            {
+                var firstPeriod = new DateOnly(dto.PurchaseDate.Year, dto.PurchaseDate.Month, 1);
+                var depRecord = new DrepreciationRecord
+                {
+                    AssetId = asset.AssetId,
+                    PolicyId = policy.PolicyId,
+                    Period = firstPeriod,
+                    DepreciationAmount = 0,
+                    AccumulatedDepreciation = 0,
+                    RemainingValue = dto.CurrentValue,
+                    CreateDate = DateTime.UtcNow
+                };
+                _context.DrepreciationRecords.Add(depRecord);
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        await _context.Entry(asset)
+            .Reference(a => a.AssetType).LoadAsync();
+        await _context.Entry(asset)
+            .Reference(a => a.Warehouse).LoadAsync();
+
+        return CreatedAtAction(nameof(GetById), new { id = asset.AssetId }, ToResponseDTO(asset));
+    }
+
+    /// <summary>
+    /// PUT /api/assets/{id} - Update asset data and status
+    /// </summary>
+    [HttpPut("{id:int}")]
+    public async Task<ActionResult<AssetResponseDTO>> Update(int id, [FromBody] UpdateAssetDTO dto)
+    {
+        var asset = await _context.Assets.FindAsync(id);
+        if (asset == null)
+            return NotFound();
+
+        if (dto.Code != null) asset.Code = dto.Code;
+        if (dto.Name != null) asset.Name = dto.Name;
+        if (dto.AssetTypeId.HasValue) asset.AssetTypeId = dto.AssetTypeId.Value;
+        if (dto.PurchaseDate.HasValue) asset.PurchaseDate = dto.PurchaseDate.Value;
+        if (dto.OriginalPrice.HasValue) asset.OriginalPrice = dto.OriginalPrice.Value;
+        if (dto.CurrentValue.HasValue) asset.CurrentValue = dto.CurrentValue.Value;
+        if (dto.Status.HasValue) asset.Status = (int)dto.Status.Value;
+        if (dto.WarrantyEndDate.HasValue) asset.WarrantyEndDate = dto.WarrantyEndDate;
+        if (dto.InUseDate.HasValue) asset.InUseDate = dto.InUseDate;
+        if (dto.Unit != null) asset.Unit = dto.Unit;
+        if (dto.Quantity.HasValue) asset.Quantity = dto.Quantity.Value;
+        if (dto.WarehouseId.HasValue) asset.WarehouseId = dto.WarehouseId.Value;
+
+        await _context.SaveChangesAsync();
+
+        await _context.Entry(asset)
+            .Reference(a => a.AssetType).LoadAsync();
+        await _context.Entry(asset)
+            .Reference(a => a.Warehouse).LoadAsync();
+
+        return Ok(ToResponseDTO(asset));
+    }
+
+    /// <summary>
+    /// DELETE /api/assets/{id} - Set asset status to Disposed, Lost, or Liquidated (soft delete)
+    /// </summary>
+    [HttpDelete("{id:int}")]
+    public async Task<ActionResult<AssetResponseDTO>> Delete(int id, [FromBody] DeleteAssetDTO dto)
+    {
+        var status = dto.Status;
+        if (status != AssetStatus.Disposed && status != AssetStatus.Lost && status != AssetStatus.Liquidated)
+            return BadRequest(new { message = "Delete must set status to Disposed, Lost, or Liquidated." });
+
+        var asset = await _context.Assets.FindAsync(id);
+        if (asset == null)
+            return NotFound();
+
+        asset.Status = (int)status;
+        await _context.SaveChangesAsync();
+
+        await _context.Entry(asset)
+            .Reference(a => a.AssetType).LoadAsync();
+        await _context.Entry(asset)
+            .Reference(a => a.Warehouse).LoadAsync();
+
+        return Ok(ToResponseDTO(asset));
+    }
+
+    private static AssetResponseDTO ToResponseDTO(Asset a)
+    {
+        return new AssetResponseDTO
+        {
+            AssetId = a.AssetId,
+            Code = a.Code,
+            Name = a.Name,
+            AssetTypeId = a.AssetTypeId,
+            AssetTypeName = a.AssetType?.Name,
+            PurchaseDate = a.PurchaseDate,
+            OriginalPrice = a.OriginalPrice,
+            CurrentValue = a.CurrentValue,
+            Status = (AssetStatus)a.Status,
+            StatusName = ((AssetStatus)a.Status).ToString(),
+            WarrantyEndDate = a.WarrantyEndDate,
+            InUseDate = a.InUseDate,
+            Unit = a.Unit,
+            Quantity = a.Quantity,
+            WarehouseId = a.WarehouseId,
+            WarehouseName = a.Warehouse?.Name,
+            CreatedBy = a.CreatedBy
+        };
+    }
+}

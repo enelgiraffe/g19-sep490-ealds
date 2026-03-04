@@ -91,11 +91,15 @@ public partial class EaldsDbContext : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        if (!optionsBuilder.IsConfigured)
-        {
-            optionsBuilder.UseSqlServer("Name=ConnectionStrings:DefaultConnection");
-        }
-    }
+Console.WriteLine(Directory.GetCurrentDirectory());
+                IConfiguration config = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json", true, true)
+                .Build();
+                var strConn = config["ConnectionStrings:MyCnn"];
+                optionsBuilder.UseSqlServer(strConn); 
+}
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

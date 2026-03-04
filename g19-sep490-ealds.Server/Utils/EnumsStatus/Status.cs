@@ -1,4 +1,4 @@
-﻿namespace g19_sep490_ealds.Server.Utils.EnumsStatus;
+namespace g19_sep490_ealds.Server.Utils.EnumsStatus;
 
 public enum AcceptanceRecordStatus
 {
@@ -7,4 +7,15 @@ public enum AcceptanceRecordStatus
     Rejected = 2,
     Cancelled = 3,
     Funding = 4
+}
+
+public enum AssetStatus
+{
+    Available = 0,
+    InUse = 1,
+    InMaintenance = 2,
+    Reserved = 3,
+    Disposed = 4,
+    Lost = 5,
+    Liquidated = 6
 }
