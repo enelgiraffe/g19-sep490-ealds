@@ -21,7 +21,8 @@ public class EmailService : IEmailService
         var port = int.Parse(_configuration["Smtp:Port"] ?? "587");
         var useSsl = bool.Parse(_configuration["Smtp:UseSsl"] ?? "false");
         var username = _configuration["Smtp:Username"] ?? throw new InvalidOperationException("SMTP Username is not configured.");
-        var password = _configuration["Smtp:Password"] ?? throw new InvalidOperationException("SMTP Password is not configured.");
+        // Gmail App Passwords are shown with spaces (e.g. "rwck sjze lvpo kkeh") but must be sent without them
+        var password = (_configuration["Smtp:Password"] ?? throw new InvalidOperationException("SMTP Password is not configured.")).Replace(" ", "");
         var fromName = _configuration["Smtp:FromName"] ?? "EALDS System";
         var fromAddress = _configuration["Smtp:FromAddress"] ?? username;
 
@@ -38,6 +39,7 @@ public class EmailService : IEmailService
         };
 
         using var client = new SmtpClient();
+        client.CheckCertificateRevocation = false;
         await client.ConnectAsync(host, port, useSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls);
         await client.AuthenticateAsync(username, password);
         await client.SendAsync(message);

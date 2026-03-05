@@ -17,13 +17,17 @@ public class AuthController : ControllerBase
     private readonly ITokenService _tokenService;
     private readonly IConfiguration _configuration;
     private readonly IEmailService _emailService;
+    private readonly IWebHostEnvironment _env;
+    private readonly ILogger<AuthController> _logger;
 
-    public AuthController(EaldsDbContext context, ITokenService tokenService, IConfiguration configuration, IEmailService emailService)
+    public AuthController(EaldsDbContext context, ITokenService tokenService, IConfiguration configuration, IEmailService emailService, IWebHostEnvironment env, ILogger<AuthController> logger)
     {
         _context = context;
         _tokenService = tokenService;
         _configuration = configuration;
         _emailService = emailService;
+        _env = env;
+        _logger = logger;
     }
 
     [HttpPost("login")]
@@ -127,9 +131,10 @@ public class AuthController : ControllerBase
             }
             catch (Exception ex)
             {
-                // Log but do not expose the error to the caller
-                var logger = HttpContext.RequestServices.GetRequiredService<ILogger<AuthController>>();
-                logger.LogError(ex, "Failed to send password reset email to {Email}", user.Email);
+                _logger.LogError(ex, "Failed to send password reset email to {Email}", user.Email);
+
+                if (_env.IsDevelopment())
+                    return StatusCode(500, new { message = "Gửi email thất bại.", error = ex.Message, detail = ex.InnerException?.Message });
             }
         }
 
