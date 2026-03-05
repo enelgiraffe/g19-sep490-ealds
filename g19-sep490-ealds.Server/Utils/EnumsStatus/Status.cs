@@ -8,3 +8,22 @@ public enum AcceptanceRecordStatus
     Cancelled = 3,
     Funding = 4
 }
+
+public enum AssetStatus
+{
+    Draft = 0,
+    Purchased = 1,
+    ReadyForUse = 2,
+    Capitalized = 3,
+    Disposed = 4
+}
+
+public enum AssetLifeActionType
+{
+    Created = 1,
+    StatusChanged = 2,
+    Capitalized = 3,
+    Transferred = 4,
+    Repaired = 5,
+    Disposed = 6
+}
