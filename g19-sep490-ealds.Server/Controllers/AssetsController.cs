@@ -18,17 +18,76 @@ public class AssetsController : ControllerBase
     }
 
     /// <summary>
-    /// GET /api/assets - Get all assets
+    /// GET /api/assets - Get all assets with optional search and filter
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<AssetResponseDTO>>> GetAll()
+    public async Task<ActionResult<IEnumerable<AssetResponseDTO>>> GetAll(
+        [FromQuery] string? keyword,
+        [FromQuery] AssetStatus? status,
+        [FromQuery] int? assetTypeId,
+        [FromQuery] int? warehouseId,
+        [FromQuery] decimal? minPrice,
+        [FromQuery] decimal? maxPrice,
+        [FromQuery] DateOnly? fromDate,
+        [FromQuery] DateOnly? toDate)
     {
-        var assets = await _context.Assets
+        var query = _context.Assets
             .Include(a => a.AssetType)
             .Include(a => a.Warehouse)
             .AsNoTracking()
+            .AsQueryable();
+
+        // Keyword search: search in code and name
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var kw = keyword.Trim().ToLower();
+            query = query.Where(a =>
+                a.Code.ToLower().Contains(kw) ||
+                a.Name.ToLower().Contains(kw));
+        }
+
+        // Filter by status
+        if (status.HasValue)
+        {
+            query = query.Where(a => a.Status == (int)status.Value);
+        }
+
+        // Filter by asset type
+        if (assetTypeId.HasValue)
+        {
+            query = query.Where(a => a.AssetTypeId == assetTypeId.Value);
+        }
+
+        // Filter by warehouse
+        if (warehouseId.HasValue)
+        {
+            query = query.Where(a => a.WarehouseId == warehouseId.Value);
+        }
+
+        // Filter by price range
+        if (minPrice.HasValue)
+        {
+            query = query.Where(a => a.CurrentValue >= minPrice.Value);
+        }
+        if (maxPrice.HasValue)
+        {
+            query = query.Where(a => a.CurrentValue <= maxPrice.Value);
+        }
+
+        // Filter by purchase date range
+        if (fromDate.HasValue)
+        {
+            query = query.Where(a => a.PurchaseDate >= fromDate.Value);
+        }
+        if (toDate.HasValue)
+        {
+            query = query.Where(a => a.PurchaseDate <= toDate.Value);
+        }
+
+        var assets = await query
             .Select(a => ToResponseDTO(a))
             .ToListAsync();
+
         return Ok(assets);
     }
 
