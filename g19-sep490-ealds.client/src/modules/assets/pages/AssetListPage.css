@@ -1,0 +1,269 @@
+.asset-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+}
+
+.asset-page__title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.asset-card {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 24px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+  padding: 24px 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.asset-card__header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.asset-card__search-group {
+  flex: 1;
+}
+
+.asset-search-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  font-size: 14px;
+  outline: none;
+}
+
+.asset-search-input::placeholder {
+  color: #9ca3af;
+}
+
+.asset-search-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
+}
+
+.asset-card__filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.asset-filter-select {
+  min-width: 130px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  padding: 8px 12px;
+  font-size: 13px;
+  background-color: #f9fafb;
+}
+
+.asset-filter-reset {
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.asset-filter-settings {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.asset-table-wrapper {
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
+.asset-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.asset-table thead {
+  background: #f9fafb;
+}
+
+.asset-table th,
+.asset-table td {
+  padding: 10px 16px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.asset-table th {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+}
+
+.asset-table tbody tr:nth-child(even) {
+  background: #fcfcfc;
+}
+
+.asset-table__cell--checkbox {
+  width: 40px;
+}
+
+.asset-table__cell--actions {
+  width: 40px;
+  text-align: right;
+}
+
+.asset-code {
+  font-weight: 600;
+}
+
+.asset-code--link {
+  color: #FE3720;
+  cursor: pointer;
+}
+
+.asset-align-right {
+  text-align: right;
+}
+
+.asset-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 110px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.asset-status-pill--active {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.asset-status-pill--inactive {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.asset-row__more {
+  position: relative;
+  display: inline-block;
+}
+
+.asset-row__more-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0;
+}
+
+.asset-row-menu {
+  position: absolute;
+  right: 0;
+  top: 30px;
+  width: 190px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+  padding: 6px 0;
+  z-index: 20;
+}
+
+.asset-row-menu__item {
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #111827;
+  cursor: pointer;
+}
+
+.asset-row-menu__item:hover {
+  background: #f3f4f6;
+}
+
+.asset-row-menu__item--danger {
+  color: #FE3720;
+}
+
+.asset-row-menu__icon {
+  width: 18px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.asset-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.asset-footer__select {
+  margin-left: 4px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  padding: 4px 8px;
+}
+
+.asset-footer__right {
+  display: flex;
+  gap: 4px;
+}
+
+.asset-footer__pager {
+  min-width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.asset-footer__pager--active {
+  background: #111827;
+  color: #ffffff;
+  border-color: #111827;
+}
+
+.asset-footer__pager:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+

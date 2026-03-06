@@ -1,0 +1,242 @@
+.mark-damaged-modal .ant-modal-content {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.mark-damaged-modal .ant-modal-body {
+  padding: 0;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.mark-damaged-modal__close {
+  font-size: 24px;
+  color: #FE3720;
+  font-weight: 300;
+}
+
+.mark-damaged-modal__header {
+  background: #ffe5e0;
+  padding: 16px 24px;
+  border-bottom: 1px solid #ffd4cc;
+}
+
+.mark-damaged-modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #FE3720;
+}
+
+.mark-damaged-modal__content {
+  padding: 24px;
+}
+
+.mark-damaged-form__item {
+  margin-bottom: 24px;
+}
+
+.mark-damaged-form__item label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.mark-damaged-input--disabled {
+  background: #f3f4f6;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+.mark-damaged-info-section {
+  margin-bottom: 24px;
+}
+
+.mark-damaged-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 16px;
+}
+
+.mark-damaged-info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mark-damaged-info-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.mark-damaged-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mark-damaged-info-item label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.mark-damaged-info-value {
+  font-size: 14px;
+  color: #111827;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.mark-damaged-form-section {
+  margin-bottom: 24px;
+}
+
+.mark-damaged-form-section .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.mark-damaged-form-section .ant-form-item-label > label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.mark-damaged-form-section .ant-picker,
+.mark-damaged-form-section .ant-input-textarea {
+  border-radius: 6px;
+  border-color: #e5e7eb;
+}
+
+.mark-damaged-attachments-section {
+  margin-top: 20px;
+}
+
+.mark-damaged-attachments-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 12px;
+}
+
+.mark-damaged-attachments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.mark-damaged-attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.mark-damaged-attachment-number {
+  color: #6b7280;
+  font-size: 13px;
+  min-width: 24px;
+}
+
+.mark-damaged-attachment-name {
+  flex: 1;
+  color: #111827;
+  font-size: 14px;
+}
+
+.mark-damaged-attachment-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.mark-damaged-attachment-actions .ant-btn-text {
+  padding: 4px 8px;
+  color: #6b7280;
+}
+
+.mark-damaged-attachment-actions .ant-btn-text:hover {
+  color: #111827;
+  background: #e5e7eb;
+}
+
+.mark-damaged-attachment-actions .ant-btn-dangerous:hover {
+  color: #FE3720;
+  background: #fee2e2;
+}
+
+.mark-damaged-btn-upload {
+  background: #10b981;
+  border-color: #10b981;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+}
+
+.mark-damaged-btn-upload:hover {
+  background: #059669;
+  border-color: #059669;
+  color: #fff;
+}
+
+.mark-damaged-modal__footer {
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  justify-content: flex-end;
+}
+
+.mark-damaged-btn-submit {
+  background: #FE3720;
+  border-color: #FE3720;
+  height: 40px;
+  padding: 0 32px;
+}
+
+.mark-damaged-btn-submit:hover {
+  background: #e5321c;
+  border-color: #e5321c;
+}
+
+.mark-damaged-btn-draft {
+  background: #6b7280;
+  border-color: #6b7280;
+  color: #fff;
+  height: 40px;
+  padding: 0 32px;
+}
+
+.mark-damaged-btn-draft:hover {
+  background: #4b5563;
+  border-color: #4b5563;
+  color: #fff;
+}
+
+/* Scrollbar styling */
+.mark-damaged-modal .ant-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.mark-damaged-modal .ant-modal-body::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.mark-damaged-modal .ant-modal-body::-webkit-scrollbar-thumb {
+  background: #919EAB;
+  border-radius: 3px;
+}
+
+.mark-damaged-modal .ant-modal-body::-webkit-scrollbar-thumb:hover {
+  background: #7a8693;
+}

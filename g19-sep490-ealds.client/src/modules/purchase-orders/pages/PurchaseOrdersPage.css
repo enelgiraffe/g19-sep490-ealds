@@ -1,0 +1,164 @@
+.purchase-orders-page {
+  padding: 24px;
+  background: #fff;
+  min-height: 100vh;
+}
+
+.purchase-orders-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.purchase-orders-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.purchase-orders-btn-add {
+  background: #FE3720;
+  border-color: #FE3720;
+  font-size: 14px;
+  font-weight: 500;
+  height: 40px;
+  padding: 0 24px;
+}
+
+.purchase-orders-btn-add:hover {
+  background: #e5321c;
+  border-color: #e5321c;
+}
+
+.purchase-orders-filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.purchase-orders-search {
+  width: 280px;
+  height: 40px;
+}
+
+.purchase-orders-select {
+  min-width: 180px;
+  height: 40px;
+}
+
+.purchase-orders-select .ant-select-selector {
+  height: 40px !important;
+  align-items: center;
+}
+
+.purchase-orders-filter-advanced,
+.purchase-orders-settings {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.purchase-orders-table-container {
+  background: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.purchase-orders-table {
+  font-size: 14px;
+}
+
+.purchase-orders-table .ant-table {
+  background: #ffffff;
+}
+
+.purchase-orders-table .ant-table-thead > tr > th {
+  background: #f9fafb;
+  color: #6b7280;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.purchase-orders-table .ant-table-tbody > tr > td {
+  padding: 16px;
+  color: #111827;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.purchase-orders-table .ant-table-tbody > tr:hover > td {
+  background: #fcfcfc;
+}
+
+.purchase-orders-status-tag {
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+}
+
+.purchase-orders-status-tag.ant-tag-success {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.purchase-orders-status-tag.ant-tag-error {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.purchase-orders-status-tag.ant-tag-warning {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.purchase-orders-status-tag.ant-tag-default {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.purchase-orders-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+.purchase-orders-actions .ant-btn-text {
+  color: #6b7280;
+  padding: 4px 8px;
+}
+
+.purchase-orders-actions .ant-btn-text:hover {
+  color: #111827;
+  background: #f3f4f6;
+}
+
+.purchase-orders-actions .ant-btn-text.ant-btn-dangerous:hover {
+  color: #FE3720;
+  background: #fee2e2;
+}
+
+.purchase-orders-pagination {
+  margin-top: 16px;
+  padding: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.purchase-orders-pagination .ant-pagination-total-text {
+  flex: 1;
+  color: #6b7280;
+}
+
+.purchase-orders-pagination .ant-pagination-options {
+  color: #6b7280;
+}

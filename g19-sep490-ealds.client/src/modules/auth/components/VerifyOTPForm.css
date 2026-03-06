@@ -24,7 +24,7 @@
 .verify-otp-logo .logo-text {
   font-size: 18px;
   font-weight: 700;
-  color: #DC143C;
+  color: #FE3720;
   letter-spacing: 1px;
   text-transform: uppercase;
 }
@@ -76,18 +76,18 @@
 }
 
 .otp-input:hover {
-  border-color: #DC143C;
+  border-color: #FE3720;
 }
 
 .otp-input:focus,
 .otp-input.ant-input-focused {
-  border-color: #DC143C;
+  border-color: #FE3720;
   box-shadow: 0 0 0 2px rgba(220, 20, 60, 0.1);
 }
 
 .verify-otp-button {
-  background-color: #DC143C;
-  border-color: #DC143C;
+  background-color: #FE3720;
+  border-color: #FE3720;
   border-radius: 8px;
   height: 48px;
   font-size: 16px;
@@ -96,13 +96,13 @@
 }
 
 .verify-otp-button:hover:not(:disabled) {
-  background-color: #b8122e;
-  border-color: #b8122e;
+  background-color: #e5321c;
+  border-color: #e5321c;
 }
 
 .verify-otp-button:focus {
-  background-color: #DC143C;
-  border-color: #DC143C;
+  background-color: #FE3720;
+  border-color: #FE3720;
 }
 
 .verify-otp-button:disabled {
@@ -122,14 +122,14 @@
 }
 
 .resend-otp-link {
-  color: #DC143C;
+  color: #FE3720;
   font-size: 14px;
   font-weight: 600;
   text-decoration: none;
 }
 
 .resend-otp-link:hover {
-  color: #b8122e;
+  color: #e5321c;
   text-decoration: underline;
 }
 
@@ -139,7 +139,7 @@
 }
 
 .back-to-login-link {
-  color: #DC143C;
+  color: #FE3720;
   font-size: 14px;
   text-decoration: none;
   display: inline-flex;
@@ -149,7 +149,7 @@
 }
 
 .back-to-login-link:hover {
-  color: #b8122e;
+  color: #e5321c;
   text-decoration: underline;
 }
 

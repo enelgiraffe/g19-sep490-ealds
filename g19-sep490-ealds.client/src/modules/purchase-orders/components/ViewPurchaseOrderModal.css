@@ -1,0 +1,232 @@
+.view-purchase-modal .ant-modal-content {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.view-purchase-modal .ant-modal-body {
+  padding: 0;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.view-purchase-modal__header {
+  background: #ffe5e0;
+  padding: 16px 24px;
+  border-bottom: 1px solid #ffd4cc;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.view-purchase-modal__header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.view-purchase-modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #FE3720;
+}
+
+.view-purchase-status-tag {
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+}
+
+.view-purchase-status-tag.ant-tag-success {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.view-purchase-status-tag.ant-tag-warning {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.view-purchase-modal__content {
+  padding: 24px;
+}
+
+.view-purchase-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.view-purchase-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.view-purchase-form__field label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.view-purchase-form__value {
+  background: #f3f4f6;
+  padding: 10px 12px;
+  border-radius: 6px;
+  color: #111827;
+  font-size: 14px;
+}
+
+.view-purchase-form__section {
+  margin-bottom: 20px;
+}
+
+.view-purchase-form__section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 12px;
+}
+
+.view-purchase-equipment-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.view-purchase-equipment-table thead th {
+  background: #f9fafb;
+  color: #6b7280;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 12px 8px;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.view-purchase-equipment-table tbody td {
+  padding: 12px 8px;
+  color: #111827;
+  font-size: 14px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.view-purchase-equipment-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.view-purchase-equipment-total {
+  background: #f9fafb;
+  font-weight: 600;
+}
+
+.view-purchase-equipment-price {
+  text-align: right;
+}
+
+.view-purchase-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.view-purchase-attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.view-purchase-attachment-number {
+  color: #6b7280;
+  font-size: 13px;
+  min-width: 24px;
+}
+
+.view-purchase-attachment-name {
+  flex: 1;
+  color: #111827;
+  font-size: 14px;
+}
+
+.view-purchase-attachment-download {
+  color: #6b7280;
+  padding: 4px 8px;
+}
+
+.view-purchase-attachment-download:hover {
+  color: #111827;
+  background: #e5e7eb;
+}
+
+.view-purchase-feedback-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.view-purchase-feedback-box label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.view-purchase-feedback-content {
+  background: #f9fafb;
+  padding: 12px;
+  border-radius: 6px;
+  color: #111827;
+  font-size: 14px;
+  min-height: 60px;
+  border: 1px solid #e5e7eb;
+}
+
+.view-purchase-modal__footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.view-purchase-btn-close {
+  background: #6b7280;
+  border-color: #6b7280;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 24px;
+}
+
+.view-purchase-btn-close:hover {
+  background: #4b5563;
+  border-color: #4b5563;
+  color: #fff;
+}
+
+/* Scrollbar styling */
+.view-purchase-modal .ant-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.view-purchase-modal .ant-modal-body::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.view-purchase-modal .ant-modal-body::-webkit-scrollbar-thumb {
+  background: #919EAB;
+  border-radius: 3px;
+}
+
+.view-purchase-modal .ant-modal-body::-webkit-scrollbar-thumb:hover {
+  background: #7a8693;
+}

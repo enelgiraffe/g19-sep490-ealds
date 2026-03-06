@@ -1,0 +1,254 @@
+.create-purchase-modal {
+  top: 20px;
+}
+
+.create-purchase-modal .ant-modal-content {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.create-purchase-modal .ant-modal-body {
+  padding: 0;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.create-purchase-modal__close {
+  font-size: 24px;
+  color: #FE3720;
+  font-weight: 300;
+}
+
+.create-purchase-modal__header {
+  background: #ffe5e0;
+  padding: 16px 24px;
+  border-bottom: 1px solid #ffd4cc;
+}
+
+.create-purchase-modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #FE3720;
+}
+
+.create-purchase-form {
+  padding: 24px;
+}
+
+.create-purchase-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 0;
+}
+
+.create-purchase-form__item {
+  margin-bottom: 16px;
+}
+
+.create-purchase-form__item-full {
+  margin-bottom: 16px;
+}
+
+.create-purchase-form__item label,
+.create-purchase-form__item-full label {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.create-purchase-form__item .ant-input,
+.create-purchase-form__item .ant-select-selector,
+.create-purchase-form__item .ant-picker,
+.create-purchase-form__item-full .ant-input-textarea {
+  border-radius: 6px;
+  border-color: #e5e7eb;
+}
+
+.create-purchase-form__item .ant-input[disabled] {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.create-purchase-form__section {
+  margin-bottom: 24px;
+}
+
+.create-purchase-form__section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 12px;
+}
+
+.create-purchase-equipment-table .ant-table {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.create-purchase-equipment-table .ant-table-thead > tr > th {
+  background: #f9fafb;
+  color: #6b7280;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 12px 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.create-purchase-equipment-table .ant-table-tbody > tr > td {
+  padding: 8px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.create-purchase-equipment-table .ant-table-summary > tr > td {
+  padding: 12px 8px;
+  background: #f9fafb;
+  font-weight: 600;
+}
+
+.create-purchase-equipment-total {
+  font-size: 14px;
+  color: #111827;
+}
+
+.create-purchase-equipment-total-value {
+  font-size: 14px;
+  color: #111827;
+  font-weight: 600;
+}
+
+.create-purchase-btn-add-equipment {
+  margin-top: 12px;
+  border-color: #e5e7eb;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.create-purchase-btn-add-equipment:hover {
+  border-color: #FE3720;
+  color: #FE3720;
+}
+
+.create-purchase-attachments {
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.create-purchase-attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.create-purchase-attachment-item span:first-child {
+  color: #6b7280;
+  font-size: 13px;
+  min-width: 24px;
+}
+
+.create-purchase-attachment-item span:nth-child(2) {
+  flex: 1;
+  color: #111827;
+  font-size: 14px;
+}
+
+.create-purchase-attachment-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.create-purchase-attachment-actions .ant-btn-text {
+  padding: 4px 8px;
+  color: #6b7280;
+}
+
+.create-purchase-attachment-actions .ant-btn-text:hover {
+  color: #111827;
+  background: #e5e7eb;
+}
+
+.create-purchase-attachment-actions .ant-btn-dangerous:hover {
+  color: #FE3720;
+  background: #fee2e2;
+}
+
+.create-purchase-btn-upload {
+  background: #FE3720;
+  color: #fff;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.create-purchase-btn-upload:hover {
+  background: #e5321c;
+  color: #fff;
+}
+
+.create-purchase-modal__footer {
+  display: flex;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.create-purchase-btn-submit {
+  background: #FE3720;
+  border-color: #FE3720;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 24px;
+}
+
+.create-purchase-btn-submit:hover {
+  background: #e5321c;
+  border-color: #e5321c;
+}
+
+.create-purchase-btn-draft {
+  background: #919EAB;
+  border-color: #919EAB;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 24px;
+}
+
+.create-purchase-btn-draft:hover {
+  background: #7a8693;
+  border-color: #7a8693;
+  color: #fff;
+}
+
+/* Scrollbar styling */
+.create-purchase-modal .ant-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.create-purchase-modal .ant-modal-body::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.create-purchase-modal .ant-modal-body::-webkit-scrollbar-thumb {
+  background: #919EAB;
+  border-radius: 3px;
+}
+
+.create-purchase-modal .ant-modal-body::-webkit-scrollbar-thumb:hover {
+  background: #7a8693;
+}

@@ -8,12 +8,20 @@ import { NotificationsPage } from './modules/notifications/pages/NotificationsPa
 import { LoginPage } from './modules/auth/pages/LoginPage';
 import { ForgotPasswordPage } from './modules/auth/pages/ForgotPasswordPage';
 import { VerifyOTPPage } from './modules/auth/pages/VerifyOTPPage';
+import { AssetListPage } from './modules/assets/pages/AssetListPage';
+import { AssetDetailPage } from './modules/assets/pages/AssetDetailPage';
+import { ProfilePage } from './modules/profile/pages/ProfilePage';
+import { PurchaseOrdersPage } from './modules/purchase-orders/pages/PurchaseOrdersPage';
+import { AccountantAssetListPage } from './modules/accountant/pages/AccountantAssetListPage';
 import './App.css';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Asset detail – full page, không dùng AppLayout */}
+        <Route path="/assets/:id" element={<AssetDetailPage />} />
+
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/verify-otp" element={<VerifyOTPPage />} />
@@ -21,9 +29,11 @@ function App() {
           <Route index element={<HomePlaceholder />} />
           {/* Common */}
           <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="profile" element={<ProfilePage />} />
           {/* Department head, Accountant, Director */}
-          <Route path="assets" element={<ModulePlaceholder title="Tài sản" />} />
-          <Route path="purchase-orders" element={<ModulePlaceholder title="Đơn mua" />} />
+          <Route path="assets" element={<AssetListPage />} />
+          <Route path="accountant-assets" element={<AccountantAssetListPage />} />
+          <Route path="purchase-orders" element={<PurchaseOrdersPage />} />
           <Route path="transfers" element={<ModulePlaceholder title="Điều chuyển" />} />
           <Route path="repairs" element={<ModulePlaceholder title="Sửa chữa" />} />
           <Route path="maintenance" element={<ModulePlaceholder title="Bảo trì" />} />

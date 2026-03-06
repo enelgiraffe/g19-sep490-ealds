@@ -24,7 +24,7 @@
 .logo-text {
   font-size: 18px;
   font-weight: 700;
-  color: #DC143C;
+  color: #FE3720;
   letter-spacing: 1px;
   text-transform: uppercase;
 }
@@ -55,18 +55,18 @@
 }
 
 .login-input:hover {
-  border-color: #DC143C;
+  border-color: #FE3720;
 }
 
 .login-input:focus,
 .login-input.ant-input-focused {
-  border-color: #DC143C;
+  border-color: #FE3720;
   box-shadow: 0 0 0 2px rgba(220, 20, 60, 0.1);
 }
 
 .login-button {
-  background-color: #DC143C;
-  border-color: #DC143C;
+  background-color: #FE3720;
+  border-color: #FE3720;
   border-radius: 8px;
   height: 48px;
   font-size: 16px;
@@ -75,13 +75,13 @@
 }
 
 .login-button:hover {
-  background-color: #b8122e;
-  border-color: #b8122e;
+  background-color: #e5321c;
+  border-color: #e5321c;
 }
 
 .login-button:focus {
-  background-color: #DC143C;
-  border-color: #DC143C;
+  background-color: #FE3720;
+  border-color: #FE3720;
 }
 
 .forgot-password-item {

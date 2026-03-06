@@ -16,7 +16,8 @@ export const ROLE_MENU: Record<AppRole, SidebarItem[]> = {
     { key: 'liquidation', path: '/liquidation', label: 'Thanh lý' },
   ],
   accountant: [
-    { key: 'assets', path: '/assets', label: 'Tài sản' },
+    // Kế toán dùng màn tài sản riêng
+    { key: 'assets', path: '/accountant-assets', label: 'Tài sản' },
     { key: 'transfers', path: '/transfers', label: 'Điều chuyển' },
     { key: 'allocations', path: '/allocations', label: 'Cấp phát-Thu hồi' },
     { key: 'liquidation', path: '/liquidation', label: 'Thanh lý' },

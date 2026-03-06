@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import { useAppStore } from '../../stores/appStore';
@@ -7,6 +7,7 @@ import type { AppRole } from '../types/layout.types';
 import './Sidebar.css';
 
 export function Sidebar() {
+  const navigate = useNavigate();
   const { currentRole, setCurrentRole } = useAppStore();
   const roleMenu = ROLE_MENU[currentRole];
 
@@ -15,6 +16,22 @@ export function Sidebar() {
     label: opt.label,
     onClick: () => setCurrentRole(opt.value as AppRole),
   }));
+
+  const userDropdownItems: MenuProps['items'] = [
+    {
+      key: 'profile',
+      label: 'Hồ sơ',
+      onClick: () => navigate('/profile'),
+    },
+    {
+      key: 'logout',
+      label: 'Đăng xuất',
+      onClick: () => {
+        // Handle logout logic here
+        navigate('/login');
+      },
+    },
+  ];
 
   const currentRoleLabel = ROLE_OPTIONS.find((o) => o.value === currentRole)?.label ?? currentRole;
 
@@ -62,13 +79,32 @@ export function Sidebar() {
           ))}
         </ul>
       </nav>
-      <Dropdown menu={{ items: roleDropdownItems }} trigger={['click']} placement="topRight">
-        <div className="sidebar__user" role="button" tabIndex={0}>
-          <div className="sidebar__user-avatar">A</div>
-          <span className="sidebar__user-name">{currentRoleLabel}</span>
-          <span className="sidebar__user-chevron">▼</span>
-        </div>
-      </Dropdown>
+      <div className="sidebar__user-section">
+        <Dropdown 
+          menu={{ items: roleDropdownItems }} 
+          trigger={['click']} 
+          placement="topRight"
+          getPopupContainer={(trigger) => trigger.parentElement || document.body}
+        >
+          <div className="sidebar__role-selector" role="button" tabIndex={0}>
+            <span className="sidebar__role-label">Vai trò:</span>
+            <span className="sidebar__role-name">{currentRoleLabel}</span>
+            <span className="sidebar__role-chevron">▼</span>
+          </div>
+        </Dropdown>
+        <Dropdown 
+          menu={{ items: userDropdownItems }} 
+          trigger={['click']} 
+          placement="topRight"
+          getPopupContainer={(trigger) => trigger.parentElement || document.body}
+        >
+          <div className="sidebar__user" role="button" tabIndex={0}>
+            <div className="sidebar__user-avatar">A</div>
+            <span className="sidebar__user-name">{currentRoleLabel}</span>
+            <span className="sidebar__user-chevron">▼</span>
+          </div>
+        </Dropdown>
+      </div>
     </aside>
   );
 }

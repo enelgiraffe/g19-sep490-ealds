@@ -23,7 +23,7 @@
 .sidebar__logo-text {
   font-size: 14px;
   font-weight: 600;
-  color: #c41e3a;
+  color: #FE3720;
   letter-spacing: 0.02em;
 }
 
@@ -63,12 +63,12 @@
 }
 
 .sidebar__link--active {
-  background: #c41e3a;
+  background: #FE3720;
   color: #fff;
 }
 
 .sidebar__link--active:hover {
-  background: #a01830;
+  background: #e5321c;
   color: #fff;
 }
 
@@ -81,14 +81,55 @@
   padding: 0 12px;
 }
 
+.sidebar__user-section {
+  border-top: 1px solid #f0f0f0;
+  background: #fff;
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar__role-selector {
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  position: relative;
+  z-index: 2;
+}
+
+.sidebar__role-selector:hover {
+  background: #f5f5f5;
+}
+
+.sidebar__role-label {
+  font-size: 12px;
+  color: #999;
+}
+
+.sidebar__role-name {
+  flex: 1;
+  font-size: 13px;
+  color: #333;
+  font-weight: 500;
+}
+
+.sidebar__role-chevron {
+  color: #999;
+  font-size: 10px;
+}
+
 .sidebar__user {
   padding: 16px 20px;
-  border-top: 1px solid #f0f0f0;
   display: flex;
   align-items: center;
   gap: 10px;
   background: #fff;
   cursor: pointer;
+  position: relative;
+  z-index: 2;
 }
 
 .sidebar__user:hover {
