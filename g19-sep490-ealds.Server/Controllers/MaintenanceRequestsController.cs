@@ -8,7 +8,7 @@ using g19_sep490_ealds.Server.Models.DTOs;
 namespace g19_sep490_ealds.Server.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/Assets/Requests/maintenance")]
 public class MaintenanceRequestsController : ControllerBase
 {
     private readonly EaldsDbContext _db;
