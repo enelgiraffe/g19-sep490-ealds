@@ -12,6 +12,8 @@ import { VerifyOTPPage } from './modules/auth/pages/VerifyOTPPage';
 import { ProtectedRoute } from './modules/auth/components/ProtectedRoute';
 import { AssetListPage } from './modules/assets/pages/AssetListPage';
 import { AssetDetailPage } from './modules/assets/pages/AssetDetailPage';
+import { AssetCreatePage } from './modules/assets/pages/AssetCreatePage';
+import { AssetEditPage } from './modules/assets/pages/AssetEditPage';
 import { ProfilePage } from './modules/profile/pages/ProfilePage';
 import { PurchaseOrdersPage } from './modules/purchase-orders/pages/PurchaseOrdersPage';
 import { AccountantAssetListPage } from './modules/accountant/pages/AccountantAssetListPage';
@@ -23,6 +25,24 @@ function App() {
       <Routes>
         {/* Asset detail – full page, không dùng AppLayout */}
         <Route path="/assets/:id" element={<AssetDetailPage />} />
+        {/* Asset create – full page, không dùng AppLayout */}
+        <Route
+          path="/assets/new"
+          element={
+            <ProtectedRoute>
+              <AssetCreatePage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Asset edit – full page, không dùng AppLayout */}
+        <Route
+          path="/assets/:id/edit"
+          element={
+            <ProtectedRoute>
+              <AssetEditPage />
+            </ProtectedRoute>
+          }
+        />
 
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />

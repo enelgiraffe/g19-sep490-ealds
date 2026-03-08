@@ -1,13 +1,34 @@
-import { useState } from 'react';
-import { Table, Button, Input, Select, Tag } from 'antd';
-import type { TableColumnsType } from 'antd';
-import { SearchOutlined, FilterOutlined, SettingOutlined, PlusOutlined, DownloadOutlined, MoreOutlined } from '@ant-design/icons';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Table, Button, Input, Select, Tag, Dropdown, Modal, message } from 'antd';
+import type { MenuProps, TableColumnsType } from 'antd';
+import {
+  SearchOutlined,
+  FilterOutlined,
+  SettingOutlined,
+  PlusOutlined,
+  DownloadOutlined,
+  MoreOutlined,
+  SwapOutlined,
+  DollarOutlined,
+  EditOutlined,
+  QrcodeOutlined,
+  DeleteOutlined,
+} from '@ant-design/icons';
+import {
+  assetService,
+  formatVnd,
+  getStatusLabel,
+  type AssetResponse,
+  type GetAssetsParams,
+} from '../../assets/services/assetService';
 import './AccountantAssetListPage.css';
 
 const { Option } = Select;
 
-interface AccountantAsset {
+interface AccountantAssetRow {
   key: string;
+  id: number;
   code: string;
   name: string;
   type: string;
@@ -19,68 +40,150 @@ interface AccountantAsset {
   depreciation: string;
 }
 
-const mockData: AccountantAsset[] = [
-  {
-    key: '1',
-    code: 'MCS',
-    name: 'Máy cắt sắt',
-    type: 'Cơ khí',
-    location: 'Kho A',
-    quantity: 1,
-    price: '910,000,000 đ',
-    status: 'in-use',
-    statusLabel: 'Đang sử dụng',
-    depreciation: '810,000,000 đ',
-  },
-  {
-    key: '2',
-    code: 'MUV',
-    name: 'Máy uốn vòm',
-    type: 'Cơ khí',
-    location: 'Kho A',
-    quantity: 1,
-    price: '500,000,000 đ',
-    status: 'in-use',
-    statusLabel: 'Đang sử dụng',
-    depreciation: '400,000,000 đ',
-  },
-  {
-    key: '3',
-    code: 'FSF90',
-    name: 'Ôtô Ferrari SF90',
-    type: 'Máy móc',
-    location: 'Kho A',
-    quantity: 1,
-    price: '34,000,500,000,000 đ',
-    status: 'in-use',
-    statusLabel: 'Đang sử dụng',
-    depreciation: '34,000,000,000,000 đ',
-  },
-  {
-    key: '4',
-    code: 'MEG',
-    name: 'Máy ép góc',
-    type: 'Cơ khí',
-    location: 'Kho A',
-    quantity: 1,
-    price: '500,000,000 đ',
-    status: 'pending-use',
-    statusLabel: 'Chưa sử dụng',
-    depreciation: '450,000,000 đ',
-  },
-];
+function mapAssetToRow(a: AssetResponse): AccountantAssetRow {
+  const isInUse = a.status === 1; // InUse
+  const depValue = Math.max(0, a.originalPrice - a.currentValue);
+  return {
+    key: String(a.assetId),
+    id: a.assetId,
+    code: a.code,
+    name: a.name,
+    type: a.assetTypeName ?? '—',
+    location: a.warehouseName ?? '—',
+    quantity: a.quantity,
+    price: formatVnd(a.currentValue),
+    status: isInUse ? 'in-use' : 'pending-use',
+    statusLabel: getStatusLabel(a.statusName),
+    depreciation: formatVnd(depValue),
+  };
+}
 
 export function AccountantAssetListPage() {
-  const [data] = useState<AccountantAsset[]>(mockData);
+  const [data, setData] = useState<AccountantAssetRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [searchInput, setSearchInput] = useState('');
+  const [keyword, setKeyword] = useState('');
+  const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
+  const [assetTypeFilter, setAssetTypeFilter] = useState<number | undefined>(undefined);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const navigate = useNavigate();
 
-  const columns: TableColumnsType<AccountantAsset> = [
+  useEffect(() => {
+    const t = setTimeout(() => setKeyword(searchInput.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    const params: GetAssetsParams = {
+      keyword: keyword || undefined,
+      status: statusFilter,
+      assetTypeId: assetTypeFilter,
+    };
+    assetService
+      .getAll(params)
+      .then((list) => {
+        if (!cancelled) setData(list.map(mapAssetToRow));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          message.error('Không tải được danh sách tài sản.');
+          setData([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [keyword, statusFilter, assetTypeFilter, refreshKey]);
+
+  const handleDeleteAsset = (asset: AccountantAssetRow) => {
+    Modal.confirm({
+      title: 'Xóa tài sản',
+      content: `Bạn có chắc muốn xóa tài sản "${asset.name}" (${asset.code})?`,
+      okText: 'Xóa',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      async onOk() {
+        try {
+          await assetService.softDelete(asset.id, { status: 4, reason: null });
+          message.success('Đã gửi yêu cầu xóa (Disposed) lên hệ thống.');
+          setRefreshKey((k) => k + 1);
+        } catch {
+          message.error('Xóa tài sản thất bại. Vui lòng thử lại.');
+        }
+      },
+    });
+  };
+
+  const handleMenuClick: MenuProps['onClick'] = ({ domEvent }) => {
+    domEvent.stopPropagation();
+  };
+
+  const buildMenu = (record: AccountantAssetRow): MenuProps => ({
+    onClick: handleMenuClick,
+    items: [
+      {
+        key: 'move',
+        icon: <SwapOutlined />,
+        label: 'Điều chuyển',
+        disabled: true,
+      },
+      {
+        key: 'liquidate',
+        icon: <DollarOutlined />,
+        label: 'Đề nghị thanh lý',
+        disabled: true,
+      },
+      {
+        key: 'edit',
+        icon: <EditOutlined />,
+        label: 'Sửa',
+        onClick: (info) => {
+          info.domEvent.stopPropagation();
+          navigate(`/assets/${record.id}/edit`);
+        },
+      },
+      {
+        key: 'print-qr',
+        icon: <QrcodeOutlined />,
+        label: 'In mã QR',
+        disabled: true,
+      },
+      {
+        type: 'divider',
+      },
+      {
+        key: 'delete',
+        icon: <DeleteOutlined style={{ color: '#FE3720' }} />,
+        label: <span style={{ color: '#FE3720' }}>Xóa</span>,
+        onClick: (info) => {
+          info.domEvent.stopPropagation();
+          handleDeleteAsset(record);
+        },
+      },
+    ],
+  });
+
+  const columns: TableColumnsType<AccountantAssetRow> = [
     {
       title: 'MÃ TÀI SẢN',
       dataIndex: 'code',
       key: 'code',
       width: 120,
-      render: (text) => <span className="accountant-asset-code">{text}</span>,
+      render: (text, record) => (
+        <button
+          type="button"
+          className="accountant-asset-code accountant-asset-code--link"
+          onClick={() => navigate(`/assets/${record.id}`)}
+        >
+          {text}
+        </button>
+      ),
     },
     {
       title: 'TÊN TÀI SẢN',
@@ -140,12 +243,19 @@ export function AccountantAssetListPage() {
       key: 'actions',
       width: 60,
       align: 'center',
-      render: () => (
-        <Button
-          type="text"
-          icon={<MoreOutlined />}
-          className="accountant-asset-actions-btn"
-        />
+      render: (_, record) => (
+        <Dropdown
+          menu={buildMenu(record)}
+          trigger={['click']}
+          placement="bottomRight"
+        >
+          <Button
+            type="text"
+            icon={<MoreOutlined />}
+            className="accountant-asset-actions-btn"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </Dropdown>
       ),
     },
   ];
@@ -165,35 +275,43 @@ export function AccountantAssetListPage() {
             placeholder="Tìm kiếm"
             prefix={<SearchOutlined />}
             className="accountant-asset-search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
           <Select
             placeholder="Loại tài sản"
             className="accountant-asset-filter"
             suffixIcon={<FilterOutlined />}
+            value={assetTypeFilter ?? ''}
+            onChange={(v) => setAssetTypeFilter(v === '' || v == null ? undefined : Number(v))}
+            allowClear
           >
-            <Option value="all">Tất cả</Option>
-            <Option value="mechanical">Cơ khí</Option>
-            <Option value="machinery">Máy móc</Option>
+            <Option value="">Tất cả</Option>
+            <Option value={1}>Máy móc</Option>
+            <Option value={2}>Thiết bị</Option>
           </Select>
           <Select
             placeholder="Trạng thái"
             className="accountant-asset-filter"
             suffixIcon={<FilterOutlined />}
+            value={statusFilter ?? ''}
+            onChange={(v) => setStatusFilter(v === '' || v == null ? undefined : Number(v))}
+            allowClear
           >
-            <Option value="all">Tất cả</Option>
-            <Option value="in-use">Đang sử dụng</Option>
-            <Option value="pending-use">Chưa sử dụng</Option>
-          </Select>
-          <Select
-            placeholder="Giá"
-            className="accountant-asset-filter"
-            suffixIcon={<FilterOutlined />}
-          >
-            <Option value="all">Tất cả</Option>
+            <Option value="">Tất cả</Option>
+            <Option value={0}>Sẵn có</Option>
+            <Option value={1}>Đang sử dụng</Option>
+            <Option value={2}>Đang bảo trì</Option>
           </Select>
           <Button
             icon={<FilterOutlined />}
             className="accountant-asset-filter-reset"
+            onClick={() => {
+              setSearchInput('');
+              setKeyword('');
+              setStatusFilter(undefined);
+              setAssetTypeFilter(undefined);
+            }}
           >
             Gỡ bộ lọc
           </Button>
@@ -207,6 +325,7 @@ export function AccountantAssetListPage() {
             type="primary"
             icon={<PlusOutlined />}
             className="accountant-asset-btn-add"
+            onClick={() => navigate('/assets/new')}
           >
             Thêm tài sản
           </Button>
@@ -224,12 +343,12 @@ export function AccountantAssetListPage() {
           rowSelection={rowSelection}
           columns={columns}
           dataSource={data}
+          loading={loading}
           pagination={{
-            total: 289,
+            total: data.length,
             pageSize: 25,
-            current: 1,
             showSizeChanger: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`,
+            showTotal: (total, range) => `${range[0]}-${range[1]} / ${total}`,
             pageSizeOptions: ['10', '25', '50', '100'],
             className: 'accountant-asset-pagination',
           }}

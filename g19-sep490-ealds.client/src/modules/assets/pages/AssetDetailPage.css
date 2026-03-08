@@ -152,6 +152,13 @@
   background: #fcfcfc;
 }
 
+.asset-detail__empty {
+  color: #6b7280;
+  font-size: 13px;
+  padding: 16px;
+  text-align: center;
+}
+
 .asset-detail__files {
   display: flex;
   flex-direction: column;

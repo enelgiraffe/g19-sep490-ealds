@@ -1,0 +1,244 @@
+.asset-create-page {
+  min-height: 100vh;
+  padding: 24px 32px 40px;
+  background: #f3f4f6;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.asset-create__header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.asset-create__back {
+  font-size: 13px;
+  color: #6b7280;
+  text-decoration: none;
+}
+
+.asset-create__back:hover {
+  text-decoration: underline;
+}
+
+.asset-create__title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.asset-create__title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.asset-create__status {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #d1fae5;
+  color: #047857;
+  margin-left: 12px;
+}
+
+.asset-create__header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.asset-create__card {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.asset-create__section {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 20px;
+}
+
+.asset-create__section:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.asset-create__section-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #111827;
+}
+
+.asset-create__grid {
+  display: grid;
+  gap: 16px 32px;
+}
+
+.asset-create__grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.asset-create__grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.asset-create__column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.asset-create__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.asset-create__field--inline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.asset-create__label {
+  font-size: 13px;
+  color: #374151;
+}
+
+.asset-create__required {
+  color: #ef4444;
+  margin-left: 4px;
+}
+
+.asset-create__input,
+.asset-create__select,
+.asset-create__textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  font-size: 13px;
+  outline: none;
+  background-color: #ffffff;
+}
+
+.asset-create__textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.asset-create__input:focus,
+.asset-create__select:focus,
+.asset-create__textarea:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
+}
+
+.asset-create__checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-top: 4px;
+  cursor: pointer;
+}
+
+.asset-create__checkbox-row input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.asset-create__suffix {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.asset-create__files {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.asset-create__file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  padding: 8px 12px;
+  background: #fafafa;
+}
+
+.asset-create__file-index {
+  font-size: 13px;
+  font-weight: 500;
+  color: #4b5563;
+}
+
+.asset-create__file-name {
+  font-size: 13px;
+  color: #111827;
+}
+
+.asset-create__file-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.asset-create__btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.asset-create__btn--primary {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.asset-create__btn--primary:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.asset-create__btn--secondary {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.asset-create__btn--danger {
+  background: #fe3720;
+  color: #ffffff;
+}
+
+.asset-create__btn--danger:hover {
+  background: #e5321c;
+}
+
+@media (max-width: 1024px) {
+  .asset-create__grid--two,
+  .asset-create__grid--three {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+

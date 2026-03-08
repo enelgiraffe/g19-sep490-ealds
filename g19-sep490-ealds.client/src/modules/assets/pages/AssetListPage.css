@@ -90,6 +90,23 @@
   justify-content: center;
 }
 
+.asset-create-button {
+  margin-left: 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: none;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.asset-create-button:hover {
+  background: #1d4ed8;
+}
+
 .asset-table-wrapper {
   border-radius: 18px;
   border: 1px solid #e5e7eb;
