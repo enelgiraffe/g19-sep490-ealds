@@ -1,0 +1,43 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": ".NET Core Launch (web)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/g19-sep490-ealds.Server/bin/Debug/net8.0/g19-sep490-ealds.Server.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/g19-sep490-ealds.Server",
+            "stopAtEntry": false,
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+            },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            },
+            "sourceFileMap": {
+                "/Views": "${workspaceFolder}/Views"
+            }
+        },
+        {
+            "name": ".NET Core Attach",
+            "type": "coreclr",
+            "request": "attach"
+        },
+        {
+            "name": "Launch Client",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "npm run dev",
+            "cwd": "${workspaceFolder}/g19-sep490-ealds.client"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Server + Client",
+            "configurations": [".NET Core Launch (web)", "Launch Client"]
+        }
+    ]
+}
