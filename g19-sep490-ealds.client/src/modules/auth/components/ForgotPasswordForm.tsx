@@ -6,10 +6,10 @@ import logoImg from '/images/logoCompany.png';
 import './ForgotPasswordForm.css';
 
 export const ForgotPasswordForm = () => {
-  const { sendOTP, loading, error, success } = useForgotPassword();
+  const { sendRequest, loading, error, success, successMessage } = useForgotPassword();
 
   const onFinish = async (values: { email: string }) => {
-    await sendOTP(values.email);
+    await sendRequest((values.email ?? '').trim());
   };
 
   return (
@@ -37,7 +37,7 @@ export const ForgotPasswordForm = () => {
 
       {success && (
         <Alert
-          message="Mã OTP đã được gửi đến email của bạn"
+          message={successMessage}
           type="success"
           showIcon
           className="forgot-password-alert"
@@ -53,6 +53,7 @@ export const ForgotPasswordForm = () => {
       >
         <Form.Item
           name="email"
+          normalize={(v) => (typeof v === 'string' ? v.trim() : v)}
           rules={[
             { required: true, message: 'Vui lòng nhập email!' },
             { type: 'email', message: 'Địa chỉ email không hợp lệ. Vui lòng kiểm tra lại.' },
@@ -62,6 +63,7 @@ export const ForgotPasswordForm = () => {
             size="large"
             placeholder="Nhập email của bạn"
             className="forgot-password-input"
+            autoComplete="email"
           />
         </Form.Item>
 

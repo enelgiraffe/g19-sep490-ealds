@@ -2,6 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import { useAppStore } from '../../stores/appStore';
+import { authService } from '../../modules/auth/services/authService';
 import { COMMON_MENU, ROLE_MENU, ROLE_OPTIONS } from '../constants/sidebarConfig';
 import type { AppRole } from '../types/layout.types';
 import './Sidebar.css';
@@ -17,6 +18,19 @@ export function Sidebar() {
     onClick: () => setCurrentRole(opt.value as AppRole),
   }));
 
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } catch {
+      // ignore (e.g. network error) – still clear local state
+    } finally {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      navigate('/login');
+    }
+  };
+
   const userDropdownItems: MenuProps['items'] = [
     {
       key: 'profile',
@@ -26,10 +40,7 @@ export function Sidebar() {
     {
       key: 'logout',
       label: 'Đăng xuất',
-      onClick: () => {
-        // Handle logout logic here
-        navigate('/login');
-      },
+      onClick: handleLogout,
     },
   ];
 

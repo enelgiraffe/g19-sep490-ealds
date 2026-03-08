@@ -7,7 +7,9 @@ import { ApprovalDetailPage } from './modules/dashboard/pages/ApprovalDetailPage
 import { NotificationsPage } from './modules/notifications/pages/NotificationsPage';
 import { LoginPage } from './modules/auth/pages/LoginPage';
 import { ForgotPasswordPage } from './modules/auth/pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './modules/auth/pages/ResetPasswordPage';
 import { VerifyOTPPage } from './modules/auth/pages/VerifyOTPPage';
+import { ProtectedRoute } from './modules/auth/components/ProtectedRoute';
 import { AssetListPage } from './modules/assets/pages/AssetListPage';
 import { AssetDetailPage } from './modules/assets/pages/AssetDetailPage';
 import { ProfilePage } from './modules/profile/pages/ProfilePage';
@@ -24,8 +26,9 @@ function App() {
 
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/verify-otp" element={<VerifyOTPPage />} />
-        <Route path="/" element={<AppLayout />}>
+        <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route index element={<HomePlaceholder />} />
           {/* Common */}
           <Route path="notifications" element={<NotificationsPage />} />

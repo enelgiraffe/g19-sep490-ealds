@@ -1,6 +1,7 @@
+import { useEffect } from 'react';
 import { Form, Input, Button } from 'antd';
 import { LockOutlined, EyeInvisibleOutlined, EyeTwoTone } from '@ant-design/icons';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useLogin } from '../hooks/useLogin';
 import type { LoginFormData } from '../types/auth.types';
 import logoImg from '/images/logoCompany.png';
@@ -8,6 +9,13 @@ import './LoginForm.css';
 
 export const LoginForm = () => {
   const { login, loading } = useLogin();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (localStorage.getItem('accessToken')) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [navigate]);
 
   const onFinish = async (values: LoginFormData) => {
     await login(values);

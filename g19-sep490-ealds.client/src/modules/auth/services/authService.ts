@@ -1,8 +1,7 @@
 import axios from 'axios';
 import type { LoginFormData, LoginResponse } from '../types/auth.types';
 
-// TODO: Replace with actual API endpoint
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 const authApi = axios.create({
   baseURL: API_BASE_URL,
@@ -11,32 +10,47 @@ const authApi = axios.create({
   },
 });
 
+// Gắn access token vào mọi request (logout, refresh, v.v.)
+authApi.interceptors.request.use((config) => {
+  const token = localStorage.getItem('accessToken');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 export const authService = {
   login: async (credentials: LoginFormData): Promise<LoginResponse> => {
-    const response = await authApi.post<LoginResponse>('/auth/login', credentials);
+    const response = await authApi.post<LoginResponse>('/api/auth/login', credentials);
     return response.data;
   },
 
   logout: async (): Promise<void> => {
-    await authApi.post('/auth/logout');
+    await authApi.post('/api/auth/logout');
   },
 
   refreshToken: async (refreshToken: string): Promise<LoginResponse> => {
-    const response = await authApi.post<LoginResponse>('/auth/refresh', {
+    const response = await authApi.post<LoginResponse>('/api/auth/refresh', {
       refreshToken,
     });
     return response.data;
   },
 
-  forgotPassword: async (email: string): Promise<void> => {
-    await authApi.post('/auth/forgot-password', { email });
+  forgotPassword: async (email: string): Promise<{ message: string }> => {
+    const response = await authApi.post<{ message: string }>('/api/auth/forgot-password', { email });
+    return response.data;
   },
 
-  verifyOTP: async (email: string, otp: string): Promise<void> => {
-    await authApi.post('/auth/verify-otp', { email, otp });
-  },
-
-  resetPassword: async (email: string, otp: string, newPassword: string): Promise<void> => {
-    await authApi.post('/auth/reset-password', { email, otp, newPassword });
+  resetPassword: async (
+    token: string,
+    newPassword: string,
+    confirmNewPassword: string
+  ): Promise<{ message: string }> => {
+    const response = await authApi.post<{ message: string }>('/api/auth/reset-password', {
+      token,
+      newPassword,
+      confirmNewPassword,
+    });
+    return response.data;
   },
 };

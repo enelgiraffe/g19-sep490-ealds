@@ -1,5 +1,6 @@
-import { Form, Input, Button } from 'antd';
+import { Form, Input, Button, message } from 'antd';
 import { useState } from 'react';
+import { profileService } from '../services/profileService';
 import './PasswordTab.css';
 
 export function PasswordTab() {
@@ -7,9 +8,28 @@ export function PasswordTab() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleUpdatePassword = (values: any) => {
-    console.log('Update password:', values);
+  const handleUpdatePassword = async (values: any) => {
+    try {
+      setSubmitting(true);
+      await profileService.changePassword({
+        currentPassword: values.currentPassword,
+        newPassword: values.newPassword,
+        confirmNewPassword: values.confirmPassword,
+      });
+
+      message.success('Đổi mật khẩu thành công.');
+      form.resetFields();
+    } catch (error: any) {
+      const errorMessage =
+        error?.response?.data?.message ||
+        'Đổi mật khẩu thất bại. Vui lòng thử lại.';
+      message.error(errorMessage);
+      throw error;
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -43,8 +63,6 @@ export function PasswordTab() {
             { required: true, message: 'Vui lòng nhập mật khẩu mới' },
             { min: 6, message: 'Mật khẩu yếu, vui lòng cập nhật lại. Mật khẩu cần có ít nhất 6 ký tự, đặc biệt, từ viết hoa' }
           ]}
-          validateStatus="error"
-          help="Mật khẩu yếu, vui lòng cập nhật lại. Mật khẩu cần có ít nhất 6 ký tự, đặc biệt, từ viết hoa"
         >
           <Input.Password
             placeholder="Nhập mật khẩu mới"
@@ -59,8 +77,6 @@ export function PasswordTab() {
           label="Nhập lại mật khẩu mới"
           name="confirmPassword"
           dependencies={['newPassword']}
-          validateStatus="error"
-          help="Mật khẩu mới đang không trùng nhau"
           rules={[
             { required: true, message: 'Vui lòng nhập lại mật khẩu mới' },
             ({ getFieldValue }) => ({
@@ -83,7 +99,12 @@ export function PasswordTab() {
         </Form.Item>
 
         <Form.Item>
-          <Button type="primary" htmlType="submit" className="password-form__submit-btn">
+          <Button
+            type="primary"
+            htmlType="submit"
+            className="password-form__submit-btn"
+            loading={submitting}
+          >
             Cập nhật
           </Button>
         </Form.Item>

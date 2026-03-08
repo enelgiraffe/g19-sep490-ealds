@@ -1,29 +1,29 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 
 export const useForgotPassword = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const navigate = useNavigate();
+  const [successMessage, setSuccessMessage] = useState<string>('');
 
-  const sendOTP = async (email: string) => {
+  const sendRequest = async (email: string) => {
     try {
       setLoading(true);
       setError(null);
       setSuccess(false);
+      setSuccessMessage('');
 
-      await authService.forgotPassword(email);
-      
+      const data = await authService.forgotPassword(email);
       setSuccess(true);
-      
-      // Navigate to OTP verification page after 1.5 seconds
-      setTimeout(() => {
-        navigate('/verify-otp', { state: { email } });
-      }, 1500);
+      setSuccessMessage(data.message ?? 'Nếu email tồn tại trong hệ thống, bạn sẽ nhận được hướng dẫn đặt lại mật khẩu.');
     } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 'Địa chỉ email không hợp lệ. Vui lòng kiểm tra lại.';
+      const data = err.response?.data;
+      const errorMessage =
+        data?.message ||
+        (data?.errors?.Email && Array.isArray(data.errors.Email) ? data.errors.Email[0] : null) ||
+        (err.response?.status === 500 ? 'Gửi email thất bại. Vui lòng thử lại sau.' : null) ||
+        (err.response?.status ? 'Yêu cầu thất bại. Vui lòng thử lại.' : 'Lỗi kết nối. Vui lòng kiểm tra mạng và thử lại.');
       setError(errorMessage);
       setSuccess(false);
     } finally {
@@ -31,5 +31,5 @@ export const useForgotPassword = () => {
     }
   };
 
-  return { sendOTP, loading, error, success };
+  return { sendRequest, loading, error, success, successMessage };
 };

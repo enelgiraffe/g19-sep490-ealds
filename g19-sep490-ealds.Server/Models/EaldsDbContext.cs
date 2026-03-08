@@ -4,7 +4,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Models;
 
-public partial class EaldsDbContext : DbContext
+public partial class EaldsDbContext : 
+    DbContext
 {
     public EaldsDbContext()
     {
