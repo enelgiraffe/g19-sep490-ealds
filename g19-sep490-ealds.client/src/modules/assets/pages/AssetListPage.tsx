@@ -1,7 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { message } from 'antd';
+import {
+  assetService,
+  formatVnd,
+  getStatusLabel,
+  type AssetResponse,
+} from '../services/assetService';
+import { transferRequestService } from '../services/transferRequestService';
+import { maintenanceRequestService } from '../services/maintenanceRequestService';
 import { MarkDamagedAssetModal } from '../components/MarkDamagedAssetModal';
 import { LiquidationRequestModal } from '../components/LiquidationRequestModal';
+import { TransferAssetModal } from '../components/TransferAssetModal';
+import { MaintenanceProposalModal } from '../components/MaintenanceProposalModal';
+import { profileService, type UserProfile } from '../../profile/services/profileService';
 import './AssetListPage.css';
 
 interface AssetItem {
@@ -29,156 +41,112 @@ interface AssetInfo {
   status: string;
   admissionDate: string;
   department: string;
+  currentDepartmentId?: number | null;
 }
 
-const MOCK_ASSETS: AssetItem[] = [
-  {
-    id: 1,
-    code: 'MCS',
-    name: 'Máy cắt sắt',
-    type: 'Cơ khí',
-    quantity: 1,
-    price: '910,000,000 đ',
-    status: 'Đang sử dụng',
-    statusColor: 'green',
-    depreciation: '810,000,000 đ',
-  },
-  {
-    id: 2,
-    code: 'MUV',
-    name: 'Máy uốn vòm',
-    type: 'Cơ khí',
-    quantity: 1,
-    price: '500,000,000 đ',
-    status: 'Đang sử dụng',
-    statusColor: 'green',
-    depreciation: '400,000,000 đ',
-  },
-  {
-    id: 3,
-    code: 'FSF90',
-    name: 'Ôtô Ferrari SF90',
-    type: 'Máy móc',
-    quantity: 1,
-    price: '34,000,500,000 đ',
-    status: 'Đang sử dụng',
-    statusColor: 'green',
-    depreciation: '34,000,000,000,000 đ',
-  },
-  {
-    id: 4,
-    code: 'MEG',
-    name: 'Máy ép góc',
-    type: 'Cơ khí',
-    quantity: 1,
-    price: '500,000,000 đ',
-    status: 'Chưa sử dụng',
-    statusColor: 'gray',
-    depreciation: '450,000,000 đ',
-  },
-];
-
-// Mock asset detail data for mark damaged modal
-const MOCK_ASSET_INFO: Record<number, AssetInfo> = {
-  1: {
-    code: 'MCS-01',
-    name: 'Máy cắt sắt',
-    type: 'Máy móc',
-    specification: 'Công suất 24000W',
-    purchaseDate: '28/01/2025',
-    warrantyExpiry: '28/01/2029',
-    currentValue: '100,000,000đ',
-    remainingValue: '83,000,000đ',
-    location: 'Kho b',
-    status: 'Đang sử dụng',
-    admissionDate: '29/01/2025',
-    department: 'Phòng IT',
-  },
-  2: {
-    code: 'MUV-01',
-    name: 'Máy uốn vòm',
-    type: 'Cơ khí',
-    specification: 'Công suất 18000W',
-    purchaseDate: '15/12/2024',
-    warrantyExpiry: '15/12/2028',
-    currentValue: '500,000,000đ',
-    remainingValue: '400,000,000đ',
-    location: 'Kho A',
-    status: 'Đang sử dụng',
-    admissionDate: '16/12/2024',
-    department: 'Phòng sản xuất',
-  },
-  3: {
-    code: 'FSF90-01',
-    name: 'Ôtô Ferrari SF90',
-    type: 'Máy móc',
-    specification: 'V8 Twin-Turbo',
-    purchaseDate: '12/10/2024',
-    warrantyExpiry: '12/10/2027',
-    currentValue: '34,000,500,000đ',
-    remainingValue: '34,000,000,000đ',
-    location: 'Bãi xe',
-    status: 'Đang sử dụng',
-    admissionDate: '13/10/2024',
-    department: 'Ban giám đốc',
-  },
-  4: {
-    code: 'MP789-01',
-    name: 'Máy Photocopy',
-    type: 'Cơ khí',
-    specification: 'A3, Màu',
-    purchaseDate: '24/09/2024',
-    warrantyExpiry: '24/09/2027',
-    currentValue: '500,000,000đ',
-    remainingValue: '450,000,000đ',
-    location: 'Văn phòng tầng 2',
-    status: 'Đang sử dụng',
-    admissionDate: '25/09/2024',
-    department: 'Phòng hành chính',
-  },
-};
-
-// Helper function to generate asset info dynamically if not exists
-const getAssetInfo = (asset: AssetItem): AssetInfo => {
-  // If we have mock data, use it
-  if (MOCK_ASSET_INFO[asset.id]) {
-    return MOCK_ASSET_INFO[asset.id];
+function getStoredUserId(): number | null {
+  const raw = localStorage.getItem('user');
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { id?: string | number | null };
+    const idNum = typeof parsed.id === 'number' ? parsed.id : Number(parsed.id);
+    return Number.isFinite(idNum) && idNum > 0 ? idNum : null;
+  } catch {
+    return null;
   }
-  
-  // Otherwise generate from asset data
-  const currentDate = new Date();
-  const purchaseDate = new Date(currentDate);
-  purchaseDate.setMonth(purchaseDate.getMonth() - 6); // 6 months ago
-  
-  const warrantyExpiry = new Date(purchaseDate);
-  warrantyExpiry.setFullYear(warrantyExpiry.getFullYear() + 3); // 3 years warranty
-  
-  const admissionDate = new Date(purchaseDate);
-  admissionDate.setDate(admissionDate.getDate() + 1); // 1 day after purchase
-  
+}
+
+function formatDate(iso?: string | null): string {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('vi-VN');
+  } catch {
+    return iso;
+  }
+}
+
+function mapResponseToItem(a: AssetResponse): AssetItem {
+  const statusName = a.statusName ?? 'Available';
+  const activeStatuses = ['Available', 'InUse', 'InMaintenance', 'Reserved'];
+  const statusColor: 'green' | 'gray' =
+    activeStatuses.includes(statusName) ? 'green' : 'gray';
   return {
-    code: `${asset.code}-01`,
-    name: asset.name,
-    type: asset.type,
-    specification: 'Quy cách tiêu chuẩn',
-    purchaseDate: purchaseDate.toLocaleDateString('vi-VN'),
-    warrantyExpiry: warrantyExpiry.toLocaleDateString('vi-VN'),
-    currentValue: asset.price,
-    remainingValue: asset.depreciation,
-    location: 'Kho chính',
-    status: asset.status,
-    admissionDate: admissionDate.toLocaleDateString('vi-VN'),
-    department: 'Phòng kỹ thuật',
+    id: a.assetId,
+    code: a.code,
+    name: a.name,
+    type: a.assetTypeName ?? '—',
+    quantity: a.quantity,
+    price: formatVnd(a.currentValue),
+    status: getStatusLabel(statusName),
+    statusColor,
+    depreciation: formatVnd(a.currentValue),
   };
-};
+}
+
+function assetResponseToAssetInfo(a: AssetResponse): AssetInfo {
+  return {
+    code: a.code,
+    name: a.name,
+    type: a.assetTypeName ?? '—',
+    specification: '—',
+    purchaseDate: formatDate(a.purchaseDate),
+    warrantyExpiry: formatDate(a.warrantyEndDate),
+    currentValue: formatVnd(a.currentValue),
+    remainingValue: formatVnd(a.currentValue),
+    location: a.warehouseName ?? '—',
+    status: getStatusLabel(a.statusName),
+    admissionDate: formatDate(a.inUseDate),
+    department: a.currentDepartmentName ?? '—',
+    currentDepartmentId: a.currentDepartmentId ?? null,
+  };
+}
 
 export function AssetListPage() {
-  const [assets] = useState<AssetItem[]>(MOCK_ASSETS);
+  const [apiAssets, setApiAssets] = useState<AssetResponse[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isMarkDamagedModalOpen, setIsMarkDamagedModalOpen] = useState(false);
   const [isLiquidationModalOpen, setIsLiquidationModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
   const [selectedAssetInfo, setSelectedAssetInfo] = useState<AssetInfo | null>(null);
+  const [transferAssetId, setTransferAssetId] = useState<number | null>(null);
+  const [maintenanceAssetId, setMaintenanceAssetId] = useState<number | null>(null);
   const navigate = useNavigate();
+
+  const assets: AssetItem[] = apiAssets?.map(mapResponseToItem) ?? [];
+
+  const fetchAssets = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await assetService.getAll();
+      setApiAssets(data);
+    } catch {
+      setError('Không tải được danh sách tài sản. Kiểm tra kết nối backend.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAssets();
+  }, [fetchAssets]);
+
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const p = await profileService.getProfile();
+        setProfile(p);
+      } catch {
+        // Không chặn trang tài sản nếu không lấy được profile
+      }
+    }
+    loadProfile();
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -203,17 +171,22 @@ export function AssetListPage() {
 
   const handleMenuAction = (actionKey: string, asset: AssetItem) => {
     setOpenMenuId(null);
-    
-    if (actionKey === 'mark-broken') {
-      const assetInfo = getAssetInfo(asset);
-      setSelectedAssetInfo(assetInfo);
+    const raw = apiAssets?.find((a) => a.assetId === asset.id);
+    if (actionKey === 'move' && raw) {
+      setSelectedAssetInfo(assetResponseToAssetInfo(raw));
+      setTransferAssetId(asset.id);
+      setIsTransferModalOpen(true);
+    } else if (actionKey === 'mark-broken' && raw) {
+      setSelectedAssetInfo(assetResponseToAssetInfo(raw));
       setIsMarkDamagedModalOpen(true);
-    } else if (actionKey === 'liquidate') {
-      const assetInfo = getAssetInfo(asset);
-      setSelectedAssetInfo(assetInfo);
+    } else if (actionKey === 'liquidate' && raw) {
+      setSelectedAssetInfo(assetResponseToAssetInfo(raw));
       setIsLiquidationModalOpen(true);
+    } else if (actionKey === 'maintenance' && raw) {
+      setSelectedAssetInfo(assetResponseToAssetInfo(raw));
+      setMaintenanceAssetId(asset.id);
+      setIsMaintenanceModalOpen(true);
     } else {
-      // Tạm thời chỉ log, sau có thể nối API / popup chi tiết
       console.log('Action', actionKey, 'for asset', asset);
     }
   };
@@ -228,6 +201,18 @@ export function AssetListPage() {
     setSelectedAssetInfo(null);
   };
 
+  const handleCloseTransferModal = () => {
+    setIsTransferModalOpen(false);
+    setSelectedAssetInfo(null);
+    setTransferAssetId(null);
+  };
+
+  const handleCloseMaintenanceModal = () => {
+    setIsMaintenanceModalOpen(false);
+    setSelectedAssetInfo(null);
+    setMaintenanceAssetId(null);
+  };
+
   const handleSubmitMarkDamaged = (values: unknown) => {
     console.log('Mark damaged:', values);
     // TODO: Call API to mark asset as damaged
@@ -237,6 +222,118 @@ export function AssetListPage() {
     console.log('Liquidation request:', values);
     // TODO: Call API to submit liquidation request
   };
+
+  const handleSubmitMaintenance = async (values: {
+    assetId: number;
+    recordNumber?: string;
+    maintenanceContent: string;
+  }) => {
+    const createdBy = profile?.id ?? getStoredUserId();
+    if (!createdBy || values.assetId == null) {
+      message.error('Không xác định được người dùng hoặc tài sản để gửi đề xuất bảo dưỡng.');
+      return;
+    }
+    try {
+      await maintenanceRequestService.create({
+        assetId: values.assetId,
+        requestTypeId: 2,
+        createdBy,
+        title: values.recordNumber
+          ? `Bảo dưỡng - Số biên bản ${values.recordNumber}`
+          : 'Đề xuất bảo dưỡng máy móc',
+        description: values.maintenanceContent || undefined,
+      });
+      message.success('Gửi đề xuất bảo dưỡng thành công.');
+      handleCloseMaintenanceModal();
+    } catch (e: any) {
+      const data = e?.response?.data;
+      const errors = data?.errors as Record<string, string[] | string> | undefined;
+      if (errors && typeof errors === 'object') {
+        const flat = Object.entries(errors)
+          .flatMap(([k, v]) => {
+            if (Array.isArray(v)) return v.map((m) => `${k}: ${m}`);
+            if (typeof v === 'string') return [`${k}: ${v}`];
+            return [];
+          })
+          .filter(Boolean);
+        message.error(flat.join(' | ') || data?.title || 'Gửi đề xuất bảo dưỡng thất bại.');
+      } else {
+        const msg =
+          data?.title ??
+          data ??
+          'Gửi đề xuất bảo dưỡng thất bại.';
+        message.error(typeof msg === 'string' ? msg : 'Gửi đề xuất bảo dưỡng thất bại.');
+      }
+    }
+  };
+
+  const handleSubmitTransfer = async (values: any) => {
+    if (!profile || transferAssetId == null) {
+      message.error('Không xác định được người dùng hoặc tài sản để điều chuyển.');
+      return;
+    }
+    try {
+      const fromLocationId = Number(values.fromLocationId);
+      const toLocationId = Number(values.toLocationId);
+      if (!fromLocationId || !toLocationId) {
+        message.error('Vui lòng nhập ID vị trí hợp lệ.');
+        return;
+      }
+
+      const transferDateValue = values.transferDate;
+      const transferDate =
+        transferDateValue && typeof transferDateValue.toISOString === 'function'
+          ? transferDateValue.toISOString()
+          : undefined;
+
+      await transferRequestService.create({
+        assetId: transferAssetId,
+        requestTypeId: 1, // Tạm dùng cùng RequestTypeId với đơn mua
+        fromLocationId,
+        toLocationId,
+        fromUserId: profile.id,
+        toUserId: null,
+        transferDate,
+        executeBy: profile.id,
+        createdBy: profile.id,
+        title: values.reason
+          ? `Điều chuyển: ${values.reason}`
+          : `Yêu cầu điều chuyển tài sản ${transferAssetId}`,
+        description: values.reason ?? undefined,
+      });
+
+      message.success('Gửi yêu cầu điều chuyển thành công.');
+      handleCloseTransferModal();
+    } catch (e: any) {
+      const msg = e?.response?.data ?? 'Gửi yêu cầu điều chuyển thất bại.';
+      message.error(msg);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="asset-page">
+        <h1 className="asset-page__title">Tài sản</h1>
+        <div className="asset-card">
+          <p>Đang tải danh sách tài sản...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="asset-page">
+        <h1 className="asset-page__title">Tài sản</h1>
+        <div className="asset-card">
+          <p>{error}</p>
+          <button type="button" onClick={() => fetchAssets()}>
+            Thử lại
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="asset-page">
@@ -430,6 +527,22 @@ export function AssetListPage() {
         onClose={handleCloseLiquidationModal}
         onSubmit={handleSubmitLiquidation}
         assetInfo={selectedAssetInfo}
+      />
+
+      <TransferAssetModal
+        open={isTransferModalOpen}
+        onClose={handleCloseTransferModal}
+        onSubmit={handleSubmitTransfer}
+        assetInfo={selectedAssetInfo}
+        fromDepartmentId={selectedAssetInfo?.currentDepartmentId ?? null}
+      />
+
+      <MaintenanceProposalModal
+        open={isMaintenanceModalOpen}
+        onClose={handleCloseMaintenanceModal}
+        onSubmit={handleSubmitMaintenance}
+        assetInfo={selectedAssetInfo}
+        assetId={maintenanceAssetId}
       />
     </div>
   );

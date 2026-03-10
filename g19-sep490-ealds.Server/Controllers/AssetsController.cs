@@ -85,7 +85,34 @@ public class AssetsController : ControllerBase
         }
 
         var assets = await query
-            .Select(a => ToResponseDTO(a))
+            .Select(a => new AssetResponseDTO
+            {
+                AssetId = a.AssetId,
+                Code = a.Code,
+                Name = a.Name,
+                AssetTypeId = a.AssetTypeId,
+                AssetTypeName = a.AssetType != null ? a.AssetType.Name : null,
+                PurchaseDate = a.PurchaseDate,
+                OriginalPrice = a.OriginalPrice,
+                CurrentValue = a.CurrentValue,
+                Status = (AssetStatus)a.Status,
+                StatusName = ((AssetStatus)a.Status).ToString(),
+                WarrantyEndDate = a.WarrantyEndDate,
+                InUseDate = a.InUseDate,
+                Unit = a.Unit,
+                Quantity = a.Quantity,
+                WarehouseId = a.WarehouseId,
+                WarehouseName = a.Warehouse != null ? a.Warehouse.Name : null,
+                CreatedBy = a.CreatedBy,
+                CurrentDepartmentId = a.AssetLocations
+                    .Where(al => al.IsCurrent)
+                    .Select(al => (int?)al.DepartmentId)
+                    .FirstOrDefault(),
+                CurrentDepartmentName = a.AssetLocations
+                    .Where(al => al.IsCurrent)
+                    .Select(al => al.Department.Name)
+                    .FirstOrDefault()
+            })
             .ToListAsync();
 
         return Ok(assets);
@@ -97,14 +124,45 @@ public class AssetsController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<AssetResponseDTO>> GetById(int id)
     {
-        var asset = await _context.Assets
+        var dto = await _context.Assets
             .Include(a => a.AssetType)
             .Include(a => a.Warehouse)
+            .Where(a => a.AssetId == id)
+            .Select(a => new AssetResponseDTO
+            {
+                AssetId = a.AssetId,
+                Code = a.Code,
+                Name = a.Name,
+                AssetTypeId = a.AssetTypeId,
+                AssetTypeName = a.AssetType != null ? a.AssetType.Name : null,
+                PurchaseDate = a.PurchaseDate,
+                OriginalPrice = a.OriginalPrice,
+                CurrentValue = a.CurrentValue,
+                Status = (AssetStatus)a.Status,
+                StatusName = ((AssetStatus)a.Status).ToString(),
+                WarrantyEndDate = a.WarrantyEndDate,
+                InUseDate = a.InUseDate,
+                Unit = a.Unit,
+                Quantity = a.Quantity,
+                WarehouseId = a.WarehouseId,
+                WarehouseName = a.Warehouse != null ? a.Warehouse.Name : null,
+                CreatedBy = a.CreatedBy,
+                CurrentDepartmentId = a.AssetLocations
+                    .Where(al => al.IsCurrent)
+                    .Select(al => (int?)al.DepartmentId)
+                    .FirstOrDefault(),
+                CurrentDepartmentName = a.AssetLocations
+                    .Where(al => al.IsCurrent)
+                    .Select(al => al.Department.Name)
+                    .FirstOrDefault()
+            })
             .AsNoTracking()
-            .FirstOrDefaultAsync(a => a.AssetId == id);
-        if (asset == null)
+            .FirstOrDefaultAsync();
+
+        if (dto == null)
             return NotFound();
-        return Ok(ToResponseDTO(asset));
+
+        return Ok(dto);
     }
 
     /// <summary>
@@ -244,7 +302,9 @@ public class AssetsController : ControllerBase
             Quantity = a.Quantity,
             WarehouseId = a.WarehouseId,
             WarehouseName = a.Warehouse?.Name,
-            CreatedBy = a.CreatedBy
+            CreatedBy = a.CreatedBy,
+            CurrentDepartmentId = null,
+            CurrentDepartmentName = null
         };
     }
 }

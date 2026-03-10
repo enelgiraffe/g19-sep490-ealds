@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
 
@@ -12,10 +13,12 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class MaintenanceRequestsController : ControllerBase
 {
     private readonly EaldsDbContext _db;
+    private readonly int _maintenanceRequestTypeId;
 
-    public MaintenanceRequestsController(EaldsDbContext db)
+    public MaintenanceRequestsController(EaldsDbContext db, IConfiguration configuration)
     {
         _db = db;
+        _maintenanceRequestTypeId = configuration.GetValue<int>("App:MaintenanceRequestTypeId", 2);
     }
 
     [HttpPost]
@@ -24,14 +27,16 @@ public class MaintenanceRequestsController : ControllerBase
         if (dto == null)
             return BadRequest("Request body is required.");
 
-        var schedule = await _db.MaintenanceSchedules.FindAsync(dto.ScheduleId);
+        var schedule = dto.ScheduleId.HasValue && dto.ScheduleId.Value > 0
+            ? await _db.MaintenanceSchedules.FindAsync(dto.ScheduleId)
+            : null;
 
         var title = dto.Title ?? $"Maintenance request for asset {dto.AssetId}";
 
         var assetRequest = new AssetRequest
         {
             UserId = dto.CreatedBy,
-            RequestTypeId = dto.RequestTypeId,
+            RequestTypeId = _maintenanceRequestTypeId,
             AssetId = dto.AssetId,
             Title = title,
             Description = dto.Description,
@@ -49,13 +54,15 @@ public class MaintenanceRequestsController : ControllerBase
         if (!planned.HasValue && schedule != null)
             planned = schedule.NextDueDate ?? schedule.StartDate;
 
+        var assignTo = dto.AssignTo > 0 ? dto.AssignTo : dto.CreatedBy;
+
         var task = new MaintenaceTask
         {
             ScheduleId = dto.ScheduleId,
             AssetRequestId = assetRequest.AssetRequestId,
             AssetId = dto.AssetId,
             PlannedDate = planned ?? DateTime.UtcNow,
-            AssignTo = dto.AssignTo,
+            AssignTo = assignTo,
             Address = dto.Address,
             Status = 0,
             CreatDate = DateTime.UtcNow,

@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
 
@@ -12,10 +13,12 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class RepairRequestsController : ControllerBase
 {
     private readonly EaldsDbContext _db;
+    private readonly int _repairRequestTypeId;
 
-    public RepairRequestsController(EaldsDbContext db)
+    public RepairRequestsController(EaldsDbContext db, IConfiguration configuration)
     {
         _db = db;
+        _repairRequestTypeId = configuration.GetValue<int>("App:RepairRequestTypeId", 4);
     }
 
     [HttpPost]
@@ -32,7 +35,7 @@ public class RepairRequestsController : ControllerBase
         var assetRequest = new AssetRequest
         {
             UserId = dto.CreatedBy,
-            RequestTypeId = dto.RequestTypeId,
+            RequestTypeId = _repairRequestTypeId,
             AssetId = dto.AssetId,
             Title = title,
             Description = dto.Description ?? dto.Reason,

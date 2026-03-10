@@ -1,0 +1,239 @@
+.maintenance-proposal-modal .ant-modal-content {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.maintenance-proposal-modal .ant-modal-body {
+  padding: 0;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.maintenance-proposal-modal__close {
+  font-size: 24px;
+  color: #fe3720;
+  font-weight: 300;
+}
+
+.maintenance-proposal-modal__header {
+  background: #ffe5e0;
+  padding: 16px 24px;
+  border-bottom: 1px solid #ffd4cc;
+}
+
+.maintenance-proposal-modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #fe3720;
+}
+
+.maintenance-proposal-modal__content {
+  padding: 24px;
+}
+
+.maintenance-proposal-form__item {
+  margin-bottom: 24px;
+}
+
+.maintenance-proposal-form__item label,
+.maintenance-proposal-section-title {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.maintenance-proposal-section-title {
+  font-size: 15px;
+  color: #111827;
+  margin-bottom: 16px;
+}
+
+.maintenance-proposal-input {
+  border-radius: 6px;
+  border-color: #e5e7eb;
+}
+
+.maintenance-proposal-info-section {
+  margin-bottom: 24px;
+}
+
+.maintenance-proposal-info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.maintenance-proposal-info-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.maintenance-proposal-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.maintenance-proposal-info-item label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.maintenance-proposal-info-value {
+  font-size: 14px;
+  color: #111827;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.maintenance-proposal-form-section {
+  margin-bottom: 24px;
+}
+
+.maintenance-proposal-form-section .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.maintenance-proposal-form-section .ant-form-item-label > label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.maintenance-proposal-form-section .ant-input-textarea {
+  border-radius: 6px;
+  border-color: #e5e7eb;
+}
+
+.maintenance-proposal-attachments-section {
+  margin-top: 20px;
+}
+
+.maintenance-proposal-attachments-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 12px;
+}
+
+.maintenance-proposal-attachments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.maintenance-proposal-attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.maintenance-proposal-attachment-number {
+  color: #6b7280;
+  font-size: 13px;
+  min-width: 24px;
+}
+
+.maintenance-proposal-attachment-name {
+  flex: 1;
+  color: #111827;
+  font-size: 14px;
+}
+
+.maintenance-proposal-attachment-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.maintenance-proposal-attachment-actions .ant-btn-text {
+  padding: 4px 8px;
+  color: #6b7280;
+}
+
+.maintenance-proposal-attachment-actions .ant-btn-text:hover {
+  color: #111827;
+  background: #e5e7eb;
+}
+
+.maintenance-proposal-attachment-actions .ant-btn-dangerous:hover {
+  color: #fe3720;
+  background: #fee2e2;
+}
+
+.maintenance-proposal-btn-upload {
+  background: #10b981;
+  border-color: #10b981;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+}
+
+.maintenance-proposal-btn-upload:hover {
+  background: #059669;
+  border-color: #059669;
+  color: #fff;
+}
+
+.maintenance-proposal-modal__footer {
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  justify-content: flex-end;
+}
+
+.maintenance-proposal-btn-submit {
+  background: #fe3720;
+  border-color: #fe3720;
+  height: 40px;
+  padding: 0 32px;
+}
+
+.maintenance-proposal-btn-submit:hover {
+  background: #e5321c;
+  border-color: #e5321c;
+}
+
+.maintenance-proposal-btn-cancel {
+  background: #6b7280;
+  border-color: #6b7280;
+  color: #fff;
+  height: 40px;
+  padding: 0 32px;
+}
+
+.maintenance-proposal-btn-cancel:hover {
+  background: #4b5563;
+  border-color: #4b5563;
+  color: #fff;
+}
+
+.maintenance-proposal-modal .ant-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.maintenance-proposal-modal .ant-modal-body::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.maintenance-proposal-modal .ant-modal-body::-webkit-scrollbar-thumb {
+  background: #919eab;
+  border-radius: 3px;
+}
+
+.maintenance-proposal-modal .ant-modal-body::-webkit-scrollbar-thumb:hover {
+  background: #7a8693;
+}

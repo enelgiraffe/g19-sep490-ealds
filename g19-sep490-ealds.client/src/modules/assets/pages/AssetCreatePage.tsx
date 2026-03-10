@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { assetService, type CreateAssetPayload } from '../services/assetService';
 import './AssetCreatePage.css';
 
 interface GeneralInfoForm {
@@ -98,18 +99,23 @@ export function AssetCreatePage() {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!general.code || !general.name || !general.assetTypeId || !general.purchaseDate) {
-      // Simple client validation – highlight required fields conceptually
       alert('Vui lòng nhập đầy đủ các trường bắt buộc được đánh dấu *.');
       return;
     }
+    if (!general.warehouseId || Number(general.warehouseId) <= 0) {
+      alert('Vui lòng chọn kho.');
+      return;
+    }
 
+    setSubmitError(null);
     setIsSubmitting(true);
 
-    const createAssetPayload = {
+    const payload: CreateAssetPayload = {
       code: general.code.trim(),
       name: general.name.trim(),
       assetTypeId: Number(general.assetTypeId),
@@ -120,27 +126,25 @@ export function AssetCreatePage() {
       inUseDate: general.purchaseDate || null,
       unit: general.unit || 'Cái',
       quantity: Number(general.quantity || 1),
-      warehouseId: Number(general.warehouseId || 0),
+      warehouseId: Number(general.warehouseId),
       createdBy: 0,
       depreciationPolicyId: depreciation.depreciationPolicyId
         ? Number(depreciation.depreciationPolicyId)
         : null,
     };
 
-    // Tạm thời chỉ log payload để dễ debug; sau sẽ nối API
-    console.log('Create asset form', {
-      general,
-      warranty,
-      depreciation,
-      allocation,
-      extra,
-      apiPayload: createAssetPayload,
-    });
-
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      await assetService.create(payload);
       navigate('/assets');
-    }, 300);
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : null;
+      setSubmitError(msg || 'Tạo tài sản thất bại. Kiểm tra kết nối backend hoặc dữ liệu.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -173,6 +177,11 @@ export function AssetCreatePage() {
       </div>
 
       <form id="asset-create-form" onSubmit={handleSubmit} className="asset-create__card">
+        {submitError && (
+          <div className="asset-create__error" role="alert">
+            {submitError}
+          </div>
+        )}
         {/* Thông tin chung */}
         <section className="asset-create__section">
           <h2 className="asset-create__section-title">Thông tin chung</h2>

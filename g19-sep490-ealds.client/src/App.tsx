@@ -16,6 +16,7 @@ import { AssetCreatePage } from './modules/assets/pages/AssetCreatePage';
 import { AssetEditPage } from './modules/assets/pages/AssetEditPage';
 import { ProfilePage } from './modules/profile/pages/ProfilePage';
 import { PurchaseOrdersPage } from './modules/purchase-orders/pages/PurchaseOrdersPage';
+import { TransfersPage } from './modules/transfers/pages/TransfersPage';
 import { AccountantAssetListPage } from './modules/accountant/pages/AccountantAssetListPage';
 import './App.css';
 
@@ -57,7 +58,7 @@ function App() {
           <Route path="assets" element={<AssetListPage />} />
           <Route path="accountant-assets" element={<AccountantAssetListPage />} />
           <Route path="purchase-orders" element={<PurchaseOrdersPage />} />
-          <Route path="transfers" element={<ModulePlaceholder title="Điều chuyển" />} />
+          <Route path="transfers" element={<TransfersPage />} />
           <Route path="repairs" element={<ModulePlaceholder title="Sửa chữa" />} />
           <Route path="maintenance" element={<ModulePlaceholder title="Bảo trì" />} />
           <Route path="liquidation" element={<ModulePlaceholder title="Thanh lý" />} />

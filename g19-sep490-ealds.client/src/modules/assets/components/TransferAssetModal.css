@@ -1,0 +1,93 @@
+.transfer-modal__close {
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.transfer-modal__title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.transfer-modal__header {
+  margin-bottom: 16px;
+}
+
+.transfer-form__section {
+  margin-bottom: 24px;
+}
+
+.transfer-form__section--locations {
+  margin-top: 24px;
+}
+
+.transfer-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.transfer-form__row {
+  display: flex;
+  gap: 16px;
+}
+
+.transfer-form__item {
+  flex: 1;
+}
+
+.transfer-input--disabled {
+  background-color: #f5f5f5;
+}
+
+.transfer-asset-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.transfer-asset-table th,
+.transfer-asset-table td {
+  border: 1px solid #f0f0f0;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.transfer-asset-table th {
+  background-color: #fafafa;
+  font-weight: 600;
+}
+
+.transfer-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.transfer-attachment-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.transfer-modal__footer {
+  margin-top: 24px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.transfer-btn-submit {
+  background-color: #ff4d4f;
+  border-color: #ff4d4f;
+}
+
+.transfer-btn-submit:hover {
+  background-color: #ff7875;
+  border-color: #ff7875;
+}
+
+.transfer-btn-cancel {
+  border-color: #d9d9d9;
+}
+

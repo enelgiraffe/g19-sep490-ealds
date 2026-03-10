@@ -75,4 +75,11 @@ public class AssetResponseDTO
     public int WarehouseId { get; set; }
     public string? WarehouseName { get; set; }
     public int CreatedBy { get; set; }
+
+    /// <summary>
+    /// Phòng ban hiện tại đang sử dụng tài sản (nếu có bản ghi AssetLocation IsCurrent).
+    /// </summary>
+    public int? CurrentDepartmentId { get; set; }
+
+    public string? CurrentDepartmentName { get; set; }
 }

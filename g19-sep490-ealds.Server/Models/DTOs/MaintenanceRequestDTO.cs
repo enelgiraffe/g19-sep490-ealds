@@ -4,7 +4,8 @@ namespace g19_sep490_ealds.Server.Models.DTOs;
 
 public class MaintenanceRequestDTO
 {
-    public int ScheduleId { get; set; }
+    /// <summary>Optional. Null/0 for ad-hoc maintenance proposal (đề xuất bảo dưỡng).</summary>
+    public int? ScheduleId { get; set; }
 
     public int RequestTypeId { get; set; }
 

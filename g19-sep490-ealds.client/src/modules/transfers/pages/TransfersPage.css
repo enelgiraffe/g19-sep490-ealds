@@ -1,0 +1,60 @@
+.transfers-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.transfers-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.transfers-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.transfers-btn-add {
+  font-weight: 500;
+}
+
+.transfers-filters {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.transfers-search {
+  max-width: 260px;
+}
+
+.transfers-select {
+  width: 180px;
+}
+
+.transfers-filter-advanced,
+.transfers-settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.transfers-table-container {
+  margin-top: 8px;
+}
+
+.transfers-table {
+  background: #fff;
+}
+
+.transfers-status-tag {
+  min-width: 90px;
+  text-align: center;
+}
+
+.transfers-pagination {
+  text-align: right;
+}
+

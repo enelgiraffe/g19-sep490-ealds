@@ -46,6 +46,8 @@ export interface AssetResponse {
   warehouseId: number;
   warehouseName?: string | null;
   createdBy: number;
+  currentDepartmentId?: number | null;
+  currentDepartmentName?: string | null;
 }
 
 export interface GetAssetsParams {

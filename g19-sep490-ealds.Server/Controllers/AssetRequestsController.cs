@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
 
@@ -13,10 +15,58 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class AssetRequestsController : ControllerBase
 {
     private readonly EaldsDbContext _db;
+    private readonly int _purchaseRequestTypeId;
 
-    public AssetRequestsController(EaldsDbContext db)
+    public AssetRequestsController(EaldsDbContext db, IConfiguration configuration)
     {
         _db = db;
+        _purchaseRequestTypeId = configuration.GetValue<int>("App:PurchaseRequestTypeId", 1);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetList([FromQuery] int? requestTypeId)
+    {
+        var typeId = requestTypeId ?? _purchaseRequestTypeId;
+        var list = await _db.AssetRequests
+            .AsNoTracking()
+            .Where(r => r.RequestTypeId == typeId)
+            .OrderByDescending(r => r.CreateDate)
+            .Select(r => new AssetRequestListItemDTO
+            {
+                AssetRequestId = r.AssetRequestId,
+                Title = r.Title,
+                Description = r.Description,
+                ProposedData = r.ProposedData,
+                Status = r.Status,
+                CreateDate = r.CreateDate,
+                CreatedBy = r.CreatedBy,
+                CreatorName = r.User != null ? r.User.Email : null
+            })
+            .ToListAsync();
+        return Ok(list);
+    }
+
+    [HttpGet("{id:int}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var request = await _db.AssetRequests
+            .AsNoTracking()
+            .Where(r => r.AssetRequestId == id && r.RequestTypeId == _purchaseRequestTypeId)
+            .Select(r => new
+            {
+                r.AssetRequestId,
+                r.Title,
+                r.Description,
+                r.ProposedData,
+                r.Status,
+                r.CreateDate,
+                r.CreatedBy,
+                CreatorName = r.User != null ? r.User.Email : null
+            })
+            .FirstOrDefaultAsync();
+        if (request == null)
+            return NotFound();
+        return Ok(request);
     }
 
     [HttpPost]
@@ -28,10 +78,18 @@ public class AssetRequestsController : ControllerBase
         if (string.IsNullOrWhiteSpace(dto.Title))
             return BadRequest("Title is required.");
 
+        var requestTypeExists = await _db.RequestTypes
+            .AsNoTracking()
+            .AnyAsync(rt => rt.RequestTypeId == _purchaseRequestTypeId);
+        if (!requestTypeExists)
+        {
+            return BadRequest($"Configured purchase RequestTypeId '{_purchaseRequestTypeId}' does not exist in RequestType table.");
+        }
+
         var assetRequest = new AssetRequest
         {
             UserId = dto.UserId,
-            RequestTypeId = dto.RequestTypeId,
+            RequestTypeId = _purchaseRequestTypeId,
             AssetId = dto.AssetId,
             Title = dto.Title,
             Description = dto.Description,
