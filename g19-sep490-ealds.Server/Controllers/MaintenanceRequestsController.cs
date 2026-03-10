@@ -92,6 +92,6 @@ public class MaintenanceRequestsController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        return Ok(new { assetRequest.AssetRequestId, task.TaskId });
+        return Ok(new { assetRequestId = assetRequest.AssetRequestId, taskId = task.TaskId });
     }
 }

@@ -76,6 +76,6 @@ public class TransferRequestsController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        return Ok(new { assetRequest.AssetRequestId, transfer.RecordId });
+        return Ok(new { assetRequestId = assetRequest.AssetRequestId, recordId = transfer.RecordId });
     }
 }
