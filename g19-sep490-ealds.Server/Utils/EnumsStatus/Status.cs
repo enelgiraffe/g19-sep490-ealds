@@ -17,5 +17,16 @@ public enum AssetStatus
     Reserved = 3,
     Disposed = 4,
     Lost = 5,
-    Liquidated = 6
+    Liquidated = 6,
+    Capitalized = 7
+}
+
+public enum AssetLifeActionType
+{
+    Created = 1,
+    StatusChanged = 2,
+    Capitalized = 3,
+    Transferred = 4,
+    Repaired = 5,
+    Disposed = 6
 }

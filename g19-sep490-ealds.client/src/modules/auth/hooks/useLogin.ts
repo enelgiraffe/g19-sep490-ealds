@@ -22,10 +22,18 @@ export const useLogin = () => {
       }
       localStorage.setItem('user', JSON.stringify(response.user));
 
-      setCurrentRole(mapBackendRoleToAppRole(response.user.role));
+      const appRole = mapBackendRoleToAppRole(response.user.role);
+      setCurrentRole(appRole);
 
       message.success('Đăng nhập thành công!');
-      navigate('/dashboard');
+
+      if (appRole === 'department_head') {
+        navigate('/assets');
+      } else if (appRole === 'accountant') {
+        navigate('/accountant-assets');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || 'Đăng nhập thất bại. Vui lòng thử lại.';
       message.error(errorMessage);

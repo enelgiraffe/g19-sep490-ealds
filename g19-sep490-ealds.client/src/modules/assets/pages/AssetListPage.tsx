@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { message } from 'antd';
+import { message, Popover, Slider, Button } from 'antd';
 import {
   assetService,
   formatVnd,
   getStatusLabel,
   type AssetResponse,
+  type GetAssetsParams,
 } from '../services/assetService';
 import { transferRequestService } from '../services/transferRequestService';
 import { maintenanceRequestService } from '../services/maintenanceRequestService';
@@ -102,11 +103,31 @@ function assetResponseToAssetInfo(a: AssetResponse): AssetInfo {
   };
 }
 
+function buildPriceFilterLabel(
+  minPrice: string,
+  maxPrice: string
+): string {
+  if (!minPrice && !maxPrice) return 'Giá';
+  const hasMin = !!minPrice;
+  const hasMax = !!maxPrice;
+  const minLabel = hasMin ? formatVnd(Number(minPrice)) : 'Tất cả';
+  const maxLabel = hasMax ? formatVnd(Number(maxPrice)) : 'Tất cả';
+  return `${minLabel} - ${maxLabel}`;
+}
+
 export function AssetListPage() {
   const [apiAssets, setApiAssets] = useState<AssetResponse[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [searchInput, setSearchInput] = useState('');
+  const [keyword, setKeyword] = useState('');
+  const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
+  const [assetTypeFilter, setAssetTypeFilter] = useState<number | undefined>(undefined);
+  const [minPrice, setMinPrice] = useState<string>('');
+  const [maxPrice, setMaxPrice] = useState<string>('');
+  const [isPriceFilterOpen, setIsPriceFilterOpen] = useState(false);
+  const [draftPriceRange, setDraftPriceRange] = useState<[number, number] | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isMarkDamagedModalOpen, setIsMarkDamagedModalOpen] = useState(false);
   const [isLiquidationModalOpen, setIsLiquidationModalOpen] = useState(false);
@@ -119,22 +140,71 @@ export function AssetListPage() {
 
   const assets: AssetItem[] = apiAssets?.map(mapResponseToItem) ?? [];
 
+  const PRICE_SLIDER_MIN = 0;
+  const PRICE_SLIDER_MAX = 1_000_000_000;
+
+  const currentMinNumber = minPrice ? Number(minPrice) : PRICE_SLIDER_MIN;
+  const currentMaxNumber = maxPrice ? Number(maxPrice) : PRICE_SLIDER_MAX;
+
+  const effectiveDraftRange: [number, number] =
+    draftPriceRange ?? [currentMinNumber, currentMaxNumber];
+
+  const priceButtonLabel = buildPriceFilterLabel(minPrice, maxPrice);
+
+  const handleOpenPriceFilter = (open: boolean) => {
+    if (open) {
+      setDraftPriceRange([currentMinNumber, currentMaxNumber]);
+    }
+    setIsPriceFilterOpen(open);
+  };
+
+  const handleApplyPriceFilter = () => {
+    if (!draftPriceRange) {
+      setMinPrice('');
+      setMaxPrice('');
+    } else {
+      const [min, max] = draftPriceRange;
+      setMinPrice(min > PRICE_SLIDER_MIN ? String(min) : '');
+      setMaxPrice(max < PRICE_SLIDER_MAX ? String(max) : '');
+    }
+    setIsPriceFilterOpen(false);
+  };
+
+  const handleClearPriceFilter = () => {
+    setDraftPriceRange([PRICE_SLIDER_MIN, PRICE_SLIDER_MAX]);
+    setMinPrice('');
+    setMaxPrice('');
+    setIsPriceFilterOpen(false);
+  };
+
   const fetchAssets = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await assetService.getAll();
+      const params: GetAssetsParams = {
+        keyword: keyword || undefined,
+        status: statusFilter,
+        assetTypeId: assetTypeFilter,
+        minPrice: minPrice ? Number(minPrice) : undefined,
+        maxPrice: maxPrice ? Number(maxPrice) : undefined,
+      };
+      const data = await assetService.getAll(params);
       setApiAssets(data);
     } catch {
       setError('Không tải được danh sách tài sản. Kiểm tra kết nối backend.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [keyword, statusFilter, assetTypeFilter, minPrice, maxPrice]);
 
   useEffect(() => {
     fetchAssets();
   }, [fetchAssets]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setKeyword(searchInput.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   useEffect(() => {
     async function loadProfile() {
@@ -345,19 +415,107 @@ export function AssetListPage() {
               type="text"
               className="asset-search-input"
               placeholder="Tìm kiếm"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
             />
           </div>
           <div className="asset-card__filters">
-            <select className="asset-filter-select">
-              <option>Loại tài sản</option>
+            <select
+              className="asset-filter-select"
+              value={assetTypeFilter ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                setAssetTypeFilter(v === '' ? undefined : Number(v));
+              }}
+            >
+              <option value="">Tất cả loại tài sản</option>
+              <option value={1}>Máy móc</option>
+              <option value={2}>Thiết bị</option>
+              <option value={3}>Khác</option>
             </select>
-            <select className="asset-filter-select">
-              <option>Trạng thái</option>
+            <select
+              className="asset-filter-select"
+              value={statusFilter ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                setStatusFilter(v === '' ? undefined : Number(v));
+              }}
+            >
+              <option value="">Tất cả trạng thái</option>
+              <option value={0}>Sẵn có</option>
+              <option value={1}>Đang sử dụng</option>
+              <option value={2}>Đang bảo trì</option>
+              <option value={3}>Đã đặt trước</option>
+              <option value={4}>Đã thanh lý</option>
+              <option value={5}>Mất</option>
+              <option value={6}>Đã thanh lý</option>
+              <option value={7}>Đã ghi tăng</option>
             </select>
-            <select className="asset-filter-select">
-              <option>Giá</option>
-            </select>
-            <button className="asset-filter-reset">Gỡ bộ lọc</button>
+            <Popover
+              open={isPriceFilterOpen}
+              onOpenChange={handleOpenPriceFilter}
+              trigger="click"
+              placement="bottomRight"
+              overlayClassName="asset-price-popover"
+              content={
+                <div className="asset-price-popover__content">
+                  <Slider
+                    range
+                    min={PRICE_SLIDER_MIN}
+                    max={PRICE_SLIDER_MAX}
+                    step={1_000_000}
+                    value={effectiveDraftRange}
+                    onChange={(value) => {
+                      const [min, max] = value as [number, number];
+                      setDraftPriceRange([min, max]);
+                    }}
+                  />
+                  <div className="asset-price-popover__labels">
+                    <div className="asset-price-label">
+                      {formatVnd(effectiveDraftRange[0])}
+                    </div>
+                    <span className="asset-price-label-separator">-</span>
+                    <div className="asset-price-label">
+                      {formatVnd(effectiveDraftRange[1])}
+                    </div>
+                  </div>
+                  <Button
+                    type="primary"
+                    block
+                    className="asset-price-popover__apply"
+                    onClick={handleApplyPriceFilter}
+                  >
+                    Áp dụng
+                  </Button>
+                  <button
+                    type="button"
+                    className="asset-price-popover__clear"
+                    onClick={handleClearPriceFilter}
+                  >
+                    Xóa bộ lọc
+                  </button>
+                </div>
+              }
+            >
+              <button type="button" className="asset-filter-select">
+                {priceButtonLabel}
+              </button>
+            </Popover>
+            <button
+              className="asset-filter-reset"
+              type="button"
+              onClick={() => {
+                setSearchInput('');
+                setKeyword('');
+                setStatusFilter(undefined);
+                setAssetTypeFilter(undefined);
+                setMinPrice('');
+                setMaxPrice('');
+                setDraftPriceRange(null);
+              }}
+            >
+              Gỡ bộ lọc
+            </button>
             <button
               className="asset-filter-settings"
               aria-label="Cài đặt hiển thị"

@@ -46,6 +46,7 @@ export function LiquidationRequestModal({ open, onClose, onSubmit, assetInfo }: 
       onCancel={onClose}
       footer={null}
       width={900}
+      centered
       className="liquidation-modal"
       closeIcon={<span className="liquidation-modal__close">×</span>}
     >
@@ -227,7 +228,7 @@ export function LiquidationRequestModal({ open, onClose, onSubmit, assetInfo }: 
           onClick={onClose}
           className="liquidation-btn-draft"
         >
-          Nhập
+          Nháp
         </Button>
       </div>
     </Modal>

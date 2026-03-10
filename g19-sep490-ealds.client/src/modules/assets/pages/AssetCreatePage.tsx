@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { assetService, type CreateAssetPayload } from '../services/assetService';
+import { useAppStore } from '../../../stores/appStore';
 import './AssetCreatePage.css';
 
 interface GeneralInfoForm {
@@ -51,6 +52,9 @@ interface ExtraInfoForm {
 
 export function AssetCreatePage() {
   const navigate = useNavigate();
+  const currentRole = useAppStore((s) => s.currentRole);
+
+  const backToListPath = currentRole === 'accountant' ? '/accountant-assets' : '/assets';
 
   const [general, setGeneral] = useState<GeneralInfoForm>({
     code: '',
@@ -135,7 +139,7 @@ export function AssetCreatePage() {
 
     try {
       await assetService.create(payload);
-      navigate('/assets');
+      navigate(backToListPath);
     } catch (err: unknown) {
       const msg =
         err && typeof err === 'object' && 'response' in err
@@ -150,7 +154,7 @@ export function AssetCreatePage() {
   return (
     <div className="asset-create-page">
       <div className="asset-create__header">
-        <Link to="/assets" className="asset-create__back">
+        <Link to={backToListPath} className="asset-create__back">
           ← Tất cả tài sản
         </Link>
         <div className="asset-create__title-row">
@@ -160,7 +164,7 @@ export function AssetCreatePage() {
             <button
               type="button"
               className="asset-create__btn asset-create__btn--secondary"
-              onClick={() => navigate('/assets')}
+              onClick={() => navigate(backToListPath)}
             >
               Hủy
             </button>

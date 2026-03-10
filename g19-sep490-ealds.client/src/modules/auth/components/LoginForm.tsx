@@ -4,6 +4,7 @@ import { LockOutlined, EyeInvisibleOutlined, EyeTwoTone } from '@ant-design/icon
 import { Link, useNavigate } from 'react-router-dom';
 import { useLogin } from '../hooks/useLogin';
 import type { LoginFormData } from '../types/auth.types';
+import { mapBackendRoleToAppRole } from '../types/auth.types';
 import logoImg from '/images/logoCompany.png';
 import './LoginForm.css';
 
@@ -12,9 +13,31 @@ export const LoginForm = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (localStorage.getItem('accessToken')) {
-      navigate('/dashboard', { replace: true });
+    const accessToken = localStorage.getItem('accessToken');
+    if (!accessToken) return;
+
+    const storedUser = localStorage.getItem('user');
+
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        const appRole = mapBackendRoleToAppRole(user.role);
+
+        if (appRole === 'department_head') {
+          navigate('/assets', { replace: true });
+          return;
+        }
+
+        if (appRole === 'accountant') {
+          navigate('/accountant-assets', { replace: true });
+          return;
+        }
+      } catch {
+        // ignore parse error and fallback to default redirect below
+      }
     }
+
+    navigate('/dashboard', { replace: true });
   }, [navigate]);
 
   const onFinish = async (values: LoginFormData) => {

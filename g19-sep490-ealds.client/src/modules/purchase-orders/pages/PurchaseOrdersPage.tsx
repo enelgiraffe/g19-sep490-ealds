@@ -10,9 +10,9 @@ import './PurchaseOrdersPage.css';
 
 const { Option } = Select;
 
-/** Backend status: 0=Chờ/Nhập, 1=Duyệt, 2=Từ chối, 3=Chờ ngân sách */
+/** Backend status: 0=Chờ/Nháp, 1=Duyệt, 2=Từ chối, 3=Chờ ngân sách */
 const STATUS_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Nhập', color: 'default' },
+  0: { label: 'Nháp', color: 'default' },
   1: { label: 'Duyệt', color: 'success' },
   2: { label: 'Từ chối', color: 'error' },
   3: { label: 'Chờ ngân sách', color: 'warning' },
@@ -73,6 +73,8 @@ export function PurchaseOrdersPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [statusFilter, setStatusFilter] = useState<number | 'all'>('all');
   const [searchText, setSearchText] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const loadList = async () => {
     setLoading(true);
@@ -179,6 +181,17 @@ export function PurchaseOrdersPage() {
     return matchStatus && matchSearch;
   });
 
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, searchText]);
+
+  const total = filteredData.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const startIndex = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const endIndex = Math.min(safePage * pageSize, total);
+  const pagedData = filteredData.slice((safePage - 1) * pageSize, safePage * pageSize);
+
   const columns: TableColumnsType<TableRow> = [
     { title: 'STT', dataIndex: 'stt', key: 'stt', width: 60, align: 'center' },
     { title: 'MÃ YÊU CẦU', dataIndex: 'code', key: 'code', width: 120 },
@@ -233,48 +246,90 @@ export function PurchaseOrdersPage() {
         </Button>
       </div>
 
-      <div className="purchase-orders-filters">
-        <Input
-          placeholder="Tìm kiếm"
-          prefix={<SearchOutlined />}
-          className="purchase-orders-search"
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-        />
-        <Select
-          placeholder="Trạng thái"
-          className="purchase-orders-select"
-          suffixIcon={<FilterOutlined />}
-          value={statusFilter}
-          onChange={(v) => setStatusFilter(v)}
-        >
-          <Option value="all">Tất cả</Option>
-          {Object.entries(STATUS_MAP).map(([k, v]) => (
-            <Option key={k} value={Number(k)}>{v.label}</Option>
-          ))}
-        </Select>
-        <Button icon={<FilterOutlined />} className="purchase-orders-filter-advanced">
-          Gộp bộ lọc
-        </Button>
-        <Button icon={<SettingOutlined />} className="purchase-orders-settings" />
-      </div>
+      <div className="purchase-orders-card">
+        <div className="purchase-orders-filters">
+          <Input
+            placeholder="Tìm kiếm"
+            prefix={<SearchOutlined />}
+            className="purchase-orders-search"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+          />
+          <Select
+            placeholder="Trạng thái"
+            className="purchase-orders-select"
+            suffixIcon={<FilterOutlined />}
+            value={statusFilter}
+            onChange={(v) => setStatusFilter(v)}
+          >
+            <Option value="all">Tất cả</Option>
+            {Object.entries(STATUS_MAP).map(([k, v]) => (
+              <Option key={k} value={Number(k)}>{v.label}</Option>
+            ))}
+          </Select>
+          <Button icon={<FilterOutlined />} className="purchase-orders-filter-advanced">
+            Gộp bộ lọc
+          </Button>
+          <Button icon={<SettingOutlined />} className="purchase-orders-settings" />
+        </div>
 
-      <div className="purchase-orders-table-container">
-        <Table
-          rowSelection={rowSelection}
-          columns={columns}
-          dataSource={filteredData}
-          loading={loading}
-          pagination={{
-            total: filteredData.length,
-            pageSize: 25,
-            showSizeChanger: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} / ${total}`,
-            pageSizeOptions: ['10', '25', '50', '100'],
-            className: 'purchase-orders-pagination',
-          }}
-          className="purchase-orders-table"
-        />
+        <div className="purchase-orders-table-container">
+          <Table
+            rowSelection={rowSelection}
+            columns={columns}
+            dataSource={pagedData}
+            loading={loading}
+            pagination={false}
+            className="purchase-orders-table"
+          />
+        </div>
+
+        <div className="purchase-orders-card__footer">
+          <div className="purchase-orders-footer__left">
+            Items per page:
+            <select
+              className="purchase-orders-footer__select"
+              value={pageSize}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                setPageSize(next);
+                setPage(1);
+              }}
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+          <div className="purchase-orders-footer__center">
+            {total === 0 ? '0-0 of 0' : `${startIndex}-${endIndex} of ${total}`}
+          </div>
+          <div className="purchase-orders-footer__right">
+            <button
+              className="purchase-orders-footer__pager"
+              disabled={safePage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              type="button"
+            >
+              ⟨
+            </button>
+            <button
+              className="purchase-orders-footer__pager purchase-orders-footer__pager--active"
+              type="button"
+            >
+              {safePage}
+            </button>
+            <button
+              className="purchase-orders-footer__pager"
+              disabled={safePage >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              type="button"
+            >
+              ⟩
+            </button>
+          </div>
+        </div>
       </div>
 
       <CreatePurchaseOrderModal
