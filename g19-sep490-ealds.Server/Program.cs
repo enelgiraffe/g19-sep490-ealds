@@ -1,6 +1,11 @@
 using System.Text;
+using g19_sep490_ealds.Server.Mappers;
+using g19_sep490_ealds.Server.Mappers.Implementation;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services;
+using g19_sep490_ealds.Server.Services.ServiceImplementation;
+using g19_sep490_ealds.Server.Services.ServiceInterface;
+using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -81,6 +86,11 @@ builder.Services.AddSwaggerGen(options =>
         }
     });
 });
+
+//DI
+builder.Services.AddScoped<IAssetCapitalizationService, AssetCapitalizationService>();
+builder.Services.AddScoped<IAssetCapitalizationMapper, AssetCapitalizationMapper>();
+builder.Services.AddMediatR(typeof(Program));
 
 var app = builder.Build();
 
