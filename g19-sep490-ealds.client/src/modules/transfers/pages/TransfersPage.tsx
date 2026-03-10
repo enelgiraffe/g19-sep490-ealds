@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
-import { Table, Button, Input, Select, Tag, message } from 'antd';
+import { useEffect, useRef, useState } from 'react';
+import { Table, Button, Input, Select, Tag, message, Tabs } from 'antd';
 import type { TableColumnsType } from 'antd';
-import { SearchOutlined, FilterOutlined, SettingOutlined } from '@ant-design/icons';
+import { SearchOutlined, FilterOutlined, SettingOutlined, EyeOutlined } from '@ant-design/icons';
 import { transferRequestService, type TransferRequestListItem } from '../../assets/services/transferRequestService';
+import { TransferAssetModal } from '../../assets/components/TransferAssetModal';
+import { TransferRequestDetailModal } from '../components/TransferRequestDetailModal';
 import './TransfersPage.css';
 
 const { Option } = Select;
@@ -35,6 +37,13 @@ export function TransfersPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<number | 'all'>('all');
   const [searchText, setSearchText] = useState('');
+  const [activeTab, setActiveTab] = useState<'location' | 'department'>('location');
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<TableRow | null>(null);
+  const tableHostRef = useRef<HTMLDivElement | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const loadList = async () => {
     setLoading(true);
@@ -70,12 +79,24 @@ export function TransfersPage() {
     return matchStatus && matchSearch;
   });
 
+  useEffect(() => {
+    // Reset to first page when filters change
+    setPage(1);
+  }, [activeTab, statusFilter, searchText]);
+
+  const total = filteredData.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const startIndex = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const endIndex = Math.min(safePage * pageSize, total);
+  const pagedData = filteredData.slice((safePage - 1) * pageSize, safePage * pageSize);
+
   const columns: TableColumnsType<TableRow> = [
     { title: 'SỐ BIÊN BẢN', dataIndex: 'code', key: 'code', width: 140 },
     { title: 'NGÀY ĐIỀU CHUYỂN', dataIndex: 'transferDateText', key: 'transferDateText', width: 140 },
     { title: 'ĐIỀU CHUYỂN TỪ', dataIndex: 'fromDepartment', key: 'fromDepartment', width: 160 },
     { title: 'ĐIỀU CHUYỂN ĐẾN', dataIndex: 'toDepartment', key: 'toDepartment', width: 160 },
-    { title: 'SỐ LƯỢNG', dataIndex: 'quantity', key: 'quantity', width: 100, align: 'center' },
+    { title: 'SỐ LƯỢNG', dataIndex: 'quantity', key: 'quantity', align: 'center', width: 120 },
     {
       title: 'TRẠNG THÁI',
       dataIndex: 'status',
@@ -91,6 +112,22 @@ export function TransfersPage() {
       },
     },
     { title: 'LÝ DO ĐIỀU CHUYỂN', dataIndex: 'reason', key: 'reason', ellipsis: true },
+    {
+      title: '',
+      key: 'actions',
+      width: 80,
+      align: 'center',
+      render: (_, record) => (
+        <Button
+          type="text"
+          icon={<EyeOutlined />}
+          onClick={() => {
+            setSelectedRequest(record);
+            setIsDetailModalOpen(true);
+          }}
+        />
+      ),
+    },
   ];
 
   return (
@@ -99,58 +136,130 @@ export function TransfersPage() {
         <h1 className="transfers-title">Điều chuyển</h1>
         <Button
           type="primary"
+          danger
           className="transfers-btn-add"
-          onClick={() => message.info('Vui lòng tạo yêu cầu điều chuyển từ màn hình Tài sản.')}
+          onClick={() => setIsTransferModalOpen(true)}
         >
           + Tạo yêu cầu điều chuyển
         </Button>
       </div>
 
-      <div className="transfers-filters">
-        <Input
-          placeholder="Tìm kiếm"
-          prefix={<SearchOutlined />}
-          className="transfers-search"
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
+      <div className="transfers-card">
+        <Tabs
+          activeKey={activeTab}
+          onChange={(key) => setActiveTab(key as 'location' | 'department')}
+          className="transfers-tabs"
+          items={[
+            { key: 'location', label: 'Vị trí tài sản' },
+            { key: 'department', label: 'Phòng ban sử dụng' },
+          ]}
         />
-        <Select
-          placeholder="Trạng thái"
-          className="transfers-select"
-          suffixIcon={<FilterOutlined />}
-          value={statusFilter}
-          onChange={(v) => setStatusFilter(v)}
-        >
-          <Option value="all">Tất cả</Option>
-          {Object.entries(STATUS_MAP).map(([k, v]) => (
-            <Option key={k} value={Number(k)}>
-              {v.label}
-            </Option>
-          ))}
-        </Select>
-        <Button icon={<FilterOutlined />} className="transfers-filter-advanced">
-          Gộp bộ lọc
-        </Button>
-        <Button icon={<SettingOutlined />} className="transfers-settings" />
+
+        <div className="transfers-filters">
+          <Input
+            placeholder="Tìm kiếm"
+            prefix={<SearchOutlined />}
+            className="transfers-search"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+          />
+          <Select
+            placeholder="Trạng thái"
+            className="transfers-select"
+            suffixIcon={<FilterOutlined />}
+            value={statusFilter}
+            onChange={(v) => setStatusFilter(v)}
+          >
+            <Option value="all">Tất cả</Option>
+            {Object.entries(STATUS_MAP).map(([k, v]) => (
+              <Option key={k} value={Number(k)}>
+                {v.label}
+              </Option>
+            ))}
+          </Select>
+          <Button icon={<FilterOutlined />} className="transfers-filter-advanced">
+            Gộp bộ lọc
+          </Button>
+          <Button icon={<SettingOutlined />} className="transfers-settings" />
+        </div>
+
+        <div className="transfers-table-container" ref={tableHostRef}>
+          <Table
+            columns={columns}
+            dataSource={pagedData}
+            loading={loading}
+            pagination={false}
+            className="transfers-table"
+            tableLayout="fixed"
+            rowKey="key"
+          />
+        </div>
+
+        <div className="transfers-card__footer">
+          <div className="transfers-footer__left">
+            Items per page:
+            <select
+              className="transfers-footer__select"
+              value={pageSize}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                setPageSize(next);
+                setPage(1);
+              }}
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+          <div className="transfers-footer__center">
+            {total === 0 ? '0-0 of 0' : `${startIndex}-${endIndex} of ${total}`}
+          </div>
+          <div className="transfers-footer__right">
+            <button
+              className="transfers-footer__pager"
+              disabled={safePage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              type="button"
+            >
+              ⟨
+            </button>
+            <button
+              className="transfers-footer__pager transfers-footer__pager--active"
+              type="button"
+            >
+              {safePage}
+            </button>
+            <button
+              className="transfers-footer__pager"
+              disabled={safePage >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              type="button"
+            >
+              ⟩
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div className="transfers-table-container">
-        <Table
-          columns={columns}
-          dataSource={filteredData}
-          loading={loading}
-          pagination={{
-            total: filteredData.length,
-            pageSize: 25,
-            showSizeChanger: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} / ${total}`,
-            pageSizeOptions: ['10', '25', '50', '100'],
-            className: 'transfers-pagination',
-          }}
-          className="transfers-table"
-          rowKey="key"
-        />
-      </div>
+      <TransferAssetModal
+        open={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        onSubmit={() => {
+          message.info('Vui lòng gửi yêu cầu điều chuyển từ màn Tài sản sau khi chọn tài sản cụ thể.');
+        }}
+        assetInfo={null}
+      />
+
+      <TransferRequestDetailModal
+        open={isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false);
+          setSelectedRequest(null);
+        }}
+        request={selectedRequest}
+      />
     </div>
   );
 }

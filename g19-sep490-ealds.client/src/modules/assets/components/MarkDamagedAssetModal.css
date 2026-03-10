@@ -1,11 +1,14 @@
 .mark-damaged-modal .ant-modal-content {
   border-radius: 8px;
   overflow: hidden;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .mark-damaged-modal .ant-modal-body {
   padding: 0;
-  max-height: 85vh;
+  flex: 1;
   overflow-y: auto;
 }
 

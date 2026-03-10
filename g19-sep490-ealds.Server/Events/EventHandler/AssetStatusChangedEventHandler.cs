@@ -1,4 +1,4 @@
-﻿using g19_sep490_ealds.Server.Events.Command;
+using g19_sep490_ealds.Server.Events.Command;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using MediatR;
@@ -7,9 +7,9 @@ namespace g19_sep490_ealds.Server.Events.EventHandler;
 
 public class AssetStatusChangedEventHandler : INotificationHandler<AssetStatusChangedEvent>
 {
-    private readonly EALDSDbcontext _context;
+    private readonly EaldsDbContext _context;
 
-    public AssetStatusChangedEventHandler(EALDSDbcontext context)
+    public AssetStatusChangedEventHandler(EaldsDbContext context)
     {
         _context = context;
     }

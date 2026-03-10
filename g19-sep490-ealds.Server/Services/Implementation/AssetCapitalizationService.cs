@@ -1,4 +1,4 @@
-﻿using g19_sep490_ealds.Server.Events.Command;
+using g19_sep490_ealds.Server.Events.Command;
 using g19_sep490_ealds.Server.Mappers;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTO.RequestDTO;
@@ -11,12 +11,12 @@ namespace g19_sep490_ealds.Server.Services.ServiceImplementation;
 
 public class AssetCapitalizationService : IAssetCapitalizationService
 {
-    private readonly EALDSDbcontext _context;
+    private readonly EaldsDbContext _context;
     private readonly IAssetCapitalizationMapper _mapper;
     private readonly IMediator _mediator;
 
     public AssetCapitalizationService(
-        EALDSDbcontext context,
+        EaldsDbContext context,
         IAssetCapitalizationMapper mapper,
         IMediator mediator)
     {

@@ -58,6 +58,7 @@ export function ViewPurchaseOrderModal({ open, onClose, data }: ViewPurchaseOrde
       onCancel={onClose}
       footer={null}
       width={700}
+      centered
       className="view-purchase-modal"
       closeIcon={null}
     >

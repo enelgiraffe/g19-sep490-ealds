@@ -102,6 +102,7 @@ export function CreatePurchaseOrderModal({
       onCancel={onClose}
       footer={null}
       width={900}
+      centered
       className="create-purchase-modal"
       closeIcon={<span className="create-purchase-modal__close">×</span>}
     >

@@ -42,7 +42,7 @@ const MAINTENANCE_REQUEST_TYPE_ID = 2;
 export const maintenanceRequestService = {
   /**
    * Gửi đề xuất bảo dưỡng máy móc (POST api/Assets/Requests/maintenance).
-   * ScheduleId: gửi 0 nếu không theo lịch định kỳ (tránh lỗi validate nếu backend đang dùng int).
+   * ScheduleId: để null/bỏ trống nếu không theo lịch định kỳ.
    */
   async create(payload: MaintenanceRequestPayload): Promise<MaintenanceRequestResponse> {
     const body = {
@@ -51,7 +51,8 @@ export const maintenanceRequestService = {
       createdBy: payload.createdBy,
       title: payload.title ?? null,
       description: payload.description ?? null,
-      scheduleId: payload.scheduleId ?? 0,
+      // Nếu không có lịch định kỳ thì để null để backend hiểu là ad-hoc, tránh FK lỗi với ScheduleId = 0.
+      scheduleId: payload.scheduleId ?? null,
       plannedDate: payload.plannedDate ?? null,
       assignTo: payload.assignTo ?? 0,
       address: payload.address ?? null,

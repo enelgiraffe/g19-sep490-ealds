@@ -22,6 +22,8 @@ public partial class EaldsDbContext :
 
     public virtual DbSet<Asset> Assets { get; set; }
 
+    public virtual DbSet<AssetCapitalization> AssetCapitalizations { get; set; }
+
     public virtual DbSet<AssetCategory> AssetCategories { get; set; }
 
     public virtual DbSet<AssetLifeCycle> AssetLifeCycles { get; set; }

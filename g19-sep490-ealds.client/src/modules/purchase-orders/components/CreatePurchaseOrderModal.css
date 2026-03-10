@@ -1,15 +1,14 @@
-.create-purchase-modal {
-  top: 20px;
-}
-
 .create-purchase-modal .ant-modal-content {
   border-radius: 8px;
   overflow: hidden;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .create-purchase-modal .ant-modal-body {
   padding: 0;
-  max-height: 85vh;
+  flex: 1;
   overflow-y: auto;
 }
 
@@ -23,6 +22,9 @@
   background: #ffe5e0;
   padding: 16px 24px;
   border-bottom: 1px solid #ffd4cc;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .create-purchase-modal__title {

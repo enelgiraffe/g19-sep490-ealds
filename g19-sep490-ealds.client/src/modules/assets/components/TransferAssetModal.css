@@ -1,3 +1,16 @@
+.transfer-modal .ant-modal-content {
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.transfer-modal .ant-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+}
+
 .transfer-modal__close {
   font-size: 20px;
   cursor: pointer;
@@ -89,5 +102,23 @@
 
 .transfer-btn-cancel {
   border-color: #d9d9d9;
+}
+
+/* Scrollbar styling */
+.transfer-modal .ant-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.transfer-modal .ant-modal-body::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.transfer-modal .ant-modal-body::-webkit-scrollbar-thumb {
+  background: #919EAB;
+  border-radius: 3px;
+}
+
+.transfer-modal .ant-modal-body::-webkit-scrollbar-thumb:hover {
+  background: #7a8693;
 }
 

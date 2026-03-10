@@ -57,8 +57,6 @@ export function TransferAssetModal({
     }
   }, [open, fromDepartmentId, form]);
 
-  if (!assetInfo) return null;
-
   const handleSubmit = () => {
     form.validateFields().then((values) => {
       onSubmit(values);
@@ -73,6 +71,7 @@ export function TransferAssetModal({
       onCancel={onClose}
       footer={null}
       width={900}
+      centered
       className="transfer-modal"
       closeIcon={<span className="transfer-modal__close">×</span>}
     >
@@ -155,32 +154,38 @@ export function TransferAssetModal({
 
           <div className="transfer-form__section">
             <h3 className="transfer-section-title">Tài sản được chuyển</h3>
-            <div className="transfer-asset-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>STT</th>
-                    <th>Mã tài sản</th>
-                    <th>Tài sản</th>
-                    <th>Vị trí tài sản</th>
-                    <th>Tình trạng</th>
-                    <th>Số lượng</th>
-                    <th>Phòng ban sử dụng</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>1</td>
-                    <td>{assetInfo.code}</td>
-                    <td>{assetInfo.name}</td>
-                    <td>{assetInfo.location}</td>
-                    <td>{assetInfo.status}</td>
-                    <td>1</td>
-                    <td>{assetInfo.department}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            {assetInfo ? (
+              <div className="transfer-asset-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>STT</th>
+                      <th>Mã tài sản</th>
+                      <th>Tài sản</th>
+                      <th>Vị trí tài sản</th>
+                      <th>Tình trạng</th>
+                      <th>Số lượng</th>
+                      <th>Phòng ban sử dụng</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>1</td>
+                      <td>{assetInfo.code}</td>
+                      <td>{assetInfo.name}</td>
+                      <td>{assetInfo.location}</td>
+                      <td>{assetInfo.status}</td>
+                      <td>1</td>
+                      <td>{assetInfo.department}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="transfer-asset-placeholder">
+                Vui lòng chọn tài sản từ danh sách tài sản để hiển thị thông tin chi tiết.
+              </p>
+            )}
           </div>
 
           <div className="transfer-form__section">
@@ -209,7 +214,7 @@ export function TransferAssetModal({
               onClick={onClose}
               className="transfer-btn-cancel"
             >
-              Nhập
+              Nháp
             </Button>
           </div>
         </Form>

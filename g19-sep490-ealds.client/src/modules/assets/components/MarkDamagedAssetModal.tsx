@@ -46,6 +46,7 @@ export function MarkDamagedAssetModal({ open, onClose, onSubmit, assetInfo }: Ma
       onCancel={onClose}
       footer={null}
       width={900}
+      centered
       className="mark-damaged-modal"
       closeIcon={<span className="mark-damaged-modal__close">×</span>}
     >
@@ -205,7 +206,7 @@ export function MarkDamagedAssetModal({ open, onClose, onSubmit, assetInfo }: Ma
           onClick={onClose}
           className="mark-damaged-btn-draft"
         >
-          Nhập
+          Nháp
         </Button>
       </div>
     </Modal>
