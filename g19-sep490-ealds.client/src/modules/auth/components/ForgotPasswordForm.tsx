@@ -80,7 +80,7 @@ export const ForgotPasswordForm = () => {
           </Button>
         </Form.Item>
 
-        <Form.Item className="back-to-login-item">
+        <Form.Item className="back-to-login-item l">
           <Link to="/login" className="back-to-login-link">
             <LeftOutlined /> Quay lại
           </Link>

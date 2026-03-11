@@ -2,42 +2,44 @@ import type { AppRole, SidebarItem } from '../types/layout.types';
 
 /** Common menu items for all users */
 export const COMMON_MENU: SidebarItem[] = [
-  { key: 'notifications', path: '/notifications', label: 'Thông báo' },
+  { key: 'notifications', path: '/notifications', label: 'Thông báo', icon: '/icons/sidebar-notifications.svg' },
 ];
 
 /** Menu items per role (paths in English) */
 export const ROLE_MENU: Record<AppRole, SidebarItem[]> = {
   department_head: [
-    { key: 'assets', path: '/assets', label: 'Tài sản' },
-    { key: 'purchase-orders', path: '/purchase-orders', label: 'Đơn mua' },
-    { key: 'transfers', path: '/transfers', label: 'Điều chuyển' },
-    { key: 'repairs', path: '/repairs', label: 'Sửa chữa' },
-    { key: 'maintenance', path: '/maintenance', label: 'Bảo trì' },
-    { key: 'liquidation', path: '/liquidation', label: 'Thanh lý' },
+    { key: 'assets', path: '/assets', label: 'Tài sản', icon: '/icons/sidebar-assets.svg' },
+    { key: 'purchase-orders', path: '/purchase-orders', label: 'Đơn mua', icon: '/icons/sidebar-purchase-orders.svg' },
+    { key: 'transfers', path: '/transfers', label: 'Điều chuyển', icon: '/icons/sidebar-transfers.svg' },
+    { key: 'repairs', path: '/repairs', label: 'Sửa chữa', icon: '/icons/sidebar-repairs.svg' },
+    { key: 'maintenance', path: '/maintenance', label: 'Bảo trì', icon: '/icons/sidebar-maintenance.svg' },
+    { key: 'liquidation', path: '/liquidation', label: 'Thanh lý', icon: '/icons/sidebar-liquidation.svg' },
+    { key: 'inventories', path: '/inventories', label: 'Kiểm kê', icon: '/icons/sidebar-inventories.svg' },
+
   ],
   accountant: [
     // Kế toán dùng màn tài sản riêng
-    { key: 'assets', path: '/accountant-assets', label: 'Tài sản' },
-    { key: 'transfers', path: '/transfers', label: 'Điều chuyển' },
-    { key: 'allocations', path: '/allocations', label: 'Cấp phát-Thu hồi' },
-    { key: 'liquidation', path: '/liquidation', label: 'Thanh lý' },
-    { key: 'cost-recording', path: '/cost-recording', label: 'Ghi nhận chi phí' },
-    { key: 'requests', path: '/requests', label: 'Yêu cầu' },
+    { key: 'assets', path: '/accountant-assets', label: 'Tài sản', icon: '/icons/sidebar-assets.svg' },
+    { key: 'transfers', path: '/transfers', label: 'Điều chuyển', icon: '/icons/sidebar-transfers.svg' },
+    { key: 'allocations', path: '/allocations', label: 'Cấp phát-Thu hồi', icon: '/icons/sidebar-allocations.svg' },
+    { key: 'liquidation', path: '/liquidation', label: 'Thanh lý', icon: '/icons/sidebar-liquidation.svg' },
+    { key: 'cost-recording', path: '/cost-recording', label: 'Ghi nhận chi phí', icon: '/icons/sidebar-cost-recording.svg' },
+    { key: 'requests', path: '/requests', label: 'Yêu cầu', icon: '/icons/sidebar-requests.svg' },
   ],
   director: [
-    { key: 'dashboard', path: '/dashboard', label: 'Dashboard' },
-    { key: 'assets', path: '/assets', label: 'Tài sản' },
-    { key: 'requests', path: '/requests', label: 'Yêu cầu' },
-    { key: 'reports', path: '/reports', label: 'Báo cáo' },
+    { key: 'dashboard', path: '/dashboard', label: 'Dashboard', icon: '/icons/sidebar-dashboard.svg' },
+    { key: 'assets', path: '/assets', label: 'Tài sản', icon: '/icons/sidebar-assets.svg' },
+    { key: 'requests', path: '/requests', label: 'Yêu cầu', icon: '/icons/sidebar-requests.svg' },
+    { key: 'reports', path: '/reports', label: 'Báo cáo', icon: '/icons/sidebar-reports.svg' },
   ],
   admin: [
-    { key: 'users', path: '/users', label: 'Người dùng' },
-    { key: 'roles', path: '/roles', label: 'Vai trò' },
-    { key: 'departments', path: '/departments', label: 'Phòng ban' },
-    { key: 'categories', path: '/categories', label: 'Danh mục' },
-    { key: 'approval-workflows', path: '/approval-workflows', label: 'Quy trình phê duyệt' },
-    { key: 'extended-fields', path: '/extended-fields', label: 'Trường mở rộng' },
-    { key: 'system-settings', path: '/system-settings', label: 'Cấu hình hệ thống' },
+    { key: 'users', path: '/users', label: 'Người dùng', icon: '/icons/sidebar-users.svg' },
+    { key: 'roles', path: '/roles', label: 'Vai trò', icon: '/icons/sidebar-roles.svg' },
+    { key: 'departments', path: '/departments', label: 'Phòng ban', icon: '/icons/sidebar-departments.svg' },
+    { key: 'categories', path: '/categories', label: 'Danh mục', icon: '/icons/sidebar-categories.svg' },
+    { key: 'approval-workflows', path: '/approval-workflows', label: 'Quy trình phê duyệt', icon: '/icons/sidebar-approval-workflows.svg' },
+    { key: 'extended-fields', path: '/extended-fields', label: 'Trường mở rộng', icon: '/icons/sidebar-extended-fields.svg' },
+    { key: 'system-settings', path: '/system-settings', label: 'Cấu hình hệ thống', icon: '/icons/sidebar-system-settings.svg' },
   ],
 };
 

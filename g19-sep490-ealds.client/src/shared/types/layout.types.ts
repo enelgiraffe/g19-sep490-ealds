@@ -8,6 +8,8 @@ export interface SidebarItem {
   key: string;
   path: string;
   label: string;
+  /** Optional icon path, e.g. '/icons/sidebar-assets.svg' */
+  icon?: string;
 }
 
 export interface RoleOption {

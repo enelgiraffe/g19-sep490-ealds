@@ -1,15 +1,37 @@
-.mark-damaged-modal .ant-modal-content {
+.mark-damaged-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.mark-damaged-modal {
+  position: relative;
+  background: #fff;
   border-radius: 8px;
   overflow: hidden;
   max-height: 85vh;
+  width: 900px;
   display: flex;
   flex-direction: column;
 }
 
-.mark-damaged-modal .ant-modal-body {
+.mark-damaged-modal__body {
   padding: 0;
   flex: 1;
   overflow-y: auto;
+}
+
+.mark-damaged-modal__close-btn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
 }
 
 .mark-damaged-modal__close {
@@ -49,6 +71,34 @@
   background: #f3f4f6;
   color: #6b7280;
   cursor: not-allowed;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.mark-damaged-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  font-size: 14px;
+}
+
+.mark-damaged-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  font-size: 14px;
+  resize: vertical;
+  min-height: 96px;
+}
+
+.mark-damaged-error-text {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #ef4444;
 }
 
 .mark-damaged-info-section {
@@ -99,22 +149,6 @@
   margin-bottom: 24px;
 }
 
-.mark-damaged-form-section .ant-form-item {
-  margin-bottom: 16px;
-}
-
-.mark-damaged-form-section .ant-form-item-label > label {
-  font-size: 13px;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.mark-damaged-form-section .ant-picker,
-.mark-damaged-form-section .ant-input-textarea {
-  border-radius: 6px;
-  border-color: #e5e7eb;
-}
-
 .mark-damaged-attachments-section {
   margin-top: 20px;
 }
@@ -160,30 +194,41 @@
   gap: 4px;
 }
 
-.mark-damaged-attachment-actions .ant-btn-text {
+.mark-damaged-attachment-btn {
   padding: 4px 8px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
   color: #6b7280;
 }
 
-.mark-damaged-attachment-actions .ant-btn-text:hover {
+.mark-damaged-attachment-btn:hover {
   color: #111827;
   background: #e5e7eb;
 }
 
-.mark-damaged-attachment-actions .ant-btn-dangerous:hover {
+.mark-damaged-attachment-btn--danger:hover {
   color: #FE3720;
   background: #fee2e2;
 }
 
 .mark-damaged-btn-upload {
   background: #10b981;
-  border-color: #10b981;
+  border: 1px solid #10b981;
   color: #fff;
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
   justify-content: center;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.mark-damaged-btn-upload-icon {
+  font-size: 14px;
 }
 
 .mark-damaged-btn-upload:hover {
@@ -202,9 +247,12 @@
 
 .mark-damaged-btn-submit {
   background: #FE3720;
-  border-color: #FE3720;
+  border: 1px solid #FE3720;
   height: 40px;
   padding: 0 32px;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
 }
 
 .mark-damaged-btn-submit:hover {
@@ -214,10 +262,12 @@
 
 .mark-damaged-btn-draft {
   background: #6b7280;
-  border-color: #6b7280;
+  border: 1px solid #6b7280;
   color: #fff;
   height: 40px;
   padding: 0 32px;
+  border-radius: 6px;
+  cursor: pointer;
 }
 
 .mark-damaged-btn-draft:hover {
@@ -227,19 +277,19 @@
 }
 
 /* Scrollbar styling */
-.mark-damaged-modal .ant-modal-body::-webkit-scrollbar {
+.mark-damaged-modal__body::-webkit-scrollbar {
   width: 6px;
 }
 
-.mark-damaged-modal .ant-modal-body::-webkit-scrollbar-track {
+.mark-damaged-modal__body::-webkit-scrollbar-track {
   background: #f1f1f1;
 }
 
-.mark-damaged-modal .ant-modal-body::-webkit-scrollbar-thumb {
+.mark-damaged-modal__body::-webkit-scrollbar-thumb {
   background: #919EAB;
   border-radius: 3px;
 }
 
-.mark-damaged-modal .ant-modal-body::-webkit-scrollbar-thumb:hover {
+.mark-damaged-modal__body::-webkit-scrollbar-thumb:hover {
   background: #7a8693;
 }

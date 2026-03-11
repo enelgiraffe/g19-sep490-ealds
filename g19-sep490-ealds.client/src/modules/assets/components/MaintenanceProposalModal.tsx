@@ -1,9 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Modal, Form, Input, Button } from 'antd';
-import { CloudUploadOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useState } from 'react';
 import './MaintenanceProposalModal.css';
-
-const { TextArea } = Input;
 
 export interface AssetInfo {
   code: string;
@@ -44,28 +40,26 @@ export function MaintenanceProposalModal({
   assetInfo,
   assetId,
 }: MaintenanceProposalModalProps) {
-  const [form] = Form.useForm();
-
-  useEffect(() => {
-    if (open) form.resetFields();
-  }, [open, form]);
-
   const [attachments, setAttachments] = useState<AttachmentItem[]>([
     { id: '1', name: 'Thông tin máy' },
     { id: '2', name: 'Thông tin nhà cung cấp' },
   ]);
+  const [recordNumber, setRecordNumber] = useState<string>('BA001');
+  const [maintenanceContent, setMaintenanceContent] = useState<string>('Hỏng nhẹ');
+  const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
 
-  if (!assetInfo || assetId == null) return null;
+  if (!open || !assetInfo || assetId == null) return null;
 
   const handleSubmit = () => {
-    form.validateFields().then((values) => {
-      onSubmit({
-        assetId,
-        recordNumber: values.recordNumber,
-        maintenanceContent: values.maintenanceContent ?? '',
-      });
-      form.resetFields();
-      // Parent đóng modal sau khi gọi API thành công
+    if (!maintenanceContent.trim()) {
+      setMaintenanceError('Vui lòng nhập nội dung bảo dưỡng');
+      return;
+    }
+
+    onSubmit({
+      assetId,
+      recordNumber: recordNumber.trim() || undefined,
+      maintenanceContent: maintenanceContent.trim(),
     });
   };
 
@@ -81,29 +75,36 @@ export function MaintenanceProposalModal({
   };
 
   return (
-    <Modal
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={900}
-      className="maintenance-proposal-modal"
-      closeIcon={<span className="maintenance-proposal-modal__close">×</span>}
-    >
-      <div className="maintenance-proposal-modal__header">
-        <h2 className="maintenance-proposal-modal__title">
-          Gửi đề xuất bảo dưỡng máy móc
-        </h2>
-      </div>
-
-      <div className="maintenance-proposal-modal__content">
-        <Form
-          form={form}
-          layout="vertical"
-          initialValues={{ recordNumber: 'BA001', maintenanceContent: 'Hỏng nhẹ' }}
+    <div className="maintenance-proposal-overlay" role="dialog" aria-modal="true">
+      <div className="maintenance-proposal-modal">
+        <button
+          type="button"
+          className="maintenance-proposal-modal__close-btn"
+          onClick={onClose}
+          aria-label="Đóng"
         >
-          <Form.Item label="Số biên bản" name="recordNumber" className="maintenance-proposal-form__item">
-            <Input placeholder="BA001" className="maintenance-proposal-input" />
-          </Form.Item>
+          <span className="maintenance-proposal-modal__close">×</span>
+        </button>
+
+        <div className="maintenance-proposal-modal__header">
+          <h2 className="maintenance-proposal-modal__title">
+            Gửi đề xuất bảo dưỡng máy móc
+          </h2>
+        </div>
+
+        <div className="maintenance-proposal-modal__body">
+          <div className="maintenance-proposal-modal__content">
+            <div className="maintenance-proposal-form__item">
+              <label htmlFor="maintenance-record-number">Số biên bản</label>
+              <input
+                id="maintenance-record-number"
+                type="text"
+                className="maintenance-proposal-input"
+                placeholder="BA001"
+                value={recordNumber}
+                onChange={(e) => setRecordNumber(e.target.value)}
+              />
+            </div>
 
           <div className="maintenance-proposal-info-section">
             <h3 className="maintenance-proposal-section-title">Thông tin tài sản</h3>
@@ -173,13 +174,25 @@ export function MaintenanceProposalModal({
 
           <div className="maintenance-proposal-form-section">
             <h3 className="maintenance-proposal-section-title">Thông tin bảo dưỡng</h3>
-            <Form.Item
-              label="Nội dung bảo dưỡng"
-              name="maintenanceContent"
-              rules={[{ required: true, message: 'Vui lòng nhập nội dung bảo dưỡng' }]}
-            >
-              <TextArea rows={4} placeholder="Mô tả nội dung cần bảo dưỡng..." />
-            </Form.Item>
+            <div className="maintenance-proposal-form__item">
+              <label htmlFor="maintenance-content">
+                Nội dung bảo dưỡng<span className="maintenance-proposal-required">*</span>
+              </label>
+              <textarea
+                id="maintenance-content"
+                className="maintenance-proposal-textarea"
+                rows={4}
+                placeholder="Mô tả nội dung cần bảo dưỡng..."
+                value={maintenanceContent}
+                onChange={(e) => {
+                  setMaintenanceContent(e.target.value);
+                  setMaintenanceError(null);
+                }}
+              />
+              {maintenanceError && (
+                <div className="maintenance-proposal-error-text">{maintenanceError}</div>
+              )}
+            </div>
 
             <div className="maintenance-proposal-attachments-section">
               <h4 className="maintenance-proposal-attachments-title">Tài liệu đính kèm</h4>
@@ -191,42 +204,51 @@ export function MaintenanceProposalModal({
                     </span>
                     <span className="maintenance-proposal-attachment-name">{att.name}</span>
                     <div className="maintenance-proposal-attachment-actions">
-                      <Button type="text" icon={<EditOutlined />} size="small" />
-                      <Button
-                        type="text"
-                        icon={<DeleteOutlined />}
-                        size="small"
-                        danger
+                      <button type="button" className="maintenance-proposal-attachment-btn">
+                        ✏
+                      </button>
+                      <button
+                        type="button"
+                        className="maintenance-proposal-attachment-btn maintenance-proposal-attachment-btn--danger"
                         onClick={() => handleRemoveAttachment(att.id)}
-                      />
+                      >
+                        🗑
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
-              <Button
-                icon={<CloudUploadOutlined />}
+              <button
+                type="button"
                 className="maintenance-proposal-btn-upload"
                 onClick={handleAddAttachment}
               >
-                + Thêm file đính kèm
-              </Button>
+                <span className="maintenance-proposal-btn-upload-icon">+</span>
+                <span>Thêm file đính kèm</span>
+              </button>
             </div>
           </div>
-        </Form>
-      </div>
+        </div>
 
-      <div className="maintenance-proposal-modal__footer">
-        <Button
-          type="primary"
-          onClick={handleSubmit}
-          className="maintenance-proposal-btn-submit"
-        >
-          Gửi yêu cầu
-        </Button>
-        <Button onClick={onClose} className="maintenance-proposal-btn-cancel">
-          Hủy
-        </Button>
+        
       </div>
-    </Modal>
+      <div className="maintenance-proposal-modal__footer">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="maintenance-proposal-btn-submit"
+          >
+            Gửi yêu cầu
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="maintenance-proposal-btn-cancel"
+          >
+            Hủy
+          </button>
+        </div>
+    </div>
+  </div>
   );
 }

@@ -1,14 +1,37 @@
-.transfer-modal .ant-modal-content {
+.transfer-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.transfer-modal {
+  position: relative;
+  background: #fff;
   border-radius: 8px;
   overflow: hidden;
   max-height: 85vh;
+  width: 900px;
   display: flex;
   flex-direction: column;
+  padding: 24px;
 }
 
-.transfer-modal .ant-modal-body {
-  padding: 24px;
+.transfer-modal__body {
   overflow-y: auto;
+  padding-right: 4px;
+}
+
+.transfer-modal__close-btn {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
 }
 
 .transfer-modal__close {
@@ -20,10 +43,14 @@
   font-size: 20px;
   font-weight: 600;
   margin: 0;
+  color: #fe3720;
 }
 
 .transfer-modal__header {
-  margin-bottom: 16px;
+  padding: 16px 24px;
+  margin: -24px -24px 16px -24px;
+  background: #ffe5e0;
+  border-bottom: 1px solid #ffd4cc;
 }
 
 .transfer-form__section {
@@ -49,8 +76,50 @@
   flex: 1;
 }
 
+.transfer-form__item--full {
+  margin-top: 16px;
+}
+
+.transfer-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  font-size: 14px;
+}
+
 .transfer-input--disabled {
   background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.transfer-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.transfer-select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  font-size: 14px;
+  background-color: #fff;
+}
+
+.transfer-required {
+  color: #ef4444;
+  margin-left: 2px;
+}
+
+.transfer-error-text {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #ef4444;
 }
 
 .transfer-asset-table table {
@@ -92,7 +161,12 @@
 
 .transfer-btn-submit {
   background-color: #ff4d4f;
-  border-color: #ff4d4f;
+  border: 1px solid #ff4d4f;
+  color: #fff;
+  border-radius: 6px;
+  padding: 0 32px;
+  height: 40px;
+  cursor: pointer;
 }
 
 .transfer-btn-submit:hover {
@@ -101,24 +175,29 @@
 }
 
 .transfer-btn-cancel {
-  border-color: #d9d9d9;
+  border: 1px solid #d9d9d9;
+  background: #f9fafb;
+  border-radius: 6px;
+  padding: 0 32px;
+  height: 40px;
+  cursor: pointer;
 }
 
 /* Scrollbar styling */
-.transfer-modal .ant-modal-body::-webkit-scrollbar {
+.transfer-modal__body::-webkit-scrollbar {
   width: 6px;
 }
 
-.transfer-modal .ant-modal-body::-webkit-scrollbar-track {
+.transfer-modal__body::-webkit-scrollbar-track {
   background: #f1f1f1;
 }
 
-.transfer-modal .ant-modal-body::-webkit-scrollbar-thumb {
+.transfer-modal__body::-webkit-scrollbar-thumb {
   background: #919EAB;
   border-radius: 3px;
 }
 
-.transfer-modal .ant-modal-body::-webkit-scrollbar-thumb:hover {
+.transfer-modal__body::-webkit-scrollbar-thumb:hover {
   background: #7a8693;
 }
 

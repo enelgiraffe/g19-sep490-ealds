@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Table, Button, Input, Select, Tag, message, Tabs } from 'antd';
-import type { TableColumnsType } from 'antd';
+import { Button, Input, Select, message, Tabs } from 'antd';
 import { SearchOutlined, FilterOutlined, SettingOutlined, EyeOutlined } from '@ant-design/icons';
 import { transferRequestService, type TransferRequestListItem } from '../../assets/services/transferRequestService';
 import { TransferAssetModal } from '../../assets/components/TransferAssetModal';
@@ -91,45 +90,6 @@ export function TransfersPage() {
   const endIndex = Math.min(safePage * pageSize, total);
   const pagedData = filteredData.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  const columns: TableColumnsType<TableRow> = [
-    { title: 'SỐ BIÊN BẢN', dataIndex: 'code', key: 'code', width: 140 },
-    { title: 'NGÀY ĐIỀU CHUYỂN', dataIndex: 'transferDateText', key: 'transferDateText', width: 140 },
-    { title: 'ĐIỀU CHUYỂN TỪ', dataIndex: 'fromDepartment', key: 'fromDepartment', width: 160 },
-    { title: 'ĐIỀU CHUYỂN ĐẾN', dataIndex: 'toDepartment', key: 'toDepartment', width: 160 },
-    { title: 'SỐ LƯỢNG', dataIndex: 'quantity', key: 'quantity', align: 'center', width: 120 },
-    {
-      title: 'TRẠNG THÁI',
-      dataIndex: 'status',
-      key: 'status',
-      width: 140,
-      render: (status: number) => {
-        const config = STATUS_MAP[status] ?? STATUS_MAP[0];
-        return (
-          <Tag color={config.color} className="transfers-status-tag">
-            {config.label}
-          </Tag>
-        );
-      },
-    },
-    { title: 'LÝ DO ĐIỀU CHUYỂN', dataIndex: 'reason', key: 'reason', ellipsis: true },
-    {
-      title: '',
-      key: 'actions',
-      width: 80,
-      align: 'center',
-      render: (_, record) => (
-        <Button
-          type="text"
-          icon={<EyeOutlined />}
-          onClick={() => {
-            setSelectedRequest(record);
-            setIsDetailModalOpen(true);
-          }}
-        />
-      ),
-    },
-  ];
-
   return (
     <div className="transfers-page">
       <div className="transfers-header">
@@ -178,26 +138,100 @@ export function TransfersPage() {
             ))}
           </Select>
           <Button icon={<FilterOutlined />} className="transfers-filter-advanced">
-            Gộp bộ lọc
+            Gỡ bộ lọc
           </Button>
           <Button icon={<SettingOutlined />} className="transfers-settings" />
         </div>
 
-        <div className="transfers-table-container" ref={tableHostRef}>
-          <Table
-            columns={columns}
-            dataSource={pagedData}
-            loading={loading}
-            pagination={false}
-            className="transfers-table"
-            tableLayout="fixed"
-            rowKey="key"
-          />
+        <div className="asset-table-wrapper transfers-table-wrapper" ref={tableHostRef}>
+          {loading ? (
+            <div className="transfers-table-loading">Đang tải danh sách yêu cầu điều chuyển...</div>
+          ) : (
+            <table className="asset-table transfers-table">
+              <thead>
+                <tr>
+                  <th className="asset-table__cell asset-table__cell--checkbox">
+                    <input type="checkbox" />
+                  </th>
+                  <th>STT</th>
+                  <th>SỐ BIÊN BẢN</th>
+                  <th>NGÀY ĐIỀU CHUYỂN</th>
+                  <th>ĐIỀU CHUYỂN TỪ</th>
+                  <th>ĐIỀU CHUYỂN ĐẾN</th>
+                  <th>SỐ LƯỢNG</th>
+                  <th>TRẠNG THÁI</th>
+                  <th>LÝ DO ĐIỀU CHUYỂN</th>
+                  <th className="asset-table__cell asset-table__cell--actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {pagedData.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="transfers-table-empty">
+                      Không có dữ liệu.
+                    </td>
+                  </tr>
+                ) : (
+                  pagedData.map((row) => {
+                    const config = STATUS_MAP[row.status] ?? STATUS_MAP[0];
+                    return (
+                      <tr key={row.key} className="asset-row">
+                        <td className="asset-table__cell asset-table__cell--checkbox">
+                          <input type="checkbox" />
+                        </td>
+                        <td className="asset-align-right">{row.stt}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="asset-code asset-code--link"
+                            onClick={() => {
+                              setSelectedRequest(row);
+                              setIsDetailModalOpen(true);
+                            }}
+                          >
+                            {row.code}
+                          </button>
+                        </td>
+                        <td>{row.transferDateText}</td>
+                        <td>{row.fromDepartment}</td>
+                        <td>{row.toDepartment}</td>
+                        <td className="asset-align-right">{row.quantity}</td>
+                        <td>
+                          <span
+                            className={
+                              config.color === 'success'
+                                ? 'asset-status-pill asset-status-pill--active'
+                                : config.color === 'default'
+                                ? 'asset-status-pill asset-status-pill--inactive'
+                                : 'asset-status-pill'
+                            }
+                          >
+                            {config.label}
+                          </span>
+                        </td>
+                        <td>{row.reason}</td>
+                        <td className="asset-table__cell asset-table__cell--actions">
+                          <Button
+                            type="text"
+                            icon={<EyeOutlined />}
+                            onClick={() => {
+                              setSelectedRequest(row);
+                              setIsDetailModalOpen(true);
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
 
         <div className="transfers-card__footer">
           <div className="transfers-footer__left">
-            Items per page:
+            Số lượng trên trang:
             <select
               className="transfers-footer__select"
               value={pageSize}
@@ -214,7 +248,7 @@ export function TransfersPage() {
             </select>
           </div>
           <div className="transfers-footer__center">
-            {total === 0 ? '0-0 of 0' : `${startIndex}-${endIndex} of ${total}`}
+            {total === 0 ? '0-0 trên 0' : `${startIndex}-${endIndex} trên ${total}`}
           </div>
           <div className="transfers-footer__right">
             <button

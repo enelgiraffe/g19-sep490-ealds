@@ -67,7 +67,15 @@ export function Sidebar() {
                       `sidebar__link ${isActive ? 'sidebar__link--active' : ''}`
                     }
                   >
-                    {item.label}
+                    {item.icon && (
+                      <img
+                        src={item.icon}
+                        alt=""
+                        className="sidebar__link-icon"
+                        aria-hidden="true"
+                      />
+                    )}
+                    <span className="sidebar__link-label">{item.label}</span>
                   </NavLink>
                 </li>
               ))}
@@ -84,7 +92,15 @@ export function Sidebar() {
                   `sidebar__link ${isActive ? 'sidebar__link--active' : ''}`
                 }
               >
-                {item.label}
+                {item.icon && (
+                  <img
+                    src={item.icon}
+                    alt=""
+                    className="sidebar__link-icon"
+                    aria-hidden="true"
+                  />
+                )}
+                <span className="sidebar__link-label">{item.label}</span>
               </NavLink>
             </li>
           ))}
