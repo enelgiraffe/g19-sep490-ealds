@@ -30,3 +30,28 @@ public enum AssetLifeActionType
     Repaired = 5,
     Disposed = 6
 }
+
+public enum InventorySessionStatus
+{
+    Draft = 0,
+    InProgress = 1,
+    Completed = 2,
+    Cancelled = 3
+}
+
+public enum InventoryTaskStatus
+{
+    Pending = 0,
+    Checked = 1
+}
+
+[Flags]
+public enum DiscrepancyType
+{
+    None = 0,
+    LocationMismatch = 1,
+    UserMismatch = 2,
+    ValueMismatch = 4,
+    ConditionMismatch = 8,
+    AssetNotFound = 16
+}
