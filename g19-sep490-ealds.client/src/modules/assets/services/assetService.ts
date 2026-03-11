@@ -50,6 +50,11 @@ export interface AssetResponse {
   currentDepartmentName?: string | null;
 }
 
+export interface AssetTypeItem {
+  assetTypeId: number;
+  name: string;
+}
+
 export interface GetAssetsParams {
   keyword?: string;
   status?: number;
@@ -155,6 +160,11 @@ export const assetService = {
       `/api/assets/${id}`,
       { data: payload }
     );
+    return response.data;
+  },
+
+  async getAssetTypes(): Promise<AssetTypeItem[]> {
+    const response = await assetApi.get<AssetTypeItem[]>('/api/assettypes');
     return response.data;
   },
 };

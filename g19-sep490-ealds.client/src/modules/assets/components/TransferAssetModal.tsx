@@ -1,10 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Modal, Form, Input, DatePicker, Button, Select } from 'antd';
-import dayjs from 'dayjs';
 import { transferRequestService, type AssetLocationOption } from '../services/transferRequestService';
 import './TransferAssetModal.css';
-
-const { TextArea } = Input;
 
 interface AssetInfo {
   code: string;
@@ -36,9 +32,15 @@ export function TransferAssetModal({
   assetInfo,
   fromDepartmentId,
 }: TransferAssetModalProps) {
-  const [form] = Form.useForm();
   const [locations, setLocations] = useState<AssetLocationOption[]>([]);
   const [locationsLoading, setLocationsLoading] = useState(false);
+  const [transferDate, setTransferDate] = useState<string>('');
+  const [reason, setReason] = useState<string>('');
+  const [fromLocationId, setFromLocationId] = useState<string>('');
+  const [toLocationId, setToLocationId] = useState<string>('');
+  const [dateError, setDateError] = useState<string | null>(null);
+  const [fromError, setFromError] = useState<string | null>(null);
+  const [toError, setToError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -52,103 +54,163 @@ export function TransferAssetModal({
   }, [open]);
 
   useEffect(() => {
-    if (open && fromDepartmentId) {
-      form.setFieldsValue({ fromLocationId: fromDepartmentId });
+    if (open) {
+      const today = new Date().toISOString().slice(0, 10);
+      setTransferDate(today);
+      setReason('');
+      setDateError(null);
+      setFromError(null);
+      setToError(null);
+      if (fromDepartmentId != null) {
+        setFromLocationId(String(fromDepartmentId));
+      } else {
+        setFromLocationId('');
+      }
+      setToLocationId('');
     }
-  }, [open, fromDepartmentId, form]);
+  }, [open, fromDepartmentId]);
 
   const handleSubmit = () => {
-    form.validateFields().then((values) => {
-      onSubmit(values);
-      form.resetFields();
-      onClose();
+    let hasError = false;
+    if (!transferDate) {
+      setDateError('Vui lòng chọn ngày điều chuyển');
+      hasError = true;
+    }
+    if (!fromLocationId) {
+      setFromError('Chọn vị trí nguồn');
+      hasError = true;
+    }
+    if (!toLocationId) {
+      setToError('Chọn vị trí đích');
+      hasError = true;
+    }
+    if (hasError) return;
+
+    const transferDateValue = transferDate ? new Date(transferDate) : undefined;
+
+    onSubmit({
+      transferDate: transferDateValue,
+      reason: reason.trim() || undefined,
+      fromLocationId,
+      toLocationId,
     });
+    onClose();
   };
 
-  return (
-    <Modal
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={900}
-      centered
-      className="transfer-modal"
-      closeIcon={<span className="transfer-modal__close">×</span>}
-    >
-      <div className="transfer-modal__header">
-        <h2 className="transfer-modal__title">Yêu cầu điều chuyển</h2>
-      </div>
+  if (!open) return null;
 
-      <div className="transfer-modal__content">
-        <Form
-          form={form}
-          layout="vertical"
-          initialValues={{
-            transferDate: dayjs(),
-          }}
+  return (
+    <div className="transfer-modal-overlay" role="dialog" aria-modal="true">
+      <div className="transfer-modal">
+        <button
+          type="button"
+          className="transfer-modal__close-btn"
+          onClick={onClose}
+          aria-label="Đóng"
         >
+          <span className="transfer-modal__close">×</span>
+        </button>
+
+        <div className="transfer-modal__header">
+          <h2 className="transfer-modal__title">Yêu cầu điều chuyển</h2>
+        </div>
+
+        <div className="transfer-modal__body">
           <div className="transfer-form__section">
             <h3 className="transfer-section-title">Thông tin chung</h3>
 
             <div className="transfer-form__row">
-              <Form.Item label="Số biên bản" className="transfer-form__item">
-                <Input defaultValue="-" disabled className="transfer-input--disabled" />
-              </Form.Item>
-              <Form.Item
-                label="Ngày điều chuyển"
-                name="transferDate"
-                className="transfer-form__item"
-                rules={[{ required: true, message: 'Vui lòng chọn ngày điều chuyển' }]}
-              >
-                <DatePicker
-                  style={{ width: '100%' }}
-                  placeholder="dd/mm/yyyy"
-                  format="DD/MM/YYYY"
+              <div className="transfer-form__item">
+                <label htmlFor="transfer-record-number">Số biên bản</label>
+                <input
+                  id="transfer-record-number"
+                  type="text"
+                  value="-"
+                  disabled
+                  className="transfer-input transfer-input--disabled"
                 />
-              </Form.Item>
+              </div>
+              <div className="transfer-form__item">
+                <label htmlFor="transfer-date">
+                  Ngày điều chuyển<span className="transfer-required">*</span>
+                </label>
+                <input
+                  id="transfer-date"
+                  type="date"
+                  className="transfer-input"
+                  value={transferDate}
+                  onChange={(e) => {
+                    setTransferDate(e.target.value);
+                    setDateError(null);
+                  }}
+                />
+                {dateError && <div className="transfer-error-text">{dateError}</div>}
+              </div>
             </div>
 
-            <Form.Item
-              label="Lý do điều chuyển"
-              name="reason"
-            >
-              <TextArea rows={3} placeholder="Nhập lý do điều chuyển" />
-            </Form.Item>
+            <div className="transfer-form__item transfer-form__item--full">
+              <label htmlFor="transfer-reason">Lý do điều chuyển</label>
+              <textarea
+                id="transfer-reason"
+                className="transfer-textarea"
+                rows={3}
+                placeholder="Nhập lý do điều chuyển"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </div>
           </div>
 
           <div className="transfer-form__section transfer-form__section--locations">
             <h3 className="transfer-section-title">Điều chuyển</h3>
             <div className="transfer-form__row">
-              <Form.Item
-                label="Từ vị trí"
-                name="fromLocationId"
-                className="transfer-form__item"
-                rules={[{ required: true, message: 'Chọn vị trí nguồn' }]}
-              >
-                <Select
-                  placeholder="Chọn vị trí hiện tại"
-                  loading={locationsLoading}
-                  allowClear
-                  showSearch
-                  optionFilterProp="label"
-                  options={locations.map((loc) => ({ value: loc.locationId, label: loc.displayName }))}
-                />
-              </Form.Item>
-              <Form.Item
-                label="Đến vị trí"
-                name="toLocationId"
-                className="transfer-form__item"
-                rules={[{ required: true, message: 'Chọn vị trí đích' }]}
-              >
-                <Select
-                  placeholder="Chọn vị trí chuyển đến"
-                  loading={locationsLoading}
-                  allowClear
-                  showSearch
-                  optionFilterProp="label"
-                  options={locations.map((loc) => ({ value: loc.locationId, label: loc.displayName }))}
-                />
-              </Form.Item>
+              <div className="transfer-form__item">
+                <label htmlFor="transfer-from-location">
+                  Từ vị trí<span className="transfer-required">*</span>
+                </label>
+                <select
+                  id="transfer-from-location"
+                  className="transfer-select"
+                  value={fromLocationId}
+                  disabled={locationsLoading}
+                  onChange={(e) => {
+                    setFromLocationId(e.target.value);
+                    setFromError(null);
+                  }}
+                >
+                  <option value="">Chọn vị trí hiện tại</option>
+                  {locations.map((loc) => (
+                    <option key={loc.locationId} value={loc.locationId}>
+                      {loc.displayName}
+                    </option>
+                  ))}
+                </select>
+                {fromError && <div className="transfer-error-text">{fromError}</div>}
+              </div>
+
+              <div className="transfer-form__item">
+                <label htmlFor="transfer-to-location">
+                  Đến vị trí<span className="transfer-required">*</span>
+                </label>
+                <select
+                  id="transfer-to-location"
+                  className="transfer-select"
+                  value={toLocationId}
+                  disabled={locationsLoading}
+                  onChange={(e) => {
+                    setToLocationId(e.target.value);
+                    setToError(null);
+                  }}
+                >
+                  <option value="">Chọn vị trí chuyển đến</option>
+                  {locations.map((loc) => (
+                    <option key={loc.locationId} value={loc.locationId}>
+                      {loc.displayName}
+                    </option>
+                  ))}
+                </select>
+                {toError && <div className="transfer-error-text">{toError}</div>}
+              </div>
             </div>
           </div>
 
@@ -201,25 +263,26 @@ export function TransferAssetModal({
               </div>
             </div>
           </div>
+        </div>
 
-          <div className="transfer-modal__footer">
-            <Button
-              type="primary"
-              onClick={handleSubmit}
-              className="transfer-btn-submit"
-            >
-              Gửi yêu cầu
-            </Button>
-            <Button
-              onClick={onClose}
-              className="transfer-btn-cancel"
-            >
-              Nháp
-            </Button>
-          </div>
-        </Form>
+        <div className="transfer-modal__footer">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="transfer-btn-submit"
+          >
+            Gửi yêu cầu
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="transfer-btn-cancel"
+          >
+            Nháp
+          </button>
+        </div>
       </div>
-    </Modal>
+    </div>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { message, Popover, Slider, Button } from 'antd';
 import {
@@ -7,6 +7,7 @@ import {
   getStatusLabel,
   type AssetResponse,
   type GetAssetsParams,
+  type AssetTypeItem,
 } from '../services/assetService';
 import { transferRequestService } from '../services/transferRequestService';
 import { maintenanceRequestService } from '../services/maintenanceRequestService';
@@ -136,6 +137,7 @@ export function AssetListPage() {
   const [selectedAssetInfo, setSelectedAssetInfo] = useState<AssetInfo | null>(null);
   const [transferAssetId, setTransferAssetId] = useState<number | null>(null);
   const [maintenanceAssetId, setMaintenanceAssetId] = useState<number | null>(null);
+  const [assetTypes, setAssetTypes] = useState<AssetTypeItem[]>([]);
   const navigate = useNavigate();
 
   const assets: AssetItem[] = apiAssets?.map(mapResponseToItem) ?? [];
@@ -201,10 +203,11 @@ export function AssetListPage() {
     fetchAssets();
   }, [fetchAssets]);
 
-  useEffect(() => {
-    const t = setTimeout(() => setKeyword(searchInput.trim()), 400);
-    return () => clearTimeout(t);
-  }, [searchInput]);
+  const handleSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      setKeyword(searchInput.trim());
+    }
+  };
 
   useEffect(() => {
     async function loadProfile() {
@@ -216,6 +219,18 @@ export function AssetListPage() {
       }
     }
     loadProfile();
+  }, []);
+
+  useEffect(() => {
+    async function loadAssetTypes() {
+      try {
+        const items = await assetService.getAssetTypes();
+        setAssetTypes(items);
+      } catch {
+        // Nếu lỗi thì vẫn để dropdown hiển thị "Tất cả loại tài sản"
+      }
+    }
+    loadAssetTypes();
   }, []);
 
   useEffect(() => {
@@ -417,6 +432,7 @@ export function AssetListPage() {
               placeholder="Tìm kiếm"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
             />
           </div>
           <div className="asset-card__filters">
@@ -429,9 +445,11 @@ export function AssetListPage() {
               }}
             >
               <option value="">Tất cả loại tài sản</option>
-              <option value={1}>Máy móc</option>
-              <option value={2}>Thiết bị</option>
-              <option value={3}>Khác</option>
+              {assetTypes.map((t) => (
+                <option key={t.assetTypeId} value={t.assetTypeId}>
+                  {t.name}
+                </option>
+              ))}
             </select>
             <select
               className="asset-filter-select"
@@ -652,23 +670,28 @@ export function AssetListPage() {
 
         <div className="asset-card__footer">
           <div className="asset-footer__left">
-            Items per page:
-            <select className="asset-footer__select">
-              <option>25</option>
-              <option>50</option>
-              <option>100</option>
+            Số lượng trên trang:
+            <select className="asset-footer__select" defaultValue={25}>
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
             </select>
           </div>
-          <div className="asset-footer__center">1-25 of 289</div>
+          <div className="asset-footer__center">1-25 trên 289</div>
           <div className="asset-footer__right">
-            <button className="asset-footer__pager" disabled>
+            <button className="asset-footer__pager" disabled type="button">
               ⟨
             </button>
-            <button className="asset-footer__pager asset-footer__pager--active">
+            <button
+              className="asset-footer__pager asset-footer__pager--active"
+              type="button"
+            >
               1
             </button>
-            <button className="asset-footer__pager">2</button>
-            <button className="asset-footer__pager">⟩</button>
+            <button className="asset-footer__pager" type="button">
+              ⟩
+            </button>
           </div>
         </div>
       </div>

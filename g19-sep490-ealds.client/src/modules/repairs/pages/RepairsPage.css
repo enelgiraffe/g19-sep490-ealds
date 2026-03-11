@@ -1,162 +1,104 @@
 .repairs-page {
-  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
 }
 
 .repairs-page__title {
   font-size: 24px;
   font-weight: 600;
-  margin-bottom: 16px;
+
 }
 
 .repairs-card {
   background: #ffffff;
-  border-radius: 16px;
+  border: 1px solid #dad9d9;
+  border-radius: 20px;
   padding: 16px 24px 24px;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-}
-
-.repairs-card__tabs {
-  display: inline-flex;
-  background: #f3f4f6;
-  border-radius: 999px;
-  padding: 4px;
-  margin-bottom: 16px;
-}
-
-.repairs-tab {
-  border: none;
-  background: transparent;
-  padding: 6px 16px;
-  border-radius: 999px;
-  font-size: 14px;
-  color: #6b7280;
-  cursor: pointer;
-}
-
-.repairs-tab--active {
-  background: #ffffff;
-  color: #111827;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
-}
-
-.repairs-card__header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
 }
 
-.repairs-card__search-group {
-  flex: 1;
+.repairs-tabs {
+  margin-top: 0;
+}
+
+.repairs-tabs .ant-tabs-nav {
+  margin: 0;
+}
+
+.repairs-tabs .ant-tabs-nav::before {
+  border-bottom: none;
+}
+
+.repairs-tabs .ant-tabs-ink-bar {
+  display: none;
+}
+
+/* Copy 1:1 style from Transfers tabs */
+.repairs-tabs .ant-tabs-tab {
+  padding: 6px 20px;
+  margin: 0 !important;
+  border-radius: 999px;
+  background: #f3f4f6;
+  border: none;
+  transition: background 0.25s ease, box-shadow 0.25s ease;
+}
+
+.repairs-tabs .ant-tabs-nav-list {
+  padding: 5px 1px;
+  gap: 8px;
+}
+
+.repairs-tabs .ant-tabs-tab .ant-tabs-tab-btn {
+  color: #6b7280;
+  font-weight: 500;
+  transition: color 0.25s ease;
+}
+
+.repairs-tabs .ant-tabs-tab.ant-tabs-tab-active {
+  background: #ffffff;
+  box-shadow: rgba(0, 0, 0, 0.02) 0px 1px 3px 0px,
+    rgba(27, 31, 35, 0.15) 0px 0px 0px 1px;
+}
+
+.repairs-tabs .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #ff4d4f;
+}
+
+.repairs-tabs .ant-tabs-tab:hover .ant-tabs-tab-btn {
+  color: #ff4d4f;
+}
+
+.repairs-filters {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.repairs-search {
   max-width: 260px;
 }
 
-.repairs-search-input {
-  width: 100%;
-  padding: 8px 12px;
-  border-radius: 999px;
-  border: 1px solid #e5e7eb;
-  outline: none;
+.repairs-select {
+  width: 180px;
 }
 
-.repairs-search-input:focus {
-  border-color: #fe3720;
-  box-shadow: 0 0 0 1px rgba(254, 55, 32, 0.1);
-}
-
-.repairs-card__filters {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.repairs-filter-select {
-  min-width: 140px;
-  padding: 8px 12px;
-  border-radius: 999px;
-  border: 1px solid #e5e7eb;
-  font-size: 14px;
-}
-
-.repairs-filter-advanced {
-  border-radius: 999px;
-  border: 1px solid #e5e7eb;
-  padding: 8px 14px;
-  background: #ffffff;
-  font-size: 14px;
-  cursor: pointer;
-}
-
-.repairs-table-wrapper {
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  overflow: hidden;
-}
-
-.repairs-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.repairs-table thead th {
-  background: #f9fafb;
-  padding: 10px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #6b7280;
-  text-align: left;
-}
-
-.repairs-table tbody td {
-  padding: 10px 12px;
-  font-size: 14px;
-  color: #111827;
-  border-top: 1px solid #f3f4f6;
-}
-
-.repairs-cell-code {
-  color: #fe3720;
-  font-weight: 600;
-}
-
-.repairs-align-center {
-  text-align: center;
-}
-
-.repairs-cell-actions {
-  text-align: center;
-  width: 40px;
-}
-
-.repairs-status-pill {
+.repairs-filter-advanced,
+.repairs-settings {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 80px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 500;
 }
 
-.repairs-status-pill--draft {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.repairs-status-pill--pending {
-  background: #e0edff;
-  color: #1d4ed8;
-}
-
-.repairs-status-pill--approved {
-  background: #dcfce7;
-  color: #15803d;
-}
-
-.repairs-status-pill--rejected {
-  background: #fee2e2;
-  color: #b91c1c;
+.repairs-table {
+  font-size: 13px;
 }
 
 .repairs-table-empty {
@@ -215,4 +157,3 @@
   opacity: 0.4;
   cursor: default;
 }
-

@@ -19,6 +19,9 @@ import { PurchaseOrdersPage } from './modules/purchase-orders/pages/PurchaseOrde
 import { TransfersPage } from './modules/transfers/pages/TransfersPage';
 import { AccountantAssetListPage } from './modules/accountant/pages/AccountantAssetListPage';
 import { RepairsPage } from './modules/repairs/pages/RepairsPage';
+import { MaintenancePage } from './modules/maintenance/pages/MaintenancePage';
+import { InventoryPage } from './modules/inventory/pages/InventoryPage';
+import { LiquidationPage } from './modules/liquidation/pages/LiquidationPage';
 import './App.css';
 
 function App() {
@@ -61,8 +64,9 @@ function App() {
           <Route path="purchase-orders" element={<PurchaseOrdersPage />} />
           <Route path="transfers" element={<TransfersPage />} />
           <Route path="repairs" element={<RepairsPage />} />
-          <Route path="maintenance" element={<ModulePlaceholder title="Bảo trì" />} />
-          <Route path="liquidation" element={<ModulePlaceholder title="Thanh lý" />} />
+          <Route path="maintenance" element={<MaintenancePage />} />
+          <Route path="inventories" element={<InventoryPage />} />
+          <Route path="liquidation" element={<LiquidationPage />} />
           <Route path="allocations" element={<ModulePlaceholder title="Cấp phát-Thu hồi" />} />
           <Route path="cost-recording" element={<ModulePlaceholder title="Ghi nhận chi phí" />} />
           <Route path="requests" element={<ModulePlaceholder title="Yêu cầu" />} />

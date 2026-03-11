@@ -13,7 +13,7 @@
 }
 
 .transfers-title {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 600;
   margin: 0;
 }
@@ -21,7 +21,8 @@
 .transfers-card {
   width: 100%;
   background: #ffffff;
-  border-radius: 24px;
+  border: 1px solid #dad9d9;
+  border-radius: 20px;
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
   padding: 16px 16px 12px;
   display: flex;
@@ -49,20 +50,27 @@
 
 .transfers-tabs .ant-tabs-tab {
   padding: 6px 20px;
-  margin: 0 8px 0 0;
+  margin: 0 !important;
   border-radius: 999px;
   background: #f3f4f6;
   border: none;
+  transition: background 0.25s ease, box-shadow 0.25s ease;
+}
+
+.transfers-tabs .ant-tabs-nav-list {
+  padding: 5px 1px;
+  gap: 8px;
 }
 
 .transfers-tabs .ant-tabs-tab .ant-tabs-tab-btn {
   color: #6b7280;
   font-weight: 500;
+  transition: color 0.25s ease;
 }
 
 .transfers-tabs .ant-tabs-tab.ant-tabs-tab-active {
   background: #ffffff;
-  box-shadow: 0 10px 40px rgba(15, 23, 42, 0.12);
+  box-shadow: rgba(0, 0, 0, 0.02) 0px 1px 3px 0px, rgba(27, 31, 35, 0.15) 0px 0px 0px 1px;
 }
 
 .transfers-tabs .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
@@ -74,7 +82,17 @@
 }
 
 .transfers-btn-add {
+  background: #FE3720;
+  border-color: #FE3720;
+  font-size: 14px;
   font-weight: 500;
+  height: 40px;
+  padding: 0 24px;
+}
+
+.transfers-btn-add:hover {
+  background: #e5321c;
+  border-color: #e5321c;
 }
 
 .transfers-filters {
@@ -98,42 +116,20 @@
   justify-content: center;
 }
 
-.transfers-table-container {
-  margin-top: 4px;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  border-radius: 18px;
-  border: 1px solid #e5e7eb;
-  overflow: hidden;
-}
-
 .transfers-table {
-  background: #fff;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+  font-size: 13px;
 }
 
-.transfers-table .ant-table {
-  flex: 1;
-  min-height: 0;
+.transfers-table-loading {
+  padding: 24px 16px;
+  font-size: 14px;
+  color: #6b7280;
 }
 
-.transfers-table .ant-table-container {
-  flex: 1;
-  min-height: 0;
-}
-
-.transfers-table .ant-table-body {
-  flex: 1;
-}
-
-.transfers-status-tag {
-  min-width: 90px;
+.transfers-table-empty {
   text-align: center;
+  padding: 24px 12px;
+  color: #6b7280;
 }
 
 .transfers-card__footer {

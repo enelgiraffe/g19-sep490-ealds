@@ -75,8 +75,10 @@
 }
 
 .login-button:hover {
-  background-color: #e5321c;
-  border-color: #e5321c;
+  background-color: rgba(254, 55, 32, 0.50) !important;
+  border-color: rgba(254, 55, 32, 0.50) !important;
+  color: #FE3720;
+  transition: all 0.3s ease;
 }
 
 .login-button:focus {
@@ -90,7 +92,7 @@
 }
 
 .forgot-password-link {
-  color: #1890ff;
+  color: #FE3720;
   font-size: 14px;
   text-decoration: none;
   display: inline-flex;
@@ -99,8 +101,8 @@
 }
 
 .forgot-password-link:hover {
-  color: #40a9ff;
-  text-decoration: underline;
+  color: #FE3720 !important;
+  text-decoration: none !important;
 }
 
 .forgot-password-link .anticon {

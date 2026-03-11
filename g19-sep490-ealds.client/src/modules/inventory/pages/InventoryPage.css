@@ -1,0 +1,195 @@
+.inventory-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+}
+
+.inventory-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.inventory-title {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.inventory-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.inventory-btn-secondary {
+  background: #ffffff;
+  border-color: #d1d5db;
+  color: #111827;
+}
+
+.inventory-btn-primary {
+  background: #fe3720;
+  border-color: #fe3720;
+  font-weight: 500;
+}
+
+.inventory-btn-primary:hover {
+  background: #e5321c;
+  border-color: #e5321c;
+}
+
+.inventory-card {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #dad9d9;
+  border-radius: 20px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+  padding: 24px 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.inventory-filters {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.inventory-search {
+  width: 280px;
+  height: 40px;
+}
+
+.inventory-select {
+  min-width: 180px;
+  height: 40px;
+}
+
+.inventory-select .ant-select-selector {
+  height: 40px !important;
+  align-items: center;
+}
+
+.inventory-filter-reset,
+.inventory-settings {
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.inventory-table {
+  font-size: 13px;
+}
+
+.inventory-table-empty {
+  padding: 24px 16px;
+  font-size: 14px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.inventory-card__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 16px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.inventory-footer__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inventory-footer__select {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.inventory-footer__center {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.inventory-footer__right {
+  display: flex;
+  gap: 6px;
+}
+
+.inventory-footer__pager {
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  padding: 4px 10px;
+  background: #ffffff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.inventory-footer__pager--active {
+  background: #fe3720;
+  border-color: #fe3720;
+  color: #ffffff;
+}
+
+.inventory-footer__pager:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.inventory-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 110px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.inventory-status-pill--completed {
+  background: #bbf7d0;
+  color: #15803d;
+}
+
+.inventory-status-pill--in-progress {
+  background: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.inventory-status-pill--not-started {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.inventory-actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.inventory-action-btn.ant-btn-text {
+  color: #6b7280;
+  padding: 4px 6px;
+}
+
+.inventory-action-btn.ant-btn-text:hover {
+  color: #111827;
+  background: #f3f4f6;
+}
+
+.inventory-action-btn.ant-btn-text.ant-btn-dangerous:hover {
+  color: #fe3720;
+  background: #fee2e2;
+}
+

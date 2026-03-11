@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Input, Select, Tag, Dropdown, message } from 'antd';
-import type { MenuProps, TableColumnsType } from 'antd';
+import { Button, Input, Select, Tag, Dropdown, message } from 'antd';
+import type { MenuProps } from 'antd';
 import { SearchOutlined, FilterOutlined, SettingOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { CreatePurchaseOrderModal } from '../components/CreatePurchaseOrderModal';
 import { ViewPurchaseOrderModal } from '../components/ViewPurchaseOrderModal';
@@ -66,7 +66,6 @@ function toTableRow(item: PurchaseOrderListItem, index: number): TableRow {
 export function PurchaseOrdersPage() {
   const [data, setData] = useState<TableRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedDetail, setSelectedDetail] = useState<PurchaseOrderDetail | null>(null);
@@ -192,51 +191,6 @@ export function PurchaseOrdersPage() {
   const endIndex = Math.min(safePage * pageSize, total);
   const pagedData = filteredData.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  const columns: TableColumnsType<TableRow> = [
-    { title: 'STT', dataIndex: 'stt', key: 'stt', width: 60, align: 'center' },
-    { title: 'MÃ YÊU CẦU', dataIndex: 'code', key: 'code', width: 120 },
-    { title: 'NGÀY ĐỀ XUẤT', dataIndex: 'requestDate', key: 'requestDate', width: 140 },
-    { title: 'MỤC ĐÍCH MUA', dataIndex: 'equipment', key: 'equipment', width: 200 },
-    { title: 'SỐ LƯỢNG', dataIndex: 'quantity', key: 'quantity', width: 100, align: 'center' },
-    { title: 'TỔNG GIÁ TRỊ DỰ KIẾN', dataIndex: 'estimatedPrice', key: 'estimatedPrice', width: 180, align: 'right' },
-    {
-      title: 'TRẠNG THÁI',
-      dataIndex: 'status',
-      key: 'status',
-      width: 140,
-      render: (status: number) => {
-        const config = STATUS_MAP[status] ?? STATUS_MAP[0];
-        return (
-          <Tag color={config.color} className="purchase-orders-status-tag">
-            {config.label}
-          </Tag>
-        );
-      },
-    },
-    {
-      title: '',
-      key: 'actions',
-      width: 120,
-      align: 'center',
-      render: (_, record) => (
-        <div className="purchase-orders-actions">
-          <Dropdown menu={{ items: getActionMenu(record) }} trigger={['click']} placement="bottomRight">
-            <Button type="text" icon={<EyeOutlined />} size="small" />
-          </Dropdown>
-          {(record.status === 0 || record.status === 3) && (
-            <Button type="text" icon={<EditOutlined />} size="small" />
-          )}
-          <Button type="text" icon={<DeleteOutlined />} size="small" danger />
-        </div>
-      ),
-    },
-  ];
-
-  const rowSelection = {
-    selectedRowKeys,
-    onChange: (newKeys: React.Key[]) => setSelectedRowKeys(newKeys),
-  };
-
   return (
     <div className="purchase-orders-page">
       <div className="purchase-orders-header">
@@ -268,25 +222,92 @@ export function PurchaseOrdersPage() {
             ))}
           </Select>
           <Button icon={<FilterOutlined />} className="purchase-orders-filter-advanced">
-            Gộp bộ lọc
+            Gỡ bộ lọc
           </Button>
           <Button icon={<SettingOutlined />} className="purchase-orders-settings" />
         </div>
 
-        <div className="purchase-orders-table-container">
-          <Table
-            rowSelection={rowSelection}
-            columns={columns}
-            dataSource={pagedData}
-            loading={loading}
-            pagination={false}
-            className="purchase-orders-table"
-          />
+        <div className="asset-table-wrapper">
+          {loading ? (
+            <div className="purchase-orders-table-loading">Đang tải danh sách đơn mua...</div>
+          ) : (
+            <table className="asset-table purchase-orders-table">
+              <thead>
+                <tr>
+                  <th className="asset-table__cell asset-table__cell--checkbox">
+                    <input type="checkbox" />
+                  </th>
+                  <th>STT</th>
+                  <th>MÃ YÊU CẦU</th>
+                  <th>NGÀY ĐỀ XUẤT</th>
+                  <th>MỤC ĐÍCH MUA</th>
+                  <th>SỐ LƯỢNG</th>
+                  <th>TỔNG GIÁ TRỊ DỰ KIẾN</th>
+                  <th>TRẠNG THÁI</th>
+                  <th className="asset-table__cell asset-table__cell--actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {pagedData.map((row) => {
+                  const config = STATUS_MAP[row.status] ?? STATUS_MAP[0];
+                  return (
+                    <tr key={row.key} className="asset-row">
+                      <td className="asset-table__cell asset-table__cell--checkbox">
+                        <input type="checkbox" />
+                      </td>
+                      <td className="asset-align-right">{row.stt}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="asset-code asset-code--link"
+                          onClick={() => handleViewDetail(row)}
+                        >
+                          {row.code}
+                        </button>
+                      </td>
+                      <td>{row.requestDate}</td>
+                      <td>{row.equipment}</td>
+                      <td className="asset-align-right">{row.quantity}</td>
+                      <td className="asset-align-right">{row.estimatedPrice}</td>
+                      <td>
+                        <span
+                          className={
+                            config.color === 'success'
+                              ? 'asset-status-pill asset-status-pill--active'
+                              : config.color === 'default'
+                              ? 'asset-status-pill asset-status-pill--inactive'
+                              : 'asset-status-pill'
+                          }
+                        >
+                          {config.label}
+                        </span>
+                      </td>
+                      <td className="asset-table__cell asset-table__cell--actions">
+                        <div className="purchase-orders-actions">
+                          <Dropdown
+                            menu={{ items: getActionMenu(row) }}
+                            trigger={['click']}
+                            placement="bottomRight"
+                          >
+                            <Button type="text" icon={<EyeOutlined />} size="small" />
+                          </Dropdown>
+                          {(row.status === 0 || row.status === 3) && (
+                            <Button type="text" icon={<EditOutlined />} size="small" />
+                          )}
+                          <Button type="text" icon={<DeleteOutlined />} size="small" danger />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
 
         <div className="purchase-orders-card__footer">
           <div className="purchase-orders-footer__left">
-            Items per page:
+            Số lượng trên trang:
             <select
               className="purchase-orders-footer__select"
               value={pageSize}
@@ -303,7 +324,7 @@ export function PurchaseOrdersPage() {
             </select>
           </div>
           <div className="purchase-orders-footer__center">
-            {total === 0 ? '0-0 of 0' : `${startIndex}-${endIndex} of ${total}`}
+            {total === 0 ? '0-0 trên 0' : `${startIndex}-${endIndex} trên ${total}`}
           </div>
           <div className="purchase-orders-footer__right">
             <button

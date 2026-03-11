@@ -1,7 +1,21 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Button, Input, Select, Tabs } from 'antd';
+import { EyeOutlined, FilterOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons';
 import './RepairsPage.css';
 
 type RepairStatus = 'draft' | 'pending' | 'approved' | 'rejected';
+
+interface RepairRow {
+  id: string;
+  assetCode: string;
+  assetName: string;
+  condition: string;
+  brokenDate: string;
+  quantity: number;
+  location: string;
+  department: string;
+  status: RepairStatus;
+}
 
 function getStatusLabel(status: RepairStatus): string {
   if (status === 'draft') return 'Chưa gửi';
@@ -15,93 +29,102 @@ export function RepairsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | RepairStatus>('all');
 
+  const filteredData: RepairRow[] = useMemo(() => {
+    // TODO: hook API data later. For now, keep empty list.
+    return [];
+  }, []);
+
   return (
     <div className="repairs-page">
       <h1 className="repairs-page__title">Sửa chữa</h1>
 
       <div className="repairs-card">
-        <div className="repairs-card__tabs">
-          <button
-            type="button"
-            className={
-              activeTab === 'need-repair'
-                ? 'repairs-tab repairs-tab--active'
-                : 'repairs-tab'
-            }
-            onClick={() => setActiveTab('need-repair')}
-          >
-            Tài sản cần sửa chữa
-          </button>
-          <button
-            type="button"
-            className={
-              activeTab === 'in-repair'
-                ? 'repairs-tab repairs-tab--active'
-                : 'repairs-tab'
-            }
-            onClick={() => setActiveTab('in-repair')}
-          >
-            Đang sửa chữa
-          </button>
+        <Tabs
+          activeKey={activeTab}
+          onChange={(key) => setActiveTab(key as 'need-repair' | 'in-repair')}
+          className="repairs-tabs"
+          items={[
+            { key: 'need-repair', label: 'Tài sản cần sửa chữa' },
+            { key: 'in-repair', label: 'Đang sửa chữa' },
+          ]}
+        />
+
+        <div className="repairs-filters">
+          <Input
+            placeholder="Tìm kiếm"
+            prefix={<SearchOutlined />}
+            className="repairs-search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <Select
+            placeholder="Trạng thái"
+            className="repairs-select"
+            suffixIcon={<FilterOutlined />}
+            value={statusFilter}
+            onChange={(v) => setStatusFilter(v)}
+            options={[
+              { value: 'all', label: 'Tất cả' },
+              { value: 'draft', label: 'Chưa gửi' },
+              { value: 'pending', label: 'Chờ phê duyệt' },
+              { value: 'approved', label: 'Phê duyệt' },
+              { value: 'rejected', label: 'Từ chối' },
+            ]}
+          />
+          <Button icon={<FilterOutlined />} className="repairs-filter-advanced">
+            Gỡ bộ lọc
+          </Button>
+          <Button icon={<SettingOutlined />} className="repairs-settings" />
         </div>
 
-        <div className="repairs-card__header">
-          <div className="repairs-card__search-group">
-            <input
-              type="text"
-              className="repairs-search-input"
-              placeholder="Tìm kiếm"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div className="repairs-card__filters">
-            <select
-              className="repairs-filter-select"
-              value={statusFilter}
-              onChange={(e) =>
-                setStatusFilter(e.target.value as 'all' | RepairStatus)
-              }
-            >
-              <option value="all">Trạng thái</option>
-              <option value="draft">Chưa gửi</option>
-              <option value="pending">Chờ phê duyệt</option>
-              <option value="approved">Phê duyệt</option>
-              <option value="rejected">Từ chối</option>
-            </select>
-            <button type="button" className="repairs-filter-advanced">
-              Gộp bộ lọc
-            </button>
-          </div>
-        </div>
-
-        <div className="repairs-table-wrapper">
-          <table className="repairs-table">
+        <div className="asset-table-wrapper repairs-table-wrapper">
+          <table className="asset-table repairs-table">
             <thead>
               <tr>
-                <th>Mã tài sản</th>
-                <th>Tên tài sản</th>
-                <th>Tình trạng</th>
-                <th>Ngày hỏng</th>
-                <th>Số lượng</th>
-                <th>Vị trí tài sản</th>
-                <th>Phòng ban quản lý</th>
-                <th>Trạng thái</th>
-                <th />
+                <th className="asset-table__cell asset-table__cell--checkbox">
+                  <input type="checkbox" />
+                </th>
+                <th>MÃ TÀI SẢN</th>
+                <th>TÊN TÀI SẢN</th>
+                <th>TÌNH TRẠNG</th>
+                <th>NGÀY HỎNG</th>
+                <th>SỐ LƯỢNG</th>
+                <th>VỊ TRÍ TÀI SẢN</th>
+                <th>PHÒNG BAN QUẢN LÝ</th>
+                <th>TRẠNG THÁI</th>
+                <th className="asset-table__cell asset-table__cell--actions" />
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td colSpan={9} className="repairs-table-empty">
-                  Không có dữ liệu.
-                </td>
-              </tr>
-              {false && (
+              {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="repairs-table-empty">
+                  <td colSpan={10} className="repairs-table-empty">
                     Không có dữ liệu.
                   </td>
                 </tr>
+              ) : (
+                filteredData.map((row) => (
+                  <tr key={row.id} className="asset-row">
+                    <td className="asset-table__cell asset-table__cell--checkbox">
+                      <input type="checkbox" />
+                    </td>
+                    <td>
+                      <button type="button" className="asset-code asset-code--link">
+                        {row.assetCode}
+                      </button>
+                    </td>
+                    <td>{row.assetName}</td>
+                    <td>{row.condition}</td>
+                    <td>{row.brokenDate}</td>
+                    <td className="asset-align-right">{row.quantity}</td>
+                    <td>{row.location}</td>
+                    <td>{row.department}</td>
+                    <td>{getStatusLabel(row.status)}</td>
+                    <td className="asset-table__cell asset-table__cell--actions">
+                      <Button type="text" icon={<EyeOutlined />} />
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -109,7 +132,7 @@ export function RepairsPage() {
 
         <div className="repairs-card__footer">
           <div className="repairs-footer__left">
-            Items per page:
+            Số lượng trên trang:
             <select className="repairs-footer__select" defaultValue={25}>
               <option value={10}>10</option>
               <option value={25}>25</option>
@@ -117,7 +140,7 @@ export function RepairsPage() {
               <option value={100}>100</option>
             </select>
           </div>
-          <div className="repairs-footer__center">1-25 of 289</div>
+          <div className="repairs-footer__center">1-25 trên 289</div>
           <div className="repairs-footer__right">
             <button className="repairs-footer__pager" disabled type="button">
               ⟨
