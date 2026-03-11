@@ -1,5 +1,6 @@
+import { useEffect, useRef } from 'react';
 import { Form, Input, Button, Alert } from 'antd';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { LeftOutlined } from '@ant-design/icons';
 import { useForgotPassword } from '../hooks/useForgotPassword';
 import logoImg from '/images/logoCompany.png';
@@ -7,10 +8,23 @@ import './ForgotPasswordForm.css';
 
 export const ForgotPasswordForm = () => {
   const { sendRequest, loading, error, success, successMessage } = useForgotPassword();
+  const navigate = useNavigate();
+  const emailRef = useRef('');
 
   const onFinish = async (values: { email: string }) => {
-    await sendRequest((values.email ?? '').trim());
+    const email = (values.email ?? '').trim();
+    emailRef.current = email;
+    await sendRequest(email);
   };
+
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        navigate('/verify-otp', { state: { email: emailRef.current } });
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [success, navigate]);
 
   return (
     <div className="forgot-password-form-container">
@@ -20,7 +34,7 @@ export const ForgotPasswordForm = () => {
       </div>
 
       <h1 className="forgot-password-title">Quên mật khẩu?</h1>
-      
+
       <p className="forgot-password-description">
         Vui lòng nhập Email tài khoản
       </p>
@@ -73,10 +87,11 @@ export const ForgotPasswordForm = () => {
             htmlType="submit"
             size="large"
             loading={loading}
+            disabled={success}
             className="forgot-password-button"
             block
           >
-            Gửi yêu cầu
+            Gửi mã OTP
           </Button>
         </Form.Item>
 

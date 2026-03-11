@@ -110,16 +110,13 @@ public class AuthController : ControllerBase
 
         if (user != null && user.Status != 0)
         {
-            var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            var otpCode = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
             var expirationMinutes = int.Parse(
-                _configuration["App:ResetPasswordTokenExpirationMinutes"] ?? "15");
+                _configuration["App:OtpExpirationMinutes"] ?? "10");
 
-            user.ResetPasswordToken = token;
+            user.ResetPasswordToken = otpCode;
             user.ResetPasswordTokenExpiryTime = DateTime.UtcNow.AddMinutes(expirationMinutes);
             await _context.SaveChangesAsync();
-
-            var frontendBaseUrl = _configuration["App:FrontendBaseUrl"]?.TrimEnd('/');
-            var resetLink = $"{frontendBaseUrl}/reset-password?token={token}";
 
             var employee = await _context.Employees
                 .FirstOrDefaultAsync(e => e.UserId == user.UserId);
@@ -127,18 +124,47 @@ public class AuthController : ControllerBase
 
             try
             {
-                await _emailService.SendPasswordResetEmailAsync(user.Email, displayName, resetLink);
+                await _emailService.SendOtpEmailAsync(user.Email, displayName, otpCode, expirationMinutes.ToString());
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to send password reset email to {Email}", user.Email);
+                _logger.LogError(ex, "Failed to send OTP email to {Email}", user.Email);
 
                 if (_env.IsDevelopment())
                     return StatusCode(500, new { message = "Gửi email thất bại.", error = ex.Message, detail = ex.InnerException?.Message });
             }
         }
 
-        return Ok(new { message = "Nếu email tồn tại trong hệ thống, bạn sẽ nhận được hướng dẫn đặt lại mật khẩu." });
+        return Ok(new { message = "Nếu email tồn tại trong hệ thống, bạn sẽ nhận được mã OTP để đặt lại mật khẩu." });
+    }
+
+    [HttpPost("verify-otp")]
+    public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequestDto request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var user = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email == request.Email);
+
+        if (user == null
+            || user.ResetPasswordToken == null
+            || user.ResetPasswordTokenExpiryTime == null
+            || user.ResetPasswordTokenExpiryTime < DateTime.UtcNow
+            || user.ResetPasswordToken != request.OtpCode)
+        {
+            return BadRequest(new { message = "Mã OTP không hợp lệ hoặc đã hết hạn." });
+        }
+
+        var resetToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var resetTokenExpirationMinutes = int.Parse(
+            _configuration["App:ResetPasswordTokenExpirationMinutes"] ?? "15");
+
+        user.ResetPasswordToken = resetToken;
+        user.ResetPasswordTokenExpiryTime = DateTime.UtcNow.AddMinutes(resetTokenExpirationMinutes);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { token = resetToken });
     }
 
     [HttpPost("reset-password")]
