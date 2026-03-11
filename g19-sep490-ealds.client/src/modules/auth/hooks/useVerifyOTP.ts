@@ -11,13 +11,12 @@ export const useVerifyOTP = () => {
     try {
       setLoading(true);
 
-      await authService.verifyOTP(email, otp);
-      
+      const data = await authService.verifyOTP(email, otp);
+
       message.success('Xác thực OTP thành công!');
-      
-      // Navigate to reset password page
+
       setTimeout(() => {
-        navigate('/reset-password', { state: { email, otp } });
+        navigate(`/reset-password?token=${data.token}`);
       }, 1000);
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Mã OTP không hợp lệ. Vui lòng thử lại.';
