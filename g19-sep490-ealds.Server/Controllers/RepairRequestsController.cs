@@ -79,6 +79,6 @@ public class RepairRequestsController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        return Ok(new { assetRequest.AssetRequestId, repairTask.TaskId });
+        return Ok(new { assetRequestId = assetRequest.AssetRequestId, taskId = repairTask.TaskId });
     }
 }
