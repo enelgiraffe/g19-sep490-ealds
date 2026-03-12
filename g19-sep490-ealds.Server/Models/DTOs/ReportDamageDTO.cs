@@ -10,9 +10,11 @@ public class ReportDamageDTO
 
     public int? RequestTypeId { get; set; }
 
-    public string? Title { get; set; }
+    // Date when damage was observed/reported
+    public DateTime ReportDate { get; set; }
 
     public string? Description { get; set; }
 
-    public int? Severity { get; set; }
+    // Link to an existing Document (file upload) for evidence; must exist in Documents table
+    public int? DocumentId { get; set; }
 }

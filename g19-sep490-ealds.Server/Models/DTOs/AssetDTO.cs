@@ -42,6 +42,9 @@ public class UpdateAssetDTO
     public string? Unit { get; set; }
     public int? Quantity { get; set; }
     public int? WarehouseId { get; set; }
+
+    // Depreciation policy (can be linked/unlinked on update)
+    public int? DepreciationPolicyId { get; set; }
 }
 
 /// <summary>
@@ -51,6 +54,20 @@ public class DeleteAssetDTO
 {
     public AssetStatus Status { get; set; } // Disposed, Lost, or Liquidated
     public string? Reason { get; set; }
+}
+
+public class MaintenanceScheduleDTO
+{
+    public int ScheduleId { get; set; }
+    public int TemplateId { get; set; }
+    public string? TemplateName { get; set; }
+    public int ScheduleType { get; set; }
+    public int? IntervalMonths { get; set; }
+    public int? IntervalHours { get; set; }
+    public DateTime StartDate { get; set; }
+    public DateTime? NextDueDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    public bool? IsActive { get; set; }
 }
 
 /// <summary>
@@ -80,6 +97,18 @@ public class AssetResponseDTO
     /// Phòng ban hiện tại đang sử dụng tài sản (nếu có bản ghi AssetLocation IsCurrent).
     /// </summary>
     public int? CurrentDepartmentId { get; set; }
-
     public string? CurrentDepartmentName { get; set; }
+
+    // Depreciation (optional; populated in GET by id)
+    public int? DepreciationPolicyId { get; set; }
+    public string? DepreciationPolicyName { get; set; }
+    public int? DepreciationUsefulLifeMonths { get; set; }
+    public decimal? DepreciationSalvageValue { get; set; }
+    public DateOnly? DepreciationPeriod { get; set; }
+    public decimal? DepreciationAmount { get; set; }
+    public decimal? AccumulatedDepreciation { get; set; }
+    public decimal? RemainingValue { get; set; }
+
+    // Maintenance (optional; populated in GET by id)
+    public List<MaintenanceScheduleDTO>? MaintenanceSchedules { get; set; }
 }
