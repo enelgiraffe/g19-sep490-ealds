@@ -84,11 +84,9 @@ public class AssetsController : ControllerBase
             query = query.Where(a => a.PurchaseDate <= toDate.Value);
         }
 
-        var assets = await query
-            .Select(a => ToResponseDTO(a))
-            .ToListAsync();
+        var assets = await query.ToListAsync();
 
-        return Ok(assets);
+        return Ok(assets.Select(ToResponseDTO));
     }
 
     /// <summary>
@@ -104,7 +102,24 @@ public class AssetsController : ControllerBase
             .FirstOrDefaultAsync(a => a.AssetId == id);
         if (asset == null)
             return NotFound();
-        return Ok(ToResponseDTO(asset));
+
+        var latestDep = await _context.DrepreciationRecords
+            .Include(r => r.Policy)
+            .AsNoTracking()
+            .Where(r => r.AssetId == id)
+            .OrderByDescending(r => r.Period)
+            .ThenByDescending(r => r.CreateDate)
+            .FirstOrDefaultAsync();
+
+        var schedules = await _context.MaintenanceSchedules
+            .Include(s => s.Template)
+            .AsNoTracking()
+            .Where(s => s.AssetId == id)
+            .OrderByDescending(s => s.IsActive)
+            .ThenByDescending(s => s.StartDate)
+            .ToListAsync();
+
+        return Ok(ToResponseDTO(asset, latestDep, schedules));
     }
 
     /// <summary>
@@ -163,7 +178,24 @@ public class AssetsController : ControllerBase
         await _context.Entry(asset)
             .Reference(a => a.Warehouse).LoadAsync();
 
-        return CreatedAtAction(nameof(GetById), new { id = asset.AssetId }, ToResponseDTO(asset));
+        // Load depreciation info for response
+        var latestDep = await _context.DrepreciationRecords
+            .Include(r => r.Policy)
+            .AsNoTracking()
+            .Where(r => r.AssetId == asset.AssetId)
+            .OrderByDescending(r => r.Period)
+            .ThenByDescending(r => r.CreateDate)
+            .FirstOrDefaultAsync();
+
+        var schedules = await _context.MaintenanceSchedules
+            .Include(s => s.Template)
+            .AsNoTracking()
+            .Where(s => s.AssetId == asset.AssetId)
+            .OrderByDescending(s => s.IsActive)
+            .ThenByDescending(s => s.StartDate)
+            .ToListAsync();
+
+        return CreatedAtAction(nameof(GetById), new { id = asset.AssetId }, ToResponseDTO(asset, latestDep, schedules));
     }
 
     /// <summary>
@@ -178,7 +210,12 @@ public class AssetsController : ControllerBase
 
         if (dto.Code != null) asset.Code = dto.Code;
         if (dto.Name != null) asset.Name = dto.Name;
-        if (dto.AssetTypeId.HasValue) asset.AssetTypeId = dto.AssetTypeId.Value;
+        if (dto.AssetTypeId.HasValue)
+        {
+            if (!await _context.AssetTypes.AnyAsync(t => t.AssetTypeId == dto.AssetTypeId.Value))
+                return BadRequest(new { message = $"AssetTypeId {dto.AssetTypeId.Value} does not exist." });
+            asset.AssetTypeId = dto.AssetTypeId.Value;
+        }
         if (dto.PurchaseDate.HasValue) asset.PurchaseDate = dto.PurchaseDate.Value;
         if (dto.OriginalPrice.HasValue) asset.OriginalPrice = dto.OriginalPrice.Value;
         if (dto.CurrentValue.HasValue) asset.CurrentValue = dto.CurrentValue.Value;
@@ -187,7 +224,42 @@ public class AssetsController : ControllerBase
         if (dto.InUseDate.HasValue) asset.InUseDate = dto.InUseDate;
         if (dto.Unit != null) asset.Unit = dto.Unit;
         if (dto.Quantity.HasValue) asset.Quantity = dto.Quantity.Value;
-        if (dto.WarehouseId.HasValue) asset.WarehouseId = dto.WarehouseId.Value;
+        if (dto.WarehouseId.HasValue)
+        {
+            if (!await _context.WarehouseAssets.AnyAsync(w => w.WarehouseId == dto.WarehouseId.Value))
+                return BadRequest(new { message = $"WarehouseId {dto.WarehouseId.Value} does not exist." });
+            asset.WarehouseId = dto.WarehouseId.Value;
+        }
+
+        // Handle depreciation policy update
+        if (dto.DepreciationPolicyId.HasValue)
+        {
+            var existingDep = await _context.DrepreciationRecords
+                .FirstOrDefaultAsync(r => r.AssetId == id);
+            if (existingDep == null)
+            {
+                var policy = await _context.DepreciationPolicies.FindAsync(dto.DepreciationPolicyId.Value);
+                if (policy != null)
+                {
+                    var firstPeriod = new DateOnly(asset.PurchaseDate.Year, asset.PurchaseDate.Month, 1);
+                    var depRecord = new DrepreciationRecord
+                    {
+                        AssetId = asset.AssetId,
+                        PolicyId = policy.PolicyId,
+                        Period = firstPeriod,
+                        DepreciationAmount = 0,
+                        AccumulatedDepreciation = 0,
+                        RemainingValue = asset.CurrentValue,
+                        CreateDate = DateTime.UtcNow
+                    };
+                    _context.DrepreciationRecords.Add(depRecord);
+                }
+            }
+            else
+            {
+                existingDep.PolicyId = dto.DepreciationPolicyId.Value;
+            }
+        }
 
         await _context.SaveChangesAsync();
 
@@ -196,24 +268,49 @@ public class AssetsController : ControllerBase
         await _context.Entry(asset)
             .Reference(a => a.Warehouse).LoadAsync();
 
-        return Ok(ToResponseDTO(asset));
+        // Reload depreciation info for response
+        var latestDep = await _context.DrepreciationRecords
+            .Include(r => r.Policy)
+            .AsNoTracking()
+            .Where(r => r.AssetId == id)
+            .OrderByDescending(r => r.Period)
+            .ThenByDescending(r => r.CreateDate)
+            .FirstOrDefaultAsync();
+
+        var schedules = await _context.MaintenanceSchedules
+            .Include(s => s.Template)
+            .AsNoTracking()
+            .Where(s => s.AssetId == id)
+            .OrderByDescending(s => s.IsActive)
+            .ThenByDescending(s => s.StartDate)
+            .ToListAsync();
+
+        return Ok(ToResponseDTO(asset, latestDep, schedules));
     }
 
     /// <summary>
     /// DELETE /api/assets/{id} - Set asset status to Disposed, Lost, or Liquidated (soft delete)
     /// </summary>
     [HttpDelete("{id:int}")]
-    public async Task<ActionResult<AssetResponseDTO>> Delete(int id, [FromBody] DeleteAssetDTO dto)
+    public async Task<ActionResult<AssetResponseDTO>> Delete(
+        int id,
+        [FromQuery] AssetStatus? status,
+        [FromBody] DeleteAssetDTO? dto)
     {
-        var status = dto.Status;
-        if (status != AssetStatus.Disposed && status != AssetStatus.Lost && status != AssetStatus.Liquidated)
+        var effectiveStatus = status ?? dto?.Status;
+        if (!effectiveStatus.HasValue)
+            return BadRequest(new { message = "Delete must provide status = Disposed, Lost, or Liquidated (query or body)." });
+
+        if (effectiveStatus.Value != AssetStatus.Disposed &&
+            effectiveStatus.Value != AssetStatus.Lost &&
+            effectiveStatus.Value != AssetStatus.Liquidated)
             return BadRequest(new { message = "Delete must set status to Disposed, Lost, or Liquidated." });
 
         var asset = await _context.Assets.FindAsync(id);
         if (asset == null)
             return NotFound();
 
-        asset.Status = (int)status;
+        asset.Status = (int)effectiveStatus.Value;
         await _context.SaveChangesAsync();
 
         await _context.Entry(asset)
@@ -246,5 +343,41 @@ public class AssetsController : ControllerBase
             WarehouseName = a.Warehouse?.Name,
             CreatedBy = a.CreatedBy
         };
+    }
+
+    private static AssetResponseDTO ToResponseDTO(
+        Asset a,
+        DrepreciationRecord? latestDep,
+        List<MaintenanceSchedule> schedules)
+    {
+        var dto = ToResponseDTO(a);
+
+        if (latestDep != null)
+        {
+            dto.DepreciationPolicyId = latestDep.PolicyId;
+            dto.DepreciationPolicyName = latestDep.Policy?.Name;
+            dto.DepreciationUsefulLifeMonths = latestDep.Policy?.UsefullLifeMonths;
+            dto.DepreciationSalvageValue = latestDep.Policy?.SalvageValue;
+            dto.DepreciationPeriod = latestDep.Period;
+            dto.DepreciationAmount = latestDep.DepreciationAmount;
+            dto.AccumulatedDepreciation = latestDep.AccumulatedDepreciation;
+            dto.RemainingValue = latestDep.RemainingValue;
+        }
+
+        dto.MaintenanceSchedules = schedules.Select(s => new MaintenanceScheduleDTO
+        {
+            ScheduleId = s.ScheduleId,
+            TemplateId = s.TemplateId,
+            TemplateName = s.Template?.Name,
+            ScheduleType = s.ScheduleType,
+            IntervalMonths = s.IntervalMonths,
+            IntervalHours = s.IntervalHours,
+            StartDate = s.StartDate,
+            NextDueDate = s.NextDueDate,
+            EndDate = s.EndDate,
+            IsActive = s.IsActive
+        }).ToList();
+
+        return dto;
     }
 }
