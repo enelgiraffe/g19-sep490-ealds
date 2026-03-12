@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
-import { Button, Input, Select, Tabs } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
+import { Button, Input, Select, Tabs, message } from 'antd';
 import { EyeOutlined, FilterOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons';
 import './RepairsPage.css';
+import { damageReportService } from '../../assets/services/damageReportService';
 
 type RepairStatus = 'draft' | 'pending' | 'approved' | 'rejected';
 
@@ -17,6 +18,22 @@ interface RepairRow {
   status: RepairStatus;
 }
 
+function formatDate(value?: string | null): string {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString('vi-VN');
+}
+
+function mapStatus(status: number): RepairStatus {
+  // Align with the common workflow in backend:
+  // 0=Nháp, 3=Chờ phê duyệt, 4=Phê duyệt, others => Từ chối/khác
+  if (status === 0) return 'draft';
+  if (status === 3) return 'pending';
+  if (status === 4) return 'approved';
+  return 'rejected';
+}
+
 function getStatusLabel(status: RepairStatus): string {
   if (status === 'draft') return 'Chưa gửi';
   if (status === 'pending') return 'Chờ phê duyệt';
@@ -28,11 +45,77 @@ export function RepairsPage() {
   const [activeTab, setActiveTab] = useState<'need-repair' | 'in-repair'>('need-repair');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | RepairStatus>('all');
+  const [rows, setRows] = useState<RepairRow[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadNeedRepair() {
+      setLoading(true);
+      try {
+        const res = await damageReportService.list({
+          requestTypeId: 4,
+          page: 1,
+          pageSize: 200,
+        });
+
+        const mapped: RepairRow[] = (res.items ?? []).map((it) => {
+          const assetCode = it.assetCode ?? '';
+          const assetName = it.assetName ?? '';
+
+          return {
+            id: String(it.id),
+            assetCode: assetCode || String(it.assetId ?? ''),
+            // Nếu assetName trống, lấy phần title nhưng bỏ prefix "Báo hỏng tài sản ..."
+            assetName:
+              assetName ||
+              (it.title
+                ? it.title.replace(/^Báo hỏng tài sản\s*/i, '').trim() || it.title
+                : '(Không có tên)'),
+            condition: it.description ?? '',
+            brokenDate: formatDate(it.createDate),
+            // nếu backend chưa có quantity thì tối thiểu hiển thị 1
+            quantity: it.assetQuantity && it.assetQuantity > 0 ? it.assetQuantity : 1,
+            location: it.currentDepartmentName ?? '',
+            department: it.currentDepartmentName ?? '',
+            status: mapStatus(it.status),
+          };
+        });
+
+        if (!cancelled) setRows(mapped);
+      } catch (e: any) {
+        const msg = e?.response?.data?.title ?? e?.response?.data ?? e?.message;
+        message.error(typeof msg === 'string' ? msg : 'Không tải được danh sách tài sản cần sửa chữa.');
+        if (!cancelled) setRows([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    if (activeTab === 'need-repair') {
+      loadNeedRepair();
+    } else {
+      setRows([]);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab]);
 
   const filteredData: RepairRow[] = useMemo(() => {
-    // TODO: hook API data later. For now, keep empty list.
-    return [];
-  }, []);
+    const keyword = search.trim().toLowerCase();
+    return rows.filter((row) => {
+      const matchStatus = statusFilter === 'all' || row.status === statusFilter;
+      const matchKeyword =
+        !keyword ||
+        row.assetCode.toLowerCase().includes(keyword) ||
+        row.assetName.toLowerCase().includes(keyword) ||
+        row.condition.toLowerCase().includes(keyword);
+      return matchStatus && matchKeyword;
+    });
+  }, [rows, search, statusFilter]);
 
   return (
     <div className="repairs-page">
@@ -71,7 +154,14 @@ export function RepairsPage() {
               { value: 'rejected', label: 'Từ chối' },
             ]}
           />
-          <Button icon={<FilterOutlined />} className="repairs-filter-advanced">
+          <Button
+            icon={<FilterOutlined />}
+            className="repairs-filter-advanced"
+            onClick={() => {
+              setSearch('');
+              setStatusFilter('all');
+            }}
+          >
             Gỡ bộ lọc
           </Button>
           <Button icon={<SettingOutlined />} className="repairs-settings" />
@@ -96,7 +186,13 @@ export function RepairsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredData.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={10} className="repairs-table-empty">
+                    Đang tải dữ liệu...
+                  </td>
+                </tr>
+              ) : filteredData.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="repairs-table-empty">
                     Không có dữ liệu.

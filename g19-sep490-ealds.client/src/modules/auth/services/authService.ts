@@ -41,6 +41,11 @@ export const authService = {
     return response.data;
   },
 
+  verifyOTP: async (email: string, otpCode: string): Promise<{ token: string }> => {
+    const response = await authApi.post<{ token: string }>('/api/auth/verify-otp', { email, otpCode });
+    return response.data;
+  },
+
   resetPassword: async (
     token: string,
     newPassword: string,

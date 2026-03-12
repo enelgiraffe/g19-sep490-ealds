@@ -53,10 +53,23 @@
   width: 100%;
 }
 
+.otp-form-item{
+  margin-bottom: 4rem;
+}
+
 .otp-form-item .ant-form-item-label > label {
   font-weight: 500;
   color: #333333;
   font-size: 14px;
+}
+
+.otp-form-item .ant-form-item-row {
+  flex-direction: column;
+}
+
+.otp-form-item .ant-form-item-label {
+  padding: 0 0 12px;
+  text-align: center;
 }
 
 .otp-input-group {

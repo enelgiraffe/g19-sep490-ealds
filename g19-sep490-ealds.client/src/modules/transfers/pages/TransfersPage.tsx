@@ -150,9 +150,6 @@ export function TransfersPage() {
             <table className="asset-table transfers-table">
               <thead>
                 <tr>
-                  <th className="asset-table__cell asset-table__cell--checkbox">
-                    <input type="checkbox" />
-                  </th>
                   <th>STT</th>
                   <th>SỐ BIÊN BẢN</th>
                   <th>NGÀY ĐIỀU CHUYỂN</th>
@@ -167,7 +164,7 @@ export function TransfersPage() {
               <tbody>
                 {pagedData.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="transfers-table-empty">
+                    <td colSpan={9} className="transfers-table-empty">
                       Không có dữ liệu.
                     </td>
                   </tr>
@@ -176,9 +173,6 @@ export function TransfersPage() {
                     const config = STATUS_MAP[row.status] ?? STATUS_MAP[0];
                     return (
                       <tr key={row.key} className="asset-row">
-                        <td className="asset-table__cell asset-table__cell--checkbox">
-                          <input type="checkbox" />
-                        </td>
                         <td className="asset-align-right">{row.stt}</td>
                         <td>
                           <button

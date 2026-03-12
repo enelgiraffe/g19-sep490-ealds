@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Form, Button, Input } from 'antd';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LeftOutlined } from '@ant-design/icons';
 import { useVerifyOTP } from '../hooks/useVerifyOTP';
 import logoImg from '/images/logoCompany.png';
@@ -8,6 +8,7 @@ import './VerifyOTPForm.css';
 
 export const VerifyOTPForm = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const email = location.state?.email || '';
   const { verifyOTP, loading } = useVerifyOTP();
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -21,7 +22,6 @@ export const VerifyOTPForm = () => {
     newOtp[index] = value;
     setOtp(newOtp);
 
-    // Auto focus next input
     if (value && index < 5) {
       const nextInput = document.getElementById(`otp-input-${index + 1}`);
       nextInput?.focus();
@@ -33,6 +33,21 @@ export const VerifyOTPForm = () => {
       const prevInput = document.getElementById(`otp-input-${index - 1}`);
       prevInput?.focus();
     }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const digits = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (!digits) return;
+
+    const newOtp = [...otp];
+    digits.split('').forEach((char, i) => {
+      newOtp[i] = char;
+    });
+    setOtp(newOtp);
+
+    const focusIndex = Math.min(digits.length, 5);
+    document.getElementById(`otp-input-${focusIndex}`)?.focus();
   };
 
   const onFinish = async () => {
@@ -58,7 +73,7 @@ export const VerifyOTPForm = () => {
         onFinish={onFinish}
         className="verify-otp-form"
       >
-        <Form.Item label="Nhập mã OTP" className="otp-form-item">
+        <Form.Item label="Nhập mã OTP" className="otp-form-item ">
           <div className="otp-input-group">
             {otp.map((digit, index) => (
               <Input
@@ -69,6 +84,7 @@ export const VerifyOTPForm = () => {
                 value={digit}
                 onChange={(e) => handleOtpChange(index, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(index, e)}
+                onPaste={handlePaste}
                 className="otp-input"
                 size="large"
               />
@@ -92,9 +108,14 @@ export const VerifyOTPForm = () => {
 
         <Form.Item className="resend-otp-item">
           <span className="resend-otp-text">Bạn chưa nhận được mã OTP? </span>
-          <Link to="/forgot-password" className="resend-otp-link">
+          <Button
+            type="link"
+            className="resend-otp-link"
+            style={{ padding: 0 }}
+            onClick={() => navigate('/forgot-password')}
+          >
             Gửi lại
-          </Link>
+          </Button>
         </Form.Item>
 
         <Form.Item className="back-to-login-item">

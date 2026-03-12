@@ -11,6 +11,7 @@ import {
 } from '../services/assetService';
 import { transferRequestService } from '../services/transferRequestService';
 import { maintenanceRequestService } from '../services/maintenanceRequestService';
+import { damageReportService } from '../services/damageReportService';
 import { MarkDamagedAssetModal } from '../components/MarkDamagedAssetModal';
 import { LiquidationRequestModal } from '../components/LiquidationRequestModal';
 import { TransferAssetModal } from '../components/TransferAssetModal';
@@ -128,6 +129,7 @@ export function AssetListPage() {
   const [minPrice, setMinPrice] = useState<string>('');
   const [maxPrice, setMaxPrice] = useState<string>('');
   const [isPriceFilterOpen, setIsPriceFilterOpen] = useState(false);
+  const [markDamagedAssetId, setMarkDamagedAssetId] = useState<number | null>(null);
   const [draftPriceRange, setDraftPriceRange] = useState<[number, number] | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isMarkDamagedModalOpen, setIsMarkDamagedModalOpen] = useState(false);
@@ -263,6 +265,7 @@ export function AssetListPage() {
       setIsTransferModalOpen(true);
     } else if (actionKey === 'mark-broken' && raw) {
       setSelectedAssetInfo(assetResponseToAssetInfo(raw));
+      setMarkDamagedAssetId(asset.id);
       setIsMarkDamagedModalOpen(true);
     } else if (actionKey === 'liquidate' && raw) {
       setSelectedAssetInfo(assetResponseToAssetInfo(raw));
@@ -279,6 +282,7 @@ export function AssetListPage() {
   const handleCloseMarkDamagedModal = () => {
     setIsMarkDamagedModalOpen(false);
     setSelectedAssetInfo(null);
+    setMarkDamagedAssetId(null);
   };
 
   const handleCloseLiquidationModal = () => {
@@ -298,9 +302,49 @@ export function AssetListPage() {
     setMaintenanceAssetId(null);
   };
 
-  const handleSubmitMarkDamaged = (values: unknown) => {
-    console.log('Mark damaged:', values);
-    // TODO: Call API to mark asset as damaged
+  const handleSubmitMarkDamaged = async (values: { damageDate: string; condition: string }) => {
+    const reportedBy = profile?.id ?? getStoredUserId();
+    if (!reportedBy || markDamagedAssetId == null) {
+      message.error('Không xác định được người dùng hoặc tài sản để báo hỏng.');
+      return;
+    }
+
+    const damageDate = values.damageDate?.trim();
+    const condition = values.condition?.trim();
+    const assetCode = selectedAssetInfo?.code;
+    const title = assetCode ? `Báo hỏng tài sản ${assetCode}` : 'Báo hỏng tài sản';
+    const descriptionParts = [
+      damageDate ? `Ngày hỏng: ${damageDate}` : null,
+      condition ? `Tình trạng: ${condition}` : null,
+    ].filter(Boolean);
+
+    try {
+      await damageReportService.report({
+        assetId: markDamagedAssetId,
+        reportedBy,
+        title,
+        description: descriptionParts.join('\n') || null,
+        severity: null,
+      });
+      message.success('Gửi báo hỏng thành công.');
+      handleCloseMarkDamagedModal();
+    } catch (e: any) {
+      const data = e?.response?.data;
+      const errors = data?.errors as Record<string, string[] | string> | undefined;
+      if (errors && typeof errors === 'object') {
+        const flat = Object.entries(errors)
+          .flatMap(([k, v]) => {
+            if (Array.isArray(v)) return v.map((m) => `${k}: ${m}`);
+            if (typeof v === 'string') return [`${k}: ${v}`];
+            return [];
+          })
+          .filter(Boolean);
+        message.error(flat.join(' | ') || data?.title || 'Gửi báo hỏng thất bại.');
+      } else {
+        const msg = data?.title ?? data ?? 'Gửi báo hỏng thất bại.';
+        message.error(typeof msg === 'string' ? msg : 'Gửi báo hỏng thất bại.');
+      }
+    }
   };
 
   const handleSubmitLiquidation = (values: unknown) => {

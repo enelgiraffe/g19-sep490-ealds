@@ -251,7 +251,7 @@ export function MarkDamagedAssetModal({
             onClick={handleSubmit}
             className="mark-damaged-btn-submit"
           >
-            Cập phát
+            Gửi
           </button>
           <button
             type="button"
