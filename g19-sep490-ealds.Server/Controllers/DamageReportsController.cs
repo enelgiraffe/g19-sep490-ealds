@@ -27,14 +27,19 @@ public class DamageReportsController : ControllerBase
         if (dto.AssetId <= 0 || dto.ReportedBy <= 0)
             return BadRequest("AssetId and ReportedBy are required.");
 
+        if (dto.ReportDate == default)
+            return BadRequest("ReportDate is required.");
+
         var assetRequest = new AssetRequest
         {
             UserId = dto.ReportedBy,
             RequestTypeId = dto.RequestTypeId ?? 0,
             AssetId = dto.AssetId,
-            Title = dto.Title ?? $"Damage report for asset {dto.AssetId}",
+            // store a short title using the report date
+            Title = $"Damage report - {dto.ReportDate:yyyy-MM-dd}",
             Description = dto.Description,
-            ProposedData = dto.Severity?.ToString(),
+            // store document reference (if any) in ProposedData so frontend can retrieve it
+            ProposedData = dto.DocumentId.HasValue ? dto.DocumentId.Value.ToString() : null,
             Status = 0,
             CreatedBy = dto.ReportedBy,
             CreateDate = DateTime.UtcNow,
@@ -61,6 +66,14 @@ public class DamageReportsController : ControllerBase
 
         _db.AssetRequestRecords.Add(record);
         await _db.SaveChangesAsync();
+
+        // If a DocumentId was provided, validate it exists and optionally link/downloadable info
+        if (dto.DocumentId.HasValue)
+        {
+            var doc = await _db.Documents.FindAsync(dto.DocumentId.Value);
+            if (doc == null)
+                return BadRequest("Document not found.");
+        }
 
         // Return Created pointing to the repair request path where frontend can proceed to create a repair request.
         var location = $"/api/Assets/Requests/repair";
