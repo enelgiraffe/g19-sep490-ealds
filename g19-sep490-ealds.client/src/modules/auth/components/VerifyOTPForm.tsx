@@ -73,7 +73,7 @@ export const VerifyOTPForm = () => {
         onFinish={onFinish}
         className="verify-otp-form"
       >
-        <Form.Item label="Nhập mã OTP" className="otp-form-item">
+        <Form.Item label="Nhập mã OTP" className="otp-form-item ">
           <div className="otp-input-group">
             {otp.map((digit, index) => (
               <Input

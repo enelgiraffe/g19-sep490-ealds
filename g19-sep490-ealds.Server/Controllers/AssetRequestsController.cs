@@ -126,7 +126,7 @@ public class AssetRequestsController : ControllerBase
 
     [HttpGet]
     [Route("/api/Assets/Requests/{id}")]
-    public async Task<IActionResult> GetById(int id)
+    public async Task<IActionResult> GetDetails(int id)
     {
         var ar = await _db.AssetRequests
             .Include(x => x.Asset)
@@ -175,7 +175,13 @@ public class AssetRequestsController : ControllerBase
         if (page <= 0) page = 1;
         if (pageSize <= 0) pageSize = 20;
 
-        var query = _db.AssetRequests.AsNoTracking().AsQueryable();
+        var query = _db.AssetRequests
+            .AsNoTracking()
+            .Include(x => x.Asset)
+                .ThenInclude(a => a.AssetLocations)
+                    .ThenInclude(al => al.Department)
+            .Include(x => x.User)
+            .AsQueryable();
 
         if (status.HasValue)
             query = query.Where(x => x.Status == status.Value);
@@ -189,8 +195,6 @@ public class AssetRequestsController : ControllerBase
         var total = await query.CountAsync();
 
         var items = await query
-            .Include(x => x.Asset)
-            .Include(x => x.User)
             .OrderByDescending(x => x.CreateDate)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -202,7 +206,17 @@ public class AssetRequestsController : ControllerBase
                 status = ar.Status,
                 createDate = ar.CreateDate,
                 userId = ar.UserId,
+                userEmail = ar.User != null ? ar.User.Email : null,
                 assetId = ar.AssetId,
+                assetCode = ar.Asset != null ? ar.Asset.Code : null,
+                assetName = ar.Asset != null ? ar.Asset.Name : null,
+                assetQuantity = ar.Asset != null ? (int?)ar.Asset.Quantity : null,
+                currentDepartmentName = ar.Asset != null
+                    ? ar.Asset.AssetLocations
+                        .Where(al => al.IsCurrent)
+                        .Select(al => al.Department != null ? al.Department.Name : null)
+                        .FirstOrDefault()
+                    : null,
                 requestTypeId = ar.RequestTypeId
             })
             .ToListAsync();

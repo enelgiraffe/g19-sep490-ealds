@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -21,8 +23,58 @@ public class MaintenanceRequestsController : ControllerBase
         _maintenanceRequestTypeId = configuration.GetValue<int>("App:MaintenanceRequestTypeId", 2);
     }
 
-    [HttpPost]
-    public async Task<IActionResult> RequestExecution([FromBody] MaintenanceRequestDTO dto)
+        /// <summary>
+        /// GET /api/Assets/Requests/maintenance/list - Danh sách yêu cầu bảo dưỡng
+        /// Trả về dạng TransferRequestListItemDTO (mã SBB..., asset, phòng ban, trạng thái, lý do).
+        /// </summary>
+        [HttpGet("list")]
+        public async Task<ActionResult<IEnumerable<TransferRequestListItemDTO>>> GetList()
+        {
+            var query = _db.MaintenaceTasks
+                .AsNoTracking()
+                .Include(t => t.Asset)
+                    .ThenInclude(a => a.AssetLocations)
+                        .ThenInclude(al => al.Department)
+                .Include(t => t.AssetRequest)
+                .Where(t => t.AssetRequest != null && t.AssetRequest.RequestTypeId == _maintenanceRequestTypeId)
+                .OrderByDescending(t => t.PlannedDate);
+
+            var list = await query
+                .Select(t => new TransferRequestListItemDTO
+                {
+                    RecordId = t.TaskId,
+                    AssetRequestId = t.AssetRequestId ?? 0,
+                    Code = "SBB" + t.TaskId,
+                    TransferDate = t.PlannedDate,
+                    AssetCode = t.Asset.Code,
+                    AssetName = t.Asset.Name,
+                    // Với bảo dưỡng, phòng ban hiện tại quản lý tài sản được dùng cho cả From/To.
+                    FromDepartment = t.Asset.AssetLocations
+                        .Where(al => al.IsCurrent)
+                        .Select(al => al.Department.Name)
+                        .FirstOrDefault() ?? string.Empty,
+                    ToDepartment = t.Asset.AssetLocations
+                        .Where(al => al.IsCurrent)
+                        .Select(al => al.Department.Name)
+                        .FirstOrDefault() ?? string.Empty,
+                    Quantity = t.Asset.Quantity,
+                    Status = t.AssetRequest!.Status,
+                    StatusName =
+                        t.AssetRequest.Status == 0 ? "Nháp" :
+                        t.AssetRequest.Status == 1 ? "Đã nộp" :
+                        t.AssetRequest.Status == 2 ? "Hợp lệ" :
+                        t.AssetRequest.Status == 3 ? "Chờ phê duyệt" :
+                        t.AssetRequest.Status == 4 ? "Phê duyệt" :
+                        "Không xác định",
+                    Reason = t.AssetRequest.Description
+                })
+                .ToListAsync();
+
+            return Ok(list);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> RequestExecution([FromBody] MaintenanceRequestDTO dto)
     {
         if (dto == null)
             return BadRequest("Request body is required.");

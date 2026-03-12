@@ -1,20 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Button, Input, Select, Tag, Dropdown, Modal, message } from 'antd';
-import type { MenuProps, TableColumnsType } from 'antd';
-import {
-  SearchOutlined,
-  FilterOutlined,
-  SettingOutlined,
-  PlusOutlined,
-  DownloadOutlined,
-  MoreOutlined,
-  SwapOutlined,
-  DollarOutlined,
-  EditOutlined,
-  QrcodeOutlined,
-  DeleteOutlined,
-} from '@ant-design/icons';
+import { Button, Modal, message } from 'antd';
+import { DownloadOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   assetService,
   formatVnd,
@@ -22,9 +9,8 @@ import {
   type AssetResponse,
   type GetAssetsParams,
 } from '../../assets/services/assetService';
+import '../../assets/pages/AssetListPage.css';
 import './AccountantAssetListPage.css';
-
-const { Option } = Select;
 
 interface AccountantAssetRow {
   key: string;
@@ -61,7 +47,6 @@ function mapAssetToRow(a: AssetResponse): AccountantAssetRow {
 export function AccountantAssetListPage() {
   const [data, setData] = useState<AccountantAssetRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [searchInput, setSearchInput] = useState('');
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
@@ -120,206 +105,15 @@ export function AccountantAssetListPage() {
     });
   };
 
-  const handleMenuClick: MenuProps['onClick'] = ({ domEvent }) => {
-    domEvent.stopPropagation();
-  };
-
-  const buildMenu = (record: AccountantAssetRow): MenuProps => ({
-    onClick: handleMenuClick,
-    items: [
-      {
-        key: 'move',
-        icon: <SwapOutlined />,
-        label: 'Điều chuyển',
-        disabled: true,
-      },
-      {
-        key: 'liquidate',
-        icon: <DollarOutlined />,
-        label: 'Đề nghị thanh lý',
-        disabled: true,
-      },
-      {
-        key: 'edit',
-        icon: <EditOutlined />,
-        label: 'Sửa',
-        onClick: (info) => {
-          info.domEvent.stopPropagation();
-          navigate(`/assets/${record.id}/edit`);
-        },
-      },
-      {
-        key: 'print-qr',
-        icon: <QrcodeOutlined />,
-        label: 'In mã QR',
-        disabled: true,
-      },
-      {
-        type: 'divider',
-      },
-      {
-        key: 'delete',
-        icon: <DeleteOutlined style={{ color: '#FE3720' }} />,
-        label: <span style={{ color: '#FE3720' }}>Xóa</span>,
-        onClick: (info) => {
-          info.domEvent.stopPropagation();
-          handleDeleteAsset(record);
-        },
-      },
-    ],
-  });
-
-  const columns: TableColumnsType<AccountantAssetRow> = [
-    {
-      title: 'MÃ TÀI SẢN',
-      dataIndex: 'code',
-      key: 'code',
-      width: 120,
-      render: (text, record) => (
-        <button
-          type="button"
-          className="accountant-asset-code accountant-asset-code--link"
-          onClick={() => navigate(`/assets/${record.id}`)}
-        >
-          {text}
-        </button>
-      ),
-    },
-    {
-      title: 'TÊN TÀI SẢN',
-      dataIndex: 'name',
-      key: 'name',
-      width: 200,
-    },
-    {
-      title: 'LOẠI TÀI SẢN',
-      dataIndex: 'type',
-      key: 'type',
-      width: 150,
-    },
-    {
-      title: 'VỊ TRÍ TÀI SẢN',
-      dataIndex: 'location',
-      key: 'location',
-      width: 150,
-    },
-    {
-      title: 'SỐ LƯỢNG',
-      dataIndex: 'quantity',
-      key: 'quantity',
-      width: 100,
-      align: 'center',
-    },
-    {
-      title: 'GIÁ',
-      dataIndex: 'price',
-      key: 'price',
-      width: 180,
-      align: 'right',
-    },
-    {
-      title: 'TRẠNG THÁI',
-      dataIndex: 'status',
-      key: 'status',
-      width: 150,
-      render: (status: string, record) => (
-        <Tag 
-          color={status === 'in-use' ? 'success' : 'default'}
-          className="accountant-asset-status-tag"
-        >
-          {record.statusLabel}
-        </Tag>
-      ),
-    },
-    {
-      title: 'GIÁ TRỊ KHẤU HAO',
-      dataIndex: 'depreciation',
-      key: 'depreciation',
-      width: 180,
-      align: 'right',
-    },
-    {
-      title: '',
-      key: 'actions',
-      width: 60,
-      align: 'center',
-      render: (_, record) => (
-        <Dropdown
-          menu={buildMenu(record)}
-          trigger={['click']}
-          placement="bottomRight"
-        >
-          <Button
-            type="text"
-            icon={<MoreOutlined />}
-            className="accountant-asset-actions-btn"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </Dropdown>
-      ),
-    },
-  ];
-
-  const rowSelection = {
-    selectedRowKeys,
-    onChange: (newSelectedRowKeys: React.Key[]) => {
-      setSelectedRowKeys(newSelectedRowKeys);
-    },
-  };
+  const statusPillClass = (row: AccountantAssetRow) =>
+    row.status === 'in-use'
+      ? 'asset-status-pill asset-status-pill--active'
+      : 'asset-status-pill asset-status-pill--inactive';
 
   return (
-    <div className="accountant-asset-page">
-      <div className="accountant-asset-header">
-        <div className="accountant-asset-header-left">
-          <Input
-            placeholder="Tìm kiếm"
-            prefix={<SearchOutlined />}
-            className="accountant-asset-search"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-          />
-          <Select
-            placeholder="Loại tài sản"
-            className="accountant-asset-filter"
-            suffixIcon={<FilterOutlined />}
-            value={assetTypeFilter ?? ''}
-            onChange={(v) => setAssetTypeFilter(v === '' || v == null ? undefined : Number(v))}
-            allowClear
-          >
-            <Option value="">Tất cả</Option>
-            <Option value={1}>Máy móc</Option>
-            <Option value={2}>Thiết bị</Option>
-          </Select>
-          <Select
-            placeholder="Trạng thái"
-            className="accountant-asset-filter"
-            suffixIcon={<FilterOutlined />}
-            value={statusFilter ?? ''}
-            onChange={(v) => setStatusFilter(v === '' || v == null ? undefined : Number(v))}
-            allowClear
-          >
-            <Option value="">Tất cả</Option>
-            <Option value={0}>Sẵn có</Option>
-            <Option value={1}>Đang sử dụng</Option>
-            <Option value={2}>Đang bảo trì</Option>
-          </Select>
-          <Button
-            icon={<FilterOutlined />}
-            className="accountant-asset-filter-reset"
-            onClick={() => {
-              setSearchInput('');
-              setKeyword('');
-              setStatusFilter(undefined);
-              setAssetTypeFilter(undefined);
-            }}
-          >
-            Gỡ bộ lọc
-          </Button>
-          <Button
-            icon={<SettingOutlined />}
-            className="accountant-asset-settings"
-          />
-        </div>
+    <div className="asset-page">
+      <div className="accountant-asset-title-row">
+        <h1 className="asset-page__title">Tài sản</h1>
         <div className="accountant-asset-header-right">
           <Button
             type="primary"
@@ -337,23 +131,156 @@ export function AccountantAssetListPage() {
           </Button>
         </div>
       </div>
+      <div className="asset-card">
+        <div className="asset-card__header">
+          <div className="accountant-asset-header">
+            <div className="accountant-asset-header-left">
+              <input
+                type="text"
+                className="asset-search-input"
+                placeholder="Tìm kiếm"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+              />
+              <select
+                className="asset-filter-select"
+                value={assetTypeFilter ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setAssetTypeFilter(v === '' ? undefined : Number(v));
+                }}
+              >
+                <option value="">Tất cả loại tài sản</option>
+                <option value={1}>Máy móc</option>
+                <option value={2}>Thiết bị</option>
+              </select>
+              <select
+                className="asset-filter-select"
+                value={statusFilter ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setStatusFilter(v === '' ? undefined : Number(v));
+                }}
+              >
+                <option value="">Tất cả trạng thái</option>
+                <option value={0}>Sẵn có</option>
+                <option value={1}>Đang sử dụng</option>
+                <option value={2}>Đang bảo trì</option>
+              </select>
+              <button
+                className="asset-filter-reset"
+                type="button"
+                onClick={() => {
+                  setSearchInput('');
+                  setKeyword('');
+                  setStatusFilter(undefined);
+                  setAssetTypeFilter(undefined);
+                }}
+              >
+                Gỡ bộ lọc
+              </button>
+              <button className="asset-filter-settings" aria-label="Cài đặt hiển thị">
+                ⚙
+              </button>
+            </div>
+          </div>
+        </div>
 
-      <div className="accountant-asset-table-container">
-        <Table
-          rowSelection={rowSelection}
-          columns={columns}
-          dataSource={data}
-          loading={loading}
-          pagination={{
-            total: data.length,
-            pageSize: 25,
-            showSizeChanger: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} / ${total}`,
-            pageSizeOptions: ['10', '25', '50', '100'],
-            className: 'accountant-asset-pagination',
-          }}
-          className="accountant-asset-table"
-        />
+        <div className="asset-table-wrapper">
+          <table className="asset-table">
+            <thead>
+              <tr>
+                <th className="asset-table__cell asset-table__cell--checkbox">
+                  <input type="checkbox" />
+                </th>
+                <th>MÃ TÀI SẢN</th>
+                <th>TÊN TÀI SẢN</th>
+                <th>LOẠI TÀI SẢN</th>
+                <th>VỊ TRÍ TÀI SẢN</th>
+                <th>SỐ LƯỢNG</th>
+                <th>GIÁ</th>
+                <th>TRẠNG THÁI</th>
+                <th>GIÁ TRỊ KHẤU HAO</th>
+                <th className="asset-table__cell asset-table__cell--actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {data.length === 0 ? (
+                <tr>
+                  <td colSpan={10} style={{ textAlign: 'center', padding: '16px' }}>
+                    Không có dữ liệu.
+                  </td>
+                </tr>
+              ) : (
+                data.map((row) => (
+                  <tr key={row.key} className="asset-row">
+                    <td className="asset-table__cell asset-table__cell--checkbox">
+                      <input type="checkbox" />
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="asset-code asset-code--link"
+                        onClick={() => navigate(`/assets/${row.id}`)}
+                      >
+                        {row.code}
+                      </button>
+                    </td>
+                    <td>{row.name}</td>
+                    <td>{row.type}</td>
+                    <td>{row.location}</td>
+                    <td className="asset-align-right">{row.quantity}</td>
+                    <td className="asset-align-right">{row.price}</td>
+                    <td>
+                      <span className={statusPillClass(row)}>{row.statusLabel}</span>
+                    </td>
+                    <td className="asset-align-right">{row.depreciation}</td>
+                    <td className="asset-table__cell asset-table__cell--actions">
+                      <button
+                        type="button"
+                        className="asset-row__more-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteAsset(row);
+                        }}
+                        title="Xóa"
+                      >
+                        🗑
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="asset-card__footer">
+          <div className="asset-footer__left">
+            Số lượng trên trang:
+            <select className="asset-footer__select" defaultValue={25}>
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+          <div className="asset-footer__center">1-25 trên {data.length}</div>
+          <div className="asset-footer__right">
+            <button className="asset-footer__pager" disabled type="button">
+              ⟨
+            </button>
+            <button
+              className="asset-footer__pager asset-footer__pager--active"
+              type="button"
+            >
+              1
+            </button>
+            <button className="asset-footer__pager" type="button">
+              ⟩
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -36,6 +36,21 @@ export interface MaintenanceRequestResponse {
   taskId: number;
 }
 
+export interface MaintenanceRequestListItemDTO {
+  recordId: number;
+  assetRequestId: number;
+  code: string;
+  transferDate: string;
+  assetCode: string;
+  assetName: string;
+  fromDepartment: string;
+  toDepartment: string;
+  quantity: number;
+  status: number;
+  statusName: string;
+  reason?: string | null;
+}
+
 /** RequestTypeId cho loại "Bảo dưỡng" - cần trùng với bản ghi trong bảng RequestType */
 const MAINTENANCE_REQUEST_TYPE_ID = 2;
 
@@ -60,6 +75,17 @@ export const maintenanceRequestService = {
     const response = await maintenanceApi.post<MaintenanceRequestResponse>(
       '/api/Assets/Requests/maintenance',
       body
+    );
+    return response.data;
+  },
+
+  /**
+   * Lấy danh sách yêu cầu bảo dưỡng cho "Tài sản cần bảo dưỡng".
+   * Backend trả dạng TransferRequestListItemDTO.
+   */
+  async list(): Promise<MaintenanceRequestListItemDTO[]> {
+    const response = await maintenanceApi.get<MaintenanceRequestListItemDTO[]>(
+      '/api/Assets/Requests/maintenance/list'
     );
     return response.data;
   },

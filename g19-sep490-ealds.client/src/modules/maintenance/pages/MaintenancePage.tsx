@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Button, Input, Select, Tabs } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
+import { Button, Input, Select, Tabs, message } from 'antd';
 import {
   EyeOutlined,
   FilterOutlined,
@@ -7,6 +7,7 @@ import {
   SettingOutlined,
 } from '@ant-design/icons';
 import './MaintenancePage.css';
+import { maintenanceRequestService } from '../../assets/services/maintenanceRequestService';
 
 type MaintenanceStatus = 'draft' | 'pending' | 'approved' | 'rejected';
 
@@ -40,52 +41,20 @@ function getStatusClass(status: MaintenanceStatus): string {
   return 'maintenance-status-pill maintenance-status-pill--rejected';
 }
 
-const MOCK_ROWS: MaintenanceRow[] = [
-  {
-    id: '1',
-    assetCode: 'MCS',
-    assetName: 'Máy cắt sắt',
-    assetType: 'Thiết bị kỹ thuật',
-    purpose: 'Duy trì hiệu suất',
-    setupDate: '28/01/2026',
-    expectedDate: '28/01/2026',
-    assetState: 'Đang sử dụng',
-    status: 'draft',
-  },
-  {
-    id: '2',
-    assetCode: 'MUV',
-    assetName: 'Máy uốn vòm',
-    assetType: 'Thiết bị kỹ thuật',
-    purpose: 'Đảm bảo an toàn',
-    setupDate: '28/01/2026',
-    expectedDate: '28/01/2026',
-    assetState: 'Đang sử dụng',
-    status: 'pending',
-  },
-  {
-    id: '3',
-    assetCode: 'MDK',
-    assetName: 'Màn điều khiển',
-    assetType: 'Thiết bị kỹ thuật',
-    purpose: 'Thay film',
-    setupDate: '28/01/2026',
-    expectedDate: '28/01/2026',
-    assetState: 'Đang sử dụng',
-    status: 'approved',
-  },
-  {
-    id: '4',
-    assetCode: 'MDK-2',
-    assetName: 'Màn điều khiển',
-    assetType: 'Thiết bị kỹ thuật',
-    purpose: 'Thay film',
-    setupDate: '28/01/2026',
-    expectedDate: '28/01/2026',
-    assetState: 'Đang sử dụng',
-    status: 'rejected',
-  },
-];
+function formatDate(value?: string | null): string {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString('vi-VN');
+}
+
+function mapStatus(status: number): MaintenanceStatus {
+  // 0=Nháp, 3=Chờ phê duyệt, 4=Phê duyệt, others => Từ chối/khác
+  if (status === 0) return 'draft';
+  if (status === 3) return 'pending';
+  if (status === 4) return 'approved';
+  return 'rejected';
+}
 
 export function MaintenancePage() {
   const [activeTab, setActiveTab] = useState<'need-maintenance' | 'in-maintenance'>(
@@ -93,10 +62,53 @@ export function MaintenancePage() {
   );
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | MaintenanceStatus>('all');
+  const [rows, setRows] = useState<MaintenanceRow[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadNeedMaintenance() {
+      setLoading(true);
+      try {
+        // Backend trả danh sách dạng TransferRequestListItemDTO
+        const list = await maintenanceRequestService.list();
+        const mapped: MaintenanceRow[] = list.map((it) => ({
+          id: String(it.recordId),
+          assetCode: it.assetCode,
+          assetName: it.assetName,
+          assetType: '', // Backend hiện chưa trả loại tài sản trong DTO này
+          purpose: it.reason ?? '',
+          setupDate: formatDate(it.transferDate),
+          expectedDate: formatDate(it.transferDate),
+          assetState: it.fromDepartment || it.toDepartment || '',
+          status: mapStatus(it.status),
+        }));
+
+        if (!cancelled) setRows(mapped);
+      } catch (e: any) {
+        // Hiển thị thông báo cố định để tránh trường hợp backend trả format lạ làm message trống.
+        message.error('Không tải được danh sách tài sản cần bảo dưỡng. Vui lòng thử lại.');
+        if (!cancelled) setRows([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    if (activeTab === 'need-maintenance') {
+      loadNeedMaintenance();
+    } else {
+      setRows([]);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab]);
 
   const filteredRows: MaintenanceRow[] = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    return MOCK_ROWS.filter((row) => {
+    return rows.filter((row) => {
       const matchStatus = statusFilter === 'all' || row.status === statusFilter;
       const matchKeyword =
         !keyword ||
@@ -105,7 +117,7 @@ export function MaintenancePage() {
         row.purpose.toLowerCase().includes(keyword);
       return matchStatus && matchKeyword;
     });
-  }, [search, statusFilter]);
+  }, [rows, search, statusFilter]);
 
   return (
     <div className="maintenance-page">
@@ -181,7 +193,13 @@ export function MaintenancePage() {
               </tr>
             </thead>
             <tbody>
-              {filteredRows.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={10} className="maintenance-table-empty">
+                    Đang tải dữ liệu...
+                  </td>
+                </tr>
+              ) : filteredRows.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="maintenance-table-empty">
                     Không có dữ liệu.

@@ -6,6 +6,13 @@
   min-height: 0;
 }
 
+.accountant-asset-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .accountant-asset-header {
   display: flex;
   justify-content: space-between;

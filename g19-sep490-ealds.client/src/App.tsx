@@ -22,6 +22,7 @@ import { RepairsPage } from './modules/repairs/pages/RepairsPage';
 import { MaintenancePage } from './modules/maintenance/pages/MaintenancePage';
 import { InventoryPage } from './modules/inventory/pages/InventoryPage';
 import { LiquidationPage } from './modules/liquidation/pages/LiquidationPage';
+import { RequestsPage } from './modules/requests/pages/RequestsPage';
 import './App.css';
 
 function App() {
@@ -69,7 +70,7 @@ function App() {
           <Route path="liquidation" element={<LiquidationPage />} />
           <Route path="allocations" element={<ModulePlaceholder title="Cấp phát-Thu hồi" />} />
           <Route path="cost-recording" element={<ModulePlaceholder title="Ghi nhận chi phí" />} />
-          <Route path="requests" element={<ModulePlaceholder title="Yêu cầu" />} />
+          <Route path="requests" element={<RequestsPage />} />
           <Route path="dashboard" element={<DirectorDashboardPage />} />
           <Route path="approval-detail/:id" element={<ApprovalDetailPage />} />
           <Route path="reports" element={<ModulePlaceholder title="Báo cáo" />} />

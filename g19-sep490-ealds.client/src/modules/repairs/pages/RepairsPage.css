@@ -107,6 +107,11 @@
   color: #6b7280;
 }
 
+.repairs-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
 .repairs-card__footer {
   display: flex;
   justify-content: space-between;
