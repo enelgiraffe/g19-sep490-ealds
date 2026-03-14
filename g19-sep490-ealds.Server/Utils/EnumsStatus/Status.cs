@@ -27,3 +27,32 @@ public enum AssetLifeActionType
     Repaired = 5,
     Disposed = 6
 }
+
+public enum MaintenanceFrequencyType
+{
+    OneTime = 1,
+    Periodic = 2
+}
+
+public enum MaintenanceRepeatIntervalUnit
+{
+    Day = 1,
+    Week = 2,
+    Month = 3,
+    Year = 4
+}
+
+public enum ScheduleType
+{
+    Auto = 1,
+    Request = 2
+}
+
+public enum MaintenanceTaskStatus
+{
+    Pending = 0,
+    Assigned = 1,
+    InProgress = 2,
+    Completed = 3,
+    Cancelled = 4
+}

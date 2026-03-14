@@ -1,8 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
 namespace g19_sep490_ealds.Server.Models;
 
@@ -34,4 +32,18 @@ public partial class MaintenanceTemplate
 
     [InverseProperty("Template")]
     public virtual ICollection<MaintenanceSchedule> MaintenanceSchedules { get; set; } = new List<MaintenanceSchedule>();
+
+    [NotMapped]
+    public MaintenanceFrequencyType FrequencyTypeEnum
+    {
+        get => (MaintenanceFrequencyType)FrequencyType;
+        set => FrequencyType = (int)value;
+    }
+
+    [NotMapped]
+    public MaintenanceRepeatIntervalUnit RepeatIntervalUnitEnum
+    {
+        get => Enum.Parse<MaintenanceRepeatIntervalUnit>(RepeatIntervalUnit);
+        set => RepeatIntervalUnit = value.ToString();
+    }
 }
