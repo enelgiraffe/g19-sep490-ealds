@@ -1,19 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Button, Input, Select, Tabs, Dropdown, message } from 'antd';
-import {
-  DeleteOutlined,
-  EditOutlined,
-  EyeOutlined,
-  FilterOutlined,
-  SearchOutlined,
-  SettingOutlined,
-} from '@ant-design/icons';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Button, DatePicker, Modal, Select, Tabs, message } from 'antd';
+import { EyeOutlined } from '@ant-design/icons';
 import { CreatePurchaseOrderModal } from '../../purchase-orders/components/CreatePurchaseOrderModal';
 import { ViewPurchaseOrderModal } from '../../purchase-orders/components/ViewPurchaseOrderModal';
 import {
   purchaseOrderService,
   type PurchaseOrderDetail,
-  type PurchaseOrderListItem,
 } from '../../purchase-orders/services/purchaseOrderService';
 import { profileService, type UserProfile } from '../../profile/services/profileService';
 import {
@@ -21,12 +13,20 @@ import {
   type TransferRequestListItem,
 } from '../../assets/services/transferRequestService';
 import { TransferRequestDetailModal } from '../../transfers/components/TransferRequestDetailModal';
-import type { MenuProps } from 'antd';
+import {
+  accountantRequestService,
+  type AccountantRequestListItem,
+} from '../services/accountantRequestService';
+import {
+  directorRequestService,
+  REQUEST_TYPE_IDS,
+  type DirectorRequestListItem,
+} from '../services/directorRequestService';
 import './RequestsPage.css';
 
 const { Option } = Select;
 
-type ActiveTabKey = 'purchase' | 'transfer';
+type ActiveTabKey = 'purchase' | 'transfer' | 'maintenance' | 'repair' | 'liquidation';
 
 const PURCHASE_STATUS_MAP: Record<number, { label: string; color: string }> = {
   0: { label: 'Nháp', color: 'default' },
@@ -43,7 +43,19 @@ const TRANSFER_STATUS_MAP: Record<number, { label: string; color: string }> = {
   4: { label: 'Phê duyệt', color: 'success' },
 };
 
-interface PurchaseTableRow extends PurchaseOrderListItem {
+/** Dùng chung cho tab Bảo dưỡng / Sửa chữa / Thanh lý (API director) */
+const DIRECTOR_STATUS_MAP: Record<number, { label: string; color: string }> = {
+  0: { label: 'Nháp', color: 'default' },
+  1: { label: 'Đã nộp', color: 'processing' },
+  2: { label: 'Từ chối', color: 'error' },
+  3: { label: 'Chờ phê duyệt', color: 'warning' },
+  4: { label: 'Phê duyệt', color: 'success' },
+};
+
+interface PurchaseTableRow {
+  assetRequestId: number;
+  title: string;
+  status: number;
   key: string;
   stt: number;
   code: string;
@@ -68,32 +80,18 @@ function formatDate(iso: string): string {
   }
 }
 
-function toPurchaseTableRow(item: PurchaseOrderListItem, index: number): PurchaseTableRow {
-  let quantity = 1;
-  let estimatedPrice = '—';
-  try {
-    if (item.proposedData) {
-      const parsed = JSON.parse(item.proposedData) as {
-        equipment?: { quantity?: number; estimatedPrice?: string }[];
-        totalPrice?: string;
-      };
-      if (Array.isArray(parsed.equipment) && parsed.equipment.length > 0) {
-        quantity = parsed.equipment.reduce((s, e) => s + (e.quantity ?? 1), 0);
-        estimatedPrice = parsed.totalPrice ?? parsed.equipment[0]?.estimatedPrice ?? '—';
-      }
-    }
-  } catch {
-    // keep defaults
-  }
+function toPurchaseTableRow(item: AccountantRequestListItem, index: number): PurchaseTableRow {
   return {
-    ...item,
     key: String(item.assetRequestId),
     stt: index + 1,
+    assetRequestId: item.assetRequestId,
+    title: item.title,
+    status: item.status,
     code: `YC-${item.assetRequestId}`,
     requestDate: formatDate(item.createDate),
     equipment: item.title,
-    quantity,
-    estimatedPrice,
+    quantity: 1,
+    estimatedPrice: '—',
   };
 }
 
@@ -123,7 +121,17 @@ export function RequestsPage() {
   const [isTransferDetailOpen, setIsTransferDetailOpen] = useState(false);
   const [selectedTransfer, setSelectedTransfer] = useState<TransferTableRow | null>(null);
 
+  const [directorRows, setDirectorRows] = useState<DirectorRequestListItem[]>([]);
+  const [directorTotal, setDirectorTotal] = useState(0);
+  const [directorLoading, setDirectorLoading] = useState(false);
+  const [selectedDirectorItem, setSelectedDirectorItem] = useState<DirectorRequestListItem | null>(
+    null,
+  );
+  const [isDirectorDetailOpen, setIsDirectorDetailOpen] = useState(false);
+
   const [statusFilter, setStatusFilter] = useState<number | 'all'>('all');
+  const [departmentFilter, setDepartmentFilter] = useState<string | 'all'>('all');
+  const [sentDateFilter, setSentDateFilter] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -132,7 +140,7 @@ export function RequestsPage() {
     const loadPurchase = async () => {
       setPurchaseLoading(true);
       try {
-        const list = await purchaseOrderService.getList();
+        const list = await accountantRequestService.getPurchaseRequests();
         setPurchaseRows(list.map((item, i) => toPurchaseTableRow(item, i)));
       } catch {
         message.error('Không tải được danh sách đơn mua.');
@@ -155,13 +163,74 @@ export function RequestsPage() {
       }
     };
 
+    const loadProfile = async () => {
+      try {
+        const profile = await profileService.getProfile();
+        setUserProfile(profile);
+      } catch {
+        // ignore profile error here; will be handled on demand
+      }
+    };
+
     loadPurchase();
     loadTransfers();
+    loadProfile();
   }, []);
+
+  const isDirectorTab =
+    activeTab === 'maintenance' || activeTab === 'repair' || activeTab === 'liquidation';
+  const directorRequestTypeId =
+    activeTab === 'maintenance'
+      ? REQUEST_TYPE_IDS.maintenance
+      : activeTab === 'repair'
+        ? REQUEST_TYPE_IDS.repair
+        : REQUEST_TYPE_IDS.liquidation;
+
+  const prevDirectorTypeIdRef = useRef<number | null>(null);
+  const effectiveDirectorPage =
+    prevDirectorTypeIdRef.current !== directorRequestTypeId ? 1 : page;
+
+  useEffect(() => {
+    if (!isDirectorTab) return;
+    if (prevDirectorTypeIdRef.current !== directorRequestTypeId) {
+      setPage(1);
+    }
+    prevDirectorTypeIdRef.current = directorRequestTypeId;
+    let cancelled = false;
+    setDirectorLoading(true);
+    directorRequestService
+      .getView({
+        requestTypeId: directorRequestTypeId,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        page: effectiveDirectorPage,
+        pageSize,
+      })
+      .then((res) => {
+        if (!cancelled) {
+          const items = res.items as DirectorRequestListItem[];
+          const byType = items.filter((item) => item.requestTypeId === directorRequestTypeId);
+          setDirectorRows(byType);
+          setDirectorTotal(res.total);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          message.error('Không tải được danh sách yêu cầu.');
+          setDirectorRows([]);
+          setDirectorTotal(0);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setDirectorLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isDirectorTab, directorRequestTypeId, statusFilter, effectiveDirectorPage, pageSize]);
 
   useEffect(() => {
     setPage(1);
-  }, [activeTab, statusFilter, searchText]);
+  }, [activeTab, statusFilter, searchText, departmentFilter, sentDateFilter]);
 
   const filteredPurchaseRows = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
@@ -179,34 +248,72 @@ export function RequestsPage() {
     const keyword = searchText.trim().toLowerCase();
     return transferRows.filter((row) => {
       const matchStatus = statusFilter === 'all' || row.status === statusFilter;
+      const matchDepartment =
+        departmentFilter === 'all' ||
+        row.fromDepartment.toLowerCase() === String(departmentFilter).toLowerCase();
+      let matchDate = true;
+      if (sentDateFilter) {
+        try {
+          const rowDate = new Date(row.transferDate).toISOString().slice(0, 10);
+          matchDate = rowDate === sentDateFilter;
+        } catch {
+          matchDate = true;
+        }
+      }
       const matchKeyword =
         !keyword ||
         row.code.toLowerCase().includes(keyword) ||
         row.assetCode.toLowerCase().includes(keyword) ||
         row.assetName.toLowerCase().includes(keyword);
-      return matchStatus && matchKeyword;
+      return matchStatus && matchDepartment && matchDate && matchKeyword;
     });
-  }, [transferRows, searchText, statusFilter]);
+  }, [transferRows, searchText, statusFilter, departmentFilter, sentDateFilter]);
+
+  const departmentOptions = useMemo(
+    () =>
+      Array.from(new Set(transferRows.map((row) => row.fromDepartment)))
+        .filter((name) => !!name)
+        .sort(),
+    [transferRows],
+  );
 
   const isPurchaseTab = activeTab === 'purchase';
-  const currentRows = isPurchaseTab ? filteredPurchaseRows : filteredTransferRows;
-  const loading = isPurchaseTab ? purchaseLoading : transferLoading;
+  const isTransferTab = activeTab === 'transfer';
+  const hasDataTable = isPurchaseTab || isTransferTab || isDirectorTab;
 
-  const total = currentRows.length;
+  const currentRows = isPurchaseTab
+    ? filteredPurchaseRows
+    : isTransferTab
+      ? filteredTransferRows
+      : [];
+  const loading = isPurchaseTab
+    ? purchaseLoading
+    : isTransferTab
+      ? transferLoading
+      : isDirectorTab
+        ? directorLoading
+        : false;
+
+  const total = isDirectorTab ? directorTotal : currentRows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
   const startIndex = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const endIndex = Math.min(safePage * pageSize, total);
-  const pagedRows = currentRows.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const pagedRows = isDirectorTab
+    ? directorRows
+    : currentRows.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleOpenCreatePurchase = async () => {
-    try {
-      const profile = await profileService.getProfile();
-      setUserProfile(profile);
-      setIsCreatePurchaseOpen(true);
-    } catch {
-      message.error('Không lấy được thông tin người dùng.');
+    if (!userProfile) {
+      try {
+        const profile = await profileService.getProfile();
+        setUserProfile(profile);
+      } catch {
+        message.error('Không lấy được thông tin người dùng.');
+        return;
+      }
     }
+    setIsCreatePurchaseOpen(true);
   };
 
   const handleCloseCreatePurchase = () => {
@@ -233,7 +340,7 @@ export function RequestsPage() {
       });
       message.success('Tạo yêu cầu mua sắm thành công.');
       handleCloseCreatePurchase();
-      const list = await purchaseOrderService.getList();
+      const list = await accountantRequestService.getPurchaseRequests();
       setPurchaseRows(list.map((item, i) => toPurchaseTableRow(item, i)));
     } catch (e: unknown) {
       const err = e as { response?: { data?: string } };
@@ -251,40 +358,6 @@ export function RequestsPage() {
     }
   };
 
-  const purchaseActionMenu = (row: PurchaseTableRow): MenuProps['items'] => [
-    {
-      key: 'view',
-      label: 'Xem',
-      icon: <EyeOutlined />,
-      onClick: () => handleViewPurchaseDetail(row),
-    },
-    ...(row.status === 0 || row.status === 3
-      ? [
-          {
-            key: 'edit',
-            label: 'Sửa',
-            icon: <EditOutlined />,
-            onClick: () => message.info('Chức năng sửa đang phát triển'),
-          },
-        ]
-      : []),
-    {
-      key: 'delete',
-      label: 'Xóa',
-      icon: <DeleteOutlined />,
-      danger: true,
-      onClick: () => message.info('Chức năng xóa đang phát triển'),
-    },
-  ];
-
-  const handleClickMainButton = () => {
-    if (isPurchaseTab) {
-      handleOpenCreatePurchase();
-    } else {
-      message.info('Vui lòng gửi yêu cầu điều chuyển từ màn Tài sản sau khi chọn tài sản cụ thể.');
-    }
-  };
-
   const renderStatusFilterOptions = () => {
     const map = isPurchaseTab ? PURCHASE_STATUS_MAP : TRANSFER_STATUS_MAP;
     return Object.entries(map).map(([k, v]) => (
@@ -298,9 +371,6 @@ export function RequestsPage() {
     <div className="requests-page">
       <div className="requests-header">
         <h1 className="requests-title">Yêu cầu</h1>
-        <Button type="primary" className="requests-btn-add" onClick={handleClickMainButton}>
-          {isPurchaseTab ? '+ Tạo yêu cầu mua sắm' : '+ Tạo yêu cầu điều chuyển'}
-        </Button>
       </div>
 
       <div className="requests-card">
@@ -311,55 +381,150 @@ export function RequestsPage() {
           items={[
             { key: 'purchase', label: 'Đơn mua' },
             { key: 'transfer', label: 'Điều chuyển' },
+            { key: 'maintenance', label: 'Bảo dưỡng' },
+            { key: 'repair', label: 'Sửa chữa' },
+            { key: 'liquidation', label: 'Thanh lý' },
           ]}
         />
 
         <div className="requests-filters">
-          <Input
-            placeholder="Tìm kiếm"
-            prefix={<SearchOutlined />}
-            className="requests-search"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-          />
-          <Select
-            placeholder="Trạng thái"
-            className="requests-select"
-            suffixIcon={<FilterOutlined />}
-            value={statusFilter}
-            onChange={(v) => setStatusFilter(v)}
-          >
-            <Option value="all">Tất cả</Option>
-            {renderStatusFilterOptions()}
-          </Select>
-          <Button
-            icon={<FilterOutlined />}
-            className="requests-filter-advanced"
-            onClick={() => {
-              setSearchText('');
-              setStatusFilter('all');
-            }}
-          >
-            Gỡ bộ lọc
-          </Button>
-          <Button icon={<SettingOutlined />} className="requests-settings" />
+          {isTransferTab && (
+            <>
+              <Select
+                placeholder="Phòng ban đề xuất"
+                className="requests-select"
+                value={departmentFilter}
+                onChange={(v) => setDepartmentFilter((v ?? 'all') as string | 'all')}
+              >
+                <Option value="all">Tất cả phòng ban</Option>
+                {departmentOptions.map((name) => (
+                  <Option key={name} value={name}>
+                    {name}
+                  </Option>
+                ))}
+              </Select>
+              <Select
+                placeholder="Trạng thái"
+                className="requests-select"
+                value={statusFilter}
+                onChange={(v) => setStatusFilter(v)}
+              >
+                <Option value="all">Tất cả</Option>
+                {renderStatusFilterOptions()}
+              </Select>
+              <DatePicker
+                placeholder="Ngày gửi"
+                className="requests-date-picker"
+                onChange={(_, dateString) => {
+                  setSentDateFilter(dateString || null);
+                }}
+              />
+            </>
+          )}
+          {isDirectorTab && (
+            <Select
+              placeholder="Trạng thái"
+              className="requests-select"
+              value={statusFilter}
+              onChange={(v) => setStatusFilter(v)}
+            >
+              <Option value="all">Tất cả</Option>
+              {Object.entries(DIRECTOR_STATUS_MAP).map(([k, v]) => (
+                <Option key={k} value={Number(k)}>
+                  {v.label}
+                </Option>
+              ))}
+            </Select>
+          )}
         </div>
 
         <div className="asset-table-wrapper requests-table-wrapper">
-          {loading ? (
+          {!hasDataTable ? (
+            <div className="requests-table-loading">
+              Chức năng đang được phát triển cho tab này.
+            </div>
+          ) : loading ? (
             <div className="requests-table-loading">
               {isPurchaseTab
                 ? 'Đang tải danh sách đơn mua...'
-                : 'Đang tải danh sách yêu cầu điều chuyển...'}
+                : isTransferTab
+                  ? 'Đang tải danh sách yêu cầu điều chuyển...'
+                  : 'Đang tải danh sách yêu cầu...'}
             </div>
+          ) : isDirectorTab ? (
+            <table className="asset-table requests-table">
+              <thead>
+                <tr>
+                  <th>MÃ YÊU CẦU</th>
+                  <th>PHÒNG BAN ĐỀ XUẤT</th>
+                  <th>NGÀY GỬI</th>
+                  <th>MÃ TÀI SẢN</th>
+                  <th>TÊN TÀI SẢN</th>
+                  <th>TRẠNG THÁI</th>
+                  <th className="asset-table__cell asset-table__cell--actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {pagedRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="requests-table-empty">
+                      Không có dữ liệu.
+                    </td>
+                  </tr>
+                ) : (
+                  (pagedRows as DirectorRequestListItem[]).map((row) => {
+                    const config = DIRECTOR_STATUS_MAP[row.status] ?? DIRECTOR_STATUS_MAP[0];
+                    return (
+                      <tr key={row.assetRequestId} className="asset-row">
+                        <td>
+                          <button
+                            type="button"
+                            className="asset-code asset-code--link"
+                            onClick={() => {
+                              setSelectedDirectorItem(row);
+                              setIsDirectorDetailOpen(true);
+                            }}
+                          >
+                            YC-{row.assetRequestId}
+                          </button>
+                        </td>
+                        <td>{row.currentDepartmentName ?? row.creatorEmail ?? '—'}</td>
+                        <td>{formatDate(row.createDate)}</td>
+                        <td>{row.assetCode ?? '—'}</td>
+                        <td>{row.assetName ?? row.title ?? '—'}</td>
+                        <td>
+                          <span
+                            className={
+                              config.color === 'success'
+                                ? 'asset-status-pill asset-status-pill--active'
+                                : config.color === 'default'
+                                  ? 'asset-status-pill asset-status-pill--inactive'
+                                  : 'asset-status-pill'
+                            }
+                          >
+                            {config.label}
+                          </span>
+                        </td>
+                        <td className="asset-table__cell asset-table__cell--actions">
+                          <Button
+                            type="text"
+                            icon={<EyeOutlined />}
+                            onClick={() => {
+                              setSelectedDirectorItem(row);
+                              setIsDirectorDetailOpen(true);
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           ) : isPurchaseTab ? (
             <table className="asset-table requests-table">
               <thead>
                 <tr>
-                  <th className="asset-table__cell asset-table__cell--checkbox">
-                    <input type="checkbox" />
-                  </th>
-                  <th>STT</th>
                   <th>MÃ YÊU CẦU</th>
                   <th>NGÀY ĐỀ XUẤT</th>
                   <th>MỤC ĐÍCH MUA</th>
@@ -372,7 +537,7 @@ export function RequestsPage() {
               <tbody>
                 {pagedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="requests-table-empty">
+                    <td colSpan={7} className="requests-table-empty">
                       Không có dữ liệu.
                     </td>
                   </tr>
@@ -381,10 +546,6 @@ export function RequestsPage() {
                     const config = PURCHASE_STATUS_MAP[row.status] ?? PURCHASE_STATUS_MAP[0];
                     return (
                       <tr key={row.key} className="asset-row">
-                        <td className="asset-table__cell asset-table__cell--checkbox">
-                          <input type="checkbox" />
-                        </td>
-                        <td className="asset-align-right">{row.stt}</td>
                         <td>
                           <button
                             type="button"
@@ -413,17 +574,14 @@ export function RequestsPage() {
                         </td>
                         <td className="asset-table__cell asset-table__cell--actions">
                           <div className="requests-actions">
-                            <Dropdown
-                              menu={{ items: purchaseActionMenu(row) }}
-                              trigger={['click']}
-                              placement="bottomRight"
+                            <Button
+                              type="text"
+                              icon={<EyeOutlined />}
+                              size="small"
+                              onClick={() => handleViewPurchaseDetail(row)}
                             >
-                              <Button type="text" icon={<EyeOutlined />} size="small" />
-                            </Dropdown>
-                            {(row.status === 0 || row.status === 3) && (
-                              <Button type="text" icon={<EditOutlined />} size="small" />
-                            )}
-                            <Button type="text" icon={<DeleteOutlined />} size="small" danger />
+                              Xem
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -436,21 +594,19 @@ export function RequestsPage() {
             <table className="asset-table requests-table">
               <thead>
                 <tr>
-                  <th>STT</th>
-                  <th>SỐ BIÊN BẢN</th>
-                  <th>NGÀY ĐIỀU CHUYỂN</th>
-                  <th>ĐIỀU CHUYỂN TỪ</th>
-                  <th>ĐIỀU CHUYỂN ĐẾN</th>
-                  <th>SỐ LƯỢNG</th>
+                  <th>MÃ YÊU CẦU</th>
+                  <th>PHÒNG BAN ĐỀ XUẤT</th>
+                  <th>NGÀY GỬI</th>
+                  <th>ĐƠN VỊ CHUYỂN</th>
+                  <th>ĐƠN VỊ NHẬN</th>
                   <th>TRẠNG THÁI</th>
-                  <th>LÝ DO ĐIỀU CHUYỂN</th>
                   <th className="asset-table__cell asset-table__cell--actions" />
                 </tr>
               </thead>
               <tbody>
                 {pagedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="requests-table-empty">
+                    <td colSpan={7} className="requests-table-empty">
                       Không có dữ liệu.
                     </td>
                   </tr>
@@ -459,7 +615,6 @@ export function RequestsPage() {
                     const config = TRANSFER_STATUS_MAP[row.status] ?? TRANSFER_STATUS_MAP[0];
                     return (
                       <tr key={row.key} className="asset-row">
-                        <td className="asset-align-right">{row.stt}</td>
                         <td>
                           <button
                             type="button"
@@ -472,10 +627,10 @@ export function RequestsPage() {
                             {row.code}
                           </button>
                         </td>
+                        <td>{row.fromDepartment}</td>
                         <td>{row.transferDateText}</td>
                         <td>{row.fromDepartment}</td>
                         <td>{row.toDepartment}</td>
-                        <td className="asset-align-right">{row.quantity}</td>
                         <td>
                           <span
                             className={
@@ -489,7 +644,6 @@ export function RequestsPage() {
                             {config.label}
                           </span>
                         </td>
-                        <td>{row.reason}</td>
                         <td className="asset-table__cell asset-table__cell--actions">
                           <Button
                             type="text"
@@ -571,6 +725,7 @@ export function RequestsPage() {
           setSelectedPurchaseDetail(null);
         }}
         data={selectedPurchaseDetail}
+        currentUserId={userProfile?.id ?? null}
       />
 
       <TransferRequestDetailModal
@@ -581,6 +736,40 @@ export function RequestsPage() {
         }}
         request={selectedTransfer}
       />
+
+      <Modal
+        title={`Chi tiết yêu cầu YC-${selectedDirectorItem?.assetRequestId ?? ''}`}
+        open={isDirectorDetailOpen}
+        onCancel={() => {
+          setIsDirectorDetailOpen(false);
+          setSelectedDirectorItem(null);
+        }}
+        footer={null}
+        width={520}
+      >
+        {selectedDirectorItem && (
+          <div className="requests-director-detail">
+            <p><strong>Tiêu đề:</strong> {selectedDirectorItem.title}</p>
+            {selectedDirectorItem.description && (
+              <p><strong>Mô tả:</strong> {selectedDirectorItem.description}</p>
+            )}
+            <p><strong>Ngày gửi:</strong> {formatDate(selectedDirectorItem.createDate)}</p>
+            <p><strong>Trạng thái:</strong>{' '}
+              {(DIRECTOR_STATUS_MAP[selectedDirectorItem.status] ?? DIRECTOR_STATUS_MAP[0]).label}
+            </p>
+            {(selectedDirectorItem.assetCode || selectedDirectorItem.assetName) && (
+              <p><strong>Tài sản:</strong>{' '}
+                {[selectedDirectorItem.assetCode, selectedDirectorItem.assetName].filter(Boolean).join(' - ')}
+              </p>
+            )}
+            {(selectedDirectorItem.currentDepartmentName || selectedDirectorItem.creatorEmail) && (
+              <p><strong>Phòng ban / Người tạo:</strong>{' '}
+                {selectedDirectorItem.currentDepartmentName ?? selectedDirectorItem.creatorEmail}
+              </p>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

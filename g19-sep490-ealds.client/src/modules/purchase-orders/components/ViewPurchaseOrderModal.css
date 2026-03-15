@@ -1,12 +1,25 @@
-.view-purchase-modal .ant-modal-content {
+.view-purchase-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.view-purchase-modal {
+  position: relative;
+  background: #fff;
   border-radius: 8px;
   overflow: hidden;
   max-height: 85vh;
+  width: 900px;
   display: flex;
   flex-direction: column;
 }
 
-.view-purchase-modal .ant-modal-body {
+.view-purchase-modal__body {
   padding: 0;
   flex: 1;
   overflow-y: auto;
@@ -40,14 +53,16 @@
   font-size: 13px;
   font-weight: 500;
   border: none;
+  background: #e5e7eb;
+  color: #374151;
 }
 
-.view-purchase-status-tag.ant-tag-success {
+.view-purchase-status-tag--success {
   background: #d1fae5;
   color: #047857;
 }
 
-.view-purchase-status-tag.ant-tag-warning {
+.view-purchase-status-tag--warning {
   background: #fef3c7;
   color: #d97706;
 }
@@ -196,18 +211,21 @@
   padding: 16px 24px;
   border-top: 1px solid #e5e7eb;
   display: flex;
-  justify-content: flex-start;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .view-purchase-btn-close {
   background: #6b7280;
-  border-color: #6b7280;
+  border: 1px solid #6b7280;
   color: #fff;
   display: flex;
   align-items: center;
   gap: 8px;
   height: 40px;
   padding: 0 24px;
+  border-radius: 6px;
+  cursor: pointer;
 }
 
 .view-purchase-btn-close:hover {
@@ -216,20 +234,162 @@
   color: #fff;
 }
 
+.view-purchase-btn-approve {
+  margin-left: auto;
+  background: #1890ff;
+  border: 1px solid #1890ff;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.view-purchase-btn-approve-icon {
+  font-size: 16px;
+}
+
+.view-purchase-btn-approve:hover {
+  background: #1677ff;
+  border-color: #1677ff;
+  color: #fff;
+}
+
 /* Scrollbar styling */
-.view-purchase-modal .ant-modal-body::-webkit-scrollbar {
+.view-purchase-modal__body::-webkit-scrollbar {
   width: 6px;
 }
 
-.view-purchase-modal .ant-modal-body::-webkit-scrollbar-track {
+.view-purchase-modal__body::-webkit-scrollbar-track {
   background: #f1f1f1;
 }
 
-.view-purchase-modal .ant-modal-body::-webkit-scrollbar-thumb {
+.view-purchase-modal__body::-webkit-scrollbar-thumb {
   background: #919EAB;
   border-radius: 3px;
 }
 
-.view-purchase-modal .ant-modal-body::-webkit-scrollbar-thumb:hover {
+.view-purchase-modal__body::-webkit-scrollbar-thumb:hover {
   background: #7a8693;
+}
+
+/* Approve modal */
+.approve-purchase-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.approve-purchase-modal {
+  background: #fff;
+  border-radius: 8px;
+  width: 640px;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.35);
+}
+
+.approve-purchase-modal__header {
+  background: #ffe5e0;
+  padding: 16px 24px;
+}
+
+.approve-purchase-modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #fe3720;
+}
+
+.approve-purchase-modal__body {
+  padding: 24px;
+}
+
+.approve-purchase-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.approve-purchase-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.approve-purchase-form__field label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.approve-purchase-select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  font-size: 14px;
+}
+
+.approve-purchase-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  font-size: 14px;
+  min-height: 80px;
+  resize: vertical;
+}
+
+.approve-purchase-modal__footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.approve-purchase-btn-back {
+  background: #6b7280;
+  border: 1px solid #6b7280;
+  color: #fff;
+  border-radius: 6px;
+  padding: 0 24px;
+  height: 40px;
+  cursor: pointer;
+}
+
+.approve-purchase-btn-back:hover {
+  background: #4b5563;
+  border-color: #4b5563;
+}
+
+.approve-purchase-btn-approve {
+  background: #1890ff;
+  border: 1px solid #1890ff;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.approve-purchase-btn-approve-icon {
+  font-size: 16px;
+}
+
+.approve-purchase-btn-approve:hover {
+  background: #1677ff;
+  border-color: #1677ff;
 }

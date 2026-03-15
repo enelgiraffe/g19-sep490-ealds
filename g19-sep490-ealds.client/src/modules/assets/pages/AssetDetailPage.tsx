@@ -82,6 +82,32 @@ export function AssetDetailPage() {
 
   const statusLabel = getStatusLabel(asset.statusName);
 
+  const depreciationPolicyLabel =
+    asset.depreciationPolicyName ?? 'Chưa cấu hình chính sách khấu hao';
+
+  const depreciationUsefulLifeLabel =
+    asset.depreciationUsefulLifeMonths != null
+      ? `${asset.depreciationUsefulLifeMonths} tháng`
+      : '—';
+
+  const depreciationSalvageValueLabel =
+    asset.depreciationSalvageValue != null
+      ? formatVnd(asset.depreciationSalvageValue)
+      : '—';
+
+  const depreciationAmountLabel =
+    asset.depreciationAmount != null
+      ? formatVnd(asset.depreciationAmount)
+      : '—';
+
+  const accumulatedDepreciationLabel =
+    asset.accumulatedDepreciation != null
+      ? formatVnd(asset.accumulatedDepreciation)
+      : '—';
+
+  const remainingValueLabel =
+    asset.remainingValue != null ? formatVnd(asset.remainingValue) : '—';
+
   return (
     <div className="asset-detail-page">
       <div className="asset-detail__header">
@@ -156,6 +182,38 @@ export function AssetDetailPage() {
         <div className="asset-detail__section">
           <h2 className="asset-detail__section-title">Thông tin khấu hao</h2>
           <div className="asset-detail__info-row">
+            <span className="label">Chính sách khấu hao</span>
+            <span className="value">{depreciationPolicyLabel}</span>
+          </div>
+          <div className="asset-detail__info-row">
+            <span className="label">Thời gian sử dụng hữu ích</span>
+            <span className="value">{depreciationUsefulLifeLabel}</span>
+          </div>
+          <div className="asset-detail__info-row">
+            <span className="label">Giá trị thu hồi ước tính</span>
+            <span className="value">{depreciationSalvageValueLabel}</span>
+          </div>
+          <div className="asset-detail__info-row">
+            <span className="label">Kỳ khấu hao gần nhất</span>
+            <span className="value">
+              {asset.depreciationPeriod
+                ? formatDate(asset.depreciationPeriod)
+                : '—'}
+            </span>
+          </div>
+          <div className="asset-detail__info-row">
+            <span className="label">Mức khấu hao kỳ gần nhất</span>
+            <span className="value">{depreciationAmountLabel}</span>
+          </div>
+          <div className="asset-detail__info-row">
+            <span className="label">Khấu hao lũy kế</span>
+            <span className="value">{accumulatedDepreciationLabel}</span>
+          </div>
+          <div className="asset-detail__info-row">
+            <span className="label">Giá trị còn lại</span>
+            <span className="value">{remainingValueLabel}</span>
+          </div>
+          <div className="asset-detail__info-row">
             <span className="label">Giá trị tính khấu hao (giá gốc)</span>
             <span className="value">{formatVnd(asset.originalPrice)}</span>
           </div>
@@ -191,24 +249,57 @@ export function AssetDetailPage() {
         </div>
 
         <div className="asset-detail__section">
-          <h2 className="asset-detail__section-title">Lịch sử sửa chữa, bảo dưỡng</h2>
+          <h2 className="asset-detail__section-title">
+            Lịch sửa chữa, bảo dưỡng / bảo trì
+          </h2>
           <div className="asset-detail__table-wrapper">
             <table className="asset-detail__table">
               <thead>
                 <tr>
                   <th>NGÀY BẮT ĐẦU</th>
-                  <th>NGHIỆP VỤ</th>
-                  <th>NGÀY HOÀN THÀNH</th>
-                  <th>NỘI DUNG</th>
-                  <th>CHI PHÍ THỰC TẾ</th>
+                  <th>MẪU LỊCH / NỘI DUNG</th>
+                  <th>LOẠI LỊCH</th>
+                  <th>CHU KỲ</th>
+                  <th>NGÀY HẠN TIẾP THEO</th>
+                  <th>NGÀY KẾT THÚC</th>
+                  <th>TRẠNG THÁI</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td colSpan={5} className="asset-detail__empty">
-                    Chưa có dữ liệu (cần API sửa chữa/bảo dưỡng).
-                  </td>
-                </tr>
+                {asset.maintenanceSchedules &&
+                asset.maintenanceSchedules.length > 0 ? (
+                  asset.maintenanceSchedules.map((s) => (
+                    <tr key={s.scheduleId}>
+                      <td>{formatDate(s.startDate)}</td>
+                      <td>{s.templateName ?? '—'}</td>
+                      <td>{s.scheduleType}</td>
+                      <td>
+                        {s.intervalMonths
+                          ? `${s.intervalMonths} tháng`
+                          : s.intervalHours
+                          ? `${s.intervalHours} giờ`
+                          : '—'}
+                      </td>
+                      <td>
+                        {s.nextDueDate ? formatDate(s.nextDueDate) : '—'}
+                      </td>
+                      <td>{s.endDate ? formatDate(s.endDate) : '—'}</td>
+                      <td>
+                        {s.isActive == null
+                          ? '—'
+                          : s.isActive
+                          ? 'Đang hiệu lực'
+                          : 'Ngừng'}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="asset-detail__empty">
+                      Chưa có lịch bảo trì/bảo dưỡng cho tài sản này.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

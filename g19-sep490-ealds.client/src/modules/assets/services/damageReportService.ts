@@ -22,9 +22,11 @@ export interface ReportDamagePayload {
   assetId: number;
   reportedBy: number;
   requestTypeId?: number | null;
-  title?: string | null;
+  /** ISO date string or value parsable by backend DateTime (ngày hỏng/ghi nhận) */
+  reportDate: string;
   description?: string | null;
   severity?: number | null;
+  documentId?: number | null;
 }
 
 export interface ReportDamageResponse {
@@ -67,9 +69,10 @@ export const damageReportService = {
       assetId: payload.assetId,
       reportedBy: payload.reportedBy,
       requestTypeId: payload.requestTypeId ?? DEFAULT_DAMAGE_REQUEST_TYPE_ID,
-      title: payload.title ?? null,
       description: payload.description ?? null,
       severity: payload.severity ?? null,
+      reportDate: payload.reportDate,
+      documentId: payload.documentId ?? null,
     };
 
     const response = await damageReportApi.post<ReportDamageResponse>(

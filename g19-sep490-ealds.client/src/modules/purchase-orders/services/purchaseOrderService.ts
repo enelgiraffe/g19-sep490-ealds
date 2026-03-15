@@ -65,4 +65,32 @@ export const purchaseOrderService = {
     );
     return response.data;
   },
+
+  async approveAsAccountant(
+    id: number,
+    payload: { approvedBy: number; comment?: string | null },
+  ): Promise<{ assetRequestId: number; status: number }> {
+    const response = await purchaseApi.post<{ assetRequestId: number; status: number }>(
+      `/api/Assets/Requests/accountant/${id}/approve`,
+      {
+        approvedBy: payload.approvedBy,
+        comment: payload.comment ?? null,
+      },
+    );
+    return response.data;
+  },
+
+  async rejectAsAccountant(
+    id: number,
+    payload: { approvedBy: number; comment?: string | null },
+  ): Promise<{ assetRequestId: number; status: number }> {
+    const response = await purchaseApi.post<{ assetRequestId: number; status: number }>(
+      `/api/Assets/Requests/accountant/${id}/reject`,
+      {
+        approvedBy: payload.approvedBy,
+        comment: payload.comment ?? null,
+      },
+    );
+    return response.data;
+  },
 };

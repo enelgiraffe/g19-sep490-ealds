@@ -109,6 +109,10 @@
   width: 180px;
 }
 
+.requests-date-picker {
+  width: 180px;
+}
+
 .requests-filter-advanced,
 .requests-settings {
   display: inline-flex;
