@@ -322,9 +322,13 @@ export function AssetListPage() {
       await damageReportService.report({
         assetId: markDamagedAssetId,
         reportedBy,
-        title,
+        requestTypeId: undefined,
+        reportDate: damageDate
+          ? new Date(damageDate).toISOString()
+          : new Date().toISOString(),
         description: descriptionParts.join('\n') || null,
         severity: null,
+        documentId: null,
       });
       message.success('Gửi báo hỏng thành công.');
       handleCloseMarkDamagedModal();

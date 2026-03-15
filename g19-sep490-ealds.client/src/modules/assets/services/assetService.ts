@@ -28,6 +28,19 @@ export type AssetStatus =
   | 'Lost'
   | 'Liquidated';
 
+export interface MaintenanceSchedule {
+  scheduleId: number;
+  templateId: number;
+  templateName?: string | null;
+  scheduleType: number;
+  intervalMonths?: number | null;
+  intervalHours?: number | null;
+  startDate: string;
+  nextDueDate?: string | null;
+  endDate?: string | null;
+  isActive?: boolean | null;
+}
+
 export interface AssetResponse {
   assetId: number;
   code: string;
@@ -48,6 +61,19 @@ export interface AssetResponse {
   createdBy: number;
   currentDepartmentId?: number | null;
   currentDepartmentName?: string | null;
+
+  // Depreciation (optional; populated in GET by id)
+  depreciationPolicyId?: number | null;
+  depreciationPolicyName?: string | null;
+  depreciationUsefulLifeMonths?: number | null;
+  depreciationSalvageValue?: number | null;
+  depreciationPeriod?: string | null;
+  depreciationAmount?: number | null;
+  accumulatedDepreciation?: number | null;
+  remainingValue?: number | null;
+
+  // Maintenance (optional; populated in GET by id)
+  maintenanceSchedules?: MaintenanceSchedule[] | null;
 }
 
 export interface AssetTypeItem {

@@ -90,6 +90,15 @@ export function PurchaseOrdersPage() {
 
   useEffect(() => {
     loadList();
+    // preload profile for possible approve actions
+    (async () => {
+      try {
+        const p = await profileService.getProfile();
+        setProfile(p);
+      } catch {
+        // ignore, will be handled on demand
+      }
+    })();
   }, []);
 
   const handleOpenCreateModal = async () => {
@@ -364,6 +373,7 @@ export function PurchaseOrdersPage() {
         open={isViewModalOpen}
         onClose={handleCloseViewModal}
         data={selectedDetail}
+        currentUserId={profile?.id ?? null}
       />
     </div>
   );
