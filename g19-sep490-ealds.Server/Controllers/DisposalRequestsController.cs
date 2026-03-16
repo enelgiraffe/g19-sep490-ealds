@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -8,7 +9,7 @@ using g19_sep490_ealds.Server.Models.DTOs;
 namespace g19_sep490_ealds.Server.Controllers;
 
 [ApiController]
-[Route("api/Assets/Disposal")]
+[Route("api/Assets/Requests/disposal")]
 public class DisposalRequestsController : ControllerBase
 {
     private readonly EaldsDbContext _db;
@@ -18,8 +19,8 @@ public class DisposalRequestsController : ControllerBase
         _db = db;
     }
 
-    [HttpPost("submit")]
-    public async Task<IActionResult> Submit([FromBody] AssetDisposalRequestDTO dto)
+    [HttpPost]
+    public async Task<IActionResult> CreateDisposalRequest([FromBody] AssetDisposalRequestDTO dto)
     {
         if (dto == null)
             return BadRequest("Request body is required.");
