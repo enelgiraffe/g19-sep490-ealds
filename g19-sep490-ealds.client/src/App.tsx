@@ -23,6 +23,7 @@ import { MaintenancePage } from './modules/maintenance/pages/MaintenancePage';
 import { InventoryPage } from './modules/inventory/pages/InventoryPage';
 import { LiquidationPage } from './modules/liquidation/pages/LiquidationPage';
 import { RequestsPage } from './modules/requests/pages/RequestsPage';
+import { CategoriesPage } from './modules/admin/pages/CategoriesPage';
 import './App.css';
 
 function App() {
@@ -78,7 +79,7 @@ function App() {
           <Route path="users" element={<ModulePlaceholder title="Người dùng" />} />
           <Route path="roles" element={<ModulePlaceholder title="Vai trò" />} />
           <Route path="departments" element={<ModulePlaceholder title="Phòng ban" />} />
-          <Route path="categories" element={<ModulePlaceholder title="Danh mục" />} />
+          <Route path="categories" element={<CategoriesPage />} />
           <Route path="approval-workflows" element={<ModulePlaceholder title="Quy trình phê duyệt" />} />
           <Route path="extended-fields" element={<ModulePlaceholder title="Trường mở rộng" />} />
           <Route path="system-settings" element={<ModulePlaceholder title="Cấu hình hệ thống" />} />
