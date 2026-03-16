@@ -1,5 +1,5 @@
 using g19_sep490_ealds.Server.Models;
-using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.DTOs.Inventory;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -254,7 +254,7 @@ public class InventoryController : ControllerBase
             DepartmentId = dto.DepartmentId,
             AssetCategoryId = dto.AssetCategoryId,
             AssetTypeId = dto.AssetTypeId,
-            Status = (int)InventorySessionStatus.InProgress,
+            Status = (int)InventorySessionStatus.Draft,
             ProgressPercent = 0,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow
@@ -276,6 +276,15 @@ public class InventoryController : ControllerBase
             });
         }
 
+        _context.Notifications.Add(new Notification
+        {
+            Title = $"Đến hạn kiểm kê tài sản: {session.Code}",
+            Content = $"Phiên kiểm kê {session.Code} sẽ bắt đầu vào ngày {session.StartDate:dd/MM/yyyy}. Vui lòng kích hoạt và thực hiện kiểm kê tài sản.",
+            RefId = session.SessionId,
+            SentDate = session.StartDate,
+            IsSend = false
+        });
+
         await _context.SaveChangesAsync();
 
         var detail = await BuildSessionDetailDTO(session.SessionId);
@@ -294,8 +303,8 @@ public class InventoryController : ControllerBase
         if (session == null)
             return NotFound(new { message = "Phiên kiểm kê không tồn tại." });
 
-        if (session.Status == (int)InventorySessionStatus.Completed)
-            return BadRequest(new { message = "Phiên kiểm kê đã hoàn thành, không thể cập nhật." });
+        if (session.Status != (int)InventorySessionStatus.InProgress)
+            return BadRequest(new { message = "Chỉ có thể ghi nhận kết quả khi phiên kiểm kê đang thực hiện." });
 
         var task = await _context.InventoryTasks
             .Include(t => t.Asset)
@@ -468,6 +477,35 @@ public class InventoryController : ControllerBase
     }
 
     /// <summary>
+    /// POST /api/inventory/sessions/{id}/activate
+    /// </summary>
+    [HttpPost("sessions/{id:int}/activate")]
+    public async Task<ActionResult> ActivateSession(int id)
+    {
+        var session = await _context.InventorySessions.FindAsync(id);
+        if (session == null)
+            return NotFound();
+
+        if (session.Status != (int)InventorySessionStatus.Draft)
+            return BadRequest(new { message = "Chỉ có thể kích hoạt phiên kiểm kê ở trạng thái Nháp." });
+
+        session.Status = (int)InventorySessionStatus.InProgress;
+
+        // Mark the scheduled notification as sent
+        var scheduledNotification = await _context.Notifications
+            .FirstOrDefaultAsync(n => n.RefId == id && !n.IsSend);
+        if (scheduledNotification != null)
+        {
+            scheduledNotification.IsSend = true;
+            scheduledNotification.SentDate = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Phiên kiểm kê đã được kích hoạt. Thông báo kiểm kê đã được gửi." });
+    }
+
+    /// <summary>
     /// GET /api/inventory/sessions/{id}/discrepancies - Get all discrepancies for a session
     /// </summary>
     [HttpGet("sessions/{id:int}/discrepancies")]
@@ -504,6 +542,350 @@ public class InventoryController : ControllerBase
         }).ToList();
 
         return Ok(result);
+    }
+
+    // ── Director review endpoints ─────────────────────────────────────────────
+
+    /// <summary>
+    /// GET /api/inventory/sessions/{id}/review-summary
+    /// Returns an aggregate discrepancy summary for a director to review before confirming.
+    /// The session must be in Completed (2) or Confirmed (4) status.
+    /// </summary>
+    [HttpGet("sessions/{id:int}/review-summary")]
+    public async Task<ActionResult<InventoryReviewSummaryDTO>> GetReviewSummary(int id)
+    {
+        var session = await _context.InventorySessions
+            .Include(s => s.Department)
+            .Include(s => s.AssetCategory)
+            .Include(s => s.AssetType)
+            .Include(s => s.InventoryTasks)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.SessionId == id);
+
+        if (session == null)
+            return NotFound();
+
+        if (session.Status != (int)InventorySessionStatus.Completed &&
+            session.Status != (int)InventorySessionStatus.Confirmed)
+            return BadRequest(new { message = "Phiên kiểm kê chưa hoàn thành, không thể xem tổng kết." });
+
+        var discrepancies = await _context.InventoryDiscrepancies
+            .Where(d => d.Task.SessionId == id)
+            .Include(d => d.Task).ThenInclude(t => t.Asset)
+            .Include(d => d.BookLocation).ThenInclude(bl => bl.Department)
+            .Include(d => d.ActualLocation).ThenInclude(al => al.Department)
+            .Include(d => d.BookUser)
+            .Include(d => d.ActualUser)
+            .AsNoTracking()
+            .ToListAsync();
+
+        var discrepancyDTOs = discrepancies.Select(d => new InventoryDiscrepancyDetailDTO
+        {
+            DiscrepancyId = d.DiscrepancyId,
+            TaskId = d.TaskId,
+            AssetId = d.Task.AssetId,
+            AssetCode = d.Task.Asset.Code,
+            AssetName = d.Task.Asset.Name,
+            DiscrepancyType = d.DiscrepancyType,
+            DiscrepancyTypeName = BuildDiscrepancyTypeName(d.DiscrepancyType),
+            BookValue = d.BookValue,
+            BookDepartmentName = d.BookLocation?.Department?.Name,
+            BookUserId = d.BookUserId,
+            BookUserName = d.BookUser?.Email,
+            BookCondition = d.BookCondition,
+            ActualValue = d.ActualValue,
+            ActualDepartmentName = d.ActualLocation?.Department?.Name,
+            ActualUserId = d.ActualUserId,
+            ActualUserName = d.ActualUser?.Email,
+            ActualCondition = d.ActualCondition
+        }).ToList();
+
+        var summary = new InventoryReviewSummaryDTO
+        {
+            SessionId = session.SessionId,
+            Code = session.Code,
+            Purpose = session.Purpose,
+            StartDate = session.StartDate,
+            EndDate = session.EndDate,
+            DepartmentName = session.Department.Name,
+            AssetCategoryName = session.AssetCategory.Name,
+            AssetTypeName = session.AssetType.Name,
+            Status = session.Status,
+            StatusName = GetSessionStatusName(session.Status),
+            TotalTasks = session.InventoryTasks.Count,
+            CompletedTasks = session.InventoryTasks.Count(t => t.Status == (int)InventoryTaskStatus.Checked),
+            ProgressPercent = session.ProgressPercent,
+            TotalDiscrepancies = discrepancies.Count,
+            AssetNotFoundCount = discrepancies.Count(d => (d.DiscrepancyType & (int)DiscrepancyType.AssetNotFound) != 0),
+            LocationMismatchCount = discrepancies.Count(d => (d.DiscrepancyType & (int)DiscrepancyType.LocationMismatch) != 0),
+            UserMismatchCount = discrepancies.Count(d => (d.DiscrepancyType & (int)DiscrepancyType.UserMismatch) != 0),
+            ValueMismatchCount = discrepancies.Count(d => (d.DiscrepancyType & (int)DiscrepancyType.ValueMismatch) != 0),
+            ConditionMismatchCount = discrepancies.Count(d => (d.DiscrepancyType & (int)DiscrepancyType.ConditionMismatch) != 0),
+            Discrepancies = discrepancyDTOs
+        };
+
+        return Ok(summary);
+    }
+
+    /// <summary>
+    /// POST /api/inventory/sessions/{id}/confirm
+    /// Director confirms the inventory results.
+    /// When ApplyCorrections is true, each detected discrepancy is automatically
+    /// reconciled against the live asset data (location, user, value, condition/status).
+    /// </summary>
+    [HttpPost("sessions/{id:int}/confirm")]
+    public async Task<ActionResult> ConfirmSession(int id, [FromBody] ReviewInventorySessionDTO dto)
+    {
+        var session = await _context.InventorySessions
+            .Include(s => s.InventoryTasks)
+            .FirstOrDefaultAsync(s => s.SessionId == id);
+
+        if (session == null)
+            return NotFound();
+
+        if (session.Status != (int)InventorySessionStatus.Completed)
+            return BadRequest(new { message = "Chỉ có thể xác nhận phiên kiểm kê đã hoàn thành (trạng thái 'Hoàn thành')." });
+
+        int correctionsApplied = 0;
+
+        if (dto.ApplyCorrections)
+        {
+            var discrepancies = await _context.InventoryDiscrepancies
+                .Where(d => d.Task.SessionId == id)
+                .Include(d => d.Task)
+                .Include(d => d.ActualLocation)
+                .ToListAsync();
+
+            foreach (var discrepancy in discrepancies)
+            {
+                var asset = await _context.Assets
+                    .Include(a => a.AssetLocations)
+                    .FirstOrDefaultAsync(a => a.AssetId == discrepancy.Task.AssetId);
+
+                if (asset == null) continue;
+
+                var flags = discrepancy.DiscrepancyType;
+                var notePrefix = $"Cập nhật từ kiểm kê {session.Code}";
+
+                // Asset not found → mark as Lost
+                if ((flags & (int)DiscrepancyType.AssetNotFound) != 0)
+                {
+                    asset.Status = (int)AssetStatus.Lost;
+                    _context.AssetLifeCycles.Add(new AssetLifeCycle
+                    {
+                        AssetId = asset.AssetId,
+                        ActionType = (int)AssetLifeActionType.StatusChanged,
+                        RelatedEntityType = 5,
+                        RelatedEntityId = id,
+                        ActorUserId = dto.ReviewedBy,
+                        ActorRoleId = dto.ReviewerRoleId,
+                        Description = $"{notePrefix}: Không tìm thấy tài sản → chuyển trạng thái Mất. {dto.ReviewNotes}".Trim(),
+                        OccurredAt = DateTime.UtcNow
+                    });
+                    correctionsApplied++;
+                    continue; // remaining checks are not meaningful for a lost asset
+                }
+
+                // Location mismatch → transfer to actual department
+                if ((flags & (int)DiscrepancyType.LocationMismatch) != 0 &&
+                    discrepancy.ActualLocation != null)
+                {
+                    var currentLoc = asset.AssetLocations.FirstOrDefault(al => al.IsCurrent);
+                    if (currentLoc != null)
+                    {
+                        currentLoc.IsCurrent = false;
+                        currentLoc.EndDate = DateOnly.FromDateTime(DateTime.UtcNow);
+                    }
+
+                    _context.AssetLocations.Add(new AssetLocation
+                    {
+                        AssetId = asset.AssetId,
+                        DepartmentId = discrepancy.ActualLocation.DepartmentId,
+                        StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                        IsCurrent = true,
+                        Note = notePrefix
+                    });
+
+                    _context.AssetLifeCycles.Add(new AssetLifeCycle
+                    {
+                        AssetId = asset.AssetId,
+                        ActionType = (int)AssetLifeActionType.Transferred,
+                        RelatedEntityType = 5,
+                        RelatedEntityId = id,
+                        ActorUserId = dto.ReviewedBy,
+                        ActorRoleId = dto.ReviewerRoleId,
+                        Description = $"{notePrefix}: Cập nhật vị trí theo thực tế kiểm kê. {dto.ReviewNotes}".Trim(),
+                        OccurredAt = DateTime.UtcNow
+                    });
+                    correctionsApplied++;
+                }
+
+                // User mismatch → reassign to actual user
+                if ((flags & (int)DiscrepancyType.UserMismatch) != 0 &&
+                    discrepancy.ActualUserId.HasValue)
+                {
+                    var employee = await _context.Employees
+                        .FirstOrDefaultAsync(e => e.UserId == discrepancy.ActualUserId.Value);
+
+                    if (employee != null)
+                    {
+                        var currentUsage = await _context.AssetUsages
+                            .FirstOrDefaultAsync(u => u.AssetId == asset.AssetId && u.IsCurrent);
+
+                        if (currentUsage != null)
+                        {
+                            currentUsage.IsCurrent = false;
+                            currentUsage.EndDate = DateOnly.FromDateTime(DateTime.UtcNow);
+                        }
+
+                        _context.AssetUsages.Add(new AssetUsage
+                        {
+                            AssetId = asset.AssetId,
+                            EmployeeId = employee.EmployeeId,
+                            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                            IsCurrent = true,
+                            Note = notePrefix
+                        });
+                        correctionsApplied++;
+                    }
+                }
+
+                // Value mismatch → update current value
+                if ((flags & (int)DiscrepancyType.ValueMismatch) != 0)
+                {
+                    asset.CurrentValue = discrepancy.ActualValue;
+                    _context.AssetLifeCycles.Add(new AssetLifeCycle
+                    {
+                        AssetId = asset.AssetId,
+                        ActionType = (int)AssetLifeActionType.StatusChanged,
+                        RelatedEntityType = 5,
+                        RelatedEntityId = id,
+                        ActorUserId = dto.ReviewedBy,
+                        ActorRoleId = dto.ReviewerRoleId,
+                        Description = $"{notePrefix}: Cập nhật giá trị từ {discrepancy.BookValue:N0} → {discrepancy.ActualValue:N0}. {dto.ReviewNotes}".Trim(),
+                        OccurredAt = DateTime.UtcNow
+                    });
+                    correctionsApplied++;
+                }
+
+                // Condition mismatch → update asset status
+                if ((flags & (int)DiscrepancyType.ConditionMismatch) != 0)
+                {
+                    if (Enum.TryParse<AssetStatus>(discrepancy.ActualCondition, ignoreCase: true, out var newStatus))
+                    {
+                        asset.Status = (int)newStatus;
+                        _context.AssetLifeCycles.Add(new AssetLifeCycle
+                        {
+                            AssetId = asset.AssetId,
+                            ActionType = (int)AssetLifeActionType.StatusChanged,
+                            RelatedEntityType = 5,
+                            RelatedEntityId = id,
+                            ActorUserId = dto.ReviewedBy,
+                            ActorRoleId = dto.ReviewerRoleId,
+                            Description = $"{notePrefix}: Cập nhật tình trạng từ {discrepancy.BookCondition} → {discrepancy.ActualCondition}. {dto.ReviewNotes}".Trim(),
+                            OccurredAt = DateTime.UtcNow
+                        });
+                        correctionsApplied++;
+                    }
+                }
+            }
+        }
+
+        session.Status = (int)InventorySessionStatus.Confirmed;
+
+        var inventoryDate = DateTime.UtcNow;
+        foreach (var task in session.InventoryTasks)
+        {
+            _context.AssetLifeCycles.Add(new AssetLifeCycle
+            {
+                AssetId = task.AssetId,
+                ActionType = (int)AssetLifeActionType.StatusChanged,
+                RelatedEntityType = 5,
+                RelatedEntityId = id,
+                ActorUserId = dto.ReviewedBy,
+                ActorRoleId = dto.ReviewerRoleId,
+                Description = $"Ngày kiểm kê gần nhất: {inventoryDate:dd/MM/yyyy}. Phiên kiểm kê: {session.Code}. {dto.ReviewNotes}".Trim().TrimEnd('.'),
+                OccurredAt = inventoryDate
+            });
+        }
+
+        // Create a confirmation notification for the department head
+        _context.Notifications.Add(new Notification
+        {
+            Title = $"Phiên kiểm kê đã được xác nhận: {session.Code}",
+            Content = $"Phiên kiểm kê {session.Code} đã được Giám đốc xác nhận. Ngày kiểm kê gần nhất đã được cập nhật: {inventoryDate:dd/MM/yyyy}.",
+            RefId = id,
+            SentDate = inventoryDate,
+            IsSend = true
+        });
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Phiên kiểm kê đã được xác nhận.",
+            correctionsApplied,
+            sessionId = id,
+            lastInventoryDate = inventoryDate
+        });
+    }
+
+    /// <summary>
+    /// POST /api/inventory/sessions/{id}/reject
+    /// Clears all existing records/discrepancies, resets task statuses to Pending,
+    /// and sends a re-check notification to the Department Head.
+    /// </summary>
+    [HttpPost("sessions/{id:int}/reject")]
+    public async Task<ActionResult> RejectSession(int id, [FromBody] ReviewInventorySessionDTO dto)
+    {
+        var session = await _context.InventorySessions
+            .Include(s => s.InventoryTasks)
+            .FirstOrDefaultAsync(s => s.SessionId == id);
+
+        if (session == null)
+            return NotFound();
+
+        if (session.Status != (int)InventorySessionStatus.Completed)
+            return BadRequest(new { message = "Chỉ có thể trả lại phiên kiểm kê đang ở trạng thái 'Hoàn thành'." });
+
+        // Re-check Clear previous records so tasks can be re-submitted with fresh data
+        var taskIds = session.InventoryTasks.Select(t => t.TaskId).ToList();
+
+        var oldDiscrepancies = await _context.InventoryDiscrepancies
+            .Where(d => taskIds.Contains(d.TaskId))
+            .ToListAsync();
+        _context.InventoryDiscrepancies.RemoveRange(oldDiscrepancies);
+
+        var oldRecords = await _context.InventoryRecords
+            .Where(r => taskIds.Contains(r.TaskId))
+            .ToListAsync();
+        _context.InventoryRecords.RemoveRange(oldRecords);
+
+        // Reset all task statuses to Pending for re-checking
+        foreach (var task in session.InventoryTasks)
+            task.Status = (int)InventoryTaskStatus.Pending;
+
+        session.Status = (int)InventorySessionStatus.InProgress;
+        session.ProgressPercent = 0;
+
+        // Send re-check notification to Department Head
+        _context.Notifications.Add(new Notification
+        {
+            Title = $"Yêu cầu kiểm kê lại: {session.Code}",
+            Content = $"Phiên kiểm kê {session.Code} đã bị Giám đốc từ chối và yêu cầu kiểm kê lại. Lý do: {dto.ReviewNotes ?? "Không có ghi chú."}",
+            RefId = id,
+            SentDate = DateTime.UtcNow,
+            IsSend = true
+        });
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Phiên kiểm kê đã bị từ chối và trả về để kiểm kê lại. Tất cả nhiệm vụ đã được đặt lại.",
+            reviewNotes = dto.ReviewNotes,
+            sessionId = id
+        });
     }
 
     // ── Metadata endpoints for dropdowns ──────────────────────────────────────
@@ -615,8 +997,9 @@ public class InventoryController : ControllerBase
     {
         0 => "Nháp",
         1 => "Đang thực hiện",
-        2 => "Hoàn thành",
+        2 => "Chờ xác nhận",
         3 => "Đã hủy",
+        4 => "Đã xác nhận",
         _ => status.ToString()
     };
 

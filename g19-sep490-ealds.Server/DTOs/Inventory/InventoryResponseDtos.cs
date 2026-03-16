@@ -1,30 +1,4 @@
-namespace g19_sep490_ealds.Server.Models.DTOs;
-
-// ── Request DTOs ──────────────────────────────────────────────────────────────
-
-public class CreateInventorySessionDTO
-{
-    public string Purpose { get; set; } = null!;
-    public DateTime StartDate { get; set; }
-    public DateTime EndDate { get; set; }
-    public int DepartmentId { get; set; }
-    public int AssetCategoryId { get; set; }
-    public int AssetTypeId { get; set; }
-    public int CreatedBy { get; set; }
-}
-
-public class SubmitInventoryTaskDTO
-{
-    public bool IsFound { get; set; }
-    public string ActualCondition { get; set; } = null!;
-    public int ActualDepartmentId { get; set; }
-    public int? ActualUserId { get; set; }
-    public decimal? ActualValue { get; set; }
-    public int CheckedBy { get; set; }
-    public string? Note { get; set; }
-}
-
-// ── Response DTOs ─────────────────────────────────────────────────────────────
+namespace g19_sep490_ealds.Server.DTOs.Inventory;
 
 public class InventorySessionListItemDTO
 {
@@ -103,4 +77,38 @@ public class DropdownItemDTO
 {
     public int Id { get; set; }
     public string Name { get; set; } = null!;
+}
+
+/// <summary>Aggregate review summary shown to the director before they confirm/reject.</summary>
+public class InventoryReviewSummaryDTO
+{
+    public int SessionId { get; set; }
+    public string Code { get; set; } = null!;
+    public string Purpose { get; set; } = null!;
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+    public string DepartmentName { get; set; } = null!;
+    public string AssetCategoryName { get; set; } = null!;
+    public string AssetTypeName { get; set; } = null!;
+    public int Status { get; set; }
+    public string StatusName { get; set; } = null!;
+    public int TotalTasks { get; set; }
+    public int CompletedTasks { get; set; }
+    public int? ProgressPercent { get; set; }
+    public int TotalDiscrepancies { get; set; }
+    public int AssetNotFoundCount { get; set; }
+    public int LocationMismatchCount { get; set; }
+    public int UserMismatchCount { get; set; }
+    public int ValueMismatchCount { get; set; }
+    public int ConditionMismatchCount { get; set; }
+    public List<InventoryDiscrepancyDetailDTO> Discrepancies { get; set; } = new();
+}
+
+/// <summary>Discrepancy DTO enriched with the asset info it belongs to.</summary>
+public class InventoryDiscrepancyDetailDTO : InventoryDiscrepancyDTO
+{
+    public int TaskId { get; set; }
+    public int AssetId { get; set; }
+    public string AssetCode { get; set; } = null!;
+    public string AssetName { get; set; } = null!;
 }

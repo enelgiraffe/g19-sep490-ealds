@@ -104,38 +104,39 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        // Always return OK to avoid leaking whether the email exists
         var user = await _context.Users
             .FirstOrDefaultAsync(u => u.Email == request.Email);
 
-        if (user != null && user.Status != 0)
+        if (user == null || user.Status == 0)
+            return BadRequest(new { message = "Email không tồn tại trong hệ thống." });
+
+        var otpCode = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+        var expirationMinutes = int.Parse(
+            _configuration["App:OtpExpirationMinutes"] ?? "10");
+
+        user.ResetPasswordToken = otpCode;
+        user.ResetPasswordTokenExpiryTime = DateTime.UtcNow.AddMinutes(expirationMinutes);
+        await _context.SaveChangesAsync();
+
+        var employee = await _context.Employees
+            .FirstOrDefaultAsync(e => e.UserId == user.UserId);
+        var displayName = employee?.Name ?? user.Email;
+
+        try
         {
-            var otpCode = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
-            var expirationMinutes = int.Parse(
-                _configuration["App:OtpExpirationMinutes"] ?? "10");
+            await _emailService.SendOtpEmailAsync(user.Email, displayName, otpCode, expirationMinutes.ToString());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send OTP email to {Email}", user.Email);
 
-            user.ResetPasswordToken = otpCode;
-            user.ResetPasswordTokenExpiryTime = DateTime.UtcNow.AddMinutes(expirationMinutes);
-            await _context.SaveChangesAsync();
+            if (_env.IsDevelopment())
+                return StatusCode(500, new { message = "Gửi email thất bại.", error = ex.Message, detail = ex.InnerException?.Message });
 
-            var employee = await _context.Employees
-                .FirstOrDefaultAsync(e => e.UserId == user.UserId);
-            var displayName = employee?.Name ?? user.Email;
-
-            try
-            {
-                await _emailService.SendOtpEmailAsync(user.Email, displayName, otpCode, expirationMinutes.ToString());
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send OTP email to {Email}", user.Email);
-
-                if (_env.IsDevelopment())
-                    return StatusCode(500, new { message = "Gửi email thất bại.", error = ex.Message, detail = ex.InnerException?.Message });
-            }
+            return StatusCode(500, new { message = "Gửi email thất bại. Vui lòng thử lại sau." });
         }
 
-        return Ok(new { message = "Nếu email tồn tại trong hệ thống, bạn sẽ nhận được mã OTP để đặt lại mật khẩu." });
+        return Ok(new { message = "Mã OTP đã được gửi đến email của bạn." });
     }
 
     [HttpPost("verify-otp")]
