@@ -51,7 +51,20 @@ public class AssetsController : ControllerBase
         // Filter by status
         if (status.HasValue)
         {
-            query = query.Where(a => a.Status == (int)status.Value);
+            if (status.Value == AssetStatus.Damaged)
+            {
+                query = query.Where(a =>
+                    a.Status == (int)AssetStatus.Damaged ||
+                    _context.AssetRequests.Any(r =>
+                        r.AssetId == a.AssetId &&
+                        r.Title != null &&
+                        r.Title.StartsWith("Damage report") &&
+                        r.Status == 0));
+            }
+            else
+            {
+                query = query.Where(a => a.Status == (int)status.Value);
+            }
         }
 
         // Filter by asset type
@@ -88,7 +101,27 @@ public class AssetsController : ControllerBase
 
         var assets = await query.ToListAsync();
 
-        return Ok(assets.Select(ToResponseDTO));
+        // Sync legacy data: assets that already have a damage-report request should be treated as Damaged
+        // even if Asset.Status wasn't updated at the time the request was created.
+        var assetIds = assets.Select(a => a.AssetId).ToList();
+        var damagedIds = await _context.AssetRequests
+            .AsNoTracking()
+            .Where(r =>
+                r.AssetId.HasValue &&
+                assetIds.Contains(r.AssetId.Value) &&
+                r.Title != null &&
+                r.Title.StartsWith("Damage report") &&
+                r.Status == 0)
+            .Select(r => r.AssetId!.Value)
+            .Distinct()
+            .ToListAsync();
+
+        var damagedSet = damagedIds.ToHashSet();
+
+        return Ok(assets.Select(a =>
+            damagedSet.Contains(a.AssetId)
+                ? ToResponseDTO(a, AssetStatus.Damaged)
+                : ToResponseDTO(a)));
     }
 
     /// <summary>
@@ -108,6 +141,14 @@ public class AssetsController : ControllerBase
         if (asset == null)
             return NotFound();
 
+        var hasDamageReport = await _context.AssetRequests
+            .AsNoTracking()
+            .AnyAsync(r =>
+                r.AssetId == id &&
+                r.Title != null &&
+                r.Title.StartsWith("Damage report") &&
+                r.Status == 0);
+
         var latestDep = await _context.DrepreciationRecords
             .Include(r => r.Policy)
             .AsNoTracking()
@@ -124,7 +165,13 @@ public class AssetsController : ControllerBase
             .ThenByDescending(s => s.StartDate)
             .ToListAsync();
 
-        return Ok(ToResponseDTO(asset, latestDep, schedules));
+        var dto = ToResponseDTO(asset, latestDep, schedules);
+        if (hasDamageReport)
+        {
+            dto.Status = AssetStatus.Damaged;
+            dto.StatusName = AssetStatus.Damaged.ToString();
+        }
+        return Ok(dto);
     }
 
     /// <summary>
@@ -326,8 +373,9 @@ public class AssetsController : ControllerBase
         return Ok(ToResponseDTO(asset));
     }
 
-    private static AssetResponseDTO ToResponseDTO(Asset a)
+    private static AssetResponseDTO ToResponseDTO(Asset a, AssetStatus? forcedStatus = null)
     {
+        var effectiveStatus = forcedStatus ?? (AssetStatus)a.Status;
         return new AssetResponseDTO
         {
             AssetId = a.AssetId,
@@ -338,8 +386,8 @@ public class AssetsController : ControllerBase
             PurchaseDate = a.PurchaseDate,
             OriginalPrice = a.OriginalPrice,
             CurrentValue = a.CurrentValue,
-            Status = (AssetStatus)a.Status,
-            StatusName = ((AssetStatus)a.Status).ToString(),
+            Status = effectiveStatus,
+            StatusName = effectiveStatus.ToString(),
             WarrantyEndDate = a.WarrantyEndDate,
             InUseDate = a.InUseDate,
             Unit = a.Unit,
@@ -347,6 +395,10 @@ public class AssetsController : ControllerBase
             WarehouseId = a.WarehouseId,
             WarehouseName = a.Warehouse?.Name,
             CreatedBy = a.CreatedBy,
+            CurrentLocationId = a.AssetLocations
+                .Where(al => al.IsCurrent)
+                .Select(al => (int?)al.LocationId)
+                .FirstOrDefault(),
             CurrentDepartmentId = a.AssetLocations
                 .Where(al => al.IsCurrent)
                 .Select(al => (int?)al.DepartmentId)

@@ -2,7 +2,6 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
 
@@ -10,34 +9,22 @@ namespace g19_sep490_ealds.Server.Controllers;
 
 [ApiController]
 [Route("api/Assets/Requests/director")]
-public class DirectorRejectController : ControllerBase
+public class DirectorFundingController : ControllerBase
 {
     private readonly EaldsDbContext _db;
-    private readonly int _transferRequestTypeId;
-    public DirectorRejectController(EaldsDbContext db, IConfiguration configuration)
-    {
-        _db = db;
-        _transferRequestTypeId = configuration.GetValue<int>("App:TransferRequestTypeId", 3);
-    }
+    public DirectorFundingController(EaldsDbContext db) => _db = db;
 
-    [HttpPost("{id}/reject")]
-    public async Task<IActionResult> Reject(int id, [FromBody] ApprovalActionDto dto)
+    [HttpPost("{id}/funding")]
+    public async Task<IActionResult> MarkFunding(int id, [FromBody] ApprovalActionDto dto)
     {
         var ar = await _db.AssetRequests.FindAsync(id);
         if (ar == null) return NotFound();
         var fromStatus = ar.Status;
-        var isTransfer =
-            ar.RequestTypeId == _transferRequestTypeId
-            || await _db.TransferRecords.AsNoTracking().AnyAsync(tr => tr.AssetRequestId == ar.AssetRequestId);
-
-        // Director rejection:
-        // - Purchase/etc: status=1 -> 3 (Rejected)
-        // - Transfer: status=2 -> 3 (Rejected)
-        if (!(ar.Status == 1 || (isTransfer && ar.Status == 2)))
-            return BadRequest("Only requests awaiting director decision can be rejected by director.");
+        if (ar.Status != 1)
+            return BadRequest("Only requests with status=1 (Waiting director approval) can be moved to funding.");
 
         var userRole = await _db.UserRoles.AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.ApprovedBy);
-        
+
         // Ensure Approval.StepId references an existing WorkflowStep (avoid FK violation when AssetRequest.StepId=0 or stale)
         WorkflowStep? step = null;
         if (ar.StepId != 0)
@@ -66,8 +53,6 @@ public class DirectorRejectController : ControllerBase
         }
         if (step == null)
         {
-            // Fallback for legacy data where RequestType.WorkflowId / WorkflowStep is not configured.
-            // Use any existing WorkflowStep matching the approver's role to satisfy FK.
             var preferredRoleId = userRole?.RoleId ?? 0;
             step = preferredRoleId != 0
                 ? await _db.WorkflowSteps.AsNoTracking()
@@ -84,7 +69,7 @@ public class DirectorRejectController : ControllerBase
         {
             StepId = step.StepId,
             AssetRequestId = ar.AssetRequestId,
-            Decision = 2,
+            Decision = 3,
             DecisionDate = DateTime.UtcNow,
             ApprovedUserId = dto.ApprovedBy,
             ApprovedRoleId = userRole?.RoleId ?? 0,
@@ -92,7 +77,7 @@ public class DirectorRejectController : ControllerBase
         };
         _db.Approvals.Add(approval);
 
-        ar.Status = 3; // rejected
+        ar.Status = 4; // funding
         ar.ApproveDate = DateTime.UtcNow;
 
         var record = new AssetRequestRecord
@@ -100,7 +85,7 @@ public class DirectorRejectController : ControllerBase
             AssetRequestId = ar.AssetRequestId,
             FromStatus = fromStatus,
             ToStatus = ar.Status,
-            Action = 2,
+            Action = 3,
             ActionByUserId = dto.ApprovedBy,
             ActionRoleId = userRole?.RoleId ?? 0,
             Comment = dto.Comment,
@@ -112,3 +97,4 @@ public class DirectorRejectController : ControllerBase
         return Ok(new { assetRequestId = ar.AssetRequestId, status = ar.Status });
     }
 }
+

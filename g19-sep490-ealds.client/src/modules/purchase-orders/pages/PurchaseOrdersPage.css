@@ -121,7 +121,7 @@
 .purchase-orders-actions {
   display: flex;
   gap: 8px;
-  justify-content: center;
+  justify-content: flex-end;
   align-items: center;
 }
 

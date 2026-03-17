@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Input, Select, Tabs, message } from 'antd';
+import { Button, Input, Modal, Popconfirm, Select, Tabs, message } from 'antd';
 import {
+  DeleteOutlined,
   EyeOutlined,
   FilterOutlined,
   SearchOutlined,
@@ -8,11 +9,14 @@ import {
 } from '@ant-design/icons';
 import './MaintenancePage.css';
 import { maintenanceRequestService } from '../../assets/services/maintenanceRequestService';
+import { directorRequestService } from '../../requests/services/directorRequestService';
+import { profileService, type UserProfile } from '../../profile/services/profileService';
 
-type MaintenanceStatus = 'draft' | 'pending' | 'approved' | 'rejected';
+type MaintenanceStatus = 'draft' | 'submitted' | 'pending' | 'approved' | 'rejected';
 
 interface MaintenanceRow {
-  id: string;
+  id: string; // taskId (recordId from backend list)
+  assetRequestId: number;
   assetCode: string;
   assetName: string;
   assetType: string;
@@ -21,10 +25,12 @@ interface MaintenanceRow {
   expectedDate: string;
   assetState: string;
   status: MaintenanceStatus;
+  rawStatus: number;
 }
 
 function getStatusLabel(status: MaintenanceStatus): string {
   if (status === 'draft') return 'Chưa gửi';
+  if (status === 'submitted') return 'Đã gửi';
   if (status === 'pending') return 'Chờ phê duyệt';
   if (status === 'approved') return 'Phê duyệt';
   return 'Từ chối';
@@ -32,6 +38,7 @@ function getStatusLabel(status: MaintenanceStatus): string {
 
 function getStatusClass(status: MaintenanceStatus): string {
   if (status === 'draft') return 'maintenance-status-pill maintenance-status-pill--draft';
+  if (status === 'submitted') return 'maintenance-status-pill maintenance-status-pill--pending';
   if (status === 'pending') {
     return 'maintenance-status-pill maintenance-status-pill--pending';
   }
@@ -49,11 +56,15 @@ function formatDate(value?: string | null): string {
 }
 
 function mapStatus(status: number): MaintenanceStatus {
-  // 0=Nháp, 3=Chờ phê duyệt, 4=Phê duyệt, others => Từ chối/khác
-  if (status === 0) return 'draft';
-  if (status === 3) return 'pending';
-  if (status === 4) return 'approved';
-  return 'rejected';
+  // Align maintenance flow with director approval endpoints:
+  // -1=Nháp, 0=Đã gửi, 1=Chờ phê duyệt, 2=Phê duyệt, 3=Từ chối
+  // Some legacy data may still use 4 as "Phê duyệt".
+  if (status === -1) return 'draft';
+  if (status === 0) return 'submitted';
+  if (status === 1) return 'pending';
+  if (status === 2 || status === 4) return 'approved';
+  if (status === 3) return 'rejected';
+  return 'submitted';
 }
 
 export function MaintenancePage() {
@@ -64,6 +75,13 @@ export function MaintenancePage() {
   const [statusFilter, setStatusFilter] = useState<'all' | MaintenanceStatus>('all');
   const [rows, setRows] = useState<MaintenanceRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [selected, setSelected] = useState<MaintenanceRow | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [decision, setDecision] = useState<'approved' | 'rejected'>('approved');
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +93,7 @@ export function MaintenancePage() {
         const list = await maintenanceRequestService.list();
         const mapped: MaintenanceRow[] = list.map((it) => ({
           id: String(it.recordId),
+          assetRequestId: it.assetRequestId,
           assetCode: it.assetCode,
           assetName: it.assetName,
           assetType: '', // Backend hiện chưa trả loại tài sản trong DTO này
@@ -83,6 +102,7 @@ export function MaintenancePage() {
           expectedDate: formatDate(it.transferDate),
           assetState: it.fromDepartment || it.toDepartment || '',
           status: mapStatus(it.status),
+          rawStatus: it.status,
         }));
 
         if (!cancelled) setRows(mapped);
@@ -105,6 +125,66 @@ export function MaintenancePage() {
       cancelled = true;
     };
   }, [activeTab]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const p = await profileService.getProfile();
+        setProfile(p);
+      } catch {
+        setProfile(null);
+      }
+    })();
+  }, []);
+
+  const isDirector = String(profile?.role ?? '').toUpperCase() === 'DIRECTOR';
+  const canDirectorApprove = isDirector && !!selected && selected.rawStatus === 1;
+
+  const reload = async () => {
+    try {
+      const list = await maintenanceRequestService.list();
+      const mapped: MaintenanceRow[] = list.map((it) => ({
+        id: String(it.recordId),
+        assetRequestId: it.assetRequestId,
+        assetCode: it.assetCode,
+        assetName: it.assetName,
+        assetType: '',
+        purpose: it.reason ?? '',
+        setupDate: formatDate(it.transferDate),
+        expectedDate: formatDate(it.transferDate),
+        assetState: it.fromDepartment || it.toDepartment || '',
+        status: mapStatus(it.status),
+        rawStatus: it.status,
+      }));
+      setRows(mapped);
+    } catch {
+      // ignore
+    }
+  };
+
+  const submitDirectorDecision = async () => {
+    if (!selected || !profile?.id) return;
+    setSubmitting(true);
+    try {
+      const payload = { approvedBy: profile.id, comment: comment.trim() || null };
+      if (decision === 'approved') {
+        await directorRequestService.approve(selected.assetRequestId, payload);
+        message.success('Đã phê duyệt yêu cầu bảo dưỡng.');
+      } else {
+        await directorRequestService.reject(selected.assetRequestId, payload);
+        message.success('Đã từ chối yêu cầu bảo dưỡng.');
+      }
+      setApproveOpen(false);
+      setDetailOpen(false);
+      setSelected(null);
+      await reload();
+    } catch (e: any) {
+      const msg = e?.response?.data ?? 'Thao tác phê duyệt thất bại.';
+      message.error(typeof msg === 'string' ? msg : 'Thao tác phê duyệt thất bại.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const filteredRows: MaintenanceRow[] = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -156,6 +236,7 @@ export function MaintenancePage() {
             options={[
               { value: 'all', label: 'Tất cả' },
               { value: 'draft', label: 'Chưa gửi' },
+              { value: 'submitted', label: 'Đã nộp' },
               { value: 'pending', label: 'Chờ phê duyệt' },
               { value: 'approved', label: 'Phê duyệt' },
               { value: 'rejected', label: 'Từ chối' },
@@ -228,7 +309,32 @@ export function MaintenancePage() {
                       </span>
                     </td>
                     <td className="asset-table__cell asset-table__cell--actions">
-                      <Button type="text" icon={<EyeOutlined />} />
+                      <Button
+                        type="text"
+                        icon={<EyeOutlined />}
+                        onClick={() => {
+                          setSelected(row);
+                          setDetailOpen(true);
+                        }}
+                      />
+                      {row.status === 'draft' || row.status === 'submitted' ? (
+                        <Popconfirm
+                          title="Xóa đề xuất bảo dưỡng?"
+                          okText="Xóa"
+                          cancelText="Hủy"
+                          onConfirm={async () => {
+                            try {
+                              await maintenanceRequestService.remove(row.assetRequestId);
+                              setRows((prev) => prev.filter((x) => x.assetRequestId !== row.assetRequestId));
+                              message.success('Đã xóa đề xuất bảo dưỡng.');
+                            } catch {
+                              message.error('Không thể xóa đề xuất bảo dưỡng. Vui lòng thử lại.');
+                            }
+                          }}
+                        >
+                          <Button type="text" danger icon={<DeleteOutlined />} />
+                        </Popconfirm>
+                      ) : null}
                     </td>
                   </tr>
                 ))
@@ -264,6 +370,93 @@ export function MaintenancePage() {
           </div>
         </div>
       </div>
+
+      <Modal
+        open={detailOpen}
+        title={selected ? `Chi tiết yêu cầu BD - YC-${selected.assetRequestId}` : 'Chi tiết yêu cầu bảo dưỡng'}
+        onCancel={() => {
+          setDetailOpen(false);
+          setSelected(null);
+        }}
+        footer={[
+          <Button
+            key="close"
+            onClick={() => {
+              setDetailOpen(false);
+              setSelected(null);
+            }}
+          >
+            Đóng
+          </Button>,
+          canDirectorApprove ? (
+            <Button
+              key="approve"
+              type="primary"
+              onClick={() => {
+                setDecision('approved');
+                setComment('');
+                setApproveOpen(true);
+              }}
+            >
+              Phê duyệt
+            </Button>
+          ) : null,
+        ]}
+      >
+        {!selected ? (
+          <div>Không có dữ liệu.</div>
+        ) : (
+          <div style={{ display: 'grid', gap: 8 }}>
+            <div>
+              <b>Tài sản:</b> {[selected.assetCode, selected.assetName].filter(Boolean).join(' - ') || '—'}
+            </div>
+            <div>
+              <b>Mục đích:</b> {selected.purpose || '—'}
+            </div>
+            <div>
+              <b>Ngày dự kiến:</b> {selected.expectedDate || '—'}
+            </div>
+            <div>
+              <b>Phòng ban:</b> {selected.assetState || '—'}
+            </div>
+            <div>
+              <b>Trạng thái:</b> {getStatusLabel(selected.status)}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={approveOpen}
+        title="Phê duyệt yêu cầu bảo dưỡng"
+        onCancel={() => setApproveOpen(false)}
+        okText="Xác nhận"
+        confirmLoading={submitting}
+        onOk={submitDirectorDecision}
+      >
+        <div style={{ display: 'grid', gap: 12 }}>
+          <div>
+            <label>Quyết định</label>
+            <select
+              style={{ width: '100%', padding: 8, marginTop: 6 }}
+              value={decision}
+              onChange={(e) => setDecision(e.target.value === 'rejected' ? 'rejected' : 'approved')}
+            >
+              <option value="approved">Phê duyệt</option>
+              <option value="rejected">Từ chối</option>
+            </select>
+          </div>
+          <div>
+            <label>Ghi chú</label>
+            <textarea
+              style={{ width: '100%', padding: 8, marginTop: 6, minHeight: 90 }}
+              placeholder="Không cần thiết"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

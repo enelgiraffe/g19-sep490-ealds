@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Input, Select, Tabs, message } from 'antd';
+import { Button, Input, Modal, Select, Tabs, message } from 'antd';
 import { EyeOutlined, FilterOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons';
 import './RepairsPage.css';
 import { damageReportService } from '../../assets/services/damageReportService';
+import { directorRequestService } from '../../requests/services/directorRequestService';
+import { profileService, type UserProfile } from '../../profile/services/profileService';
 
-type RepairStatus = 'draft' | 'pending' | 'approved' | 'rejected';
+type RepairStatus = 'draft' | 'submitted' | 'pending' | 'approved' | 'rejected';
 
 interface RepairRow {
   id: string;
+  assetRequestId: number;
   assetCode: string;
   assetName: string;
   condition: string;
@@ -16,6 +19,7 @@ interface RepairRow {
   location: string;
   department: string;
   status: RepairStatus;
+  rawStatus: number;
 }
 
 function formatDate(value?: string | null): string {
@@ -26,19 +30,30 @@ function formatDate(value?: string | null): string {
 }
 
 function mapStatus(status: number): RepairStatus {
-  // Align with the common workflow in backend:
-  // 0=Nháp, 3=Chờ phê duyệt, 4=Phê duyệt, others => Từ chối/khác
-  if (status === 0) return 'draft';
-  if (status === 3) return 'pending';
-  if (status === 4) return 'approved';
+  // Align with backend workflow used by AssetRequest (director flow):
+  // -1=Nháp, 0=Đã gửi, 1=Chờ phê duyệt, 2=Phê duyệt, 3=Từ chối
+  if (status === -1) return 'draft';
+  if (status === 0) return 'submitted';
+  if (status === 1) return 'pending';
+  if (status === 2) return 'approved';
   return 'rejected';
 }
 
 function getStatusLabel(status: RepairStatus): string {
   if (status === 'draft') return 'Chưa gửi';
+  if (status === 'submitted') return 'Đã gửi';
   if (status === 'pending') return 'Chờ phê duyệt';
   if (status === 'approved') return 'Phê duyệt';
   return 'Từ chối';
+}
+
+function getStatusClass(status: RepairStatus): string {
+  // Reuse the same status pill styles used across Purchase/Transfer pages
+  if (status === 'submitted') return 'asset-status-pill asset-status-pill--processing';
+  if (status === 'pending') return 'asset-status-pill asset-status-pill--warning';
+  if (status === 'approved') return 'asset-status-pill asset-status-pill--active';
+  if (status === 'draft') return 'asset-status-pill asset-status-pill--inactive';
+  return 'asset-status-pill asset-status-pill--danger';
 }
 
 export function RepairsPage() {
@@ -47,6 +62,13 @@ export function RepairsPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | RepairStatus>('all');
   const [rows, setRows] = useState<RepairRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [selected, setSelected] = useState<RepairRow | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [decision, setDecision] = useState<'approved' | 'rejected'>('approved');
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,6 +88,7 @@ export function RepairsPage() {
 
           return {
             id: String(it.id),
+            assetRequestId: it.id,
             assetCode: assetCode || String(it.assetId ?? ''),
             // Nếu assetName trống, lấy phần title nhưng bỏ prefix "Báo hỏng tài sản ..."
             assetName:
@@ -80,6 +103,7 @@ export function RepairsPage() {
             location: it.currentDepartmentName ?? '',
             department: it.currentDepartmentName ?? '',
             status: mapStatus(it.status),
+            rawStatus: it.status,
           };
         });
 
@@ -103,6 +127,97 @@ export function RepairsPage() {
       cancelled = true;
     };
   }, [activeTab]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const p = await profileService.getProfile();
+        setProfile(p);
+      } catch {
+        setProfile(null);
+      }
+    })();
+  }, []);
+
+  const isDirector = String(profile?.role ?? '').toUpperCase() === 'DIRECTOR';
+  const canDirectorApprove = isDirector && !!selected && selected.rawStatus === 1;
+
+  const reload = async () => {
+    try {
+      const res = await damageReportService.list({ requestTypeId: 4, page: 1, pageSize: 200 });
+      const mapped: RepairRow[] = (res.items ?? []).map((it) => ({
+        id: String(it.id),
+        assetRequestId: it.id,
+        assetCode: (it.assetCode ?? '') || String(it.assetId ?? ''),
+        assetName:
+          (it.assetName ?? '') ||
+          (it.title
+            ? it.title.replace(/^Báo hỏng tài sản\s*/i, '').trim() || it.title
+            : '(Không có tên)'),
+        condition: it.description ?? '',
+        brokenDate: formatDate(it.createDate),
+        quantity: it.assetQuantity && it.assetQuantity > 0 ? it.assetQuantity : 1,
+        location: it.currentDepartmentName ?? '',
+        department: it.currentDepartmentName ?? '',
+        status: mapStatus(it.status),
+        rawStatus: it.status,
+      }));
+      setRows(mapped);
+    } catch {
+      // ignore
+    }
+  };
+
+  const submitDirectorDecision = async () => {
+    if (!selected || !profile?.id) return;
+    setSubmitting(true);
+    try {
+      const payload = { approvedBy: profile.id, comment: comment.trim() || null };
+      if (decision === 'approved') {
+        await directorRequestService.approve(selected.assetRequestId, payload);
+        message.success('Đã phê duyệt yêu cầu sửa chữa.');
+      } else {
+        await directorRequestService.reject(selected.assetRequestId, payload);
+        message.success('Đã từ chối yêu cầu sửa chữa.');
+      }
+      setApproveOpen(false);
+      setDetailOpen(false);
+      setSelected(null);
+      await reload();
+    } catch (e: any) {
+      const msg = e?.response?.data ?? 'Thao tác phê duyệt thất bại.';
+      message.error(typeof msg === 'string' ? msg : 'Thao tác phê duyệt thất bại.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteDamageReport = (row: RepairRow) => {
+    const idNum = Number(row.id);
+    if (!Number.isFinite(idNum) || idNum <= 0) {
+      message.error('Không xác định được mã đơn báo hỏng.');
+      return;
+    }
+
+    Modal.confirm({
+      title: 'Xóa đơn báo hỏng?',
+      content: `Bạn có chắc muốn xóa đơn báo hỏng của tài sản ${row.assetCode || ''}?`,
+      okText: 'Xóa',
+      okButtonProps: { danger: true },
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          await damageReportService.delete(idNum);
+          message.success('Đã xóa đơn báo hỏng.');
+          setRows((prev) => prev.filter((x) => x.id !== row.id));
+        } catch (e: any) {
+          const data = e?.response?.data;
+          const msg = data?.title ?? data ?? e?.message ?? 'Xóa đơn báo hỏng thất bại.';
+          message.error(typeof msg === 'string' ? msg : 'Xóa đơn báo hỏng thất bại.');
+        }
+      },
+    });
+  };
 
   const filteredData: RepairRow[] = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -149,6 +264,7 @@ export function RepairsPage() {
             options={[
               { value: 'all', label: 'Tất cả' },
               { value: 'draft', label: 'Chưa gửi' },
+              { value: 'submitted', label: 'Đã gửi' },
               { value: 'pending', label: 'Chờ phê duyệt' },
               { value: 'approved', label: 'Phê duyệt' },
               { value: 'rejected', label: 'Từ chối' },
@@ -215,9 +331,21 @@ export function RepairsPage() {
                     <td className="asset-align-right">{row.quantity}</td>
                     <td>{row.location}</td>
                     <td>{row.department}</td>
-                    <td>{getStatusLabel(row.status)}</td>
+                    <td>
+                      <span className={getStatusClass(row.status)}>{getStatusLabel(row.status)}</span>
+                    </td>
                     <td className="asset-table__cell asset-table__cell--actions">
-                      <Button type="text" icon={<EyeOutlined />} />
+                      <Button
+                        type="text"
+                        icon={<EyeOutlined />}
+                        onClick={() => {
+                          setSelected(row);
+                          setDetailOpen(true);
+                        }}
+                      />
+                      <Button danger type="text" onClick={() => handleDeleteDamageReport(row)}>
+                        Xóa
+                      </Button>
                     </td>
                   </tr>
                 ))
@@ -253,6 +381,93 @@ export function RepairsPage() {
           </div>
         </div>
       </div>
+
+      <Modal
+        open={detailOpen}
+        title={selected ? `Chi tiết yêu cầu SC - YC-${selected.assetRequestId}` : 'Chi tiết yêu cầu sửa chữa'}
+        onCancel={() => {
+          setDetailOpen(false);
+          setSelected(null);
+        }}
+        footer={[
+          <Button
+            key="close"
+            onClick={() => {
+              setDetailOpen(false);
+              setSelected(null);
+            }}
+          >
+            Đóng
+          </Button>,
+          canDirectorApprove ? (
+            <Button
+              key="approve"
+              type="primary"
+              onClick={() => {
+                setDecision('approved');
+                setComment('');
+                setApproveOpen(true);
+              }}
+            >
+              Phê duyệt
+            </Button>
+          ) : null,
+        ]}
+      >
+        {!selected ? (
+          <div>Không có dữ liệu.</div>
+        ) : (
+          <div style={{ display: 'grid', gap: 8 }}>
+            <div>
+              <b>Tài sản:</b> {[selected.assetCode, selected.assetName].filter(Boolean).join(' - ') || '—'}
+            </div>
+            <div>
+              <b>Tình trạng:</b> {selected.condition || '—'}
+            </div>
+            <div>
+              <b>Ngày hỏng:</b> {selected.brokenDate || '—'}
+            </div>
+            <div>
+              <b>Phòng ban:</b> {selected.department || '—'}
+            </div>
+            <div>
+              <b>Trạng thái:</b> {getStatusLabel(selected.status)}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={approveOpen}
+        title="Phê duyệt yêu cầu sửa chữa"
+        onCancel={() => setApproveOpen(false)}
+        okText="Xác nhận"
+        confirmLoading={submitting}
+        onOk={submitDirectorDecision}
+      >
+        <div style={{ display: 'grid', gap: 12 }}>
+          <div>
+            <label>Quyết định</label>
+            <select
+              style={{ width: '100%', padding: 8, marginTop: 6 }}
+              value={decision}
+              onChange={(e) => setDecision(e.target.value === 'rejected' ? 'rejected' : 'approved')}
+            >
+              <option value="approved">Phê duyệt</option>
+              <option value="rejected">Từ chối</option>
+            </select>
+          </div>
+          <div>
+            <label>Ghi chú</label>
+            <textarea
+              style={{ width: '100%', padding: 8, marginTop: 6, minHeight: 90 }}
+              placeholder="Không cần thiết"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

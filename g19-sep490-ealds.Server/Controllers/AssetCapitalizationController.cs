@@ -1,8 +1,10 @@
-﻿using g19_sep490_ealds.Server.Models;
+using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTO.RequestDTO;
 using g19_sep490_ealds.Server.Services.ServiceInterface;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using System.Net;
 
 namespace g19_sep490_ealds.Server.Controllers;
@@ -21,10 +23,14 @@ public class AssetCapitalizationController : ControllerBase
     [HttpPut("change-status")]
     [ProducesResponseType(typeof(IEnumerable<Asset>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(string), (int)HttpStatusCode.BadRequest)]
-    //[Authorize(Roles = "Admin, Employee")]
+    [Authorize(Roles = "ACCOUNTANT")]
     public async Task<IActionResult> Capitalize([FromBody] AssetCapitalizationRequestDTO request)
     {
-        var userId = 1;
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!int.TryParse(userIdClaim, out var userId) || userId <= 0)
+        {
+            return Unauthorized("Invalid user identity.");
+        }
 
         var result = await _service.CapitalizeAssetAsync(request, userId);
 

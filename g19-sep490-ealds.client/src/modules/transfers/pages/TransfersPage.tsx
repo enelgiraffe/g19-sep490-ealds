@@ -1,18 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Input, Select, message, Tabs } from 'antd';
-import { SearchOutlined, FilterOutlined, SettingOutlined, EyeOutlined } from '@ant-design/icons';
+import { Button, Input, Select, message, Tabs, Popconfirm } from 'antd';
+import {
+  SearchOutlined,
+  FilterOutlined,
+  SettingOutlined,
+  EyeOutlined,
+  DeleteOutlined,
+} from '@ant-design/icons';
 import { transferRequestService, type TransferRequestListItem } from '../../assets/services/transferRequestService';
 import { TransferAssetModal } from '../../assets/components/TransferAssetModal';
 import { TransferRequestDetailModal } from '../components/TransferRequestDetailModal';
+import { profileService, type UserProfile } from '../../profile/services/profileService';
 import './TransfersPage.css';
 
 const { Option } = Select;
 
 const STATUS_MAP: Record<number, { label: string; color: string }> = {
   0: { label: 'Nháp', color: 'default' },
-  1: { label: 'Đã nộp', color: 'processing' },
-  2: { label: 'Hợp lệ', color: 'success' },
-  3: { label: 'Chờ phê duyệt', color: 'warning' },
+  1: { label: 'Đã gửi', color: 'processing' },
+  2: { label: 'Chờ phê duyệt', color: 'warning' },
+  3: { label: 'Từ chối', color: 'error' },
   4: { label: 'Phê duyệt', color: 'success' },
 };
 
@@ -43,6 +50,14 @@ export function TransfersPage() {
   const tableHostRef = useRef<HTMLDivElement | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    profileService
+      .getProfile()
+      .then((p) => setProfile(p))
+      .catch(() => setProfile(null));
+  }, []);
 
   const loadList = async () => {
     setLoading(true);
@@ -197,6 +212,12 @@ export function TransfersPage() {
                                 ? 'asset-status-pill asset-status-pill--active'
                                 : config.color === 'default'
                                 ? 'asset-status-pill asset-status-pill--inactive'
+                                  : config.color === 'processing'
+                                    ? 'asset-status-pill asset-status-pill--processing'
+                                    : config.color === 'warning'
+                                      ? 'asset-status-pill asset-status-pill--warning'
+                                      : config.color === 'error'
+                                        ? 'asset-status-pill asset-status-pill--danger'
                                 : 'asset-status-pill'
                             }
                           >
@@ -205,14 +226,36 @@ export function TransfersPage() {
                         </td>
                         <td>{row.reason}</td>
                         <td className="asset-table__cell asset-table__cell--actions">
-                          <Button
-                            type="text"
-                            icon={<EyeOutlined />}
-                            onClick={() => {
-                              setSelectedRequest(row);
-                              setIsDetailModalOpen(true);
-                            }}
-                          />
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
+                            <Button
+                              type="text"
+                              icon={<EyeOutlined />}
+                              onClick={() => {
+                                setSelectedRequest(row);
+                                setIsDetailModalOpen(true);
+                              }}
+                            />
+                            {(row.status === 0 || row.status === 1) && (
+                              <Popconfirm
+                                title="Xóa yêu cầu điều chuyển?"
+                                description="Thao tác này sẽ xóa yêu cầu và hoàn tác phòng ban/vị trí hiện tại theo dữ liệu điều chuyển."
+                                okText="Xóa"
+                                cancelText="Hủy"
+                                onConfirm={async () => {
+                                  try {
+                                    await transferRequestService.delete(row.assetRequestId);
+                                    message.success('Đã xóa yêu cầu điều chuyển.');
+                                    await loadList();
+                                  } catch (e: any) {
+                                    const msg = e?.response?.data ?? 'Xóa yêu cầu thất bại.';
+                                    message.error(msg);
+                                  }
+                                }}
+                              >
+                                <Button type="text" danger icon={<DeleteOutlined />} />
+                              </Popconfirm>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -274,8 +317,57 @@ export function TransfersPage() {
       <TransferAssetModal
         open={isTransferModalOpen}
         onClose={() => setIsTransferModalOpen(false)}
-        onSubmit={() => {
-          message.info('Vui lòng gửi yêu cầu điều chuyển từ màn Tài sản sau khi chọn tài sản cụ thể.');
+        mode={activeTab}
+        onSubmit={async (values: any) => {
+          if (!profile) {
+            message.error('Không lấy được thông tin người dùng. Vui lòng đăng nhập lại.');
+            return;
+          }
+          const assetIds: number[] =
+            Array.isArray(values.assetIds) && values.assetIds.length > 0
+              ? values.assetIds.map((x: any) => Number(x)).filter((n: number) => Number.isFinite(n) && n > 0)
+              : [];
+          if (assetIds.length === 0) {
+            message.error('Vui lòng chọn ít nhất 1 tài sản.');
+            return;
+          }
+
+          const fromLocationId = Number(values.fromLocationId);
+          const toLocationId = Number(values.toLocationId);
+          if (!fromLocationId || !toLocationId) {
+            message.error('Vui lòng chọn phòng ban/vị trí hợp lệ.');
+            return;
+          }
+
+          const transferDateValue = values.transferDate;
+          const transferDate =
+            transferDateValue && typeof transferDateValue.toISOString === 'function'
+              ? transferDateValue.toISOString()
+              : undefined;
+
+          try {
+            for (const assetId of assetIds) {
+              await transferRequestService.create({
+                assetId,
+                requestTypeId: 1,
+                fromLocationId,
+                toLocationId,
+                fromUserId: profile.id,
+                toUserId: null,
+                transferDate,
+                executeBy: profile.id,
+                createdBy: profile.id,
+                title: values.reason ? `Điều chuyển: ${values.reason}` : `Yêu cầu điều chuyển tài sản ${assetId}`,
+                description: values.reason ?? undefined,
+              });
+            }
+            message.success('Gửi yêu cầu điều chuyển thành công.');
+            setIsTransferModalOpen(false);
+            await loadList();
+          } catch (e: any) {
+            const msg = e?.response?.data ?? 'Gửi yêu cầu điều chuyển thất bại.';
+            message.error(msg);
+          }
         }}
         assetInfo={null}
       />

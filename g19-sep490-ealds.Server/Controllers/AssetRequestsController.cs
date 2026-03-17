@@ -34,6 +34,7 @@ public class AssetRequestsController : ControllerBase
             .Select(r => new AssetRequestListItemDTO
             {
                 AssetRequestId = r.AssetRequestId,
+                AssetId = r.AssetId,
                 Title = r.Title,
                 Description = r.Description,
                 ProposedData = r.ProposedData,
@@ -55,6 +56,7 @@ public class AssetRequestsController : ControllerBase
             .Select(r => new
             {
                 r.AssetRequestId,
+                r.AssetId,
                 r.Title,
                 r.Description,
                 r.ProposedData,
@@ -78,6 +80,10 @@ public class AssetRequestsController : ControllerBase
         if (string.IsNullOrWhiteSpace(dto.Title))
             return BadRequest("Title is required.");
 
+        var desiredStatus = dto.Status ?? 0;
+        if (desiredStatus != 0 && desiredStatus != -1)
+            return BadRequest("Invalid status. Allowed: -1 (Draft), 0 (Submitted).");
+
         var requestTypeExists = await _db.RequestTypes
             .AsNoTracking()
             .AnyAsync(rt => rt.RequestTypeId == _purchaseRequestTypeId);
@@ -94,7 +100,7 @@ public class AssetRequestsController : ControllerBase
             Title = dto.Title,
             Description = dto.Description,
             ProposedData = dto.ProposedData,
-            Status = 0,
+            Status = desiredStatus,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow,
             StepId = 0
@@ -109,12 +115,12 @@ public class AssetRequestsController : ControllerBase
         var record = new AssetRequestRecord
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            FromStatus = 0,
-            ToStatus = 0,
+            FromStatus = assetRequest.Status,
+            ToStatus = assetRequest.Status,
             Action = 0,
             ActionByUserId = dto.CreatedBy,
             ActionRoleId = actionRoleId,
-            Comment = "Created request",
+            Comment = assetRequest.Status == -1 ? "Created draft request" : "Created request",
             OccurredAt = DateTime.UtcNow
         };
 
@@ -122,6 +128,81 @@ public class AssetRequestsController : ControllerBase
         await _db.SaveChangesAsync();
 
         return Ok(new { assetRequestId = assetRequest.AssetRequestId });
+    }
+
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(int id, [FromBody] AssetRequestDTO dto)
+    {
+        if (dto == null)
+            return BadRequest("Request body is required.");
+
+        if (string.IsNullOrWhiteSpace(dto.Title))
+            return BadRequest("Title is required.");
+
+        var desiredStatus = dto.Status ?? -1;
+
+        var ar = await _db.AssetRequests.FirstOrDefaultAsync(x => x.AssetRequestId == id && x.RequestTypeId == _purchaseRequestTypeId);
+        if (ar == null) return NotFound();
+
+        var actorRoleCode = await _db.UserRoles
+            .AsNoTracking()
+            .Where(ur => ur.UserId == dto.CreatedBy)
+            .Select(ur => ur.Role.Code)
+            .FirstOrDefaultAsync();
+
+        var isAccountantActor = string.Equals(actorRoleCode, "ACCOUNTANT", StringComparison.OrdinalIgnoreCase);
+
+        // Editable cases:
+        // - Draft (-1): creator can edit and keep Draft or submit (0)
+        // - Accountant-approved (1): accountant can edit info/attachments but must keep status=1
+        if (ar.Status == -1)
+        {
+            if (desiredStatus != -1 && desiredStatus != 0)
+                return BadRequest("Invalid status. Allowed: -1 (Draft), 0 (Sent).");
+        }
+        else if (ar.Status == 1)
+        {
+            if (!isAccountantActor)
+                return BadRequest("Only accountant can edit requests after accountant approval.");
+            if (desiredStatus != 1)
+                return BadRequest("Invalid status. Allowed: 1 (Waiting director approval).");
+        }
+        else
+        {
+            return BadRequest("Only draft requests (status=-1) or accountant-approved requests (status=1) can be edited.");
+        }
+
+        var fromStatus = ar.Status;
+
+        ar.Title = dto.Title;
+        ar.Description = dto.Description;
+        ar.ProposedData = dto.ProposedData;
+        ar.AssetId = dto.AssetId;
+        ar.UserId = dto.UserId;
+        ar.CreatedBy = dto.CreatedBy;
+        ar.Status = desiredStatus;
+
+        var userRole = await _db.UserRoles.AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.CreatedBy);
+        var actionRoleId = userRole?.RoleId ?? 1;
+
+        var record = new AssetRequestRecord
+        {
+            AssetRequestId = ar.AssetRequestId,
+            FromStatus = fromStatus,
+            ToStatus = ar.Status,
+            Action = (fromStatus == -1 && desiredStatus == 0) ? 1 : 0,
+            ActionByUserId = dto.CreatedBy,
+            ActionRoleId = actionRoleId,
+            Comment =
+                (fromStatus == -1 && desiredStatus == 0) ? "Submitted request"
+                : (fromStatus == -1) ? "Updated draft request"
+                : "Updated after accountant approval",
+            OccurredAt = DateTime.UtcNow
+        };
+        _db.AssetRequestRecords.Add(record);
+
+        await _db.SaveChangesAsync();
+        return Ok(new { assetRequestId = ar.AssetRequestId });
     }
 
     [HttpGet]

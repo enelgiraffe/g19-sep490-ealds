@@ -59,7 +59,8 @@ export const transferRequestService = {
   },
 
   async getAssetLocations(): Promise<AssetLocationOption[]> {
-    const response = await transferApi.get<AssetLocationOption[]>('/api/AssetLocations');
+    // Backend exposes department dropdown options at /api/AssetLocations/departments
+    const response = await transferApi.get<AssetLocationOption[]>('/api/AssetLocations/departments');
     return response.data;
   },
 
@@ -67,6 +68,38 @@ export const transferRequestService = {
     const response = await transferApi.post<{ assetRequestId: number; recordId: number }>(
       '/api/Assets/Requests/transfer',
       payload
+    );
+    return response.data;
+  },
+
+  async delete(assetRequestId: number): Promise<void> {
+    await transferApi.delete(`/api/Assets/Requests/transfer/${assetRequestId}`);
+  },
+
+  async approveAsAccountant(
+    id: number,
+    payload: { approvedBy: number; comment?: string | null },
+  ): Promise<{ assetRequestId: number; status: number }> {
+    const response = await transferApi.post<{ assetRequestId: number; status: number }>(
+      `/api/Assets/Requests/accountant/${id}/approve`,
+      {
+        approvedBy: payload.approvedBy,
+        comment: payload.comment ?? null,
+      },
+    );
+    return response.data;
+  },
+
+  async rejectAsAccountant(
+    id: number,
+    payload: { approvedBy: number; comment?: string | null },
+  ): Promise<{ assetRequestId: number; status: number }> {
+    const response = await transferApi.post<{ assetRequestId: number; status: number }>(
+      `/api/Assets/Requests/accountant/${id}/reject`,
+      {
+        approvedBy: payload.approvedBy,
+        comment: payload.comment ?? null,
+      },
     );
     return response.data;
   },

@@ -1,21 +1,24 @@
 import { useState, useEffect } from 'react';
-import { Button, Input, Select, Tag, Dropdown, message } from 'antd';
-import type { MenuProps } from 'antd';
+import { Button, Input, Select, Tag, message } from 'antd';
 import { SearchOutlined, FilterOutlined, SettingOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { CreatePurchaseOrderModal } from '../components/CreatePurchaseOrderModal';
 import { ViewPurchaseOrderModal } from '../components/ViewPurchaseOrderModal';
 import { purchaseOrderService, type PurchaseOrderListItem, type PurchaseOrderDetail } from '../services/purchaseOrderService';
+import dayjs from 'dayjs';
+import type { Dayjs } from 'dayjs';
 import { profileService, type UserProfile } from '../../profile/services/profileService';
 import './PurchaseOrdersPage.css';
 
 const { Option } = Select;
 
-/** Backend status: 0=Chờ/Nháp, 1=Duyệt, 2=Từ chối, 3=Chờ ngân sách */
+/** Backend status: -1=Nháp, 0=Đã gửi (kế toán), 1=Chờ duyệt (giám đốc), 2=Duyệt, 3=Từ chối, 4=Chờ ngân sách */
 const STATUS_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Nháp', color: 'default' },
-  1: { label: 'Duyệt', color: 'success' },
-  2: { label: 'Từ chối', color: 'error' },
-  3: { label: 'Chờ ngân sách', color: 'warning' },
+  [-1]: { label: 'Nháp', color: 'default' },
+  0: { label: 'Đã gửi', color: 'processing' },
+  1: { label: 'Chờ duyệt', color: 'warning' },
+  2: { label: 'Duyệt', color: 'success' },
+  3: { label: 'Từ chối', color: 'error' },
+  4: { label: 'Chờ ngân sách', color: 'warning' },
 };
 
 interface TableRow extends PurchaseOrderListItem {
@@ -69,6 +72,7 @@ export function PurchaseOrdersPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedDetail, setSelectedDetail] = useState<PurchaseOrderDetail | null>(null);
+  const [editingDetail, setEditingDetail] = useState<PurchaseOrderDetail | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [statusFilter, setStatusFilter] = useState<number | 'all'>('all');
   const [searchText, setSearchText] = useState('');
@@ -105,6 +109,7 @@ export function PurchaseOrdersPage() {
     try {
       const p = await profileService.getProfile();
       setProfile(p);
+      setEditingDetail(null);
       setIsCreateModalOpen(true);
     } catch {
       message.error('Không lấy được thông tin người dùng.');
@@ -113,6 +118,7 @@ export function PurchaseOrdersPage() {
   const handleCloseCreateModal = () => {
     setIsCreateModalOpen(false);
     setProfile(null);
+    setEditingDetail(null);
   };
 
   const handleViewDetail = async (record: TableRow) => {
@@ -134,20 +140,37 @@ export function PurchaseOrdersPage() {
     title: string;
     description?: string;
     proposedData?: string;
+    status?: number;
   }) => {
     if (!profile) {
       message.error('Vui lòng đăng nhập lại.');
       return;
     }
     try {
-      await purchaseOrderService.create({
-        userId: profile.id,
-        title: payload.title,
-        description: payload.description ?? null,
-        proposedData: payload.proposedData ?? null,
-        createdBy: profile.id,
-      });
-      message.success('Tạo yêu cầu mua sắm thành công.');
+      if (editingDetail) {
+        await purchaseOrderService.update(editingDetail.assetRequestId, {
+          userId: profile.id,
+          title: payload.title,
+          description: payload.description ?? null,
+          proposedData: payload.proposedData ?? null,
+          createdBy: profile.id,
+          status: payload.status ?? -1,
+        });
+      } else {
+        await purchaseOrderService.create({
+          userId: profile.id,
+          title: payload.title,
+          description: payload.description ?? null,
+          proposedData: payload.proposedData ?? null,
+          createdBy: profile.id,
+          status: payload.status ?? 0,
+        });
+      }
+      if ((payload.status ?? 0) === -1) {
+        message.success(editingDetail ? 'Cập nhật nháp thành công.' : 'Lưu nháp yêu cầu mua sắm thành công.');
+      } else {
+        message.success(editingDetail ? 'Đã gửi yêu cầu mua sắm.' : 'Gửi yêu cầu mua sắm thành công.');
+      }
       handleCloseCreateModal();
       loadList();
     } catch (e: unknown) {
@@ -156,29 +179,61 @@ export function PurchaseOrdersPage() {
     }
   };
 
-  const getActionMenu = (record: TableRow): MenuProps['items'] => [
-    {
-      key: 'view',
-      label: 'Xem',
-      icon: <EyeOutlined />,
-      onClick: () => handleViewDetail(record),
-    },
-    ...(record.status === 0 || record.status === 3
-      ? [{
-          key: 'edit',
-          label: 'Sửa',
-          icon: <EditOutlined />,
-          onClick: () => message.info('Chức năng sửa đang phát triển'),
-        }]
-      : []),
-    {
-      key: 'delete',
-      label: 'Xóa',
-      icon: <DeleteOutlined />,
-      danger: true,
-      onClick: () => message.info('Chức năng xóa đang phát triển'),
-    },
-  ];
+  const parseToFormValues = (detail: PurchaseOrderDetail) => {
+    const values: any = {
+      title: detail.title ?? '',
+      equipment: [{ name: '', quantity: 1, machineCode: '', unit: 'Cái', estimatedPrice: '' }],
+    };
+    try {
+      const desc = (detail.description ?? '').split('\n').map((s) => s.trim()).filter(Boolean);
+      for (const line of desc) {
+        if (line.startsWith('Lý do:')) values.reason = line.replace('Lý do:', '').trim();
+        if (line.startsWith('Thời gian cần:')) {
+          const raw = line.replace('Thời gian cần:', '').trim();
+          const parsed = dayjs(raw, 'DD/MM/YYYY', true);
+          values.needDate = parsed.isValid() ? (parsed as Dayjs) : undefined;
+        }
+        if (line.startsWith('Nhà cung cấp đề xuất:')) values.supplier = line.replace('Nhà cung cấp đề xuất:', '').trim();
+        if (line.startsWith('Loại tài sản:')) values.assetType = line.replace('Loại tài sản:', '').trim();
+        if (line.startsWith('Mục đích:')) values.purpose = line.replace('Mục đích:', '').trim();
+      }
+    } catch {
+      // ignore
+    }
+    try {
+      if (detail.proposedData) {
+        const parsed = JSON.parse(detail.proposedData) as { equipment?: any[] };
+        if (Array.isArray(parsed.equipment) && parsed.equipment.length > 0) {
+          values.equipment = parsed.equipment.map((e) => ({
+            name: e.name ?? '',
+            quantity: e.quantity ?? 1,
+            machineCode: e.machineCode ?? '',
+            unit: e.unit ?? 'Cái',
+            estimatedPrice: e.estimatedPrice ?? '',
+          }));
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return values;
+  };
+
+  const handleEditDraft = async (record: TableRow) => {
+    try {
+      const detail = await purchaseOrderService.getById(record.assetRequestId);
+      if (detail.status !== -1) {
+        message.warning('Chỉ được sửa khi yêu cầu đang ở trạng thái Nháp.');
+        return;
+      }
+      const p = await profileService.getProfile();
+      setProfile(p);
+      setEditingDetail(detail);
+      setIsCreateModalOpen(true);
+    } catch {
+      message.error('Không tải được dữ liệu nháp để sửa.');
+    }
+  };
 
   const filteredData = data.filter((row) => {
     const matchStatus = statusFilter === 'all' || row.status === statusFilter;
@@ -285,6 +340,12 @@ export function PurchaseOrdersPage() {
                               ? 'asset-status-pill asset-status-pill--active'
                               : config.color === 'default'
                               ? 'asset-status-pill asset-status-pill--inactive'
+                              : config.color === 'processing'
+                              ? 'asset-status-pill asset-status-pill--processing'
+                              : config.color === 'warning'
+                              ? 'asset-status-pill asset-status-pill--warning'
+                              : config.color === 'error'
+                              ? 'asset-status-pill asset-status-pill--danger'
                               : 'asset-status-pill'
                           }
                         >
@@ -293,15 +354,19 @@ export function PurchaseOrdersPage() {
                       </td>
                       <td className="asset-table__cell asset-table__cell--actions">
                         <div className="purchase-orders-actions">
-                          <Dropdown
-                            menu={{ items: getActionMenu(row) }}
-                            trigger={['click']}
-                            placement="bottomRight"
-                          >
-                            <Button type="text" icon={<EyeOutlined />} size="small" />
-                          </Dropdown>
-                          {(row.status === 0 || row.status === 3) && (
-                            <Button type="text" icon={<EditOutlined />} size="small" />
+                          <Button
+                            type="text"
+                            icon={<EyeOutlined />}
+                            size="small"
+                            onClick={() => handleViewDetail(row)}
+                          />
+                          {row.status === -1 && (
+                            <Button
+                              type="text"
+                              icon={<EditOutlined />}
+                              size="small"
+                              onClick={() => handleEditDraft(row)}
+                            />
                           )}
                           <Button type="text" icon={<DeleteOutlined />} size="small" danger />
                         </div>
@@ -367,6 +432,8 @@ export function PurchaseOrdersPage() {
         onClose={handleCloseCreateModal}
         onSubmit={handleSubmitPurchaseOrder}
         creatorName={profile?.name ?? profile?.email ?? null}
+        initialValues={editingDetail ? parseToFormValues(editingDetail) : undefined}
+        mode={editingDetail ? 'edit' : 'create'}
       />
 
       <ViewPurchaseOrderModal
@@ -374,6 +441,7 @@ export function PurchaseOrdersPage() {
         onClose={handleCloseViewModal}
         data={selectedDetail}
         currentUserId={profile?.id ?? null}
+        currentUserRole={profile?.role ?? null}
       />
     </div>
   );

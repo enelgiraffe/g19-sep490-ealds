@@ -152,6 +152,28 @@
   font-size: 13px;
 }
 
+.transfer-asset-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.transfer-btn-pick-asset {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.transfer-btn-pick-asset:hover {
+  border-color: #fe3720;
+  color: #fe3720;
+}
+
 .transfer-modal__footer {
   margin-top: 24px;
   display: flex;

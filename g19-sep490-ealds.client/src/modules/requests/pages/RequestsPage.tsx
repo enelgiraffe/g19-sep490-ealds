@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, DatePicker, Modal, Select, Tabs, message } from 'antd';
-import { EyeOutlined } from '@ant-design/icons';
+import { Button, DatePicker, Select, Tabs, message, Input } from 'antd';
+import { EyeOutlined, EditOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
+import type { Dayjs } from 'dayjs';
 import { CreatePurchaseOrderModal } from '../../purchase-orders/components/CreatePurchaseOrderModal';
 import { ViewPurchaseOrderModal } from '../../purchase-orders/components/ViewPurchaseOrderModal';
 import {
@@ -12,7 +14,7 @@ import {
   transferRequestService,
   type TransferRequestListItem,
 } from '../../assets/services/transferRequestService';
-import { TransferRequestDetailModal } from '../../transfers/components/TransferRequestDetailModal';
+import { AccountantTransferRequestDetailModal } from '../components/AccountantTransferRequestDetailModal';
 import {
   accountantRequestService,
   type AccountantRequestListItem,
@@ -26,29 +28,53 @@ import './RequestsPage.css';
 
 const { Option } = Select;
 
-type ActiveTabKey = 'purchase' | 'transfer' | 'maintenance' | 'repair' | 'liquidation';
+type ActiveTabKey = 'purchase' | 'transfer' | 'liquidation';
+type ActiveTabKeyAll = ActiveTabKey | 'maintenance' | 'repair';
 
 const PURCHASE_STATUS_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Nháp', color: 'default' },
-  1: { label: 'Duyệt', color: 'success' },
-  2: { label: 'Từ chối', color: 'error' },
-  3: { label: 'Chờ ngân sách', color: 'warning' },
+  [-1]: { label: 'Nháp', color: 'default' },
+  0: { label: 'Đã gửi', color: 'processing' },
+  1: { label: 'Chờ duyệt', color: 'warning' },
+  2: { label: 'Duyệt', color: 'success' },
+  3: { label: 'Từ chối', color: 'error' },
+  4: { label: 'Chờ ngân sách', color: 'warning' },
 };
 
 const TRANSFER_STATUS_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Nháp', color: 'default' },
-  1: { label: 'Đã nộp', color: 'processing' },
-  2: { label: 'Hợp lệ', color: 'success' },
-  3: { label: 'Chờ phê duyệt', color: 'warning' },
+  1: { label: 'Đã gửi', color: 'processing' },
+  2: { label: 'Chờ phê duyệt', color: 'warning' },
+  3: { label: 'Từ chối', color: 'error' },
   4: { label: 'Phê duyệt', color: 'success' },
 };
 
-/** Dùng chung cho tab Bảo dưỡng / Sửa chữa / Thanh lý (API director) */
+/**
+ * Dùng chung cho tab Thanh lý (API director).
+ * Backend đang dùng status:
+ * -1: Nháp (nếu có)
+ *  0: Đã gửi/đã nộp
+ *  1: Chờ phê duyệt (director)
+ *  2: Phê duyệt
+ *  3: Từ chối
+ */
 const DIRECTOR_STATUS_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Nháp', color: 'default' },
-  1: { label: 'Đã nộp', color: 'processing' },
-  2: { label: 'Từ chối', color: 'error' },
-  3: { label: 'Chờ phê duyệt', color: 'warning' },
+  [-1]: { label: 'Nháp', color: 'default' },
+  0: { label: 'Đã gửi', color: 'processing' },
+  1: { label: 'Chờ phê duyệt', color: 'warning' },
+  2: { label: 'Phê duyệt', color: 'success' },
+  3: { label: 'Từ chối', color: 'error' },
+};
+
+/**
+ * Status cho Bảo dưỡng / Sửa chữa: trưởng phòng ban gửi thẳng cho giám đốc (không qua kế toán).
+ * Thực tế dữ liệu có thể còn lẫn các status cũ, nên map vẫn cover 0/4 để tránh hiển thị sai/trống.
+ */
+const MAINT_REPAIR_STATUS_MAP: Record<number, { label: string; color: string }> = {
+  [-1]: { label: 'Nháp', color: 'default' },
+  0: { label: 'Đã gửi', color: 'processing' },
+  1: { label: 'Chờ phê duyệt', color: 'warning' },
+  2: { label: 'Phê duyệt', color: 'success' },
+  3: { label: 'Từ chối', color: 'error' },
+  // Legacy/variant status value seen in some endpoints
   4: { label: 'Phê duyệt', color: 'success' },
 };
 
@@ -105,13 +131,17 @@ function toTransferTableRow(item: TransferRequestListItem, index: number): Trans
 }
 
 export function RequestsPage() {
-  const [activeTab, setActiveTab] = useState<ActiveTabKey>('purchase');
+  const [activeTab, setActiveTab] = useState<ActiveTabKeyAll>('purchase');
+  const didInitDirectorDefaultTabRef = useRef(false);
 
   const [purchaseRows, setPurchaseRows] = useState<PurchaseTableRow[]>([]);
   const [purchaseLoading, setPurchaseLoading] = useState(false);
   const [isCreatePurchaseOpen, setIsCreatePurchaseOpen] = useState(false);
   const [isViewPurchaseOpen, setIsViewPurchaseOpen] = useState(false);
   const [selectedPurchaseDetail, setSelectedPurchaseDetail] = useState<PurchaseOrderDetail | null>(
+    null,
+  );
+  const [editingPurchaseDetail, setEditingPurchaseDetail] = useState<PurchaseOrderDetail | null>(
     null,
   );
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -128,6 +158,10 @@ export function RequestsPage() {
     null,
   );
   const [isDirectorDetailOpen, setIsDirectorDetailOpen] = useState(false);
+  const [isDirectorApproveOpen, setIsDirectorApproveOpen] = useState(false);
+  const [directorDecision, setDirectorDecision] = useState<'approved' | 'rejected'>('approved');
+  const [directorComment, setDirectorComment] = useState('');
+  const [directorSubmitting, setDirectorSubmitting] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState<number | 'all'>('all');
   const [departmentFilter, setDepartmentFilter] = useState<string | 'all'>('all');
@@ -177,21 +211,67 @@ export function RequestsPage() {
     loadProfile();
   }, []);
 
-  const isDirectorTab =
-    activeTab === 'maintenance' || activeTab === 'repair' || activeTab === 'liquidation';
-  const directorRequestTypeId =
-    activeTab === 'maintenance'
-      ? REQUEST_TYPE_IDS.maintenance
-      : activeTab === 'repair'
-        ? REQUEST_TYPE_IDS.repair
-        : REQUEST_TYPE_IDS.liquidation;
+  // Director module: default landing should expose director tabs (maintenance/repair/liquidation)
+  useEffect(() => {
+    if (didInitDirectorDefaultTabRef.current) return;
+    if (!userProfile?.role) return;
+    didInitDirectorDefaultTabRef.current = true;
+    if (String(userProfile.role).toUpperCase() === 'DIRECTOR') {
+      setActiveTab('purchase');
+    }
+  }, [userProfile]);
+
+  const reloadPurchaseList = async () => {
+    setPurchaseLoading(true);
+    try {
+      const list = await accountantRequestService.getPurchaseRequests();
+      setPurchaseRows(list.map((item, i) => toPurchaseTableRow(item, i)));
+    } catch {
+      message.error('Không tải được danh sách đơn mua.');
+      setPurchaseRows([]);
+    } finally {
+      setPurchaseLoading(false);
+    }
+  };
+
+  const normalizedRole = String(userProfile?.role ?? '').toUpperCase();
+  const isDirectorRole = normalizedRole === 'DIRECTOR';
+  const isAccountantRole = normalizedRole === 'ACCOUNTANT';
+
+  const shouldUseDirectorView = (isDirectorRole &&
+    (activeTab === 'purchase' ||
+      activeTab === 'transfer' ||
+      activeTab === 'maintenance' ||
+      activeTab === 'repair' ||
+      activeTab === 'liquidation')) ||
+    (!isDirectorRole && activeTab === 'liquidation');
+
+  const directorRequestTypeId = shouldUseDirectorView ? REQUEST_TYPE_IDS[activeTab] : null;
+
+  // Ensure director sees only requests already passed accountant step (per workflow)
+  // - Purchase: accountant approves 0->1, director decides at status=1
+  // - Transfer: accountant approves 1->2, director decides at status=2
+  const enforcedDirectorStatus: number | undefined =
+    isDirectorRole && activeTab === 'purchase'
+      ? 1
+      : isDirectorRole && activeTab === 'transfer'
+        ? 2
+        : undefined;
+
+  const canDirectorApprove =
+    !!userProfile?.id &&
+    !!selectedDirectorItem &&
+    (selectedDirectorItem.status === 1 ||
+      (selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.transfer &&
+        selectedDirectorItem.status === 2));
 
   const prevDirectorTypeIdRef = useRef<number | null>(null);
   const effectiveDirectorPage =
     prevDirectorTypeIdRef.current !== directorRequestTypeId ? 1 : page;
 
   useEffect(() => {
-    if (!isDirectorTab) return;
+    if (!shouldUseDirectorView) return;
+    if (directorRequestTypeId == null) return;
     if (prevDirectorTypeIdRef.current !== directorRequestTypeId) {
       setPage(1);
     }
@@ -201,15 +281,14 @@ export function RequestsPage() {
     directorRequestService
       .getView({
         requestTypeId: directorRequestTypeId,
-        status: statusFilter === 'all' ? undefined : statusFilter,
+        status:
+          enforcedDirectorStatus ?? (statusFilter === 'all' ? undefined : statusFilter),
         page: effectiveDirectorPage,
         pageSize,
       })
       .then((res) => {
         if (!cancelled) {
-          const items = res.items as DirectorRequestListItem[];
-          const byType = items.filter((item) => item.requestTypeId === directorRequestTypeId);
-          setDirectorRows(byType);
+          setDirectorRows(res.items as DirectorRequestListItem[]);
           setDirectorTotal(res.total);
         }
       })
@@ -226,11 +305,25 @@ export function RequestsPage() {
     return () => {
       cancelled = true;
     };
-  }, [isDirectorTab, directorRequestTypeId, statusFilter, effectiveDirectorPage, pageSize]);
+  }, [
+    shouldUseDirectorView,
+    directorRequestTypeId,
+    enforcedDirectorStatus,
+    statusFilter,
+    effectiveDirectorPage,
+    pageSize,
+  ]);
 
   useEffect(() => {
     setPage(1);
   }, [activeTab, statusFilter, searchText, departmentFilter, sentDateFilter]);
+
+  useEffect(() => {
+    if (!shouldUseDirectorView) return;
+    setPage(1);
+    setSelectedDirectorItem(null);
+    setIsDirectorDetailOpen(false);
+  }, [activeTab, shouldUseDirectorView]);
 
   const filteredPurchaseRows = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
@@ -247,6 +340,8 @@ export function RequestsPage() {
   const filteredTransferRows = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
     return transferRows.filter((row) => {
+      // Kế toán chỉ xem yêu cầu điều chuyển từ trạng thái "Đã gửi" trở đi (ẩn nháp của trưởng phòng ban).
+      const matchMinStatus = row.status >= 1;
       const matchStatus = statusFilter === 'all' || row.status === statusFilter;
       const matchDepartment =
         departmentFilter === 'all' ||
@@ -265,7 +360,7 @@ export function RequestsPage() {
         row.code.toLowerCase().includes(keyword) ||
         row.assetCode.toLowerCase().includes(keyword) ||
         row.assetName.toLowerCase().includes(keyword);
-      return matchStatus && matchDepartment && matchDate && matchKeyword;
+      return matchMinStatus && matchStatus && matchDepartment && matchDate && matchKeyword;
     });
   }, [transferRows, searchText, statusFilter, departmentFilter, sentDateFilter]);
 
@@ -279,7 +374,7 @@ export function RequestsPage() {
 
   const isPurchaseTab = activeTab === 'purchase';
   const isTransferTab = activeTab === 'transfer';
-  const hasDataTable = isPurchaseTab || isTransferTab || isDirectorTab;
+  const hasDataTable = isPurchaseTab || isTransferTab || shouldUseDirectorView;
 
   const currentRows = isPurchaseTab
     ? filteredPurchaseRows
@@ -290,55 +385,60 @@ export function RequestsPage() {
     ? purchaseLoading
     : isTransferTab
       ? transferLoading
-      : isDirectorTab
+      : shouldUseDirectorView
         ? directorLoading
         : false;
 
-  const total = isDirectorTab ? directorTotal : currentRows.length;
+  const total = shouldUseDirectorView ? directorTotal : currentRows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
   const startIndex = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const endIndex = Math.min(safePage * pageSize, total);
-  const pagedRows = isDirectorTab
+  const pagedRows = shouldUseDirectorView
     ? directorRows
     : currentRows.slice((safePage - 1) * pageSize, safePage * pageSize);
-
-  const handleOpenCreatePurchase = async () => {
-    if (!userProfile) {
-      try {
-        const profile = await profileService.getProfile();
-        setUserProfile(profile);
-      } catch {
-        message.error('Không lấy được thông tin người dùng.');
-        return;
-      }
-    }
-    setIsCreatePurchaseOpen(true);
-  };
 
   const handleCloseCreatePurchase = () => {
     setIsCreatePurchaseOpen(false);
     setUserProfile(null);
+    setEditingPurchaseDetail(null);
   };
 
   const handleSubmitPurchaseOrder = async (payload: {
     title: string;
     description?: string;
     proposedData?: string;
+    status?: number;
   }) => {
     if (!userProfile) {
       message.error('Vui lòng đăng nhập lại.');
       return;
     }
     try {
-      await purchaseOrderService.create({
-        userId: userProfile.id,
-        title: payload.title,
-        description: payload.description ?? null,
-        proposedData: payload.proposedData ?? null,
-        createdBy: userProfile.id,
-      });
-      message.success('Tạo yêu cầu mua sắm thành công.');
+      if (editingPurchaseDetail) {
+        await purchaseOrderService.update(editingPurchaseDetail.assetRequestId, {
+          userId: userProfile.id,
+          title: payload.title,
+          description: payload.description ?? null,
+          proposedData: payload.proposedData ?? null,
+          createdBy: userProfile.id,
+          status: payload.status ?? -1,
+        });
+      } else {
+        await purchaseOrderService.create({
+          userId: userProfile.id,
+          title: payload.title,
+          description: payload.description ?? null,
+          proposedData: payload.proposedData ?? null,
+          createdBy: userProfile.id,
+          status: payload.status ?? 0,
+        });
+      }
+      if ((payload.status ?? 0) === -1) {
+        message.success(editingPurchaseDetail ? 'Cập nhật nháp yêu cầu mua sắm thành công.' : 'Lưu nháp yêu cầu mua sắm thành công.');
+      } else {
+        message.success(editingPurchaseDetail ? 'Đã gửi yêu cầu mua sắm.' : 'Gửi yêu cầu mua sắm thành công.');
+      }
       handleCloseCreatePurchase();
       const list = await accountantRequestService.getPurchaseRequests();
       setPurchaseRows(list.map((item, i) => toPurchaseTableRow(item, i)));
@@ -348,8 +448,81 @@ export function RequestsPage() {
     }
   };
 
+  const parseToFormValues = (detail: PurchaseOrderDetail) => {
+    const values: Record<string, unknown> = {
+      title: detail.title ?? '',
+      equipment: [{ name: '', quantity: 1, machineCode: '', unit: 'Cái', estimatedPrice: '' }],
+    };
+    try {
+      const lines = (detail.description ?? '')
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      for (const line of lines) {
+        if (line.startsWith('Lý do:')) values.reason = line.replace('Lý do:', '').trim();
+        if (line.startsWith('Thời gian cần:')) {
+          const raw = line.replace('Thời gian cần:', '').trim();
+          const parsed = dayjs(raw, 'DD/MM/YYYY', true);
+          values.needDate = parsed.isValid() ? (parsed as Dayjs) : undefined;
+        }
+        if (line.startsWith('Nhà cung cấp đề xuất:')) values.supplier = line.replace('Nhà cung cấp đề xuất:', '').trim();
+        if (line.startsWith('Loại tài sản:')) values.assetType = line.replace('Loại tài sản:', '').trim();
+        if (line.startsWith('Mục đích:')) values.purpose = line.replace('Mục đích:', '').trim();
+      }
+    } catch {
+      // ignore
+    }
+    try {
+      if (detail.proposedData) {
+        const parsed = JSON.parse(detail.proposedData) as {
+          equipment?: {
+            name?: string;
+            quantity?: number;
+            machineCode?: string;
+            unit?: string;
+            estimatedPrice?: string;
+          }[];
+        };
+        if (Array.isArray(parsed.equipment) && parsed.equipment.length > 0) {
+          values.equipment = parsed.equipment.map((e) => ({
+            name: e.name ?? '',
+            quantity: e.quantity ?? 1,
+            machineCode: e.machineCode ?? '',
+            unit: e.unit ?? 'Cái',
+            estimatedPrice: e.estimatedPrice ?? '',
+          }));
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return values;
+  };
+
+  const handleEditDraftPurchase = async (row: PurchaseTableRow) => {
+    try {
+      const detail = await purchaseOrderService.getById(row.assetRequestId);
+      if (detail.status !== -1) {
+        message.warning('Chỉ được sửa khi yêu cầu đang ở trạng thái Nháp.');
+        return;
+      }
+      if (!userProfile) {
+        const profile = await profileService.getProfile();
+        setUserProfile(profile);
+      }
+      setEditingPurchaseDetail(detail);
+      setIsCreatePurchaseOpen(true);
+    } catch {
+      message.error('Không tải được dữ liệu nháp để sửa.');
+    }
+  };
+
   const handleViewPurchaseDetail = async (row: PurchaseTableRow) => {
     try {
+      if (!userProfile) {
+        const profile = await profileService.getProfile();
+        setUserProfile(profile);
+      }
       const detail = await purchaseOrderService.getById(row.assetRequestId);
       setSelectedPurchaseDetail(detail);
       setIsViewPurchaseOpen(true);
@@ -367,6 +540,14 @@ export function RequestsPage() {
     ));
   };
 
+  const getDirectorStatusMapForType = (requestTypeId: number) => {
+    if (requestTypeId === REQUEST_TYPE_IDS.transfer) return TRANSFER_STATUS_MAP;
+    if (requestTypeId === REQUEST_TYPE_IDS.maintenance || requestTypeId === REQUEST_TYPE_IDS.repair) {
+      return MAINT_REPAIR_STATUS_MAP;
+    }
+    return DIRECTOR_STATUS_MAP;
+  };
+
   return (
     <div className="requests-page">
       <div className="requests-header">
@@ -376,18 +557,40 @@ export function RequestsPage() {
       <div className="requests-card">
         <Tabs
           activeKey={activeTab}
-          onChange={(key) => setActiveTab(key as ActiveTabKey)}
+          onChange={(key) => setActiveTab(key as ActiveTabKeyAll)}
           className="requests-tabs"
           items={[
-            { key: 'purchase', label: 'Đơn mua' },
-            { key: 'transfer', label: 'Điều chuyển' },
-            { key: 'maintenance', label: 'Bảo dưỡng' },
-            { key: 'repair', label: 'Sửa chữa' },
-            { key: 'liquidation', label: 'Thanh lý' },
+            ...(isAccountantRole
+              ? ([
+                  { key: 'purchase', label: 'Đơn mua' },
+                  { key: 'transfer', label: 'Điều chuyển' },
+                  { key: 'liquidation', label: 'Thanh lý' },
+                ] as const)
+              : isDirectorRole
+                ? ([
+                    { key: 'purchase', label: 'Đơn mua' },
+                    { key: 'transfer', label: 'Điều chuyển' },
+                    { key: 'maintenance', label: 'Bảo dưỡng' },
+                    { key: 'repair', label: 'Sửa chữa' },
+                    { key: 'liquidation', label: 'Thanh lý' },
+                  ] as const)
+                : ([
+                    { key: 'purchase', label: 'Đơn mua' },
+                    { key: 'transfer', label: 'Điều chuyển' },
+                    { key: 'liquidation', label: 'Thanh lý' },
+                  ] as const)),
           ]}
         />
 
         <div className="requests-filters">
+          {(isPurchaseTab || isTransferTab) && (
+            <Input
+              placeholder="Tìm kiếm"
+              className="requests-search"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+            />
+          )}
           {isTransferTab && (
             <>
               <Select
@@ -421,21 +624,30 @@ export function RequestsPage() {
               />
             </>
           )}
-          {isDirectorTab && (
-            <Select
-              placeholder="Trạng thái"
-              className="requests-select"
-              value={statusFilter}
-              onChange={(v) => setStatusFilter(v)}
-            >
-              <Option value="all">Tất cả</Option>
-              {Object.entries(DIRECTOR_STATUS_MAP).map(([k, v]) => (
-                <Option key={k} value={Number(k)}>
-                  {v.label}
-                </Option>
-              ))}
-            </Select>
-          )}
+          {shouldUseDirectorView &&
+            (enforcedDirectorStatus != null ? (
+              <div style={{ color: '#6b7280', fontSize: 13 }}>
+                Chỉ hiển thị: <strong>Chờ phê duyệt</strong>
+              </div>
+            ) : (
+              <Select
+                placeholder="Trạng thái"
+                className="requests-select"
+                value={statusFilter}
+                onChange={(v) => setStatusFilter(v)}
+              >
+                <Option value="all">Tất cả</Option>
+                {Object.entries(
+                  activeTab === 'maintenance' || activeTab === 'repair'
+                    ? MAINT_REPAIR_STATUS_MAP
+                    : DIRECTOR_STATUS_MAP,
+                ).map(([k, v]) => (
+                  <Option key={k} value={Number(k)}>
+                    {v.label}
+                  </Option>
+                ))}
+              </Select>
+            ))}
         </div>
 
         <div className="asset-table-wrapper requests-table-wrapper">
@@ -451,7 +663,7 @@ export function RequestsPage() {
                   ? 'Đang tải danh sách yêu cầu điều chuyển...'
                   : 'Đang tải danh sách yêu cầu...'}
             </div>
-          ) : isDirectorTab ? (
+          ) : shouldUseDirectorView ? (
             <table className="asset-table requests-table">
               <thead>
                 <tr>
@@ -473,7 +685,10 @@ export function RequestsPage() {
                   </tr>
                 ) : (
                   (pagedRows as DirectorRequestListItem[]).map((row) => {
-                    const config = DIRECTOR_STATUS_MAP[row.status] ?? DIRECTOR_STATUS_MAP[0];
+                    const map = getDirectorStatusMapForType(row.requestTypeId);
+                    const fallback =
+                      map === MAINT_REPAIR_STATUS_MAP ? MAINT_REPAIR_STATUS_MAP[0] : DIRECTOR_STATUS_MAP[0];
+                    const config = map[row.status] ?? fallback;
                     return (
                       <tr key={row.assetRequestId} className="asset-row">
                         <td>
@@ -482,6 +697,8 @@ export function RequestsPage() {
                             className="asset-code asset-code--link"
                             onClick={() => {
                               setSelectedDirectorItem(row);
+                              setDirectorDecision('approved');
+                              setDirectorComment('');
                               setIsDirectorDetailOpen(true);
                             }}
                           >
@@ -499,7 +716,13 @@ export function RequestsPage() {
                                 ? 'asset-status-pill asset-status-pill--active'
                                 : config.color === 'default'
                                   ? 'asset-status-pill asset-status-pill--inactive'
-                                  : 'asset-status-pill'
+                                : config.color === 'processing'
+                                  ? 'asset-status-pill asset-status-pill--processing'
+                                  : config.color === 'warning'
+                                    ? 'asset-status-pill asset-status-pill--warning'
+                                    : config.color === 'error'
+                                      ? 'asset-status-pill asset-status-pill--danger'
+                                      : 'asset-status-pill'
                             }
                           >
                             {config.label}
@@ -511,6 +734,8 @@ export function RequestsPage() {
                             icon={<EyeOutlined />}
                             onClick={() => {
                               setSelectedDirectorItem(row);
+                              setDirectorDecision('approved');
+                              setDirectorComment('');
                               setIsDirectorDetailOpen(true);
                             }}
                           />
@@ -566,7 +791,13 @@ export function RequestsPage() {
                                 ? 'asset-status-pill asset-status-pill--active'
                                 : config.color === 'default'
                                 ? 'asset-status-pill asset-status-pill--inactive'
-                                : 'asset-status-pill'
+                                : config.color === 'processing'
+                                  ? 'asset-status-pill asset-status-pill--processing'
+                                  : config.color === 'warning'
+                                    ? 'asset-status-pill asset-status-pill--warning'
+                                    : config.color === 'error'
+                                      ? 'asset-status-pill asset-status-pill--danger'
+                                      : 'asset-status-pill'
                             }
                           >
                             {config.label}
@@ -582,6 +813,16 @@ export function RequestsPage() {
                             >
                               Xem
                             </Button>
+                            {row.status === -1 && (
+                              <Button
+                                type="text"
+                                icon={<EditOutlined />}
+                                size="small"
+                                onClick={() => handleEditDraftPurchase(row)}
+                              >
+                                Sửa
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -612,7 +853,7 @@ export function RequestsPage() {
                   </tr>
                 ) : (
                   (pagedRows as TransferTableRow[]).map((row) => {
-                    const config = TRANSFER_STATUS_MAP[row.status] ?? TRANSFER_STATUS_MAP[0];
+                    const config = TRANSFER_STATUS_MAP[row.status] ?? TRANSFER_STATUS_MAP[1];
                     return (
                       <tr key={row.key} className="asset-row">
                         <td>
@@ -638,7 +879,13 @@ export function RequestsPage() {
                                 ? 'asset-status-pill asset-status-pill--active'
                                 : config.color === 'default'
                                 ? 'asset-status-pill asset-status-pill--inactive'
-                                : 'asset-status-pill'
+                                : config.color === 'processing'
+                                  ? 'asset-status-pill asset-status-pill--processing'
+                                  : config.color === 'warning'
+                                    ? 'asset-status-pill asset-status-pill--warning'
+                                    : config.color === 'error'
+                                      ? 'asset-status-pill asset-status-pill--danger'
+                                      : 'asset-status-pill'
                             }
                           >
                             {config.label}
@@ -716,6 +963,7 @@ export function RequestsPage() {
         onClose={handleCloseCreatePurchase}
         onSubmit={handleSubmitPurchaseOrder}
         creatorName={userProfile?.name ?? userProfile?.email ?? null}
+        initialValues={editingPurchaseDetail ? parseToFormValues(editingPurchaseDetail) : undefined}
       />
 
       <ViewPurchaseOrderModal
@@ -726,50 +974,276 @@ export function RequestsPage() {
         }}
         data={selectedPurchaseDetail}
         currentUserId={userProfile?.id ?? null}
+        currentUserRole={userProfile?.role ?? null}
+        onActionCompleted={async (assetRequestId) => {
+          // Refresh detail + list so status pill updates immediately after approve/reject
+          try {
+            const detail = await purchaseOrderService.getById(assetRequestId);
+            setSelectedPurchaseDetail(detail);
+          } catch {
+            // ignore detail reload; list reload will still reflect status
+          }
+          await reloadPurchaseList();
+        }}
       />
 
-      <TransferRequestDetailModal
+      <AccountantTransferRequestDetailModal
         open={isTransferDetailOpen}
         onClose={() => {
           setIsTransferDetailOpen(false);
           setSelectedTransfer(null);
         }}
-        request={selectedTransfer}
+        data={selectedTransfer}
+        currentUserId={userProfile?.id ?? null}
+        onActionCompleted={async () => {
+          // Refresh list so status + visibility update after approve/reject
+          try {
+            const list = await transferRequestService.getList();
+            setTransferRows(list.map((item, i) => toTransferTableRow(item, i)));
+          } catch {
+            // ignore; list may be refreshed on next page visit
+          }
+        }}
       />
 
-      <Modal
-        title={`Chi tiết yêu cầu YC-${selectedDirectorItem?.assetRequestId ?? ''}`}
-        open={isDirectorDetailOpen}
-        onCancel={() => {
-          setIsDirectorDetailOpen(false);
-          setSelectedDirectorItem(null);
-        }}
-        footer={null}
-        width={520}
-      >
-        {selectedDirectorItem && (
-          <div className="requests-director-detail">
-            <p><strong>Tiêu đề:</strong> {selectedDirectorItem.title}</p>
-            {selectedDirectorItem.description && (
-              <p><strong>Mô tả:</strong> {selectedDirectorItem.description}</p>
-            )}
-            <p><strong>Ngày gửi:</strong> {formatDate(selectedDirectorItem.createDate)}</p>
-            <p><strong>Trạng thái:</strong>{' '}
-              {(DIRECTOR_STATUS_MAP[selectedDirectorItem.status] ?? DIRECTOR_STATUS_MAP[0]).label}
-            </p>
-            {(selectedDirectorItem.assetCode || selectedDirectorItem.assetName) && (
-              <p><strong>Tài sản:</strong>{' '}
-                {[selectedDirectorItem.assetCode, selectedDirectorItem.assetName].filter(Boolean).join(' - ')}
-              </p>
-            )}
-            {(selectedDirectorItem.currentDepartmentName || selectedDirectorItem.creatorEmail) && (
-              <p><strong>Phòng ban / Người tạo:</strong>{' '}
-                {selectedDirectorItem.currentDepartmentName ?? selectedDirectorItem.creatorEmail}
-              </p>
-            )}
+      {isDirectorDetailOpen && selectedDirectorItem && (
+        <div className="acct-transfer-modal-overlay" role="dialog" aria-modal="true">
+          <div className="acct-transfer-modal">
+            {(() => {
+              const map = getDirectorStatusMapForType(selectedDirectorItem.requestTypeId);
+              const fallback =
+                map === MAINT_REPAIR_STATUS_MAP ? MAINT_REPAIR_STATUS_MAP[0] : DIRECTOR_STATUS_MAP[0];
+              const statusConfig = map[selectedDirectorItem.status] ?? fallback;
+              const statusClassName =
+                statusConfig.color === 'success'
+                  ? 'acct-transfer-status-tag acct-transfer-status-tag--success'
+                  : statusConfig.color === 'warning'
+                    ? 'acct-transfer-status-tag acct-transfer-status-tag--warning'
+                    : statusConfig.color === 'processing'
+                      ? 'acct-transfer-status-tag acct-transfer-status-tag--processing'
+                      : statusConfig.color === 'error'
+                        ? 'acct-transfer-status-tag acct-transfer-status-tag--error'
+                        : 'acct-transfer-status-tag';
+
+              return (
+                <>
+                  <div className="acct-transfer-modal__header">
+                    <div className="acct-transfer-modal__header-left">
+                      <h2 className="acct-transfer-modal__title">
+                        Chi tiết yêu cầu YC-{selectedDirectorItem.assetRequestId}
+                      </h2>
+                      <span className={statusClassName}>{statusConfig.label}</span>
+                    </div>
+                  </div>
+
+                  <div className="acct-transfer-modal__body">
+                    <div className="acct-transfer-modal__content">
+                      <div className="acct-transfer-form__row">
+                        <div className="acct-transfer-form__field">
+                          <label>Mã yêu cầu</label>
+                          <div className="acct-transfer-form__value">
+                            YC-{selectedDirectorItem.assetRequestId}
+                          </div>
+                        </div>
+                        <div className="acct-transfer-form__field">
+                          <label>Ngày gửi</label>
+                          <div className="acct-transfer-form__value">
+                            {formatDate(selectedDirectorItem.createDate)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="acct-transfer-form__row">
+                        <div className="acct-transfer-form__field">
+                          <label>Phòng ban đề xuất</label>
+                          <div className="acct-transfer-form__value">
+                            {selectedDirectorItem.currentDepartmentName ?? '—'}
+                          </div>
+                        </div>
+                        <div className="acct-transfer-form__field">
+                          <label>Người tạo</label>
+                          <div className="acct-transfer-form__value">
+                            {selectedDirectorItem.creatorEmail ?? '—'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="acct-transfer-form__section">
+                        <h3 className="acct-transfer-form__section-title">Nội dung yêu cầu</h3>
+                        <div className="acct-transfer-form__value">
+                          {selectedDirectorItem.title ?? '—'}
+                        </div>
+                      </div>
+
+                      {(selectedDirectorItem.assetCode || selectedDirectorItem.assetName) && (
+                        <div className="acct-transfer-form__row">
+                          <div className="acct-transfer-form__field">
+                            <label>Mã tài sản</label>
+                            <div className="acct-transfer-form__value">
+                              {selectedDirectorItem.assetCode ?? '—'}
+                            </div>
+                          </div>
+                          <div className="acct-transfer-form__field">
+                            <label>Tên tài sản</label>
+                            <div className="acct-transfer-form__value">
+                              {selectedDirectorItem.assetName ?? '—'}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedDirectorItem.description && (
+                        <div className="acct-transfer-form__section">
+                          <h3 className="acct-transfer-form__section-title">Mô tả</h3>
+                          <div className="acct-transfer-form__value">
+                            {selectedDirectorItem.description}
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedDirectorItem.proposedData && (
+                        <div className="acct-transfer-form__section">
+                          <h3 className="acct-transfer-form__section-title">Dữ liệu đề xuất</h3>
+                          <pre
+                            className="acct-transfer-form__value"
+                            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                          >
+                            {selectedDirectorItem.proposedData}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="acct-transfer-modal__footer">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDirectorDetailOpen(false);
+                        setSelectedDirectorItem(null);
+                      }}
+                      className="acct-transfer-btn-close"
+                    >
+                      Quay lại
+                    </button>
+
+                    {canDirectorApprove && (
+                      <button
+                        type="button"
+                        className="acct-transfer-btn-approve"
+                        onClick={() => {
+                          setDirectorDecision('approved');
+                          setDirectorComment('');
+                          setIsDirectorApproveOpen(true);
+                        }}
+                      >
+                        <span className="acct-transfer-btn-approve-icon">📋</span>
+                        <span>Phê duyệt</span>
+                      </button>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
-        )}
-      </Modal>
+        </div>
+      )}
+
+      {canDirectorApprove && isDirectorApproveOpen && (
+        <div className="acct-transfer-approve-overlay" role="dialog" aria-modal="true">
+          <div className="acct-transfer-approve-modal">
+            <div className="acct-transfer-approve-modal__header">
+              <h3 className="acct-transfer-approve-modal__title">Phê duyệt yêu cầu</h3>
+            </div>
+
+            <div className="acct-transfer-approve-modal__body">
+              <div className="acct-transfer-approve-form">
+                <div className="acct-transfer-approve-form__row">
+                  <div className="acct-transfer-approve-form__field">
+                    <label>Phê duyệt</label>
+                    <select
+                      className="acct-transfer-approve-select"
+                      value={directorDecision}
+                      onChange={(e) =>
+                        setDirectorDecision(e.target.value === 'rejected' ? 'rejected' : 'approved')
+                      }
+                    >
+                      <option value="approved">Phê duyệt</option>
+                      <option value="rejected">Từ chối</option>
+                    </select>
+                  </div>
+                  <div className="acct-transfer-approve-form__field">
+                    <label>Ghi chú</label>
+                    <textarea
+                      className="acct-transfer-approve-textarea"
+                      placeholder="Không cần thiết"
+                      value={directorComment}
+                      onChange={(e) => setDirectorComment(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="acct-transfer-approve-modal__footer">
+              <button
+                type="button"
+                className="acct-transfer-approve-btn-back"
+                onClick={() => setIsDirectorApproveOpen(false)}
+                disabled={directorSubmitting}
+              >
+                ← Quay lại
+              </button>
+              <button
+                type="button"
+                className="acct-transfer-approve-btn-submit"
+                disabled={directorSubmitting}
+                onClick={async () => {
+                  if (!selectedDirectorItem || !userProfile?.id) return;
+                  setDirectorSubmitting(true);
+                  try {
+                    const payload = {
+                      approvedBy: userProfile.id,
+                      comment: directorComment.trim() || null,
+                    };
+                    if (directorDecision === 'approved') {
+                      await directorRequestService.approve(selectedDirectorItem.assetRequestId, payload);
+                      message.success('Đã phê duyệt yêu cầu.');
+                    } else {
+                      await directorRequestService.reject(selectedDirectorItem.assetRequestId, payload);
+                      message.success('Đã từ chối yêu cầu.');
+                    }
+
+                    setIsDirectorApproveOpen(false);
+                    setIsDirectorDetailOpen(false);
+                    setSelectedDirectorItem(null);
+
+                    setDirectorLoading(true);
+                    const res = await directorRequestService.getView({
+                      requestTypeId: selectedDirectorItem.requestTypeId,
+                      status: enforcedDirectorStatus ?? (statusFilter === 'all' ? undefined : statusFilter),
+                      page: 1,
+                      pageSize,
+                    });
+                    setPage(1);
+                    setDirectorRows(res.items as DirectorRequestListItem[]);
+                    setDirectorTotal(res.total);
+                  } catch (e: unknown) {
+                    const err = e as { response?: { data?: string } };
+                    message.error(err?.response?.data ?? 'Thao tác phê duyệt thất bại.');
+                  } finally {
+                    setDirectorSubmitting(false);
+                    setDirectorLoading(false);
+                  }
+                }}
+              >
+                <span className="acct-transfer-btn-approve-icon">📋</span>
+                <span>Phê duyệt</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

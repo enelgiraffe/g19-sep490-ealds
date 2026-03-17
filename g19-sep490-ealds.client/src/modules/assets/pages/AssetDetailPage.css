@@ -26,6 +26,13 @@
 .asset-detail__title-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.asset-detail__title-group {
+  display: flex;
+  align-items: center;
   gap: 12px;
 }
 
@@ -207,6 +214,20 @@
   font-weight: 500;
   cursor: pointer;
   border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.asset-detail__btn--primary {
+  background: #1890ff;
+  color: #ffffff;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.045);
+}
+
+.asset-detail__btn--primary:hover {
+  background: #1677ff;
 }
 
 .asset-detail__btn--danger {

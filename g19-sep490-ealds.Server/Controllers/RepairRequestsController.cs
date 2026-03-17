@@ -40,7 +40,9 @@ public class RepairRequestsController : ControllerBase
             Title = title,
             Description = dto.Description ?? dto.Reason,
             ProposedData = null,
-            Status = 0,
+            // Align with director workflow: newly created repair requests are considered "submitted"
+            // so they can be approved/rejected by director (DirectorApproveController expects status=1).
+            Status = 1,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow,
             StepId = 0
@@ -66,8 +68,8 @@ public class RepairRequestsController : ControllerBase
         var record = new AssetRequestRecord
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            FromStatus = 0,
-            ToStatus = 0,
+            FromStatus = assetRequest.Status,
+            ToStatus = assetRequest.Status,
             Action = 0,
             ActionByUserId = dto.CreatedBy,
             ActionRoleId = actionRoleId,

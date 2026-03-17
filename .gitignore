@@ -163,3 +163,4 @@ appsettings.Development.json
 bin/
 obj/
 .buildtmp/
+.build-temp/

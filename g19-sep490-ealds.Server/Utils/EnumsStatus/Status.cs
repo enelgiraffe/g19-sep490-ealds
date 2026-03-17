@@ -18,7 +18,8 @@ public enum AssetStatus
     Disposed = 4,
     Lost = 5,
     Liquidated = 6,
-    Capitalized = 7
+    Capitalized = 7,
+    Damaged = 8
 }
 
 public enum AssetLifeActionType

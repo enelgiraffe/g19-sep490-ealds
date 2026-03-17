@@ -32,6 +32,7 @@ interface AssetItem {
 }
 
 interface AssetInfo {
+  assetId: number;
   code: string;
   name: string;
   type: string;
@@ -89,6 +90,7 @@ function mapResponseToItem(a: AssetResponse): AssetItem {
 
 function assetResponseToAssetInfo(a: AssetResponse): AssetInfo {
   return {
+    assetId: a.assetId,
     code: a.code,
     name: a.name,
     type: a.assetTypeName ?? '—',
@@ -311,8 +313,6 @@ export function AssetListPage() {
 
     const damageDate = values.damageDate?.trim();
     const condition = values.condition?.trim();
-    const assetCode = selectedAssetInfo?.code;
-    const title = assetCode ? `Báo hỏng tài sản ${assetCode}` : 'Báo hỏng tài sản';
     const descriptionParts = [
       damageDate ? `Ngày hỏng: ${damageDate}` : null,
       condition ? `Tình trạng: ${condition}` : null,
@@ -331,6 +331,7 @@ export function AssetListPage() {
         documentId: null,
       });
       message.success('Gửi báo hỏng thành công.');
+      await fetchAssets();
       handleCloseMarkDamagedModal();
     } catch (e: any) {
       const data = e?.response?.data;
@@ -401,11 +402,22 @@ export function AssetListPage() {
   };
 
   const handleSubmitTransfer = async (values: any) => {
-    if (!profile || transferAssetId == null) {
+    if (!profile) {
       message.error('Không xác định được người dùng hoặc tài sản để điều chuyển.');
       return;
     }
     try {
+      const assetIds: number[] =
+        Array.isArray(values.assetIds) && values.assetIds.length > 0
+          ? values.assetIds.map((x: any) => Number(x)).filter((n: number) => Number.isFinite(n) && n > 0)
+          : transferAssetId != null
+            ? [transferAssetId]
+            : [];
+      if (assetIds.length === 0) {
+        message.error('Vui lòng chọn ít nhất 1 tài sản.');
+        return;
+      }
+
       const fromLocationId = Number(values.fromLocationId);
       const toLocationId = Number(values.toLocationId);
       if (!fromLocationId || !toLocationId) {
@@ -419,21 +431,23 @@ export function AssetListPage() {
           ? transferDateValue.toISOString()
           : undefined;
 
-      await transferRequestService.create({
-        assetId: transferAssetId,
-        requestTypeId: 1, // Tạm dùng cùng RequestTypeId với đơn mua
-        fromLocationId,
-        toLocationId,
-        fromUserId: profile.id,
-        toUserId: null,
-        transferDate,
-        executeBy: profile.id,
-        createdBy: profile.id,
-        title: values.reason
-          ? `Điều chuyển: ${values.reason}`
-          : `Yêu cầu điều chuyển tài sản ${transferAssetId}`,
-        description: values.reason ?? undefined,
-      });
+      for (const assetId of assetIds) {
+        await transferRequestService.create({
+          assetId,
+          requestTypeId: 1, // TODO: Align with backend request type config if needed
+          fromLocationId,
+          toLocationId,
+          fromUserId: profile.id,
+          toUserId: null,
+          transferDate,
+          executeBy: profile.id,
+          createdBy: profile.id,
+          title: values.reason
+            ? `Điều chuyển: ${values.reason}`
+            : `Yêu cầu điều chuyển tài sản ${assetId}`,
+          description: values.reason ?? undefined,
+        });
+      }
 
       message.success('Gửi yêu cầu điều chuyển thành công.');
       handleCloseTransferModal();

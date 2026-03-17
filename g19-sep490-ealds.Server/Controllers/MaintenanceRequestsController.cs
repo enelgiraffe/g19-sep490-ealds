@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -60,10 +61,11 @@ public class MaintenanceRequestsController : ControllerBase
                     Quantity = t.Asset.Quantity,
                     Status = t.AssetRequest!.Status,
                     StatusName =
-                        t.AssetRequest.Status == 0 ? "Nháp" :
-                        t.AssetRequest.Status == 1 ? "Đã nộp" :
-                        t.AssetRequest.Status == 2 ? "Hợp lệ" :
-                        t.AssetRequest.Status == 3 ? "Chờ phê duyệt" :
+                        t.AssetRequest.Status == -1 ? "Nháp" :
+                        t.AssetRequest.Status == 0 ? "Đã gửi" :
+                        t.AssetRequest.Status == 1 ? "Chờ phê duyệt" :
+                        t.AssetRequest.Status == 2 ? "Phê duyệt" :
+                        t.AssetRequest.Status == 3 ? "Từ chối" :
                         t.AssetRequest.Status == 4 ? "Phê duyệt" :
                         "Không xác định",
                     Reason = t.AssetRequest.Description
@@ -79,6 +81,10 @@ public class MaintenanceRequestsController : ControllerBase
         if (dto == null)
             return BadRequest("Request body is required.");
 
+        var asset = await _db.Assets.FirstOrDefaultAsync(a => a.AssetId == dto.AssetId);
+        if (asset == null)
+            return NotFound($"AssetId {dto.AssetId} not found.");
+
         var schedule = dto.ScheduleId.HasValue && dto.ScheduleId.Value > 0
             ? await _db.MaintenanceSchedules.FindAsync(dto.ScheduleId)
             : null;
@@ -93,7 +99,8 @@ public class MaintenanceRequestsController : ControllerBase
             Title = title,
             Description = dto.Description,
             ProposedData = null,
-            Status = 0,
+            // Vừa tạo là "Đã nộp" để tránh hiển thị "Chưa gửi"
+            Status = 1,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow,
             StepId = 0
@@ -130,16 +137,39 @@ public class MaintenanceRequestsController : ControllerBase
         var record = new AssetRequestRecord
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            FromStatus = 0,
-            ToStatus = 0,
+            FromStatus = assetRequest.Status,
+            ToStatus = assetRequest.Status,
             Action = 0,
             ActionByUserId = dto.CreatedBy,
             ActionRoleId = actionRoleId,
-            Comment = "Maintenance execution requested",
+            Comment = "Maintenance request created",
             OccurredAt = DateTime.UtcNow
         };
 
         _db.AssetRequestRecords.Add(record);
+
+        // Update asset status to InMaintenance when maintenance is reported/created
+        // (Previously: only created request + task, asset status stayed unchanged)
+        var oldAssetStatus = asset.Status;
+        if (oldAssetStatus != (int)AssetStatus.InMaintenance)
+        {
+            asset.Status = (int)AssetStatus.InMaintenance;
+            _db.Assets.Update(asset);
+
+            _db.AssetLifeCycles.Add(new AssetLifeCycle
+            {
+                AssetId = asset.AssetId,
+                ActionType = (int)AssetLifeActionType.StatusChanged,
+                RelatedEntityType = 1, // 1 = Asset
+                RelatedEntityId = asset.AssetId,
+                ActorUserId = dto.CreatedBy,
+                ActorRoleId = actionRoleId,
+                Description =
+                    $"Status changed from {(AssetStatus)oldAssetStatus} " +
+                    $"to {(AssetStatus)AssetStatus.InMaintenance}",
+                OccurredAt = DateTime.UtcNow
+            });
+        }
 
         // update schedule next due date if possible
         if (schedule != null && schedule.IntervalMonths.HasValue)
@@ -152,5 +182,48 @@ public class MaintenanceRequestsController : ControllerBase
         await _db.SaveChangesAsync();
 
         return Ok(new { assetRequestId = assetRequest.AssetRequestId, taskId = task.TaskId });
+    }
+
+    /// <summary>
+    /// DELETE /api/Assets/Requests/maintenance/{assetRequestId} - Xóa đề xuất bảo dưỡng (chỉ khi chưa duyệt).
+    /// </summary>
+    [HttpDelete("{assetRequestId:int}")]
+    public async Task<IActionResult> DeleteMaintenanceRequest(int assetRequestId)
+    {
+        var task = await _db.MaintenaceTasks
+            .Include(t => t.AssetRequest)
+            .FirstOrDefaultAsync(t => t.AssetRequestId == assetRequestId);
+
+        // If there is no task, still allow deleting the AssetRequest if it exists
+        var ar = task?.AssetRequest ?? await _db.AssetRequests.FirstOrDefaultAsync(r => r.AssetRequestId == assetRequestId);
+        if (ar == null)
+            return NotFound(new { message = $"Maintenance request {assetRequestId} not found." });
+
+        // Allow delete only when request is Draft(0) or Submitted(1)
+        if (ar.Status > 1)
+            return BadRequest("Chỉ được xóa đề xuất bảo dưỡng khi đang ở trạng thái Nháp hoặc Đã nộp.");
+
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        try
+        {
+            var approvals = await _db.Approvals.Where(x => x.AssetRequestId == assetRequestId).ToListAsync();
+            var records = await _db.AssetRequestRecords.Where(x => x.AssetRequestId == assetRequestId).ToListAsync();
+            var maintenanceTasks = await _db.MaintenaceTasks.Where(x => x.AssetRequestId == assetRequestId).ToListAsync();
+
+            if (approvals.Count > 0) _db.Approvals.RemoveRange(approvals);
+            if (records.Count > 0) _db.AssetRequestRecords.RemoveRange(records);
+            if (maintenanceTasks.Count > 0) _db.MaintenaceTasks.RemoveRange(maintenanceTasks);
+
+            _db.AssetRequests.Remove(ar);
+
+            await _db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return NoContent();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
     }
 }

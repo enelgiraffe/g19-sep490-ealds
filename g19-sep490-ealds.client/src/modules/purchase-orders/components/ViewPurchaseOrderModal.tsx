@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { message } from 'antd';
 import { purchaseOrderService, type PurchaseOrderDetail } from '../services/purchaseOrderService';
+import { assetCapitalizationService } from '../../assets/services/assetCapitalizationService';
 import './ViewPurchaseOrderModal.css';
 
 const STATUS_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Nhập', color: 'default' },
-  1: { label: 'Duyệt', color: 'success' },
-  2: { label: 'Từ chối', color: 'error' },
-  3: { label: 'Chờ ngân sách', color: 'warning' },
+  [-1]: { label: 'Nháp', color: 'default' },
+  0: { label: 'Đã gửi', color: 'processing' },
+  1: { label: 'Chờ duyệt', color: 'warning' },
+  2: { label: 'Duyệt', color: 'success' },
+  3: { label: 'Từ chối', color: 'error' },
+  4: { label: 'Chờ ngân sách', color: 'warning' },
 };
 
 function formatDate(iso: string): string {
@@ -23,6 +26,8 @@ interface ViewPurchaseOrderModalProps {
   onClose: () => void;
   data: PurchaseOrderDetail | null;
   currentUserId?: number | null;
+  currentUserRole?: string | null;
+  onActionCompleted?: (assetRequestId: number) => void | Promise<void>;
 }
 
 export function ViewPurchaseOrderModal({
@@ -30,6 +35,8 @@ export function ViewPurchaseOrderModal({
   onClose,
   data,
   currentUserId,
+  currentUserRole,
+  onActionCompleted,
 }: ViewPurchaseOrderModalProps) {
   if (!open || !data) return null;
 
@@ -37,6 +44,58 @@ export function ViewPurchaseOrderModal({
   const [decision, setDecision] = useState<'approved' | 'rejected'>('approved');
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [capitalizeNote, setCapitalizeNote] = useState('');
+  const [capitalizing, setCapitalizing] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(data.title ?? '');
+  const [editDescription, setEditDescription] = useState(data.description ?? '');
+  const [editDocuments, setEditDocuments] = useState<{ name: string; url: string }[]>([]);
+  const [docName, setDocName] = useState('');
+  const [docUrl, setDocUrl] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const normalizedRole = String(currentUserRole ?? '').toUpperCase();
+  const isAccountantRole = normalizedRole === 'ACCOUNTANT';
+
+  // Accountant action points:
+  // - status=0: accountant approves/rejects (forward to director / return to draft)
+  // - status=1: accountant already approved => accountant can still update info/attachments
+  // - status=1/2: accountant can capitalize asset (if AssetId exists)
+  const canAccountantApprove = isAccountantRole && !!currentUserId && data.status === 0;
+  const canRecordCapitalization =
+    isAccountantRole && !!currentUserId && (data.status === 1 || data.status === 2) && !!data.assetId;
+  const canEditAfterAccountantApprove = isAccountantRole && !!currentUserId && data.status === 1;
+
+  const parsedProposedData = useMemo(() => {
+    try {
+      if (!data.proposedData) return null;
+      return JSON.parse(data.proposedData) as any;
+    } catch {
+      return null;
+    }
+  }, [data.proposedData]);
+
+  // Init editable fields/docs when opening or data changes (best-effort)
+  useEffect(() => {
+    if (!open || !data) return;
+    setEditTitle(data.title ?? '');
+    setEditDescription(data.description ?? '');
+    if (parsedProposedData && Array.isArray((parsedProposedData as any).documents)) {
+      const docs = (parsedProposedData as any).documents
+        .filter((d: any) => d && (d.url || d.fileUrl))
+        .map((d: any, idx: number) => ({
+          name: String(d.name ?? `Tài liệu ${idx + 1}`),
+          url: String(d.url ?? d.fileUrl),
+        }));
+      setEditDocuments(docs);
+    } else {
+      setEditDocuments([]);
+    }
+    setIsEditing(false);
+    setDocName('');
+    setDocUrl('');
+  }, [open, data, parsedProposedData]);
+
   const handleSubmitApproval = async () => {
     if (!currentUserId) {
       message.error('Không lấy được thông tin người dùng.');
@@ -49,20 +108,82 @@ export function ViewPurchaseOrderModal({
           approvedBy: currentUserId,
           comment: comment.trim() || null,
         });
-        message.success('Phê duyệt đơn thành công.');
+        message.success('Đã chuyển yêu cầu sang giám đốc (Chờ duyệt).');
       } else {
         await purchaseOrderService.rejectAsAccountant(data.assetRequestId, {
           approvedBy: currentUserId,
           comment: comment.trim() || null,
         });
-        message.success('Từ chối đơn thành công.');
+        message.success('Đã trả yêu cầu về Nháp.');
       }
+      await onActionCompleted?.(data.assetRequestId);
       setIsApproveOpen(false);
     } catch (e: unknown) {
       const err = e as { response?: { data?: string } };
       message.error(err?.response?.data ?? 'Thao tác phê duyệt thất bại.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleRecordCapitalization = async () => {
+    if (!currentUserId) {
+      message.error('Không lấy được thông tin người dùng.');
+      return;
+    }
+    if (!data.assetId) {
+      message.error('Đơn mua này chưa được gắn AssetId nên chưa thể ghi tăng.');
+      return;
+    }
+    setCapitalizing(true);
+    try {
+      await assetCapitalizationService.changeStatus({
+        assetId: data.assetId,
+        note: capitalizeNote.trim() || null,
+      });
+      message.success('Đã biến đơn mua thành tài sản cố định (ghi tăng).');
+      await onActionCompleted?.(data.assetRequestId);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: any } };
+      const msg = err?.response?.data?.message ?? err?.response?.data ?? 'Ghi tăng tài sản thất bại.';
+      message.error(typeof msg === 'string' ? msg : 'Ghi tăng tài sản thất bại.');
+    } finally {
+      setCapitalizing(false);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!currentUserId) {
+      message.error('Không lấy được thông tin người dùng.');
+      return;
+    }
+    if (!editTitle.trim()) {
+      message.error('Vui lòng nhập Lý do đề nghị.');
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const nextProposed = {
+        ...(parsedProposedData && typeof parsedProposedData === 'object' ? parsedProposedData : {}),
+        documents: editDocuments.map((d) => ({ name: d.name, url: d.url })),
+      };
+      await purchaseOrderService.update(data.assetRequestId, {
+        userId: data.userId,
+        assetId: data.assetId ?? null,
+        title: editTitle.trim(),
+        description: editDescription.trim() || null,
+        proposedData: JSON.stringify(nextProposed),
+        createdBy: currentUserId,
+        status: 1,
+      });
+      message.success('Đã cập nhật đơn mua sau khi kế toán phê duyệt.');
+      setIsEditing(false);
+      await onActionCompleted?.(data.assetRequestId);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: string } };
+      message.error(err?.response?.data ?? 'Cập nhật thất bại.');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -128,7 +249,16 @@ export function ViewPurchaseOrderModal({
               <div className="view-purchase-form__row">
                 <div className="view-purchase-form__field">
                   <label>Lý do đề nghị</label>
-                  <div className="view-purchase-form__value">{data.title}</div>
+                  {isEditing ? (
+                    <input
+                      className="approve-purchase-textarea"
+                      style={{ height: 40 }}
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                    />
+                  ) : (
+                    <div className="view-purchase-form__value">{data.title}</div>
+                  )}
                 </div>
                 <div className="view-purchase-form__field">
                   <label>Thời gian cần vật tư</label>
@@ -208,36 +338,109 @@ export function ViewPurchaseOrderModal({
               {data.description && (
                 <div className="view-purchase-form__section">
                   <label>Mục đích sử dụng</label>
-                  <div className="view-purchase-form__value">{data.description}</div>
+                  {isEditing ? (
+                    <textarea
+                      className="approve-purchase-textarea"
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                    />
+                  ) : (
+                    <div className="view-purchase-form__value">{data.description}</div>
+                  )}
                 </div>
               )}
 
-              {/* Tài liệu đính kèm (demo giống design) */}
+              {/* Tài liệu đính kèm */}
               <div className="view-purchase-form__section">
                 <h3 className="view-purchase-form__section-title">Tài liệu đính kèm</h3>
                 <div className="view-purchase-attachments">
-                  <div className="view-purchase-attachment-item">
-                    <span className="view-purchase-attachment-number">#1</span>
-                    <span className="view-purchase-attachment-name">Thông tin máy</span>
+                  {editDocuments.length === 0 ? (
+                    <div className="view-purchase-form__value">—</div>
+                  ) : (
+                    editDocuments.map((doc, idx) => (
+                      <div key={`${doc.url}-${idx}`} className="view-purchase-attachment-item">
+                        <span className="view-purchase-attachment-number">#{idx + 1}</span>
+                        <span className="view-purchase-attachment-name">{doc.name || `Tài liệu ${idx + 1}`}</span>
+                        <button
+                          type="button"
+                          className="view-purchase-attachment-download"
+                          onClick={() => window.open(doc.url, '_blank')}
+                        >
+                          Mở
+                        </button>
+                        {isEditing && (
+                          <button
+                            type="button"
+                            className="view-purchase-attachment-download"
+                            onClick={() =>
+                              setEditDocuments((prev) => prev.filter((_, i) => i !== idx))
+                            }
+                          >
+                            Xoá
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+                {isEditing && (
+                  <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+                    <input
+                      className="approve-purchase-textarea"
+                      style={{ height: 40 }}
+                      placeholder="Tên tài liệu"
+                      value={docName}
+                      onChange={(e) => setDocName(e.target.value)}
+                    />
+                    <input
+                      className="approve-purchase-textarea"
+                      style={{ height: 40 }}
+                      placeholder="Link tài liệu (URL)"
+                      value={docUrl}
+                      onChange={(e) => setDocUrl(e.target.value)}
+                    />
                     <button
                       type="button"
-                      className="view-purchase-attachment-download"
+                      className="view-purchase-btn-approve"
+                      onClick={() => {
+                        const name = docName.trim() || `Tài liệu ${editDocuments.length + 1}`;
+                        const url = docUrl.trim();
+                        if (!url) {
+                          message.error('Vui lòng nhập URL tài liệu.');
+                          return;
+                        }
+                        setEditDocuments((prev) => [...prev, { name, url }]);
+                        setDocName('');
+                        setDocUrl('');
+                      }}
                     >
-                      Tải xuống
+                      Thêm tài liệu
                     </button>
                   </div>
-                  <div className="view-purchase-attachment-item">
-                    <span className="view-purchase-attachment-number">#2</span>
-                    <span className="view-purchase-attachment-name">Thông tin nhà cung cấp</span>
-                    <button
-                      type="button"
-                      className="view-purchase-attachment-download"
-                    >
-                      Tải xuống
-                    </button>
+                )}
+              </div>
+
+              {isAccountantRole && data.status === 1 && (
+                <div className="view-purchase-form__section">
+                  <h3 className="view-purchase-form__section-title">Kế toán xử lý sau duyệt</h3>
+                  <div className="view-purchase-form__row">
+                    <div className="view-purchase-form__field">
+                      <label>Ghi chú ghi tăng (không bắt buộc)</label>
+                      <textarea
+                        className="approve-purchase-textarea"
+                        placeholder="Không cần thiết"
+                        value={capitalizeNote}
+                        onChange={(e) => setCapitalizeNote(e.target.value)}
+                      />
+                      {!data.assetId && (
+                        <div className="view-purchase-form__value" style={{ marginTop: 8 }}>
+                          Chưa có <b>AssetId</b> gắn với đơn mua nên chưa thể ghi tăng.
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Ghi chú của người gửi */}
               {data.description && (
@@ -260,7 +463,53 @@ export function ViewPurchaseOrderModal({
           >
             Quay lại
           </button>
-          {currentUserId && (
+          {canEditAfterAccountantApprove && (
+            <>
+              {isEditing ? (
+                <>
+                  <button
+                    type="button"
+                    className="view-purchase-btn-approve"
+                    disabled={savingEdit}
+                    onClick={handleSaveEdit}
+                  >
+                    <span>{savingEdit ? 'Đang lưu...' : 'Lưu thay đổi'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="view-purchase-btn-close"
+                    onClick={() => {
+                      setIsEditing(false);
+                      setEditTitle(data.title ?? '');
+                      setEditDescription(data.description ?? '');
+                    }}
+                  >
+                    Huỷ
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="view-purchase-btn-approve"
+                  onClick={() => setIsEditing(true)}
+                >
+                  <span>Chỉnh sửa</span>
+                </button>
+              )}
+            </>
+          )}
+          {canRecordCapitalization && (
+            <button
+              type="button"
+              className="view-purchase-btn-approve"
+              disabled={capitalizing}
+              onClick={handleRecordCapitalization}
+            >
+              <span className="view-purchase-btn-approve-icon">🏷</span>
+              <span>{capitalizing ? 'Đang ghi tăng...' : 'Biến thành tài sản cố định'}</span>
+            </button>
+          )}
+          {canAccountantApprove && (
             <button
               type="button"
               className="view-purchase-btn-approve"
@@ -273,7 +522,7 @@ export function ViewPurchaseOrderModal({
         </div>
       </div>
 
-      {currentUserId && isApproveOpen && (
+      {canAccountantApprove && isApproveOpen && (
         <div
           className="approve-purchase-modal-overlay"
           role="dialog"
