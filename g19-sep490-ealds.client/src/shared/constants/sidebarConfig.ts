@@ -14,6 +14,7 @@ export const ROLE_MENU: Record<AppRole, SidebarItem[]> = {
     { key: 'repairs', path: '/repairs', label: 'Sửa chữa' },
     { key: 'maintenance', path: '/maintenance', label: 'Bảo trì' },
     { key: 'liquidation', path: '/liquidation', label: 'Thanh lý' },
+    { key: 'inventory', path: '/inventory', label: 'Kiểm kê' },
   ],
   accountant: [
     // Kế toán dùng màn tài sản riêng

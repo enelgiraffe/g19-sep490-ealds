@@ -22,6 +22,21 @@ public class SubmitInventoryTaskDTO
     public string? Note { get; set; }
 }
 
+public class StatusEntryPayloadDTO
+{
+    public string StatusKey { get; set; } = null!;
+    public int ActualQty { get; set; }
+}
+
+public class SaveAssetInventoryDTO
+{
+    public int AssetId { get; set; }
+    public List<StatusEntryPayloadDTO> StatusEntries { get; set; } = new();
+    public int? ActualLocationId { get; set; }
+    public int? ActualManagerId { get; set; }
+    public int CheckedBy { get; set; }
+}
+
 /// <summary>Request payload for a director to confirm or reject a completed inventory session.</summary>
 public class ReviewInventorySessionDTO
 {

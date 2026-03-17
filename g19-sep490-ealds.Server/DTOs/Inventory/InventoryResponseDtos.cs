@@ -21,7 +21,49 @@ public class InventorySessionListItemDTO
 
 public class InventorySessionDetailDTO : InventorySessionListItemDTO
 {
+    public int QuantityDiffCount { get; set; }
+    public int LocationChangeCount { get; set; }
+    public int DepartmentChangeCount { get; set; }
+    public int ConditionChangeCount { get; set; }
     public List<InventoryTaskDTO> Tasks { get; set; } = new();
+}
+
+public class SessionAssetCheckItemDTO
+{
+    public int AssetId { get; set; }
+    public string AssetCode { get; set; } = null!;
+    public string AssetName { get; set; } = null!;
+    public string DepartmentName { get; set; } = null!;
+    public int BookQty { get; set; }
+    public int? ActualQty { get; set; }
+    public int? Difference { get; set; }
+    public int CheckStatus { get; set; } // 0=Chưa kiểm kê, 2=Hoàn tất
+}
+
+public class AssetStatusEntryDTO
+{
+    public string StatusKey { get; set; } = null!;
+    public string StatusLabel { get; set; } = null!;
+    public int BookQty { get; set; }
+    public int? ActualQty { get; set; }
+}
+
+public class AssetInventoryDetailDTO
+{
+    public int AssetId { get; set; }
+    public string AssetCode { get; set; } = null!;
+    public string AssetName { get; set; } = null!;
+    public string CategoryName { get; set; } = null!;
+    public string TypeName { get; set; } = null!;
+    public List<AssetStatusEntryDTO> StatusEntries { get; set; } = new();
+    public int? BookLocationId { get; set; }
+    public string BookLocationName { get; set; } = null!;
+    public int? ActualLocationId { get; set; }
+    public int? BookManagerId { get; set; }
+    public string BookManagerName { get; set; } = null!;
+    public int? ActualManagerId { get; set; }
+    public List<DropdownItemDTO> Locations { get; set; } = new();
+    public List<DropdownItemDTO> Managers { get; set; } = new();
 }
 
 public class InventoryTaskDTO

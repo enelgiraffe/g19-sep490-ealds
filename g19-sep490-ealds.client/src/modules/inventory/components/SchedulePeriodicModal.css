@@ -1,0 +1,77 @@
+.schedule-periodic-modal .ant-modal-content {
+  border-radius: 8px;
+  padding: 0;
+}
+
+.schedule-periodic-modal .ant-modal-body {
+  padding: 0;
+}
+
+.schedule-modal__header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.schedule-modal__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.schedule-modal__close {
+  font-size: 20px;
+  color: #666;
+  line-height: 1;
+}
+
+.schedule-modal__subtitle {
+  font-size: 12px;
+  color: #888;
+  margin: 4px 0 0;
+}
+
+.schedule-periodic-form {
+  padding: 20px 24px 0;
+}
+
+.schedule-periodic-form .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.schedule-periodic-form .ant-form-item-label > label {
+  font-size: 13px;
+  color: #333;
+  font-weight: 500;
+}
+
+.schedule-periodic-form .ant-select,
+.schedule-periodic-form .ant-picker {
+  width: 100%;
+}
+
+.schedule-form__datepicker {
+  width: 100% !important;
+}
+
+.schedule-form__textarea {
+  resize: vertical;
+}
+
+.schedule-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid #e8e8e8;
+  margin-top: 4px;
+}
+
+.schedule-modal__btn-cancel {
+  min-width: 80px;
+}
+
+.schedule-modal__btn-submit {
+  min-width: 80px;
+  background-color: #1677ff;
+}
