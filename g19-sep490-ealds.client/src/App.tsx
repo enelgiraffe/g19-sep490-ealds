@@ -21,6 +21,7 @@ import { AccountantAssetListPage } from './modules/accountant/pages/AccountantAs
 import { RepairsPage } from './modules/repairs/pages/RepairsPage';
 import { InventoryPage } from './modules/inventory/pages/InventoryPage';
 import { PeriodicInventoryExecutionPage } from './modules/inventory/pages/PeriodicInventoryExecutionPage';
+import { DirectorInventoryPage } from './modules/inventory/pages/DirectorInventoryPage';
 import './App.css';
 
 function App() {
@@ -66,6 +67,7 @@ function App() {
           <Route path="maintenance" element={<ModulePlaceholder title="Bảo trì" />} />
           <Route path="inventory" element={<InventoryPage />} />
           <Route path="inventory/:sessionId" element={<PeriodicInventoryExecutionPage />} />
+          <Route path="reports" element={<DirectorInventoryPage />} />
           <Route path="liquidation" element={<ModulePlaceholder title="Thanh lý" />} />
           <Route path="allocations" element={<ModulePlaceholder title="Cấp phát-Thu hồi" />} />
           <Route path="cost-recording" element={<ModulePlaceholder title="Ghi nhận chi phí" />} />

@@ -96,6 +96,29 @@ export interface CompleteSessionResult {
   conditionChangeCount: number;
 }
 
+export interface ReviewSessionPayload {
+  reviewedBy: number;
+  reviewerRoleId: number;
+  reviewNotes?: string;
+  applyCorrections?: boolean;
+}
+
+export const SESSION_STATUS = {
+  Scheduled: 0,
+  InProgress: 1,
+  Completed: 2,
+  Cancelled: 3,
+  Confirmed: 4,
+} as const;
+
+export const SESSION_STATUS_LABEL: Record<number, string> = {
+  0: 'Đã lên lịch',
+  1: 'Đang thực hiện',
+  2: 'Chờ xác nhận',
+  3: 'Đã hủy',
+  4: 'Đã xác nhận',
+};
+
 export interface InventorySessionListItem {
   sessionId: number;
   code: string;
@@ -129,7 +152,7 @@ export function getCurrentUserId(): number {
     const userStr = localStorage.getItem('user');
     if (!userStr) return 0;
     const user = JSON.parse(userStr);
-    return parseInt(user.id, 10) || 0;
+    return Number.parseInt(user.id, 10) || 0;
   } catch {
     return 0;
   }
@@ -208,6 +231,43 @@ export const inventoryService = {
     const res = await inventoryApi.post<CompleteSessionResult>(
       `/api/inventory/sessions/${sessionId}/complete`,
     );
+    return res.data;
+  },
+
+  async confirmSession(sessionId: number, payload: ReviewSessionPayload): Promise<unknown> {
+    const res = await inventoryApi.post(
+      `/api/inventory/sessions/${sessionId}/confirm`,
+      payload,
+    );
+    return res.data;
+  },
+
+  async rejectSession(sessionId: number, payload: ReviewSessionPayload): Promise<unknown> {
+    const res = await inventoryApi.post(
+      `/api/inventory/sessions/${sessionId}/reject`,
+      payload,
+    );
+    return res.data;
+  },
+
+  async cancelSession(sessionId: number, payload: ReviewSessionPayload): Promise<unknown> {
+    const res = await inventoryApi.post(
+      `/api/inventory/sessions/${sessionId}/cancel`,
+      payload,
+    );
+    return res.data;
+  },
+
+  async activateSession(sessionId: number): Promise<unknown> {
+    const res = await inventoryApi.post(`/api/inventory/sessions/${sessionId}/activate`);
+    return res.data;
+  },
+
+  async updateSession(
+    sessionId: number,
+    payload: { purpose: string; startDate: string; endDate: string },
+  ): Promise<unknown> {
+    const res = await inventoryApi.put(`/api/inventory/sessions/${sessionId}`, payload);
     return res.data;
   },
 

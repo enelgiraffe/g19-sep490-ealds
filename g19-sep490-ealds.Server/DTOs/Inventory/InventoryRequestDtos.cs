@@ -37,6 +37,13 @@ public class SaveAssetInventoryDTO
     public int CheckedBy { get; set; }
 }
 
+public class UpdateInventorySessionDTO
+{
+    public string Purpose { get; set; } = null!;
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
 /// <summary>Request payload for a director to confirm or reject a completed inventory session.</summary>
 public class ReviewInventorySessionDTO
 {

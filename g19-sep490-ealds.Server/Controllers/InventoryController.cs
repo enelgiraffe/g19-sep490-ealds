@@ -543,7 +543,7 @@ public class InventoryController : ControllerBase
             DepartmentId = dto.DepartmentId,
             AssetCategoryId = dto.AssetCategoryId,
             AssetTypeId = dto.AssetTypeId,
-            Status = (int)InventorySessionStatus.Draft,
+            Status = (int)InventorySessionStatus.Scheduled,
             ProgressPercent = 0,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow
@@ -791,6 +791,31 @@ public class InventoryController : ControllerBase
     }
 
     /// <summary>
+    /// PUT /api/inventory/sessions/{id} - Update purpose and dates of a scheduled session
+    /// </summary>
+    [HttpPut("sessions/{id:int}")]
+    public async Task<ActionResult> UpdateSession(int id, [FromBody] UpdateInventorySessionDTO dto)
+    {
+        var session = await _context.InventorySessions.FindAsync(id);
+        if (session == null)
+            return NotFound();
+
+        if (session.Status != (int)InventorySessionStatus.Scheduled)
+            return BadRequest(new { message = "Chỉ có thể chỉnh sửa phiên kiểm kê ở trạng thái 'Đã lên lịch'." });
+
+        if (dto.EndDate <= dto.StartDate)
+            return BadRequest(new { message = "Ngày kết thúc phải sau ngày bắt đầu." });
+
+        session.Purpose = dto.Purpose;
+        session.StartDate = dto.StartDate;
+        session.EndDate = dto.EndDate;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Đã cập nhật thông tin phiên kiểm kê." });
+    }
+
+    /// <summary>
     /// POST /api/inventory/sessions/{id}/activate
     /// </summary>
     [HttpPost("sessions/{id:int}/activate")]
@@ -800,8 +825,8 @@ public class InventoryController : ControllerBase
         if (session == null)
             return NotFound();
 
-        if (session.Status != (int)InventorySessionStatus.Draft)
-            return BadRequest(new { message = "Chỉ có thể kích hoạt phiên kiểm kê ở trạng thái Nháp." });
+        if (session.Status != (int)InventorySessionStatus.Scheduled)
+            return BadRequest(new { message = "Chỉ có thể kích hoạt phiên kiểm kê ở trạng thái Đã lên lịch." });
 
         session.Status = (int)InventorySessionStatus.InProgress;
 
@@ -817,6 +842,44 @@ public class InventoryController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "Phiên kiểm kê đã được kích hoạt. Thông báo kiểm kê đã được gửi." });
+    }
+
+    /// <summary>
+    /// POST /api/inventory/sessions/{id}/cancel
+    /// Director cancels a scheduled (status = Đã lên lịch) inventory session.
+    /// </summary>
+    [HttpPost("sessions/{id:int}/cancel")]
+    public async Task<ActionResult> CancelSession(int id, [FromBody] ReviewInventorySessionDTO dto)
+    {
+        var session = await _context.InventorySessions
+            .Include(s => s.InventoryTasks)
+            .FirstOrDefaultAsync(s => s.SessionId == id);
+
+        if (session == null)
+            return NotFound();
+
+        if (session.Status != (int)InventorySessionStatus.Scheduled)
+            return BadRequest(new { message = "Chỉ có thể hủy phiên kiểm kê đang ở trạng thái 'Đã lên lịch'." });
+
+        session.Status = (int)InventorySessionStatus.Cancelled;
+
+        _context.Notifications.Add(new Notification
+        {
+            Title = $"Lịch kiểm kê bị hủy: {session.Code}",
+            Content = $"Phiên kiểm kê {session.Code} đã bị Giám đốc hủy. Lý do: {dto.ReviewNotes ?? "Không có ghi chú."}",
+            RefId = id,
+            SentDate = DateTime.UtcNow,
+            IsSend = true
+        });
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Phiên kiểm kê đã được hủy.",
+            sessionId = id,
+            reviewNotes = dto.ReviewNotes
+        });
     }
 
     /// <summary>
@@ -1146,8 +1209,9 @@ public class InventoryController : ControllerBase
 
     /// <summary>
     /// POST /api/inventory/sessions/{id}/reject
-    /// Clears all existing records/discrepancies, resets task statuses to Pending,
-    /// and sends a re-check notification to the Department Head.
+    /// Director demands a recheck: clears all existing records/discrepancies,
+    /// resets task statuses to Pending, and sends a re-check notification to the Department Head.
+    /// Session must be in status 'Chờ xác nhận' (Completed = 2).
     /// </summary>
     [HttpPost("sessions/{id:int}/reject")]
     public async Task<ActionResult> RejectSession(int id, [FromBody] ReviewInventorySessionDTO dto)
@@ -1326,7 +1390,7 @@ public class InventoryController : ControllerBase
 
     private static string GetSessionStatusName(int status) => status switch
     {
-        0 => "Nháp",
+        0 => "Đã lên lịch",
         1 => "Đang thực hiện",
         2 => "Chờ xác nhận",
         3 => "Đã hủy",

@@ -33,7 +33,7 @@ public enum AssetLifeActionType
 
 public enum InventorySessionStatus
 {
-    Draft = 0,
+    Scheduled = 0,
     InProgress = 1,
     Completed = 2,
     Cancelled = 3,
