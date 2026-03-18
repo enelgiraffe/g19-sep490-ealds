@@ -36,4 +36,20 @@ public class AssetCapitalizationController : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpPut("capitalize-purchase-request")]
+    [ProducesResponseType(typeof(IEnumerable<Asset>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(string), (int)HttpStatusCode.BadRequest)]
+    [Authorize(Roles = "ACCOUNTANT")]
+    public async Task<IActionResult> CapitalizePurchaseRequest([FromBody] AssetCapitalizationFromRequestDTO request)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!int.TryParse(userIdClaim, out var userId) || userId <= 0)
+        {
+            return Unauthorized("Invalid user identity.");
+        }
+
+        var result = await _service.CapitalizeFromPurchaseRequestAsync(request, userId);
+        return Ok(result);
+    }
 }

@@ -23,11 +23,42 @@ export interface AssetCapitalizationPayload {
   note?: string | null;
 }
 
+export interface CapitalizePurchaseRequestPayload {
+  assetRequestId: number;
+  note?: string | null;
+  code: string;
+  name: string;
+  assetTypeId: number;
+  purchaseDate: string; // yyyy-mm-dd
+  originalPrice: number;
+  currentValue: number;
+  unit: string;
+  quantity: number;
+  warehouseId: number;
+}
+
 export const assetCapitalizationService = {
   async changeStatus(payload: AssetCapitalizationPayload) {
     const response = await capitalizationApi.put('/api/AssetCapitalization/change-status', {
       assetId: payload.assetId,
       note: payload.note ?? null,
+    });
+    return response.data;
+  },
+
+  async capitalizePurchaseRequest(payload: CapitalizePurchaseRequestPayload) {
+    const response = await capitalizationApi.put('/api/AssetCapitalization/capitalize-purchase-request', {
+      assetRequestId: payload.assetRequestId,
+      note: payload.note ?? null,
+      code: payload.code,
+      name: payload.name,
+      assetTypeId: payload.assetTypeId,
+      purchaseDate: payload.purchaseDate,
+      originalPrice: payload.originalPrice,
+      currentValue: payload.currentValue,
+      unit: payload.unit,
+      quantity: payload.quantity,
+      warehouseId: payload.warehouseId,
     });
     return response.data;
   },
