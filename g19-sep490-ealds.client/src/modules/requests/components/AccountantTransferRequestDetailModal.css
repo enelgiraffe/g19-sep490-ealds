@@ -1,0 +1,303 @@
+.acct-transfer-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.acct-transfer-modal {
+  position: relative;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 85vh;
+  width: 900px;
+  display: flex;
+  flex-direction: column;
+}
+
+.acct-transfer-modal__header {
+  background: #eaf2ff;
+  padding: 16px 24px;
+  border-bottom: 1px solid #d6e4ff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.acct-transfer-modal__header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.acct-transfer-modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1677ff;
+}
+
+.acct-transfer-status-tag {
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.acct-transfer-status-tag--success {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.acct-transfer-status-tag--warning {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.acct-transfer-status-tag--processing {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.acct-transfer-status-tag--error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.acct-transfer-modal__body {
+  padding: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.acct-transfer-modal__content {
+  padding: 24px;
+}
+
+.acct-transfer-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.acct-transfer-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.acct-transfer-form__field label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.acct-transfer-form__value {
+  background: #f3f4f6;
+  padding: 10px 12px;
+  border-radius: 6px;
+  color: #111827;
+  font-size: 14px;
+}
+
+.acct-transfer-form__section {
+  margin-bottom: 20px;
+}
+
+.acct-transfer-form__section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 12px;
+}
+
+.acct-transfer-modal__footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.acct-transfer-btn-close {
+  background: #6b7280;
+  border: 1px solid #6b7280;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 24px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.acct-transfer-btn-close:hover {
+  background: #4b5563;
+  border-color: #4b5563;
+  color: #fff;
+}
+
+.acct-transfer-btn-approve {
+  margin-left: auto;
+  background: #1890ff;
+  border: 1px solid #1890ff;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.acct-transfer-btn-approve:hover {
+  background: #1677ff;
+  border-color: #1677ff;
+  color: #fff;
+}
+
+.acct-transfer-btn-approve-icon {
+  font-size: 16px;
+}
+
+/* Approve modal */
+.acct-transfer-approve-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.acct-transfer-approve-modal {
+  background: #fff;
+  border-radius: 8px;
+  width: 640px;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.35);
+}
+
+.acct-transfer-approve-modal__header {
+  background: #eaf2ff;
+  padding: 16px 24px;
+}
+
+.acct-transfer-approve-modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1677ff;
+}
+
+.acct-transfer-approve-modal__body {
+  padding: 24px;
+}
+
+.acct-transfer-approve-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.acct-transfer-approve-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.acct-transfer-approve-form__field label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.acct-transfer-approve-select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  font-size: 14px;
+}
+
+.acct-transfer-approve-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  font-size: 14px;
+  min-height: 80px;
+  resize: vertical;
+}
+
+.acct-transfer-approve-modal__footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.acct-transfer-approve-btn-back {
+  background: #6b7280;
+  border: 1px solid #6b7280;
+  color: #fff;
+  border-radius: 6px;
+  padding: 0 24px;
+  height: 40px;
+  cursor: pointer;
+}
+
+.acct-transfer-approve-btn-back:hover {
+  background: #4b5563;
+  border-color: #4b5563;
+}
+
+.acct-transfer-approve-btn-submit {
+  background: #1890ff;
+  border: 1px solid #1890ff;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.acct-transfer-approve-btn-submit:hover {
+  background: #1677ff;
+  border-color: #1677ff;
+}
+
+.acct-transfer-modal__body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.acct-transfer-modal__body::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.acct-transfer-modal__body::-webkit-scrollbar-thumb {
+  background: #919eab;
+  border-radius: 3px;
+}
+
+.acct-transfer-modal__body::-webkit-scrollbar-thumb:hover {
+  background: #7a8693;
+}
+

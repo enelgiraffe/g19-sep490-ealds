@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -12,6 +13,7 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class DamageReportsController : ControllerBase
 {
     private readonly EaldsDbContext _db;
+    private const string DamageReportTitlePrefix = "Damage report -";
 
     public DamageReportsController(EaldsDbContext db)
     {
@@ -30,6 +32,10 @@ public class DamageReportsController : ControllerBase
         if (dto.ReportDate == default)
             return BadRequest("ReportDate is required.");
 
+        var asset = await _db.Assets.FindAsync(dto.AssetId);
+        if (asset == null)
+            return NotFound("Asset not found.");
+
         var assetRequest = new AssetRequest
         {
             UserId = dto.ReportedBy,
@@ -40,13 +46,18 @@ public class DamageReportsController : ControllerBase
             Description = dto.Description,
             // store document reference (if any) in ProposedData so frontend can retrieve it
             ProposedData = dto.DocumentId.HasValue ? dto.DocumentId.Value.ToString() : null,
-            Status = 0,
+            // Submitted to approval flow immediately
+            Status = 1,
             CreatedBy = dto.ReportedBy,
             CreateDate = DateTime.UtcNow,
             StepId = 0
         };
 
         _db.AssetRequests.Add(assetRequest);
+
+        // Mark asset as damaged immediately after reporting
+        asset.Status = (int)AssetStatus.Damaged;
+
         await _db.SaveChangesAsync();
 
         var userRole = await _db.UserRoles.AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.ReportedBy);
@@ -55,8 +66,8 @@ public class DamageReportsController : ControllerBase
         var record = new AssetRequestRecord
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            FromStatus = 0,
-            ToStatus = 0,
+            FromStatus = 1,
+            ToStatus = 1,
             Action = 0,
             ActionByUserId = dto.ReportedBy,
             ActionRoleId = actionRoleId,
@@ -78,5 +89,44 @@ public class DamageReportsController : ControllerBase
         // Return Created pointing to the repair request path where frontend can proceed to create a repair request.
         var location = $"/api/Assets/Requests/repair";
         return Created(location, new { assetRequestId = assetRequest.AssetRequestId });
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var ar = await _db.AssetRequests
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.AssetRequestId == id);
+
+        if (ar == null)
+            return NotFound();
+
+        // Only allow deleting damage-report requests created by this controller
+        if (string.IsNullOrWhiteSpace(ar.Title) || !ar.Title.StartsWith(DamageReportTitlePrefix))
+            return BadRequest("Only damage report requests can be deleted via this endpoint.");
+
+        // Remove children first because FK delete behavior is ClientSetNull (no cascade)
+        var approvals = await _db.Approvals.Where(x => x.AssetRequestId == id).ToListAsync();
+        var records = await _db.AssetRequestRecords.Where(x => x.AssetRequestId == id).ToListAsync();
+        var repairTasks = await _db.RepairTasks.Where(x => x.AssetRequestId == id).ToListAsync();
+        var maintenanceTasks = await _db.MaintenaceTasks.Where(x => x.AssetRequestId == id).ToListAsync();
+        var disposalRecords = await _db.DiposalRecords.Where(x => x.AssetRequestId == id).ToListAsync();
+        var transferRecords = await _db.TransferRecords.Where(x => x.AssetRequestId == id).ToListAsync();
+        var procurements = await _db.Procurements.Where(x => x.AssetRequestId == id).ToListAsync();
+
+        if (approvals.Count > 0) _db.Approvals.RemoveRange(approvals);
+        if (records.Count > 0) _db.AssetRequestRecords.RemoveRange(records);
+        if (repairTasks.Count > 0) _db.RepairTasks.RemoveRange(repairTasks);
+        if (maintenanceTasks.Count > 0) _db.MaintenaceTasks.RemoveRange(maintenanceTasks);
+        if (disposalRecords.Count > 0) _db.DiposalRecords.RemoveRange(disposalRecords);
+        if (transferRecords.Count > 0) _db.TransferRecords.RemoveRange(transferRecords);
+        if (procurements.Count > 0) _db.Procurements.RemoveRange(procurements);
+
+        var tracked = new AssetRequest { AssetRequestId = id };
+        _db.AssetRequests.Attach(tracked);
+        _db.AssetRequests.Remove(tracked);
+
+        await _db.SaveChangesAsync();
+        return Ok(new { assetRequestId = id, deleted = true });
     }
 }

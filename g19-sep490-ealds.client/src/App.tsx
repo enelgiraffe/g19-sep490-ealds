@@ -23,6 +23,8 @@ import { MaintenancePage } from './modules/maintenance/pages/MaintenancePage';
 import { InventoryPage } from './modules/inventory/pages/InventoryPage';
 import { LiquidationPage } from './modules/liquidation/pages/LiquidationPage';
 import { RequestsPage } from './modules/requests/pages/RequestsPage';
+import { CategoriesPage } from './modules/admin/pages/CategoriesPage';
+import { CostRecordingPage } from './modules/cost-recording/pages/CostRecordingPage';
 import './App.css';
 
 function App() {
@@ -69,7 +71,7 @@ function App() {
           <Route path="inventories" element={<InventoryPage />} />
           <Route path="liquidation" element={<LiquidationPage />} />
           <Route path="allocations" element={<ModulePlaceholder title="Cấp phát-Thu hồi" />} />
-          <Route path="cost-recording" element={<ModulePlaceholder title="Ghi nhận chi phí" />} />
+          <Route path="cost-recording" element={<CostRecordingPage />} />
           <Route path="requests" element={<RequestsPage />} />
           <Route path="dashboard" element={<DirectorDashboardPage />} />
           <Route path="approval-detail/:id" element={<ApprovalDetailPage />} />
@@ -78,7 +80,7 @@ function App() {
           <Route path="users" element={<ModulePlaceholder title="Người dùng" />} />
           <Route path="roles" element={<ModulePlaceholder title="Vai trò" />} />
           <Route path="departments" element={<ModulePlaceholder title="Phòng ban" />} />
-          <Route path="categories" element={<ModulePlaceholder title="Danh mục" />} />
+          <Route path="categories" element={<CategoriesPage />} />
           <Route path="approval-workflows" element={<ModulePlaceholder title="Quy trình phê duyệt" />} />
           <Route path="extended-fields" element={<ModulePlaceholder title="Trường mở rộng" />} />
           <Route path="system-settings" element={<ModulePlaceholder title="Cấu hình hệ thống" />} />

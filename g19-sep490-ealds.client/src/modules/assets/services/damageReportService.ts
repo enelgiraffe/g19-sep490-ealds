@@ -82,6 +82,13 @@ export const damageReportService = {
     return response.data;
   },
 
+  async delete(assetRequestId: number): Promise<{ assetRequestId: number; deleted: boolean }> {
+    const response = await damageReportApi.delete<{ assetRequestId: number; deleted: boolean }>(
+      `/api/Assets/Requests/report-damage/${assetRequestId}`
+    );
+    return response.data;
+  },
+
   async list(params?: {
     status?: number;
     requestTypeId?: number;

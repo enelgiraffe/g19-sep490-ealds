@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button, Input, Select } from 'antd';
 import {
   DownloadOutlined,
@@ -7,81 +8,107 @@ import {
   SettingOutlined,
   EyeOutlined,
 } from '@ant-design/icons';
+import { assetService, formatVnd, getStatusLabel, type AssetResponse, type AssetTypeItem } from '../../assets/services/assetService';
 import './LiquidationPage.css';
 
 const { Option } = Select;
 
-type LiquidationStatus = 'stopped' | 'liquidated';
+type LiquidationStatusFilter = 'all' | 'disposed' | 'liquidated';
 
 interface LiquidationRow {
-  id: string;
+  id: number;
   assetCode: string;
   assetName: string;
   assetType: string;
+  assetTypeId?: number | null;
   quantity: number;
   originalPrice: string;
   depreciationValue: string;
-  status: LiquidationStatus;
+  statusName: string;
 }
 
-function getStatusLabel(status: LiquidationStatus): string {
-  if (status === 'stopped') return 'Dừng sử dụng';
-  return 'Đã thanh lý';
+function toRow(a: AssetResponse): LiquidationRow {
+  return {
+    id: a.assetId,
+    assetCode: a.code,
+    assetName: a.name,
+    assetType: a.assetTypeName ?? '—',
+    assetTypeId: a.assetTypeId ?? null,
+    quantity: a.quantity ?? 1,
+    originalPrice: formatVnd(a.originalPrice ?? 0),
+    depreciationValue: formatVnd(a.currentValue ?? 0),
+    statusName: a.statusName ?? '',
+  };
 }
 
 export function LiquidationPage() {
   const [search, setSearch] = useState('');
-  const [assetTypeFilter, setAssetTypeFilter] = useState<'all' | string>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | LiquidationStatus>('all');
+  const [assetTypeFilter, setAssetTypeFilter] = useState<'all' | number>('all');
+  const [statusFilter, setStatusFilter] = useState<LiquidationStatusFilter>('all');
+  const [assets, setAssets] = useState<AssetResponse[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [assetTypes, setAssetTypes] = useState<AssetTypeItem[]>([]);
+  const navigate = useNavigate();
 
-  const allData: LiquidationRow[] = useMemo(
-    () => [
-      {
-        id: '1',
-        assetCode: 'MCS',
-        assetName: 'Máy cắt sắt',
-        assetType: 'Cơ khí',
-        quantity: 1,
-        originalPrice: '910,000,000 đ',
-        depreciationValue: '910,000,000 đ',
-        status: 'stopped',
-      },
-      {
-        id: '2',
-        assetCode: 'MUV',
-        assetName: 'Máy uốn vòm',
-        assetType: 'Cơ khí',
-        quantity: 1,
-        originalPrice: '500,000,000 đ',
-        depreciationValue: '500,000,000 đ',
-        status: 'liquidated',
-      },
-      {
-        id: '3',
-        assetCode: 'FSF90',
-        assetName: 'Ôtô Ferrari SF90',
-        assetType: 'Máy móc',
-        quantity: 1,
-        originalPrice: '34,000,500,000,000 đ',
-        depreciationValue: '34,000,500,000,000 đ',
-        status: 'liquidated',
-      },
-    ],
-    []
-  );
+  useEffect(() => {
+    async function loadAssetTypes() {
+      try {
+        const items = await assetService.getAssetTypes();
+        setAssetTypes(items);
+      } catch {
+        setAssetTypes([]);
+      }
+    }
+    loadAssetTypes();
+  }, []);
+
+  useEffect(() => {
+    async function loadDisposedAssets() {
+      setLoading(true);
+      setError(null);
+      try {
+        // Backend enum: Disposed=4, Liquidated=6 (cả hai đều là "Đã thanh lý" ở UI)
+        const [disposed, liquidated] = await Promise.all([
+          assetService.getAll({ status: 4 }),
+          assetService.getAll({ status: 6 }),
+        ]);
+
+        const merged = [...disposed, ...liquidated];
+        const map = new Map<number, AssetResponse>();
+        for (const a of merged) map.set(a.assetId, a);
+        setAssets(Array.from(map.values()));
+      } catch {
+        setError('Không tải được danh sách tài sản đã thanh lý. Kiểm tra kết nối backend.');
+        setAssets([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadDisposedAssets();
+  }, []);
+
+  const allRows: LiquidationRow[] = useMemo(() => {
+    return (assets ?? []).map(toRow);
+  }, [assets]);
 
   const filteredData = useMemo(() => {
-    return allData.filter((row) => {
+    return allRows.filter((row) => {
       const matchSearch =
         !search ||
         row.assetCode.toLowerCase().includes(search.toLowerCase()) ||
         row.assetName.toLowerCase().includes(search.toLowerCase());
       const matchType =
-        assetTypeFilter === 'all' || row.assetType.toLowerCase() === assetTypeFilter.toLowerCase();
-      const matchStatus = statusFilter === 'all' || row.status === statusFilter;
+        assetTypeFilter === 'all' || row.assetTypeId === assetTypeFilter;
+      const isDisposed = row.statusName === 'Disposed';
+      const isLiquidated = row.statusName === 'Liquidated';
+      const matchStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'disposed' && isDisposed) ||
+        (statusFilter === 'liquidated' && isLiquidated);
       return matchSearch && matchType && matchStatus;
     });
-  }, [allData, search, assetTypeFilter, statusFilter]);
+  }, [allRows, search, assetTypeFilter, statusFilter]);
 
   const total = filteredData.length;
 
@@ -107,8 +134,11 @@ export function LiquidationPage() {
               onChange={(v) => setAssetTypeFilter(v)}
             >
               <Option value="all">Tất cả loại tài sản</Option>
-              <Option value="Cơ khí">Cơ khí</Option>
-              <Option value="Máy móc">Máy móc</Option>
+              {assetTypes.map((t) => (
+                <Option key={t.assetTypeId} value={t.assetTypeId}>
+                  {t.name}
+                </Option>
+              ))}
             </Select>
             <Select
               placeholder="Tình trạng"
@@ -118,8 +148,8 @@ export function LiquidationPage() {
               onChange={(v) => setStatusFilter(v)}
             >
               <Option value="all">Tất cả tình trạng</Option>
-              <Option value="stopped">Dừng sử dụng</Option>
-              <Option value="liquidated">Đã thanh lý</Option>
+              <Option value="disposed">Đã thanh lý (Disposed)</Option>
+              <Option value="liquidated">Đã thanh lý (Liquidated)</Option>
             </Select>
             <Button
               icon={<FilterOutlined />}
@@ -159,7 +189,19 @@ export function LiquidationPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredData.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={9} className="liquidation-table-empty">
+                    Đang tải dữ liệu...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={9} className="liquidation-table-empty">
+                    {error}
+                  </td>
+                </tr>
+              ) : filteredData.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="liquidation-table-empty">
                     Không có dữ liệu.
@@ -180,16 +222,20 @@ export function LiquidationPage() {
                     <td>
                       <span
                         className={
-                          row.status === 'liquidated'
-                            ? 'asset-status-pill asset-status-pill--active'
+                          row.statusName === 'Disposed' || row.statusName === 'Liquidated'
+                            ? 'asset-status-pill asset-status-pill--inactive'
                             : 'asset-status-pill asset-status-pill--inactive'
                         }
                       >
-                        {getStatusLabel(row.status)}
+                        {getStatusLabel(row.statusName)}
                       </span>
                     </td>
                     <td className="asset-table__cell asset-table__cell--actions">
-                      <Button type="text" icon={<EyeOutlined />} />
+                      <Button
+                        type="text"
+                        icon={<EyeOutlined />}
+                        onClick={() => navigate(`/assets/${row.id}`)}
+                      />
                     </td>
                   </tr>
                 ))

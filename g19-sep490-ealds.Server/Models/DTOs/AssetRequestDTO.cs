@@ -17,4 +17,10 @@ public class AssetRequestDTO
     public string? ProposedData { get; set; }
 
     public int CreatedBy { get; set; }
+
+    /// <summary>
+    /// Optional status for creation flow.
+    /// -1: Draft, 0: Submitted/Pending approval (default)
+    /// </summary>
+    public int? Status { get; set; }
 }

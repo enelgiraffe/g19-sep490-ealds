@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { transferRequestService, type AssetLocationOption } from '../services/transferRequestService';
+import { SelectAssetsModal, type SelectableAsset } from './SelectAssetsModal';
 import './TransferAssetModal.css';
 
 interface AssetInfo {
+  assetId?: number;
   code: string;
   name: string;
   type: string;
@@ -15,6 +17,7 @@ interface AssetInfo {
   status: string;
   admissionDate: string;
   department: string;
+  currentDepartmentId?: number | null;
 }
 
 interface TransferAssetModalProps {
@@ -23,6 +26,7 @@ interface TransferAssetModalProps {
   onSubmit: (values: any) => void;
   assetInfo: AssetInfo | null;
   fromDepartmentId?: number | null;
+  mode?: 'location' | 'department';
 }
 
 export function TransferAssetModal({
@@ -31,6 +35,7 @@ export function TransferAssetModal({
   onSubmit,
   assetInfo,
   fromDepartmentId,
+  mode = 'location',
 }: TransferAssetModalProps) {
   const [locations, setLocations] = useState<AssetLocationOption[]>([]);
   const [locationsLoading, setLocationsLoading] = useState(false);
@@ -41,6 +46,8 @@ export function TransferAssetModal({
   const [dateError, setDateError] = useState<string | null>(null);
   const [fromError, setFromError] = useState<string | null>(null);
   const [toError, setToError] = useState<string | null>(null);
+  const [isSelectAssetsOpen, setIsSelectAssetsOpen] = useState(false);
+  const [selectedAssets, setSelectedAssets] = useState<SelectableAsset[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -61,6 +68,7 @@ export function TransferAssetModal({
       setDateError(null);
       setFromError(null);
       setToError(null);
+      setSelectedAssets([]);
       if (fromDepartmentId != null) {
         setFromLocationId(String(fromDepartmentId));
       } else {
@@ -70,18 +78,38 @@ export function TransferAssetModal({
     }
   }, [open, fromDepartmentId]);
 
+  useEffect(() => {
+    if (!open) return;
+    if (assetInfo) {
+      const mapped: SelectableAsset = {
+        assetId: assetInfo.assetId ?? -1,
+        code: assetInfo.code,
+        name: assetInfo.name,
+        locationLabel: assetInfo.location ?? '—',
+        statusLabel: assetInfo.status ?? '—',
+        quantity: 1,
+        currentDepartmentName: assetInfo.department ?? '—',
+        currentDepartmentId: assetInfo.currentDepartmentId ?? null,
+      };
+      if (mapped.assetId > 0) setSelectedAssets([mapped]);
+    }
+  }, [open, assetInfo]);
+
   const handleSubmit = () => {
     let hasError = false;
     if (!transferDate) {
       setDateError('Vui lòng chọn ngày điều chuyển');
       hasError = true;
     }
+    if (!assetInfo && selectedAssets.length === 0) {
+      hasError = true;
+    }
     if (!fromLocationId) {
-      setFromError('Chọn vị trí nguồn');
+      setFromError(mode === 'department' ? 'Chọn phòng ban nguồn' : 'Chọn vị trí nguồn');
       hasError = true;
     }
     if (!toLocationId) {
-      setToError('Chọn vị trí đích');
+      setToError(mode === 'department' ? 'Chọn phòng ban đích' : 'Chọn vị trí đích');
       hasError = true;
     }
     if (hasError) return;
@@ -93,6 +121,7 @@ export function TransferAssetModal({
       reason: reason.trim() || undefined,
       fromLocationId,
       toLocationId,
+      assetIds: selectedAssets.map((a) => a.assetId).filter((id) => id > 0),
     });
     onClose();
   };
@@ -162,11 +191,14 @@ export function TransferAssetModal({
           </div>
 
           <div className="transfer-form__section transfer-form__section--locations">
-            <h3 className="transfer-section-title">Điều chuyển</h3>
+            <h3 className="transfer-section-title">
+              {mode === 'department' ? 'Chuyển phòng ban sử dụng' : 'Điều chuyển'}
+            </h3>
             <div className="transfer-form__row">
               <div className="transfer-form__item">
                 <label htmlFor="transfer-from-location">
-                  Từ vị trí<span className="transfer-required">*</span>
+                  {mode === 'department' ? 'Từ phòng ban' : 'Từ vị trí'}
+                  <span className="transfer-required">*</span>
                 </label>
                 <select
                   id="transfer-from-location"
@@ -178,7 +210,9 @@ export function TransferAssetModal({
                     setFromError(null);
                   }}
                 >
-                  <option value="">Chọn vị trí hiện tại</option>
+                  <option value="">
+                    {mode === 'department' ? 'Chọn phòng ban nguồn' : 'Chọn vị trí hiện tại'}
+                  </option>
                   {locations.map((loc) => (
                     <option key={loc.locationId} value={loc.locationId}>
                       {loc.displayName}
@@ -190,7 +224,8 @@ export function TransferAssetModal({
 
               <div className="transfer-form__item">
                 <label htmlFor="transfer-to-location">
-                  Đến vị trí<span className="transfer-required">*</span>
+                  {mode === 'department' ? 'Đến phòng ban' : 'Đến vị trí'}
+                  <span className="transfer-required">*</span>
                 </label>
                 <select
                   id="transfer-to-location"
@@ -202,7 +237,9 @@ export function TransferAssetModal({
                     setToError(null);
                   }}
                 >
-                  <option value="">Chọn vị trí chuyển đến</option>
+                  <option value="">
+                    {mode === 'department' ? 'Chọn phòng ban đích' : 'Chọn vị trí chuyển đến'}
+                  </option>
                   {locations.map((loc) => (
                     <option key={loc.locationId} value={loc.locationId}>
                       {loc.displayName}
@@ -216,7 +253,16 @@ export function TransferAssetModal({
 
           <div className="transfer-form__section">
             <h3 className="transfer-section-title">Tài sản được chuyển</h3>
-            {assetInfo ? (
+            <div className="transfer-asset-actions">
+              <button
+                type="button"
+                className="transfer-btn-pick-asset"
+                onClick={() => setIsSelectAssetsOpen(true)}
+              >
+                Chọn tài sản
+              </button>
+            </div>
+            {selectedAssets.length > 0 ? (
               <div className="transfer-asset-table">
                 <table>
                   <thead>
@@ -231,15 +277,17 @@ export function TransferAssetModal({
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>1</td>
-                      <td>{assetInfo.code}</td>
-                      <td>{assetInfo.name}</td>
-                      <td>{assetInfo.location}</td>
-                      <td>{assetInfo.status}</td>
-                      <td>1</td>
-                      <td>{assetInfo.department}</td>
-                    </tr>
+                    {selectedAssets.map((a, idx) => (
+                      <tr key={a.assetId}>
+                        <td>{idx + 1}</td>
+                        <td>{a.code}</td>
+                        <td>{a.name}</td>
+                        <td>{a.locationLabel}</td>
+                        <td>{a.statusLabel}</td>
+                        <td>1</td>
+                        <td>{a.currentDepartmentName}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -282,6 +330,21 @@ export function TransferAssetModal({
           </button>
         </div>
       </div>
+
+      <SelectAssetsModal
+        open={isSelectAssetsOpen}
+        onClose={() => setIsSelectAssetsOpen(false)}
+        initialSelectedIds={selectedAssets.map((a) => a.assetId)}
+        enforceSameDepartment
+        onConfirm={(assets) => {
+          setSelectedAssets(assets);
+          const deptIds = Array.from(new Set(assets.map((a) => a.currentDepartmentId).filter((x) => x != null)));
+          if (deptIds.length === 1) {
+            setFromLocationId(String(deptIds[0]));
+            setFromError(null);
+          }
+        }}
+      />
     </div>
   );
 }

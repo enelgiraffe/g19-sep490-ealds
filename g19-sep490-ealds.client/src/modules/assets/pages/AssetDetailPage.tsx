@@ -6,6 +6,8 @@ import {
   getStatusLabel,
   type AssetResponse,
 } from '../services/assetService';
+import { profileService, type UserProfile } from '../../profile/services/profileService';
+import { mapBackendRoleToAppRole } from '../../auth/types/auth.types';
 import './AssetDetailPage.css';
 
 function formatDate(iso?: string | null): string {
@@ -24,6 +26,20 @@ export function AssetDetailPage() {
   const [asset, setAsset] = useState<AssetResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  const storedRole = (() => {
+    const raw = localStorage.getItem('user');
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as { role?: string | null };
+      return parsed.role ?? null;
+    } catch {
+      return null;
+    }
+  })();
+
+  const isAccountant = mapBackendRoleToAppRole(profile?.role ?? storedRole) === 'accountant';
 
   useEffect(() => {
     if (!id || Number.isNaN(id)) {
@@ -34,17 +50,22 @@ export function AssetDetailPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    assetService
-      .getById(id)
-      .then((data) => {
-        if (!cancelled) setAsset(data);
-      })
-      .catch(() => {
+    async function load() {
+      try {
+        const [assetRes, profileRes] = await Promise.all([
+          assetService.getById(id),
+          profileService.getProfile().catch(() => null),
+        ]);
+        if (cancelled) return;
+        setAsset(assetRes);
+        if (profileRes) setProfile(profileRes);
+      } catch {
         if (!cancelled) setError('Không tải được thông tin tài sản.');
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    }
+    load();
     return () => {
       cancelled = true;
     };
@@ -54,7 +75,7 @@ export function AssetDetailPage() {
     return (
       <div className="asset-detail-page">
         <div className="asset-detail__header">
-          <Link to="/assets" className="asset-detail__back">
+          <Link to={isAccountant ? '/accountant-assets' : '/assets'} className="asset-detail__back">
             ← Tất cả tài sản
           </Link>
         </div>
@@ -69,7 +90,10 @@ export function AssetDetailPage() {
     return (
       <div className="asset-detail-page">
         <div className="asset-detail__header">
-          <Link to="/assets" className="asset-detail__back">
+          <Link
+            to={isAccountant ? '/accountant-assets' : '/assets'}
+            className="asset-detail__back"
+          >
             ← Quay lại danh sách tài sản
           </Link>
         </div>
@@ -111,12 +135,27 @@ export function AssetDetailPage() {
   return (
     <div className="asset-detail-page">
       <div className="asset-detail__header">
-        <Link to="/assets" className="asset-detail__back">
+        <Link
+          to={isAccountant ? '/accountant-assets' : '/assets'}
+          className="asset-detail__back"
+        >
           ← Tất cả tài sản
         </Link>
         <div className="asset-detail__title-row">
-          <h1 className="asset-detail__title">{asset.name}</h1>
-          <span className="asset-detail__status">{statusLabel}</span>
+          <div className="asset-detail__title-group">
+            <h1 className="asset-detail__title">{asset.name}</h1>
+            <span className="asset-detail__status">{statusLabel}</span>
+          </div>
+          {isAccountant && (
+            <div className="asset-detail__actions">
+              <Link
+                to={`/assets/${asset.assetId}/edit`}
+                className="asset-detail__btn asset-detail__btn--primary"
+              >
+                ✏️ Chỉnh sửa
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 
@@ -152,8 +191,8 @@ export function AssetDetailPage() {
             </div>
             <div className="asset-detail__info-col">
               <div className="asset-detail__info-row">
-                <span className="label">Vị trí tài sản</span>
-                <span className="value">{asset.warehouseName ?? '—'}</span>
+                <span className="label">Phòng ban sử dụng</span>
+                <span className="value">{asset.currentDepartmentName ?? '—'}</span>
               </div>
               <div className="asset-detail__info-row">
                 <span className="label">Ngày mua</span>

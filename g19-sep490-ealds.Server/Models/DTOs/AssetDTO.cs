@@ -96,6 +96,7 @@ public class AssetResponseDTO
     /// <summary>
     /// Phòng ban hiện tại đang sử dụng tài sản (nếu có bản ghi AssetLocation IsCurrent).
     /// </summary>
+    public int? CurrentLocationId { get; set; }
     public int? CurrentDepartmentId { get; set; }
     public string? CurrentDepartmentName { get; set; }
 

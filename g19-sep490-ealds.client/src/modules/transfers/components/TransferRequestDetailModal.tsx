@@ -10,8 +10,8 @@ const STATUS_MAP: Record<
 > = {
   0: { label: 'Nháp', color: 'default' },
   1: { label: 'Đã nộp', color: 'processing' },
-  2: { label: 'Hợp lệ', color: 'success' },
-  3: { label: 'Chờ phê duyệt', color: 'warning' },
+  2: { label: 'Chờ phê duyệt', color: 'warning' },
+  3: { label: 'Từ chối', color: 'error' },
   4: { label: 'Phê duyệt', color: 'success' },
 };
 

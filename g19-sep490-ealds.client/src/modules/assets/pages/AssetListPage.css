@@ -114,13 +114,14 @@
 }
 
 .asset-table-wrapper {
-  overflow: hidden;
+  overflow: auto;
   flex: 1;
   min-height: 0;
 }
 
 .asset-table {
   width: 100%;
+  min-width: 980px;
   border-collapse: collapse;
   font-size: 13px;
 }
@@ -194,6 +195,22 @@
 .asset-status-pill--inactive {
   background: #919EAB;
   color: #FFFFFF;
+}
+
+/* Purchase/Request status variants */
+.asset-status-pill--processing {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.asset-status-pill--warning {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.asset-status-pill--danger {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 .asset-row__more {

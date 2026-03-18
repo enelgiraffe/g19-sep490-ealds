@@ -21,6 +21,7 @@ export function BasicInfoTab() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [initialValues, setInitialValues] = useState<Partial<BasicInfoFormValues> | null>(null);
 
   const loadProfile = async () => {
     try {
@@ -37,6 +38,7 @@ export function BasicInfoTab() {
         address: profile.address ?? undefined,
       };
       form.setFieldsValue(values);
+      setInitialValues(values);
     } catch (error: any) {
       const errorMessage = error?.response?.data?.message || 'Không thể tải thông tin hồ sơ.';
       message.error(errorMessage);
@@ -63,7 +65,7 @@ export function BasicInfoTab() {
 
       const updated = await profileService.updateProfile(payload);
 
-      form.setFieldsValue({
+      const updatedValues: Partial<BasicInfoFormValues> = {
         email: updated.email,
         fullName: updated.name,
         birthday: updated.dob ? dayjs(updated.dob) : undefined,
@@ -72,7 +74,10 @@ export function BasicInfoTab() {
         department: updated.departmentName ?? undefined,
         phone: updated.phone ?? undefined,
         address: updated.address ?? undefined,
-      });
+      };
+
+      form.setFieldsValue(updatedValues);
+      setInitialValues(updatedValues);
 
       message.success('Cập nhật hồ sơ thành công.');
       setEditing(false);
@@ -88,6 +93,20 @@ export function BasicInfoTab() {
 
   const isReadOnly = !editing;
 
+  const handleToggleEdit = () => {
+    if (!editing) {
+      setEditing(true);
+      return;
+    }
+
+    if (initialValues) {
+      form.setFieldsValue(initialValues);
+    } else {
+      form.resetFields();
+    }
+    setEditing(false);
+  };
+
   return (
     <div className="basic-info-tab">
       <div className="basic-info-tab__header">
@@ -95,7 +114,7 @@ export function BasicInfoTab() {
           type="primary"
           icon={<span>✏️</span>}
           className="basic-info-tab__edit-btn"
-          onClick={() => setEditing((prev) => !prev)}
+          onClick={handleToggleEdit}
         >
           {editing ? 'Hủy' : 'Chỉnh sửa'}
         </Button>
@@ -132,11 +151,31 @@ export function BasicInfoTab() {
           </div>
 
           <div className="basic-info-form__row">
-            <Form.Item label="Ngày tháng năm sinh" name="birthday" className="basic-info-form__item">
+            <Form.Item
+              label="Ngày tháng năm sinh"
+              name="birthday"
+              className="basic-info-form__item"
+              rules={[
+                {
+                  validator: (_, value: Dayjs | undefined) => {
+                    if (!value) return Promise.resolve();
+                    if (value.isAfter(dayjs(), 'day')) {
+                      return Promise.reject(
+                        new Error('Ngày sinh không được lớn hơn ngày hiện tại'),
+                      );
+                    }
+                    return Promise.resolve();
+                  },
+                },
+              ]}
+            >
               <DatePicker
                 style={{ width: '100%' }}
                 format="DD/MM/YYYY"
                 placeholder="Chọn ngày sinh"
+                disabledDate={(current) =>
+                  !!current && current.endOf('day').isAfter(dayjs().endOf('day'))
+                }
                 disabled={isReadOnly}
               />
             </Form.Item>
@@ -152,8 +191,17 @@ export function BasicInfoTab() {
               className="basic-info-form__item"
               rules={[
                 {
-                  pattern: /^[0-9+()\-.\s]*$/,
-                  message: 'Số điện thoại không hợp lệ',
+                  validator: (_, value: string | undefined) => {
+                    if (!value) return Promise.resolve();
+                    const trimmed = value.trim();
+                    const phoneRegex = /^\d{11}$/;
+                    if (!phoneRegex.test(trimmed)) {
+                      return Promise.reject(
+                        new Error('Số điện thoại không hợp lệ. Vui lòng nhập đúng 11 chữ số.'),
+                      );
+                    }
+                    return Promise.resolve();
+                  },
                 },
               ]}
             >

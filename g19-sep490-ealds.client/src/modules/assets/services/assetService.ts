@@ -26,7 +26,9 @@ export type AssetStatus =
   | 'Reserved'
   | 'Disposed'
   | 'Lost'
-  | 'Liquidated';
+  | 'Liquidated'
+  | 'Capitalized'
+  | 'Damaged';
 
 export interface MaintenanceSchedule {
   scheduleId: number;
@@ -59,6 +61,7 @@ export interface AssetResponse {
   warehouseId: number;
   warehouseName?: string | null;
   createdBy: number;
+  currentLocationId?: number | null;
   currentDepartmentId?: number | null;
   currentDepartmentName?: string | null;
 
@@ -148,6 +151,8 @@ export function getStatusLabel(statusName: string): string {
     Disposed: 'Đã thanh lý',
     Lost: 'Mất',
     Liquidated: 'Đã thanh lý',
+    Capitalized: 'Đã vốn hoá',
+    Damaged: 'Đã hỏng',
   };
   return map[statusName] ?? statusName;
 }

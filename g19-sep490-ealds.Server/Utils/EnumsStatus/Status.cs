@@ -18,7 +18,8 @@ public enum AssetStatus
     Disposed = 4,
     Lost = 5,
     Liquidated = 6,
-    Capitalized = 7
+    Capitalized = 7,
+    Damaged = 8
 }
 
 public enum AssetLifeActionType
@@ -36,7 +37,8 @@ public enum InventorySessionStatus
     Draft = 0,
     InProgress = 1,
     Completed = 2,
-    Cancelled = 3
+    Cancelled = 3,
+    Confirmed = 4
 }
 
 public enum InventoryTaskStatus

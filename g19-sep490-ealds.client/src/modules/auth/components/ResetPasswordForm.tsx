@@ -43,7 +43,7 @@ export const ResetPasswordForm = () => {
 
       <h1 className="reset-password-title">Đặt lại mật khẩu</h1>
       <p className="reset-password-description">
-        Nhập mật khẩu mới (ít nhất 6 ký tự) và xác nhận.
+        Nhập mật khẩu mới (ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt) và xác nhận.
       </p>
 
       <Form
@@ -58,7 +58,11 @@ export const ResetPasswordForm = () => {
           label="Mật khẩu mới"
           rules={[
             { required: true, message: 'Vui lòng nhập mật khẩu mới.' },
-            { min: 6, message: 'Mật khẩu phải có ít nhất 6 ký tự.' },
+            { min: 8, message: 'Mật khẩu phải có ít nhất 8 ký tự.' },
+            {
+              pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d]).{8,}$/,
+              message: 'Mật khẩu phải bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt.',
+            },
           ]}
         >
           <Input.Password

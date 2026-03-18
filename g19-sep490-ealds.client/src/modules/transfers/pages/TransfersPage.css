@@ -174,3 +174,19 @@
   cursor: default;
 }
 
+/* Status pill variants (ensure "Đã gửi" has color) */
+.asset-status-pill--processing {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.asset-status-pill--warning {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.asset-status-pill--danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+

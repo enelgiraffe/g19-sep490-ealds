@@ -89,4 +89,11 @@ export const maintenanceRequestService = {
     );
     return response.data;
   },
+
+  /**
+   * Xóa đề xuất bảo dưỡng theo AssetRequestId (chỉ khi chưa duyệt).
+   */
+  async remove(assetRequestId: number): Promise<void> {
+    await maintenanceApi.delete(`/api/Assets/Requests/maintenance/${assetRequestId}`);
+  },
 };

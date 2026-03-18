@@ -3,6 +3,7 @@ namespace g19_sep490_ealds.Server.Models.DTOs;
 public class AssetRequestListItemDTO
 {
     public int AssetRequestId { get; set; }
+    public int? AssetId { get; set; }
     public string Title { get; set; } = null!;
     public string? Description { get; set; }
     public string? ProposedData { get; set; }

@@ -76,4 +76,32 @@ export const directorRequestService = {
     );
     return response.data;
   },
+
+  async approve(
+    id: number,
+    payload: { approvedBy: number; comment?: string | null },
+  ): Promise<{ assetRequestId: number; status: number }> {
+    const response = await directorApi.post<{ assetRequestId: number; status: number }>(
+      `/api/Assets/Requests/director/${id}/approve`,
+      {
+        approvedBy: payload.approvedBy,
+        comment: payload.comment ?? null,
+      },
+    );
+    return response.data;
+  },
+
+  async reject(
+    id: number,
+    payload: { approvedBy: number; comment?: string | null },
+  ): Promise<{ assetRequestId: number; status: number }> {
+    const response = await directorApi.post<{ assetRequestId: number; status: number }>(
+      `/api/Assets/Requests/director/${id}/reject`,
+      {
+        approvedBy: payload.approvedBy,
+        comment: payload.comment ?? null,
+      },
+    );
+    return response.data;
+  },
 };

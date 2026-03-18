@@ -18,9 +18,10 @@ purchaseApi.interceptors.request.use((config) => {
   return config;
 });
 
-/** Backend Status: 0=Chờ duyệt, 1=Đã duyệt, 2=Từ chối, 3=Chờ ngân sách (map theo UI) */
+/** Backend Status: -1=Nháp, 0=Đã gửi (kế toán), 1=Chờ duyệt (giám đốc), 2=Duyệt, 3=Từ chối, 4=Chờ ngân sách */
 export interface PurchaseOrderListItem {
   assetRequestId: number;
+  assetId?: number | null;
   title: string;
   description: string | null;
   proposedData: string | null;
@@ -39,6 +40,8 @@ export interface CreatePurchaseOrderPayload {
   description?: string | null;
   proposedData?: string | null;
   createdBy: number;
+  /** -1: Draft, 0: Submitted/Pending approval (default) */
+  status?: number | null;
 }
 
 export const purchaseOrderService = {
@@ -61,6 +64,14 @@ export const purchaseOrderService = {
   async create(payload: CreatePurchaseOrderPayload): Promise<{ assetRequestId: number }> {
     const response = await purchaseApi.post<{ assetRequestId: number }>(
       '/api/Assets/Requests/purchase',
+      payload
+    );
+    return response.data;
+  },
+
+  async update(id: number, payload: CreatePurchaseOrderPayload): Promise<{ assetRequestId: number }> {
+    const response = await purchaseApi.put<{ assetRequestId: number }>(
+      `/api/Assets/Requests/purchase/${id}`,
       payload
     );
     return response.data;

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
 
@@ -13,13 +14,25 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class AccountantApproveController : ControllerBase
 {
     private readonly EaldsDbContext _db;
-    public AccountantApproveController(EaldsDbContext db) => _db = db;
+    private readonly int _transferRequestTypeId;
+
+    public AccountantApproveController(EaldsDbContext db, IConfiguration configuration)
+    {
+        _db = db;
+        _transferRequestTypeId = configuration.GetValue<int>("App:TransferRequestTypeId", 3);
+    }
 
     [HttpPost("{id}/approve")]
     public async Task<IActionResult> Approve(int id, [FromBody] ApprovalActionDto dto)
     {
         var ar = await _db.AssetRequests.FindAsync(id);
         if (ar==null) return NotFound();
+        var fromStatus = ar.Status;
+        var isTransfer =
+            ar.RequestTypeId == _transferRequestTypeId
+            || await _db.TransferRecords.AsNoTracking().AnyAsync(tr => tr.AssetRequestId == ar.AssetRequestId);
+        if (!(ar.Status == 0 || (isTransfer && ar.Status == 1)))
+            return BadRequest("Only requests with status=0 (Sent) can be approved by accountant.");
 
         var rt = await _db.RequestTypes.FindAsync(ar.RequestTypeId);
         int workflowId = rt?.WorkflowId ?? 0;
@@ -29,11 +42,12 @@ public class AccountantApproveController : ControllerBase
         if (ar.StepId==0) currentStep = steps.FirstOrDefault();
         else currentStep = steps.FirstOrDefault(s=>s.StepId==ar.StepId) ?? steps.FirstOrDefault();
 
-        if (currentStep==null)
-        {
-            ar.Status = 1; ar.ApproveDate = DateTime.UtcNow;
-        }
-        else
+        // Accounting approval:
+        // - Purchase/etc: forward to director (waiting director decision) => 0 -> 1
+        // - Transfer: mark as valid for next step (as per transfer status map) => 1 -> 2
+        ar.Status = isTransfer ? 2 : 1;
+        ar.ApproveDate = null;
+        if (currentStep != null)
         {
             var userRole = await _db.UserRoles.AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.ApprovedBy);
             var approval = new Approval
@@ -47,22 +61,12 @@ public class AccountantApproveController : ControllerBase
                 Comment = dto.Comment
             };
             _db.Approvals.Add(approval);
-
-            if (currentStep.IsFinalStep)
-            {
-                ar.Status = 1; ar.ApproveDate = DateTime.UtcNow;
-            }
-            else
-            {
-                var next = steps.FirstOrDefault(s => s.StepOrder > currentStep.StepOrder);
-                if (next!=null) ar.StepId = next.StepId; else { ar.Status = 1; ar.ApproveDate = DateTime.UtcNow; }
-            }
         }
 
         var record = new AssetRequestRecord
         {
             AssetRequestId = ar.AssetRequestId,
-            FromStatus = 0,
+            FromStatus = fromStatus,
             ToStatus = ar.Status,
             Action = 1,
             ActionByUserId = dto.ApprovedBy,

@@ -18,7 +18,10 @@ public class AccountantViewController : ControllerBase
     [HttpGet("view")]
     public async Task<IActionResult> Get([FromQuery] string? requestTypeIds, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var query = _db.AssetRequests.AsNoTracking().AsQueryable();
+        var query = _db.AssetRequests
+            .AsNoTracking()
+            .Where(ar => ar.Status != -1) // accountant should not see drafts
+            .AsQueryable();
         if (!string.IsNullOrWhiteSpace(requestTypeIds))
         {
             var ids = requestTypeIds.Split(',').Select(s => { int.TryParse(s.Trim(), out var v); return v; }).Where(v => v>0).ToArray();
