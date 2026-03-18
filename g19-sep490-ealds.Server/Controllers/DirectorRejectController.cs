@@ -33,13 +33,13 @@ public class DirectorRejectController : ControllerBase
         };
         _db.Approvals.Add(approval);
 
-        ar.Status = 2; // rejected
+        ar.Status = (int)AssetRequestStatus.Rejected; // rejected
         ar.ApproveDate = DateTime.UtcNow;
 
         var record = new AssetRequestRecord
         {
             AssetRequestId = ar.AssetRequestId,
-            FromStatus = 0,
+            FromStatus = (int)AssetRequestStatus.Draft,
             ToStatus = ar.Status,
             Action = 2,
             ActionByUserId = dto.ApprovedBy,

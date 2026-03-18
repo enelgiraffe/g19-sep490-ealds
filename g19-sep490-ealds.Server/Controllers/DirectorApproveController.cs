@@ -33,12 +33,12 @@ public class DirectorApproveController : ControllerBase
         };
         _db.Approvals.Add(approval);
 
-        ar.Status = 1; ar.ApproveDate = DateTime.UtcNow;
+        ar.Status = (int)AssetRequestStatus.Approved; ar.ApproveDate = DateTime.UtcNow;
 
         var record = new AssetRequestRecord
         {
             AssetRequestId = ar.AssetRequestId,
-            FromStatus = 0,
+            FromStatus = (int)AssetRequestStatus.Draft,
             ToStatus = ar.Status,
             Action = 1,
             ActionByUserId = dto.ApprovedBy,

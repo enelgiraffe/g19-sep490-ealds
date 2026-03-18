@@ -33,12 +33,12 @@ public class AccountantRejectController : ControllerBase
         };
         _db.Approvals.Add(approval);
 
-        ar.Status = 2; ar.ApproveDate = DateTime.UtcNow;
+        ar.Status = (int)AssetRequestStatus.Rejected; ar.ApproveDate = DateTime.UtcNow;
 
         var record = new AssetRequestRecord
         {
             AssetRequestId = ar.AssetRequestId,
-            FromStatus = 0,
+            FromStatus = (int)AssetRequestStatus.Draft,
             ToStatus = ar.Status,
             Action = 2,
             ActionByUserId = dto.ApprovedBy,

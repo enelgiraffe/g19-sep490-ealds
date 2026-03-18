@@ -34,7 +34,7 @@ public class TransferRequestsController : ControllerBase
             Title = title,
             Description = dto.Description,
             ProposedData = null,
-            Status = 0,
+            Status = (int)AssetRequestStatus.Draft,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow,
             StepId = 0
@@ -63,8 +63,8 @@ public class TransferRequestsController : ControllerBase
         var record = new AssetRequestRecord
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            FromStatus = 0,
-            ToStatus = 0,
+            FromStatus = (int)AssetRequestStatus.Draft,
+            ToStatus = (int)AssetRequestStatus.Draft,
             Action = 0,
             ActionByUserId = dto.CreatedBy,
             ActionRoleId = actionRoleId,

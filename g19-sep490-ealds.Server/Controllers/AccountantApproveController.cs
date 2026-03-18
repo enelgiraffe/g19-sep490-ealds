@@ -31,7 +31,7 @@ public class AccountantApproveController : ControllerBase
 
         if (currentStep==null)
         {
-            ar.Status = 1; ar.ApproveDate = DateTime.UtcNow;
+            ar.Status = (int)AssetRequestStatus.Approved; ar.ApproveDate = DateTime.UtcNow;
         }
         else
         {
@@ -50,19 +50,19 @@ public class AccountantApproveController : ControllerBase
 
             if (currentStep.IsFinalStep)
             {
-                ar.Status = 1; ar.ApproveDate = DateTime.UtcNow;
+                ar.Status = (int)AssetRequestStatus.Approved; ar.ApproveDate = DateTime.UtcNow;
             }
             else
             {
                 var next = steps.FirstOrDefault(s => s.StepOrder > currentStep.StepOrder);
-                if (next!=null) ar.StepId = next.StepId; else { ar.Status = 1; ar.ApproveDate = DateTime.UtcNow; }
+                if (next!=null) ar.StepId = next.StepId; else { ar.Status = (int)AssetRequestStatus.Approved; ar.ApproveDate = DateTime.UtcNow; }
             }
         }
 
         var record = new AssetRequestRecord
         {
             AssetRequestId = ar.AssetRequestId,
-            FromStatus = 0,
+            FromStatus = (int)AssetRequestStatus.Draft,
             ToStatus = ar.Status,
             Action = 1,
             ActionByUserId = dto.ApprovedBy,

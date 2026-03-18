@@ -28,7 +28,7 @@ public class AssetRequestsController : ControllerBase
         if (string.IsNullOrWhiteSpace(dto.Title))
             return BadRequest("Title is required.");
 
-        var assetRequest = new AssetRequest
+            var assetRequest = new AssetRequest
         {
             UserId = dto.UserId,
             RequestTypeId = dto.RequestTypeId,
@@ -36,7 +36,7 @@ public class AssetRequestsController : ControllerBase
             Title = dto.Title,
             Description = dto.Description,
             ProposedData = dto.ProposedData,
-            Status = 0,
+            Status = (int)AssetRequestStatus.Draft,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow,
             StepId = 0
@@ -51,8 +51,8 @@ public class AssetRequestsController : ControllerBase
         var record = new AssetRequestRecord
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            FromStatus = 0,
-            ToStatus = 0,
+            FromStatus = (int)AssetRequestStatus.Draft,
+            ToStatus = (int)AssetRequestStatus.Draft,
             Action = 0,
             ActionByUserId = dto.CreatedBy,
             ActionRoleId = actionRoleId,

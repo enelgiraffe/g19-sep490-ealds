@@ -40,7 +40,7 @@ public class DamageReportsController : ControllerBase
             Description = dto.Description,
             // store document reference (if any) in ProposedData so frontend can retrieve it
             ProposedData = dto.DocumentId.HasValue ? dto.DocumentId.Value.ToString() : null,
-            Status = 0,
+            Status = (int)AssetRequestStatus.Draft,
             CreatedBy = dto.ReportedBy,
             CreateDate = DateTime.UtcNow,
             StepId = 0
@@ -55,8 +55,8 @@ public class DamageReportsController : ControllerBase
         var record = new AssetRequestRecord
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            FromStatus = 0,
-            ToStatus = 0,
+            FromStatus = (int)AssetRequestStatus.Draft,
+            ToStatus = (int)AssetRequestStatus.Draft,
             Action = 0,
             ActionByUserId = dto.ReportedBy,
             ActionRoleId = actionRoleId,
