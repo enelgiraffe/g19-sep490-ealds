@@ -99,8 +99,7 @@ public class MaintenanceRequestsController : ControllerBase
             Title = title,
             Description = dto.Description,
             ProposedData = null,
-            // Vừa tạo là "Đã nộp" để tránh hiển thị "Chưa gửi"
-            Status = 1,
+            Status = (int)AssetRequestStatus.Draft,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow,
             StepId = 0
@@ -137,8 +136,8 @@ public class MaintenanceRequestsController : ControllerBase
         var record = new AssetRequestRecord
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            FromStatus = assetRequest.Status,
-            ToStatus = assetRequest.Status,
+            FromStatus = (int)AssetRequestStatus.Draft,
+            ToStatus = (int)AssetRequestStatus.Draft,
             Action = 0,
             ActionByUserId = dto.CreatedBy,
             ActionRoleId = actionRoleId,
@@ -199,9 +198,9 @@ public class MaintenanceRequestsController : ControllerBase
         if (ar == null)
             return NotFound(new { message = $"Maintenance request {assetRequestId} not found." });
 
-        // Allow delete only when request is Draft(0) or Submitted(1)
-        if (ar.Status > 1)
-            return BadRequest("Chỉ được xóa đề xuất bảo dưỡng khi đang ở trạng thái Nháp hoặc Đã nộp.");
+        // Only allow deleting when request is still in Draft state.
+        if (ar.Status != (int)AssetRequestStatus.Draft)
+            return BadRequest("Chỉ được xóa đề xuất bảo dưỡng khi đang ở trạng thái Nháp.");
 
         await using var tx = await _db.Database.BeginTransactionAsync();
         try
@@ -225,5 +224,102 @@ public class MaintenanceRequestsController : ControllerBase
             await tx.RollbackAsync();
             throw;
         }
+    }
+
+    [HttpPost("{id}/start")]
+    public async Task<IActionResult> StartMaintenance(int id, [FromBody] ApprovalActionDto dto)
+    {
+        var ar = await _db.AssetRequests.FindAsync(id);
+        if (ar == null) return NotFound();
+
+        if (ar.Status != (int)AssetRequestStatus.Approved)
+            return BadRequest("Only approved requests can be started.");
+
+        var userRole = await _db.UserRoles.Include(ur => ur.Role).AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.ApprovedBy);
+        var role = userRole?.Role;
+        var allowed = role != null && (
+            (role.Code != null && (role.Code.Equals("DepartmentManager", StringComparison.OrdinalIgnoreCase) || role.Code.Equals("Accountant", StringComparison.OrdinalIgnoreCase)))
+            || (role.Name != null && (role.Name.IndexOf("Manager", StringComparison.OrdinalIgnoreCase) >= 0 || role.Name.IndexOf("Director", StringComparison.OrdinalIgnoreCase) >= 0 || role.Name.IndexOf("Accountant", StringComparison.OrdinalIgnoreCase) >= 0))
+        );
+
+        if (!allowed) return Forbid();
+
+        var from = ar.Status;
+        ar.Status = (int)AssetRequestStatus.ConfirmedStart;
+
+        // mark related maintenance task as in-progress
+        var task = await _db.MaintenaceTasks.FirstOrDefaultAsync(t => t.AssetRequestId == ar.AssetRequestId);
+        if (task != null)
+        {
+            task.Status = 1; // in-progress
+            _db.MaintenaceTasks.Update(task);
+        }
+
+        var record = new AssetRequestRecord
+        {
+            AssetRequestId = ar.AssetRequestId,
+            FromStatus = from,
+            ToStatus = ar.Status,
+            Action = 2,
+            ActionByUserId = dto.ApprovedBy,
+            ActionRoleId = userRole?.RoleId ?? 0,
+            Comment = dto.Comment,
+            OccurredAt = DateTime.UtcNow
+        };
+
+        _db.AssetRequestRecords.Add(record);
+        await _db.SaveChangesAsync();
+
+        return Ok(new { assetRequestId = ar.AssetRequestId, status = ar.Status, taskId = task?.TaskId });
+    }
+
+    [HttpPost("tasks/{taskId}/complete")]
+    public async Task<IActionResult> CompleteMaintenance(int taskId, [FromBody] Models.DTOs.MaintenanceCompleteDto dto)
+    {
+        var task = await _db.MaintenaceTasks.FindAsync(taskId);
+        if (task == null) return NotFound();
+
+        var mr = new MaintenanceRecord
+        {
+            TaskId = task.TaskId,
+            ExecutionDate = dto.ExecutionDate ?? DateTime.UtcNow,
+            TotalCost = dto.TotalCost,
+            WorkPerformed = dto.WorkPerformed ?? string.Empty,
+            ConditionBefore = dto.ConditionBefore ?? string.Empty,
+            ConditionAfter = dto.ConditionAfter ?? string.Empty,
+            TechnicalNote = dto.TechnicalNote,
+            Status = 1
+        };
+
+        _db.MaintenanceRecords.Add(mr);
+
+        task.Status = 2; // completed
+        _db.MaintenaceTasks.Update(task);
+
+        // add asset request record if linked
+        if (task.AssetRequestId.HasValue)
+        {
+            var ar = await _db.AssetRequests.FindAsync(task.AssetRequestId.Value);
+            if (ar != null)
+            {
+                var rec = new AssetRequestRecord
+                {
+                    AssetRequestId = ar.AssetRequestId,
+                    FromStatus = ar.Status,
+                    ToStatus = ar.Status,
+                    Action = 3,
+                    ActionByUserId = dto.CompletedBy,
+                    ActionRoleId = 0,
+                    Comment = "Maintenance completed",
+                    OccurredAt = DateTime.UtcNow
+                };
+
+                _db.AssetRequestRecords.Add(rec);
+            }
+        }
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new { recordId = mr.RecordId, taskId = task.TaskId });
     }
 }

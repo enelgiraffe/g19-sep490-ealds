@@ -46,8 +46,7 @@ public class DamageReportsController : ControllerBase
             Description = dto.Description,
             // store document reference (if any) in ProposedData so frontend can retrieve it
             ProposedData = dto.DocumentId.HasValue ? dto.DocumentId.Value.ToString() : null,
-            // Submitted to approval flow immediately
-            Status = 1,
+            Status = (int)AssetRequestStatus.Draft,
             CreatedBy = dto.ReportedBy,
             CreateDate = DateTime.UtcNow,
             StepId = 0
@@ -66,8 +65,8 @@ public class DamageReportsController : ControllerBase
         var record = new AssetRequestRecord
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            FromStatus = 1,
-            ToStatus = 1,
+            FromStatus = (int)AssetRequestStatus.Draft,
+            ToStatus = (int)AssetRequestStatus.Draft,
             Action = 0,
             ActionByUserId = dto.ReportedBy,
             ActionRoleId = actionRoleId,

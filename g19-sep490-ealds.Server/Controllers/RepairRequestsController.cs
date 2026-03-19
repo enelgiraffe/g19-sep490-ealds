@@ -40,9 +40,7 @@ public class RepairRequestsController : ControllerBase
             Title = title,
             Description = dto.Description ?? dto.Reason,
             ProposedData = null,
-            // Align with director workflow: newly created repair requests are considered "submitted"
-            // so they can be approved/rejected by director (DirectorApproveController expects status=1).
-            Status = 1,
+            Status = (int)AssetRequestStatus.Draft,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow,
             StepId = 0
@@ -68,8 +66,8 @@ public class RepairRequestsController : ControllerBase
         var record = new AssetRequestRecord
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            FromStatus = assetRequest.Status,
-            ToStatus = assetRequest.Status,
+            FromStatus = (int)AssetRequestStatus.Draft,
+            ToStatus = (int)AssetRequestStatus.Draft,
             Action = 0,
             ActionByUserId = dto.CreatedBy,
             ActionRoleId = actionRoleId,
@@ -82,5 +80,98 @@ public class RepairRequestsController : ControllerBase
         await _db.SaveChangesAsync();
 
         return Ok(new { assetRequestId = assetRequest.AssetRequestId, taskId = repairTask.TaskId });
+    }
+
+    [HttpPost("{id}/start")]
+    public async Task<IActionResult> StartRepair(int id, [FromBody] ApprovalActionDto dto)
+    {
+        var ar = await _db.AssetRequests.FindAsync(id);
+        if (ar == null) return NotFound();
+
+        if (ar.Status != (int)AssetRequestStatus.Approved)
+            return BadRequest("Only approved requests can be started.");
+
+        var userRole = await _db.UserRoles.Include(ur => ur.Role).AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.ApprovedBy);
+        var role = userRole?.Role;
+        var allowed = role != null && (
+            (role.Code != null && (role.Code.Equals("DepartmentManager", StringComparison.OrdinalIgnoreCase) || role.Code.Equals("Accountant", StringComparison.OrdinalIgnoreCase)))
+            || (role.Name != null && (role.Name.IndexOf("Manager", StringComparison.OrdinalIgnoreCase) >= 0 || role.Name.IndexOf("Director", StringComparison.OrdinalIgnoreCase) >= 0 || role.Name.IndexOf("Accountant", StringComparison.OrdinalIgnoreCase) >= 0))
+        );
+
+        if (!allowed) return Forbid();
+
+        var from = ar.Status;
+        ar.Status = (int)AssetRequestStatus.ConfirmedStart;
+
+        var task = await _db.RepairTasks.FirstOrDefaultAsync(t => t.AssetRequestId == ar.AssetRequestId);
+        if (task != null)
+        {
+            task.Status = 1; // in-progress
+            _db.RepairTasks.Update(task);
+        }
+
+        var record = new AssetRequestRecord
+        {
+            AssetRequestId = ar.AssetRequestId,
+            FromStatus = from,
+            ToStatus = ar.Status,
+            Action = 2,
+            ActionByUserId = dto.ApprovedBy,
+            ActionRoleId = userRole?.RoleId ?? 0,
+            Comment = dto.Comment,
+            OccurredAt = DateTime.UtcNow
+        };
+
+        _db.AssetRequestRecords.Add(record);
+        await _db.SaveChangesAsync();
+
+        return Ok(new { assetRequestId = ar.AssetRequestId, status = ar.Status, taskId = task?.TaskId });
+    }
+
+    [HttpPost("tasks/{taskId}/complete")]
+    public async Task<IActionResult> CompleteRepair(int taskId, [FromBody] Models.DTOs.RepairCompleteDto dto)
+    {
+        var task = await _db.RepairTasks.FindAsync(taskId);
+        if (task == null) return NotFound();
+
+        var rr = new RepairRecord
+        {
+            TaskId = task.TaskId,
+            ActualCost = dto.ActualCost,
+            RepairDate = dto.RepairDate ?? DateTime.UtcNow,
+            Result = dto.Result ?? string.Empty,
+            SupplierId = dto.SupplierId
+        };
+
+        _db.RepairRecords.Add(rr);
+
+        task.Status = 2; // completed
+        _db.RepairTasks.Update(task);
+
+        // add asset request record if linked
+        if (task.AssetRequestId != 0)
+        {
+            var ar = await _db.AssetRequests.FindAsync(task.AssetRequestId);
+            if (ar != null)
+            {
+                var rec = new AssetRequestRecord
+                {
+                    AssetRequestId = ar.AssetRequestId,
+                    FromStatus = ar.Status,
+                    ToStatus = ar.Status,
+                    Action = 3,
+                    ActionByUserId = dto.CompletedBy,
+                    ActionRoleId = 0,
+                    Comment = "Repair completed",
+                    OccurredAt = DateTime.UtcNow
+                };
+
+                _db.AssetRequestRecords.Add(rec);
+            }
+        }
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new { recordId = rr.RecordId, taskId = task.TaskId });
     }
 }

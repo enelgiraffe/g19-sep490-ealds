@@ -80,10 +80,6 @@ public class AssetRequestsController : ControllerBase
         if (string.IsNullOrWhiteSpace(dto.Title))
             return BadRequest("Title is required.");
 
-        var desiredStatus = dto.Status ?? 0;
-        if (desiredStatus != 0 && desiredStatus != -1)
-            return BadRequest("Invalid status. Allowed: -1 (Draft), 0 (Submitted).");
-
         var requestTypeExists = await _db.RequestTypes
             .AsNoTracking()
             .AnyAsync(rt => rt.RequestTypeId == _purchaseRequestTypeId);
@@ -100,7 +96,7 @@ public class AssetRequestsController : ControllerBase
             Title = dto.Title,
             Description = dto.Description,
             ProposedData = dto.ProposedData,
-            Status = desiredStatus,
+            Status = (int)AssetRequestStatus.Draft,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow,
             StepId = 0
@@ -115,12 +111,12 @@ public class AssetRequestsController : ControllerBase
         var record = new AssetRequestRecord
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            FromStatus = assetRequest.Status,
-            ToStatus = assetRequest.Status,
+            FromStatus = (int)AssetRequestStatus.Draft,
+            ToStatus = (int)AssetRequestStatus.Draft,
             Action = 0,
             ActionByUserId = dto.CreatedBy,
             ActionRoleId = actionRoleId,
-            Comment = assetRequest.Status == -1 ? "Created draft request" : "Created request",
+            Comment = "Created draft request",
             OccurredAt = DateTime.UtcNow
         };
 
