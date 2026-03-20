@@ -5,11 +5,11 @@ namespace g19_sep490_ealds.Server.Services.Interface;
 
 public interface IMaintenanceTemplateService
 {
-    public Task<IEnumerable<MaintenanceTemplateResponseDTO>> GetAllTemplatesAsync();
-    public Task<IEnumerable<MaintenanceTemplateResponseDTO>> SearchTemplateByKeyAsync(string name);
-    public Task<MaintenanceTemplateResponseDTO> UpdatTemplateAsync(int id, TemplateUpdateDTO update);
-    public Task<MaintenanceTemplateResponseDTO> CreateTemplateAsync(TemplateCreateDTO create);
-    public Task<MaintenanceTemplateResponseDTO> ToggleTemplateStatusAsync(int id);
-    public Task<bool> HardDeleteTemplateAsync(int id);
-    public Task<MaintenanceTemplateResponseDTO> FindTemplateByIdAsync(int id);
+    Task<IEnumerable<MaintenanceTemplateResponseDTO>> GetAllTemplatesAsync();
+    Task<IEnumerable<MaintenanceTemplateResponseDTO>> SearchTemplateByKeyAsync(string name);
+    Task<MaintenanceTemplateResponseDTO> UpdatTemplateAsync(int id, TemplateUpdateDTO update);
+    Task<MaintenanceTemplateResponseDTO> CreateTemplateAsync(TemplateCreateDTO create);
+    Task<MaintenanceTemplateResponseDTO> ToggleTemplateStatusAsync(int id);
+    Task<bool> HardDeleteTemplateAsync(int id);
+    Task<MaintenanceTemplateResponseDTO> FindTemplateByIdAsync(int id);
 }

@@ -31,6 +31,9 @@ builder.Services.AddScoped<IMaintenanceTemplateMapper, MaintenanceTemplateMapper
 builder.Services.AddScoped<IMaintenanceTemplateService, MaintenanceTemplateService>();
 builder.Services.AddScoped<IMaintenanceScheduleService, MaintenanceScheduleService>();
 builder.Services.AddScoped<IMaintenanceScheduleMapper, MaintenanceScheduleMapper>();
+builder.Services.AddScoped<IMaintenanceRecordService, MaintenanceRecordService>();
+builder.Services.AddScoped<IMaintenanceRecordMapper, MaintenanceRecordMapper>();
+builder.Services.AddScoped<IMaintenanceTaskService, MaintenanceTaskService>();
 
 builder.Services.AddMediatR(typeof(Program));
 

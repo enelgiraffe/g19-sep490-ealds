@@ -15,7 +15,9 @@ public enum AssetStatus
     Purchased = 1,
     ReadyForUse = 2,
     Capitalized = 3,
-    Disposed = 4
+    Disposed = 4,
+    UnderMaintenance = 5,
+    Active = 6
 }
 
 public enum AssetLifeActionType
@@ -55,4 +57,11 @@ public enum MaintenanceTaskStatus
     InProgress = 2,
     Completed = 3,
     Cancelled = 4
+}
+
+public enum MaintenanceRecordStatus
+{
+    Completed = 1,
+    Failed = 2,
+    Partial = 3
 }

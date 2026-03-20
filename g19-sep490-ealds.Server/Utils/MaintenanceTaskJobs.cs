@@ -51,7 +51,8 @@ public class MaintenanceTaskJobs : IJob
         {
             // tránh tạo task trùng
             var exist = await db.MaintenaceTasks.AnyAsync(x => x.ScheduleId == schedule.ScheduleId
-                                                               && x.PlannedDate == schedule.NextDueDate);
+                                                               && x.PlannedDate == schedule.NextDueDate.Value.Date
+                                                               && x.Status != (int)MaintenanceTaskStatus.Completed);
 
             if (exist)
                 continue;
