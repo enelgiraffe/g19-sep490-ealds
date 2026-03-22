@@ -32,7 +32,7 @@ public partial class EALDSDbcontext : DbContext
     public virtual DbSet<AssetRequest> AssetRequests { get; set; }
 
     public virtual DbSet<AssetRequestRecord> AssetRequestRecords { get; set; }
-
+    public virtual DbSet<AssetRevaluation> AssetRevaluations { get; set; }
     public virtual DbSet<AssetType> AssetTypes { get; set; }
 
     public virtual DbSet<AssetUsage> AssetUsages { get; set; }

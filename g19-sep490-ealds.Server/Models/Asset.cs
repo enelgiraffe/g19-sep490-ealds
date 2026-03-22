@@ -44,6 +44,8 @@ public partial class Asset
     public int Quantity { get; set; }
 
     public int WarehouseId { get; set; }
+    public int? DepreciationPolicyId { get; set; }
+
 
     [InverseProperty("Asset")]
     public virtual ICollection<AssetCapitalization> AssetCapitalizations { get; set; } = new List<AssetCapitalization>();
@@ -95,6 +97,13 @@ public partial class Asset
     [ForeignKey("WarehouseId")]
     [InverseProperty("Assets")]
     public virtual WarehouseAsset Warehouse { get; set; } = null!;
+
+    [ForeignKey("DepreciationPolicyId")]
+    [InverseProperty("Assets")]
+    public virtual DepreciationPolicy? DepreciationPolicy { get; set; }
+
+    [InverseProperty("Asset")]
+    public virtual ICollection<AssetRevaluation> AssetRevaluations { get; set; } = new List<AssetRevaluation>();
 
     [NotMapped]
     public AssetStatus StatusEnum
