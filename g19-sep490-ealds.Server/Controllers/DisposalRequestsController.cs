@@ -76,8 +76,8 @@ public class DisposalRequestsController : ControllerBase
 
         _db.DiposalRecords.Add(diposal);
 
-        // mark asset as disposed
-        asset.Status = (int)AssetStatus.Disposed;
+        // NOTE: Asset status is NOT changed to Disposed here.
+        // Status will be updated only after the disposal request is approved/finalized.
 
         await _db.SaveChangesAsync();
 

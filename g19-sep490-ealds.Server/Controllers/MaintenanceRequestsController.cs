@@ -150,28 +150,7 @@ public class MaintenanceRequestsController : ControllerBase
 
         _db.AssetRequestRecords.Add(record);
 
-        // Update asset status to InMaintenance when maintenance is reported/created
-        // (Previously: only created request + task, asset status stayed unchanged)
-        var oldAssetStatus = asset.Status;
-        if (oldAssetStatus != (int)AssetStatus.InMaintenance)
-        {
-            asset.Status = (int)AssetStatus.InMaintenance;
-            _db.Assets.Update(asset);
-
-            _db.AssetLifeCycles.Add(new AssetLifeCycle
-            {
-                AssetId = asset.AssetId,
-                ActionType = (int)AssetLifeActionType.StatusChanged,
-                RelatedEntityType = 1, // 1 = Asset
-                RelatedEntityId = asset.AssetId,
-                ActorUserId = dto.CreatedBy,
-                ActorRoleId = actionRoleId,
-                Description =
-                    $"Status changed from {(AssetStatus)oldAssetStatus} " +
-                    $"to {(AssetStatus)AssetStatus.InMaintenance}",
-                OccurredAt = DateTime.UtcNow
-            });
-        }
+        // NOTE: Asset status is NOT changed here – only changed when maintenance actually starts (StartMaintenance).
 
         // update schedule next due date if possible
         if (schedule != null && schedule.IntervalMonths.HasValue)
@@ -256,22 +235,54 @@ public class MaintenanceRequestsController : ControllerBase
         var from = ar.Status;
         ar.Status = 4;
 
-        // mark related maintenance task as in-progress
+        // mark related maintenance task as in-progress and persist start fields
         var task = await _db.MaintenaceTasks.FirstOrDefaultAsync(t => t.AssetRequestId == ar.AssetRequestId);
         if (task != null)
         {
             if (dto.MaintenanceDate.HasValue)
                 task.PlannedDate = dto.MaintenanceDate.Value;
             if (dto.PerformerUserId.HasValue && dto.PerformerUserId.Value > 0)
+            {
                 task.AssignTo = dto.PerformerUserId.Value;
+                task.PerformerUserId = dto.PerformerUserId.Value;
+            }
             if (!string.IsNullOrWhiteSpace(dto.Location))
                 task.Address = dto.Location;
+            task.MaintenanceProvider = dto.MaintenanceProvider;
+            task.EstimatedCost = dto.EstimatedCost;
+            task.ExpectedCompletionDate = dto.ExpectedCompletionDate ?? dto.ExpectedCompletionTo;
+            task.MaintenanceContent = dto.MaintenanceContent;
+            task.LocationType = dto.LocationType;
             task.Status = 1; // in-progress
             _db.MaintenaceTasks.Update(task);
         }
 
         if (!string.IsNullOrWhiteSpace(dto.DetailedDescription))
             ar.Description = dto.DetailedDescription;
+
+        // Set asset status to InMaintenance only now (when maintenance actually starts)
+        var linkedAssetId = task?.AssetId ?? 0;
+        if (linkedAssetId > 0)
+        {
+            var linkedAsset = await _db.Assets.FindAsync(linkedAssetId);
+            if (linkedAsset != null && linkedAsset.Status != (int)AssetStatus.InMaintenance)
+            {
+                var oldStatus = linkedAsset.Status;
+                linkedAsset.Status = (int)AssetStatus.InMaintenance;
+                _db.Assets.Update(linkedAsset);
+                _db.AssetLifeCycles.Add(new AssetLifeCycle
+                {
+                    AssetId = linkedAsset.AssetId,
+                    ActionType = (int)AssetLifeActionType.StatusChanged,
+                    RelatedEntityType = 1,
+                    RelatedEntityId = linkedAsset.AssetId,
+                    ActorUserId = dto.StartedBy,
+                    ActorRoleId = userRole?.RoleId ?? 0,
+                    Description = $"Status changed from {(AssetStatus)oldStatus} to {(AssetStatus)AssetStatus.InMaintenance} (maintenance started)",
+                    OccurredAt = DateTime.UtcNow
+                });
+            }
+        }
 
         Dictionary<string, object?> startData = new()
         {

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -22,6 +22,15 @@ public partial class RepairTask
     public string Reason { get; set; } = null!;
 
     public int Status { get; set; }
+
+    // Fields populated when repair is started (nullable until then)
+    [Column(TypeName = "datetime")]
+    public DateTime? RepairDate { get; set; }
+
+    [Column(TypeName = "datetime")]
+    public DateTime? ExpectedCompletionDate { get; set; }
+
+    public string? RepairProgressStatus { get; set; }
 
     [ForeignKey("AssetId")]
     [InverseProperty("RepairTasks")]

@@ -9,6 +9,10 @@ public class RepairCompleteDto
 
     public string? ReportNumber { get; set; }
 
+    // Thông tin ghi nhận tài sản hỏng
+    public DateTime? DamageDate { get; set; }
+    public string? DamageCondition { get; set; }
+
     public DateTime? CompletionDate { get; set; }
     public DateTime? RepairDate { get; set; }
 

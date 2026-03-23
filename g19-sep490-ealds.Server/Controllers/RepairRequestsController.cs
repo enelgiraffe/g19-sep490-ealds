@@ -122,6 +122,10 @@ public class RepairRequestsController : ControllerBase
                 task.Reason = dto.DamageCondition;
             if (dto.EstimatedCost.HasValue)
                 task.EstimatedCost = dto.EstimatedCost.Value;
+            // Persist new start fields
+            task.RepairDate = dto.RepairDate;
+            task.ExpectedCompletionDate = dto.ExpectedCompletionDate ?? dto.ExpectedCompletionTo;
+            task.RepairProgressStatus = dto.RepairProgressStatus;
             task.Status = 1; // in-progress
             _db.RepairTasks.Update(task);
         }
@@ -227,7 +231,9 @@ public class RepairRequestsController : ControllerBase
             ActualCost = dto.ActualCost,
             RepairDate = repairDate,
             Result = resultText,
-            SupplierId = dto.SupplierId
+            SupplierId = dto.SupplierId,
+            DamageDate = dto.DamageDate,
+            DamageCondition = dto.DamageCondition
         };
 
         _db.RepairRecords.Add(rr);
