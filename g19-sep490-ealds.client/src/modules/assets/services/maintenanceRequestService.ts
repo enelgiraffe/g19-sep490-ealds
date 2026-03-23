@@ -96,4 +96,68 @@ export const maintenanceRequestService = {
   async remove(assetRequestId: number): Promise<void> {
     await maintenanceApi.delete(`/api/Assets/Requests/maintenance/${assetRequestId}`);
   },
+
+  /** Bắt đầu thực hiện bảo dưỡng (sau khi đã duyệt cuối workflow) — POST .../maintenance/{id}/start */
+  async start(
+    assetRequestId: number,
+    payload: MaintenanceStartPayload
+  ): Promise<{ assetRequestId: number; status: number; taskId?: number }> {
+    const response = await maintenanceApi.post<{
+      assetRequestId: number;
+      status: number;
+      taskId?: number;
+    }>(`/api/Assets/Requests/maintenance/${assetRequestId}/start`, payload);
+    return response.data;
+  },
+
+  /** Hoàn thành bảo dưỡng — POST .../maintenance/tasks/{taskId}/complete */
+  async complete(
+    taskId: number,
+    payload: MaintenanceCompletePayload
+  ): Promise<{ recordId: number; taskId: number }> {
+    const response = await maintenanceApi.post<{ recordId: number; taskId: number }>(
+      `/api/Assets/Requests/maintenance/tasks/${taskId}/complete`,
+      payload
+    );
+    return response.data;
+  },
 };
+
+/** Khớp backend MaintenanceStartDto (JSON camelCase) */
+export interface MaintenanceStartPayload {
+  startedBy: number;
+  comment?: string | null;
+  reportNumber?: string | null;
+  maintenanceDate?: string | null;
+  performerUserId?: number | null;
+  maintenanceProvider?: string | null;
+  estimatedCost?: number | null;
+  expectedCompletionDate?: string | null;
+  expectedCompletionFrom?: string | null;
+  expectedCompletionTo?: string | null;
+  maintenanceContent?: string | null;
+  detailedDescription?: string | null;
+  locationType?: string | null;
+  location?: string | null;
+  attachmentDocumentIds?: number[] | null;
+  attachmentUrls?: string[] | null;
+}
+
+/** Khớp backend MaintenanceCompleteDto */
+export interface MaintenanceCompletePayload {
+  completedBy: number;
+  reportNumber?: string | null;
+  completionDate?: string | null;
+  executionDate?: string | null;
+  returnToUseDate?: string | null;
+  actualCost?: number | null;
+  totalCost?: number;
+  maintenanceContent?: string | null;
+  detailedDescription?: string | null;
+  workPerformed?: string | null;
+  conditionBefore?: string | null;
+  conditionAfter?: string | null;
+  technicalNote?: string | null;
+  attachmentDocumentIds?: number[] | null;
+  attachmentUrls?: string[] | null;
+}

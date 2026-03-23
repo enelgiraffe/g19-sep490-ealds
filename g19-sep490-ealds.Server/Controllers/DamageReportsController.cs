@@ -86,8 +86,8 @@ public class DamageReportsController : ControllerBase
                 return BadRequest("Document not found.");
         }
 
-        // Return Created pointing to the repair request path where frontend can proceed to create a repair request.
-        var location = $"/api/Assets/Requests/repair";
+        // Return location of the created request resource.
+        var location = $"/api/Assets/Requests/{assetRequest.AssetRequestId}";
         return Created(location, new { assetRequestId = assetRequest.AssetRequestId });
     }
 

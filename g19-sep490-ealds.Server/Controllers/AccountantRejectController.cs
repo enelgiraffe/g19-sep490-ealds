@@ -68,7 +68,7 @@ public class AccountantRejectController : ControllerBase
             };
             _db.Approvals.Add(approval);
         }
-
+        
         // Accounting rejection:
         // - Purchase/etc: return to draft for creator to edit/resend => 0 -> -1
         // - Transfer: mark request as rejected => 1 -> 3

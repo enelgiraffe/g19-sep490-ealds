@@ -162,3 +162,135 @@
   opacity: 0.4;
   cursor: default;
 }
+
+/* Modal "Sửa chữa tài sản" — header đỏ, nội dung form */
+.repair-form-modal .ant-modal-content {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.repair-form-modal .ant-modal-header {
+  margin: 0;
+  padding: 14px 20px;
+  background: #fe3720;
+  border-bottom: none;
+}
+
+.repair-form-modal .ant-modal-title {
+  color: #fff !important;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.repair-form-modal .ant-modal-close {
+  color: #fff !important;
+  top: 14px;
+}
+
+.repair-form-modal .ant-modal-close:hover {
+  color: #fff !important;
+  opacity: 0.85;
+}
+
+.repair-form-modal .ant-modal-body {
+  padding: 20px 24px;
+  background: #f3f4f6;
+}
+
+.repair-form-modal .ant-modal-footer {
+  margin: 0;
+  padding: 14px 20px;
+  border-top: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.repair-form-modal__section {
+  background: #fff;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.repair-form-modal__section-title {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 12px;
+  color: #111827;
+}
+
+.repair-form-modal__label {
+  font-size: 13px;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+.repair-form-modal__label--req::before {
+  content: '* ';
+  color: #fe3720;
+}
+
+.repair-form-modal__readonly-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 24px;
+  font-size: 13px;
+  color: #1f2937;
+}
+
+.repair-form-modal__readonly-grid b {
+  color: #6b7280;
+  font-weight: 500;
+  margin-right: 6px;
+}
+
+.repair-form-modal__field-input .ant-input,
+.repair-form-modal__field-input .ant-input-number-input,
+.repair-form-modal__field-input .ant-picker {
+  background: #f9fafb;
+}
+
+.repair-form-modal__attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.repair-form-modal__attach-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.repair-form-modal__footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.repair-form-modal__btn-send {
+  background: #fe3720 !important;
+  border-color: #fe3720 !important;
+  color: #fff !important;
+  font-weight: 500;
+  height: 40px;
+  padding: 0 20px;
+}
+
+.repair-form-modal__btn-send:hover {
+  background: #e5321c !important;
+  border-color: #e5321c !important;
+  color: #fff !important;
+}
+
+.repair-form-modal__btn-cancel {
+  min-width: 88px;
+  height: 40px;
+}
