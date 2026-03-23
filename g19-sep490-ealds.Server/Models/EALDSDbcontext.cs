@@ -583,6 +583,8 @@ public partial class EaldsDbContext : DbContext
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
             entity.Property(e => e.PlannedDate).HasColumnType("datetime");
+            entity.Property(e => e.EstimatedCost).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ExpectedCompletionDate).HasColumnType("datetime");
 
             entity.HasOne(d => d.Asset).WithMany(p => p.MaintenaceTasks)
                 .HasForeignKey(d => d.AssetId)
@@ -717,6 +719,7 @@ public partial class EaldsDbContext : DbContext
 
             entity.Property(e => e.ActualCost).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.RepairDate).HasColumnType("datetime");
+            entity.Property(e => e.DamageDate).HasColumnType("datetime");
 
             entity.HasOne(d => d.Supplier).WithMany(p => p.RepairRecords)
                 .HasForeignKey(d => d.SupplierId)
@@ -735,6 +738,8 @@ public partial class EaldsDbContext : DbContext
             entity.ToTable("RepairTask");
 
             entity.Property(e => e.EstimatedCost).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.RepairDate).HasColumnType("datetime");
+            entity.Property(e => e.ExpectedCompletionDate).HasColumnType("datetime");
 
             entity.HasOne(d => d.Asset).WithMany(p => p.RepairTasks)
                 .HasForeignKey(d => d.AssetId)

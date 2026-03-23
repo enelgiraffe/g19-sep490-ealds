@@ -103,6 +103,14 @@ public class RepairRequestsController : ControllerBase
         var task = await _db.RepairTasks.FirstOrDefaultAsync(t => t.AssetRequestId == ar.AssetRequestId);
         if (task != null)
         {
+            if (!string.IsNullOrWhiteSpace(dto.DamageCondition))
+                task.Reason = dto.DamageCondition;
+            if (dto.EstimatedCost.HasValue)
+                task.EstimatedCost = dto.EstimatedCost.Value;
+            // Persist new start fields
+            task.RepairDate = dto.RepairDate;
+            task.ExpectedCompletionDate = dto.ExpectedCompletionDate ?? dto.ExpectedCompletionTo;
+            task.RepairProgressStatus = dto.RepairProgressStatus;
             task.Status = 1; // in-progress
             _db.RepairTasks.Update(task);
         }
@@ -135,9 +143,11 @@ public class RepairRequestsController : ControllerBase
         {
             TaskId = task.TaskId,
             ActualCost = dto.ActualCost,
-            RepairDate = dto.RepairDate ?? DateTime.UtcNow,
-            Result = dto.Result ?? string.Empty,
-            SupplierId = dto.SupplierId
+            RepairDate = repairDate,
+            Result = resultText,
+            SupplierId = dto.SupplierId,
+            DamageDate = dto.DamageDate,
+            DamageCondition = dto.DamageCondition
         };
 
         _db.RepairRecords.Add(rr);

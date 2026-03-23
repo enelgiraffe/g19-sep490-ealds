@@ -12,7 +12,14 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class DirectorApproveController : ControllerBase
 {
     private readonly EaldsDbContext _db;
-    public DirectorApproveController(EaldsDbContext db) => _db = db;
+    private readonly int _transferRequestTypeId;
+    private readonly int _purchaseRequestTypeId;
+    public DirectorApproveController(EaldsDbContext db, IConfiguration configuration)
+    {
+        _db = db;
+        _transferRequestTypeId = configuration.GetValue<int>("App:TransferRequestTypeId", 3);
+        _purchaseRequestTypeId = configuration.GetValue<int>("App:PurchaseRequestTypeId", 1);
+    }
 
     [HttpPost("{id}/approve")]
     public async Task<IActionResult> Approve(int id, [FromBody] ApprovalActionDto dto)
@@ -48,7 +55,32 @@ public class DirectorApproveController : ControllerBase
         };
         _db.AssetRequestRecords.Add(record);
 
+        // Bug 3 fix: create a Procurement record when a purchase request is approved by director
+        var isPurchase = ar.RequestTypeId == _purchaseRequestTypeId;
+        if (isPurchase && ar.Status == 2)
+        {
+            var alreadyHasProcurement = await _db.Procurements.AsNoTracking()
+                .AnyAsync(p => p.AssetRequestId == ar.AssetRequestId);
+            if (!alreadyHasProcurement)
+            {
+                var procurement = new Procurement
+                {
+                    AssetRequestId = ar.AssetRequestId,
+                    ContractNo = string.Empty,      // To be filled by accountant later
+                    ContractDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    TotalAmount = 0,
+                    AdvanceAmount = 0,
+                    RemainingAmount = 0,
+                    Status = 0,                     // 0 = pending/initial
+                    CreatedBy = dto.ApprovedBy,
+                    CreateDate = DateTime.UtcNow
+                };
+                _db.Procurements.Add(procurement);
+            }
+        }
+
         await _db.SaveChangesAsync();
         return Ok(new { assetRequestId = ar.AssetRequestId, status = ar.Status });
     }
 }
+

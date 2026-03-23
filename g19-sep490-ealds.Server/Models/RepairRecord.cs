@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace g19_sep490_ealds.Server.Models;
@@ -14,6 +14,12 @@ public partial class RepairRecord
     public DateTime RepairDate { get; set; }
 
     public string Result { get; set; } = null!;
+
+    // Thông tin ghi nhận tài sản hỏng
+    [Column(TypeName = "datetime")]
+    public DateTime? DamageDate { get; set; }
+
+    public string? DamageCondition { get; set; }
 
     public int? SupplierId { get; set; }
 

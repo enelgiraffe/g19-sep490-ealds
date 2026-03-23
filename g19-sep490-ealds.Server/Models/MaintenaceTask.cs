@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace g19_sep490_ealds.Server.Models;
@@ -25,6 +25,23 @@ public partial class MaintenaceTask
 
     public int CreateBy { get; set; }
 
+    // Fields populated when maintenance is started (nullable until then)
+    public int? PerformerUserId { get; set; }
+
+    public string? MaintenanceProvider { get; set; }
+
+    [Column(TypeName = "decimal(18, 2)")]
+    public decimal? EstimatedCost { get; set; }
+
+    [Column(TypeName = "datetime")]
+    public DateTime? ExpectedCompletionDate { get; set; }
+
+    public string? MaintenanceContent { get; set; }
+
+    public string? LocationType { get; set; }
+
+    [ForeignKey("AssetId")]
+    [InverseProperty("MaintenaceTasks")]
     public virtual Asset Asset { get; set; } = null!;
 
     public virtual AssetRequest? AssetRequest { get; set; }
