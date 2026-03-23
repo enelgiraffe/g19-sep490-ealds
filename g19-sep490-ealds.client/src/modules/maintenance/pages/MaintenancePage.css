@@ -209,3 +209,129 @@
   color: #b91c1c;
 }
 
+/* Modal "Bảo dưỡng tài sản" — cùng phong cách mockup (header đỏ) */
+.maintenance-form-modal .ant-modal-content {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.maintenance-form-modal .ant-modal-header {
+  margin: 0;
+  padding: 14px 20px;
+  background: #fe3720;
+  border-bottom: none;
+}
+
+.maintenance-form-modal .ant-modal-title {
+  color: #fff !important;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.maintenance-form-modal .ant-modal-close {
+  color: #fff !important;
+  top: 14px;
+}
+
+.maintenance-form-modal .ant-modal-close:hover {
+  color: #fff !important;
+  opacity: 0.85;
+}
+
+.maintenance-form-modal .ant-modal-body {
+  padding: 20px 24px;
+  background: #f3f4f6;
+}
+
+.maintenance-form-modal .ant-modal-footer {
+  margin: 0;
+  padding: 14px 20px;
+  border-top: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.maintenance-form-modal__section {
+  background: #fff;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.maintenance-form-modal__section-title {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 12px;
+  color: #111827;
+}
+
+.maintenance-form-modal__label {
+  font-size: 13px;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+.maintenance-form-modal__label--req::before {
+  content: '* ';
+  color: #fe3720;
+}
+
+.maintenance-form-modal__readonly-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 24px;
+  font-size: 13px;
+  color: #1f2937;
+}
+
+.maintenance-form-modal__readonly-grid b {
+  color: #6b7280;
+  font-weight: 500;
+  margin-right: 6px;
+}
+
+.maintenance-form-modal__attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.maintenance-form-modal__attach-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.maintenance-form-modal__footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.maintenance-form-modal__btn-confirm {
+  background: #fe3720 !important;
+  border-color: #fe3720 !important;
+  color: #fff !important;
+  font-weight: 500;
+  height: 40px;
+  padding: 0 20px;
+}
+
+.maintenance-form-modal__btn-confirm:hover {
+  background: #e5321c !important;
+  border-color: #e5321c !important;
+  color: #fff !important;
+}
+
+.maintenance-form-modal__btn-cancel {
+  min-width: 88px;
+  height: 40px;
+}
+

@@ -1,16 +1,54 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Input, Modal, Select, Tabs, message } from 'antd';
-import { EyeOutlined, FilterOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons';
+import {
+  Button,
+  DatePicker,
+  Input,
+  InputNumber,
+  Modal,
+  Row,
+  Col,
+  Select,
+  Tabs,
+  message,
+} from 'antd';
+import type { Dayjs } from 'dayjs';
+import dayjs from 'dayjs';
+import {
+  CheckOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  EditOutlined,
+  EyeOutlined,
+  FilterOutlined,
+  MailOutlined,
+  PlusOutlined,
+  SearchOutlined,
+  SettingOutlined,
+} from '@ant-design/icons';
 import './RepairsPage.css';
 import { damageReportService } from '../../assets/services/damageReportService';
+import { assetRequestService } from '../../assets/services/assetRequestService';
+import { assetService, formatVnd, type AssetResponse } from '../../assets/services/assetService';
+import {
+  repairRequestService,
+  type RepairCompletePayload,
+  type RepairStartPayload,
+} from '../../assets/services/repairRequestService';
 import { directorRequestService } from '../../requests/services/directorRequestService';
 import { profileService, type UserProfile } from '../../profile/services/profileService';
 
-type RepairStatus = 'draft' | 'submitted' | 'pending' | 'approved' | 'rejected';
+type RepairStatus =
+  | 'draft'
+  | 'submitted'
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'inProgress';
 
 interface RepairRow {
   id: string;
   assetRequestId: number;
+  assetId: number;
   assetCode: string;
   assetName: string;
   condition: string;
@@ -30,12 +68,13 @@ function formatDate(value?: string | null): string {
 }
 
 function mapStatus(status: number): RepairStatus {
-  // Align with backend workflow used by AssetRequest (director flow):
-  // -1=Nháp, 0=Đã gửi, 1=Chờ phê duyệt, 2=Phê duyệt, 3=Từ chối
+  // -1=Nháp, 0=Đã gửi, 1=Chờ phê duyệt, 2=Đã duyệt (chưa bắt đầu), 3=Từ chối, 4=Đang sửa chữa (đã start)
   if (status === -1) return 'draft';
   if (status === 0) return 'submitted';
   if (status === 1) return 'pending';
   if (status === 2) return 'approved';
+  if (status === 3) return 'rejected';
+  if (status === 4) return 'inProgress';
   return 'rejected';
 }
 
@@ -44,6 +83,7 @@ function getStatusLabel(status: RepairStatus): string {
   if (status === 'submitted') return 'Đã gửi';
   if (status === 'pending') return 'Chờ phê duyệt';
   if (status === 'approved') return 'Phê duyệt';
+  if (status === 'inProgress') return 'Đang sửa chữa';
   return 'Từ chối';
 }
 
@@ -52,9 +92,12 @@ function getStatusClass(status: RepairStatus): string {
   if (status === 'submitted') return 'asset-status-pill asset-status-pill--processing';
   if (status === 'pending') return 'asset-status-pill asset-status-pill--warning';
   if (status === 'approved') return 'asset-status-pill asset-status-pill--active';
+  if (status === 'inProgress') return 'asset-status-pill asset-status-pill--processing';
   if (status === 'draft') return 'asset-status-pill asset-status-pill--inactive';
   return 'asset-status-pill asset-status-pill--danger';
 }
+
+type RepairCompleteAttachmentRow = { key: string; name: string };
 
 export function RepairsPage() {
   const [activeTab, setActiveTab] = useState<'need-repair' | 'in-repair'>('need-repair');
@@ -70,10 +113,42 @@ export function RepairsPage() {
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const [repairStartOpen, setRepairStartOpen] = useState(false);
+  const [repairStartRow, setRepairStartRow] = useState<RepairRow | null>(null);
+  const [repairAsset, setRepairAsset] = useState<AssetResponse | null>(null);
+  const [repairStartLoading, setRepairStartLoading] = useState(false);
+  const [repairStartSubmitting, setRepairStartSubmitting] = useState(false);
+  const [repairReportNumber, setRepairReportNumber] = useState('');
+  const [damageDate, setDamageDate] = useState<Dayjs | null>(null);
+  const [damageCondition, setDamageCondition] = useState('');
+  const [repairDate, setRepairDate] = useState<Dayjs | null>(null);
+  const [repairExpectedDate, setRepairExpectedDate] = useState<Dayjs | null>(null);
+  const [repairEstimatedCost, setRepairEstimatedCost] = useState<number | null>(null);
+  const [repairProgressStatus, setRepairProgressStatus] = useState('');
+
+  const [repairCompleteOpen, setRepairCompleteOpen] = useState(false);
+  const [repairCompleteRow, setRepairCompleteRow] = useState<RepairRow | null>(null);
+  const [repairCompleteTaskId, setRepairCompleteTaskId] = useState<number | null>(null);
+  const [repairCompleteAsset, setRepairCompleteAsset] = useState<AssetResponse | null>(null);
+  const [repairCompleteLoading, setRepairCompleteLoading] = useState(false);
+  const [repairCompleteSubmitting, setRepairCompleteSubmitting] = useState(false);
+  const [repairCompleteReportNumber, setRepairCompleteReportNumber] = useState('');
+  const [repairCompleteCompletionDate, setRepairCompleteCompletionDate] = useState<Dayjs | null>(
+    null
+  );
+  const [repairCompleteReturnDate, setRepairCompleteReturnDate] = useState<Dayjs | null>(null);
+  const [repairCompleteActualCost, setRepairCompleteActualCost] = useState<number | null>(null);
+  const [repairCompleteResult, setRepairCompleteResult] = useState('');
+  const [repairCompleteDetail, setRepairCompleteDetail] = useState('');
+  const [repairCompleteAttachments, setRepairCompleteAttachments] = useState<
+    RepairCompleteAttachmentRow[]
+  >([]);
+  const [repairEditingAttachKey, setRepairEditingAttachKey] = useState<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
 
-    async function loadNeedRepair() {
+    async function loadRepairList() {
       setLoading(true);
       try {
         const res = await damageReportService.list({
@@ -89,8 +164,8 @@ export function RepairsPage() {
           return {
             id: String(it.id),
             assetRequestId: it.id,
+            assetId: it.assetId,
             assetCode: assetCode || String(it.assetId ?? ''),
-            // Nếu assetName trống, lấy phần title nhưng bỏ prefix "Báo hỏng tài sản ..."
             assetName:
               assetName ||
               (it.title
@@ -98,7 +173,6 @@ export function RepairsPage() {
                 : '(Không có tên)'),
             condition: it.description ?? '',
             brokenDate: formatDate(it.createDate),
-            // nếu backend chưa có quantity thì tối thiểu hiển thị 1
             quantity: it.assetQuantity && it.assetQuantity > 0 ? it.assetQuantity : 1,
             location: it.currentDepartmentName ?? '',
             department: it.currentDepartmentName ?? '',
@@ -110,17 +184,15 @@ export function RepairsPage() {
         if (!cancelled) setRows(mapped);
       } catch (e: any) {
         const msg = e?.response?.data?.title ?? e?.response?.data ?? e?.message;
-        message.error(typeof msg === 'string' ? msg : 'Không tải được danh sách tài sản cần sửa chữa.');
+        message.error(typeof msg === 'string' ? msg : 'Không tải được danh sách sửa chữa.');
         if (!cancelled) setRows([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
-    if (activeTab === 'need-repair') {
-      loadNeedRepair();
-    } else {
-      setRows([]);
+    if (activeTab === 'need-repair' || activeTab === 'in-repair') {
+      loadRepairList();
     }
 
     return () => {
@@ -148,6 +220,7 @@ export function RepairsPage() {
       const mapped: RepairRow[] = (res.items ?? []).map((it) => ({
         id: String(it.id),
         assetRequestId: it.id,
+        assetId: it.assetId,
         assetCode: (it.assetCode ?? '') || String(it.assetId ?? ''),
         assetName:
           (it.assetName ?? '') ||
@@ -165,6 +238,187 @@ export function RepairsPage() {
       setRows(mapped);
     } catch {
       // ignore
+    }
+  };
+
+  const openRepairStart = async (row: RepairRow) => {
+    setRepairStartRow(row);
+    setRepairStartLoading(true);
+    setRepairStartOpen(true);
+    try {
+      const det = await assetRequestService.getById(row.assetRequestId);
+      const aid = det.asset?.assetId ?? row.assetId;
+      if (aid) {
+        const asset = await assetService.getById(aid);
+        setRepairAsset(asset);
+      } else {
+        setRepairAsset(null);
+      }
+      setRepairReportNumber('');
+      setDamageDate(dayjs());
+      setDamageCondition(row.condition || '');
+      setRepairDate(dayjs());
+      setRepairExpectedDate(null);
+      setRepairEstimatedCost(null);
+      setRepairProgressStatus('');
+    } catch {
+      message.error('Không tải được thông tin tài sản.');
+      setRepairStartOpen(false);
+      setRepairStartRow(null);
+      setRepairAsset(null);
+    } finally {
+      setRepairStartLoading(false);
+    }
+  };
+
+  const submitRepairStart = async () => {
+    if (!repairStartRow || !profile?.id) return;
+    if (!damageDate) {
+      message.warning('Vui lòng chọn ngày hỏng.');
+      return;
+    }
+    if (!repairDate) {
+      message.warning('Vui lòng chọn ngày sửa chữa.');
+      return;
+    }
+    if (!repairProgressStatus.trim()) {
+      message.warning('Vui lòng nhập tình trạng sửa chữa.');
+      return;
+    }
+    setRepairStartSubmitting(true);
+    try {
+      const expectedCompletionDate = repairExpectedDate
+        ? repairExpectedDate.toISOString()
+        : undefined;
+
+      const payload: RepairStartPayload = {
+        startedBy: profile.id,
+        reportNumber: repairReportNumber.trim() || null,
+        damageDate: damageDate.toISOString(),
+        damageCondition: damageCondition.trim() || null,
+        repairDate: repairDate.toISOString(),
+        expectedCompletionDate,
+        expectedCompletionFrom: undefined,
+        expectedCompletionTo: undefined,
+        estimatedCost: repairEstimatedCost ?? undefined,
+        repairProgressStatus: repairProgressStatus.trim(),
+        comment: null,
+      };
+
+      await repairRequestService.start(repairStartRow.assetRequestId, payload);
+      message.success('Đã bắt đầu sửa chữa.');
+      setRepairStartOpen(false);
+      setRepairStartRow(null);
+      setRepairAsset(null);
+      await reload();
+    } catch (e: any) {
+      const msg = e?.response?.data ?? 'Không thể bắt đầu sửa chữa.';
+      message.error(typeof msg === 'string' ? msg : 'Không thể bắt đầu sửa chữa.');
+    } finally {
+      setRepairStartSubmitting(false);
+    }
+  };
+
+  const openRepairComplete = async (row: RepairRow) => {
+    if (row.rawStatus !== 4) {
+      message.warning('Chỉ có thể hoàn thành khi đơn đang trong trạng thái đang sửa chữa.');
+      return;
+    }
+    setRepairCompleteRow(row);
+    setRepairCompleteLoading(true);
+    setRepairCompleteOpen(true);
+    setRepairCompleteAttachments([]);
+    setRepairEditingAttachKey(null);
+    try {
+      const det = await assetRequestService.getById(row.assetRequestId);
+      const task =
+        det.repairTasks?.find((t) => t.status === 1) ?? det.repairTasks?.[0] ?? null;
+      if (!task?.taskId) {
+        message.error('Không tìm thấy công việc sửa chữa đang thực hiện.');
+        setRepairCompleteOpen(false);
+        setRepairCompleteRow(null);
+        setRepairCompleteTaskId(null);
+        return;
+      }
+      setRepairCompleteTaskId(task.taskId);
+
+      const aid = det.asset?.assetId ?? row.assetId;
+      if (aid) {
+        const asset = await assetService.getById(aid);
+        setRepairCompleteAsset(asset);
+      } else {
+        setRepairCompleteAsset(null);
+      }
+
+      let rep = '';
+      if (det.proposedData) {
+        try {
+          const pd = JSON.parse(det.proposedData) as Record<string, unknown>;
+          if (typeof pd.reportNumber === 'string') rep = pd.reportNumber;
+        } catch {
+          /* ignore */
+        }
+      }
+      setRepairCompleteReportNumber(rep);
+      setRepairCompleteCompletionDate(dayjs());
+      setRepairCompleteReturnDate(dayjs());
+      setRepairCompleteActualCost(null);
+      setRepairCompleteResult('');
+      setRepairCompleteDetail(row.condition || '');
+    } catch {
+      message.error('Không tải được thông tin tài sản.');
+      setRepairCompleteOpen(false);
+      setRepairCompleteRow(null);
+      setRepairCompleteTaskId(null);
+      setRepairCompleteAsset(null);
+    } finally {
+      setRepairCompleteLoading(false);
+    }
+  };
+
+  const submitRepairComplete = async () => {
+    if (!repairCompleteRow || !profile?.id || repairCompleteTaskId == null) return;
+    if (!repairCompleteCompletionDate) {
+      message.warning('Vui lòng chọn ngày hoàn thành sửa chữa.');
+      return;
+    }
+    if (!repairCompleteReturnDate) {
+      message.warning('Vui lòng chọn ngày đưa vào sử dụng lại.');
+      return;
+    }
+    if (repairCompleteActualCost == null || repairCompleteActualCost < 0) {
+      message.warning('Vui lòng nhập chi phí thực tế.');
+      return;
+    }
+
+    setRepairCompleteSubmitting(true);
+    try {
+      const payload: RepairCompletePayload = {
+        completedBy: profile.id,
+        reportNumber: repairCompleteReportNumber.trim() || null,
+        completionDate: repairCompleteCompletionDate.toISOString(),
+        returnToUseDate: repairCompleteReturnDate.toISOString(),
+        actualCost: repairCompleteActualCost,
+        result: repairCompleteResult.trim() || undefined,
+        detailedDescription: repairCompleteDetail.trim() || null,
+        attachmentUrls:
+          repairCompleteAttachments.length > 0
+            ? repairCompleteAttachments.map((a) => a.name.trim()).filter(Boolean)
+            : null,
+      };
+
+      await repairRequestService.complete(repairCompleteTaskId, payload);
+      message.success('Đã hoàn thành sửa chữa.');
+      setRepairCompleteOpen(false);
+      setRepairCompleteRow(null);
+      setRepairCompleteTaskId(null);
+      setRepairCompleteAsset(null);
+      await reload();
+    } catch (e: any) {
+      const msg = e?.response?.data ?? 'Không thể hoàn thành sửa chữa.';
+      message.error(typeof msg === 'string' ? msg : 'Không thể hoàn thành sửa chữa.');
+    } finally {
+      setRepairCompleteSubmitting(false);
     }
   };
 
@@ -221,7 +475,8 @@ export function RepairsPage() {
 
   const filteredData: RepairRow[] = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    return rows.filter((row) => {
+    const byTab = activeTab === 'in-repair' ? rows.filter((r) => r.rawStatus === 4) : rows;
+    return byTab.filter((row) => {
       const matchStatus = statusFilter === 'all' || row.status === statusFilter;
       const matchKeyword =
         !keyword ||
@@ -230,7 +485,7 @@ export function RepairsPage() {
         row.condition.toLowerCase().includes(keyword);
       return matchStatus && matchKeyword;
     });
-  }, [rows, search, statusFilter]);
+  }, [rows, search, statusFilter, activeTab]);
 
   return (
     <div className="repairs-page">
@@ -267,6 +522,7 @@ export function RepairsPage() {
               { value: 'submitted', label: 'Đã gửi' },
               { value: 'pending', label: 'Chờ phê duyệt' },
               { value: 'approved', label: 'Phê duyệt' },
+              { value: 'inProgress', label: 'Đang sửa chữa' },
               { value: 'rejected', label: 'Từ chối' },
             ]}
           />
@@ -343,9 +599,21 @@ export function RepairsPage() {
                           setDetailOpen(true);
                         }}
                       />
-                      <Button danger type="text" onClick={() => handleDeleteDamageReport(row)}>
-                        Xóa
-                      </Button>
+                      {activeTab === 'need-repair' && row.status === 'approved' ? (
+                        <Button type="link" size="small" onClick={() => openRepairStart(row)}>
+                          Bắt đầu SC
+                        </Button>
+                      ) : null}
+                      {activeTab === 'in-repair' && row.status === 'inProgress' ? (
+                        <Button type="link" size="small" onClick={() => openRepairComplete(row)}>
+                          Hoàn thành SC
+                        </Button>
+                      ) : null}
+                      {activeTab === 'need-repair' ? (
+                        <Button danger type="text" onClick={() => handleDeleteDamageReport(row)}>
+                          Xóa
+                        </Button>
+                      ) : null}
                     </td>
                   </tr>
                 ))
@@ -432,6 +700,480 @@ export function RepairsPage() {
             </div>
             <div>
               <b>Trạng thái:</b> {getStatusLabel(selected.status)}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        className="repair-form-modal"
+        open={repairStartOpen}
+        title="Sửa chữa tài sản"
+        width={920}
+        onCancel={() => {
+          setRepairStartOpen(false);
+          setRepairStartRow(null);
+          setRepairAsset(null);
+        }}
+        footer={
+          <div className="repair-form-modal__footer-actions">
+            <Button
+              className="repair-form-modal__btn-cancel"
+              onClick={() => {
+                setRepairStartOpen(false);
+                setRepairStartRow(null);
+                setRepairAsset(null);
+              }}
+            >
+              Hủy
+            </Button>
+            <Button
+              className="repair-form-modal__btn-send"
+              type="primary"
+              icon={<MailOutlined />}
+              loading={repairStartSubmitting}
+              onClick={submitRepairStart}
+            >
+              Gửi yêu cầu
+            </Button>
+          </div>
+        }
+        destroyOnClose
+      >
+        {repairStartLoading ? (
+          <div>Đang tải...</div>
+        ) : !repairStartRow ? (
+          <div>Không có dữ liệu.</div>
+        ) : (
+          <div>
+            <div className="repair-form-modal__section">
+              <div className="repair-form-modal__label">Số biên bản</div>
+              <Input
+                className="repair-form-modal__field-input"
+                style={{ maxWidth: 280, marginTop: 6 }}
+                value={repairReportNumber}
+                onChange={(e) => setRepairReportNumber(e.target.value)}
+                placeholder="VD: BA001"
+              />
+            </div>
+
+            <div className="repair-form-modal__section">
+              <div className="repair-form-modal__section-title">Thông tin tài sản</div>
+              <div className="repair-form-modal__readonly-grid">
+                <div>
+                  <b>Mã tài sản:</b>
+                  {repairAsset?.code ?? repairStartRow.assetCode}
+                </div>
+                <div>
+                  <b>Giá trị tài sản:</b>
+                  {repairAsset ? formatVnd(repairAsset.originalPrice) : '—'}
+                </div>
+                <div>
+                  <b>Tên tài sản:</b>
+                  {repairAsset?.name ?? repairStartRow.assetName}
+                </div>
+                <div>
+                  <b>Giá trị còn lại:</b>
+                  {repairAsset?.remainingValue != null
+                    ? formatVnd(repairAsset.remainingValue)
+                    : repairAsset
+                      ? formatVnd(repairAsset.currentValue)
+                      : '—'}
+                </div>
+                <div>
+                  <b>Loại tài sản:</b>
+                  {repairAsset?.assetTypeName ?? '—'}
+                </div>
+                <div>
+                  <b>Vị trí tài sản:</b>
+                  {repairAsset?.warehouseName ||
+                    repairAsset?.currentDepartmentName ||
+                    repairStartRow.location ||
+                    '—'}
+                </div>
+                <div>
+                  <b>Quy cách tài sản:</b>
+                  {repairAsset
+                    ? [repairAsset.unit ? `Đơn vị: ${repairAsset.unit}` : null, `SL: ${repairAsset.quantity}`]
+                        .filter(Boolean)
+                        .join(' · ')
+                    : '—'}
+                </div>
+                <div>
+                  <b>Tình trạng:</b>
+                  {repairAsset?.statusName ?? '—'}
+                </div>
+                <div>
+                  <b>Ngày mua:</b>{' '}
+                  {repairAsset?.purchaseDate ? formatDate(repairAsset.purchaseDate) : '—'}
+                </div>
+                <div>
+                  <b>Ngày đưa vào SD:</b>{' '}
+                  {repairAsset?.inUseDate ? formatDate(repairAsset.inUseDate) : '—'}
+                </div>
+                <div>
+                  <b>Hạn bảo hành:</b>{' '}
+                  {repairAsset?.warrantyEndDate ? formatDate(repairAsset.warrantyEndDate) : '—'}
+                </div>
+                <div>
+                  <b>Phòng ban SD:</b>
+                  {repairAsset?.currentDepartmentName ?? repairStartRow.department ?? '—'}
+                </div>
+              </div>
+            </div>
+
+            <div className="repair-form-modal__section">
+              <div className="repair-form-modal__section-title">Thông tin ghi nhận tài sản hỏng</div>
+              <Row gutter={[16, 12]}>
+                <Col xs={24} md={12}>
+                  <div className="repair-form-modal__label repair-form-modal__label--req">Ngày hỏng</div>
+                  <DatePicker
+                    className="repair-form-modal__field-input"
+                    style={{ width: '100%', marginTop: 4 }}
+                    format="DD/MM/YYYY"
+                    value={damageDate}
+                    onChange={(v) => setDamageDate(v)}
+                  />
+                </Col>
+                <Col xs={24} md={12}>
+                  <div className="repair-form-modal__label">Tình trạng</div>
+                  <Input.TextArea
+                    className="repair-form-modal__field-input"
+                    rows={2}
+                    style={{ marginTop: 4 }}
+                    value={damageCondition}
+                    onChange={(e) => setDamageCondition(e.target.value)}
+                    placeholder="VD: Hỏng nhẹ"
+                  />
+                </Col>
+              </Row>
+              <div className="repair-form-modal__label" style={{ marginTop: 12 }}>
+                Tài liệu đính kèm
+              </div>
+              <div className="repair-form-modal__attachments">
+                {['Thông tin máy', 'Thông tin nhà cung cấp'].map((name, i) => (
+                  <div key={name} className="repair-form-modal__attach-row">
+                    <span>
+                      #{i + 1} {name}
+                    </span>
+                    <Button type="text" icon={<DownloadOutlined />} disabled title="Tích hợp tải file sau" />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="repair-form-modal__section" style={{ marginBottom: 0 }}>
+              <div className="repair-form-modal__section-title">Thông tin sửa chữa</div>
+              <Row gutter={[20, 16]}>
+                <Col xs={24} md={12}>
+                  <div className="repair-form-modal__label repair-form-modal__label--req">Ngày sửa chữa</div>
+                  <DatePicker
+                    className="repair-form-modal__field-input"
+                    style={{ width: '100%', marginTop: 4 }}
+                    format="DD/MM/YYYY"
+                    value={repairDate}
+                    onChange={(v) => setRepairDate(v)}
+                  />
+                  <div className="repair-form-modal__label" style={{ marginTop: 12 }}>
+                    Ngày dự kiến hoàn thành
+                  </div>
+                  <DatePicker
+                    className="repair-form-modal__field-input"
+                    style={{ width: '100%', marginTop: 4 }}
+                    format="DD/MM/YYYY"
+                    value={repairExpectedDate}
+                    onChange={(v) => setRepairExpectedDate(v)}
+                  />
+                  <div className="repair-form-modal__label" style={{ marginTop: 12 }}>
+                    Chi phí dự kiến
+                  </div>
+                  <InputNumber
+                    className="repair-form-modal__field-input"
+                    style={{ width: '100%', marginTop: 4 }}
+                    min={0}
+                    value={repairEstimatedCost ?? undefined}
+                    onChange={(v) => setRepairEstimatedCost(typeof v === 'number' ? v : null)}
+                    formatter={(v) =>
+                      v != null && String(v) !== ''
+                        ? `${String(v).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}₫`
+                        : ''
+                    }
+                    parser={(v) => {
+                      const n = Number(String(v ?? '').replace(/\./g, '').replace('₫', '').trim());
+                      return Number.isFinite(n) ? n : 0;
+                    }}
+                  />
+                </Col>
+                <Col xs={24} md={12}>
+                  <div className="repair-form-modal__label repair-form-modal__label--req">
+                    Tình trạng sửa chữa
+                  </div>
+                  <Input.TextArea
+                    className="repair-form-modal__field-input"
+                    rows={10}
+                    style={{ marginTop: 4 }}
+                    value={repairProgressStatus}
+                    onChange={(e) => setRepairProgressStatus(e.target.value)}
+                    placeholder="Mô tả tình trạng / kế hoạch sửa chữa"
+                  />
+                </Col>
+              </Row>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        className="repair-form-modal"
+        open={repairCompleteOpen}
+        title="Hoàn thành sửa chữa tài sản"
+        width={920}
+        onCancel={() => {
+          setRepairCompleteOpen(false);
+          setRepairCompleteRow(null);
+          setRepairCompleteTaskId(null);
+          setRepairCompleteAsset(null);
+        }}
+        footer={
+          <div className="repair-form-modal__footer-actions">
+            <Button
+              className="repair-form-modal__btn-cancel"
+              onClick={() => {
+                setRepairCompleteOpen(false);
+                setRepairCompleteRow(null);
+                setRepairCompleteTaskId(null);
+                setRepairCompleteAsset(null);
+              }}
+            >
+              Hủy
+            </Button>
+            <Button
+              className="repair-form-modal__btn-send"
+              type="primary"
+              icon={<CheckOutlined />}
+              loading={repairCompleteSubmitting}
+              onClick={submitRepairComplete}
+            >
+              Lưu
+            </Button>
+          </div>
+        }
+        destroyOnClose
+      >
+        {repairCompleteLoading ? (
+          <div>Đang tải...</div>
+        ) : !repairCompleteRow ? (
+          <div>Không có dữ liệu.</div>
+        ) : (
+          <div>
+            <div className="repair-form-modal__section">
+              <div className="repair-form-modal__label">Số biên bản</div>
+              <Input
+                className="repair-form-modal__field-input"
+                style={{ maxWidth: 280, marginTop: 6 }}
+                value={repairCompleteReportNumber}
+                onChange={(e) => setRepairCompleteReportNumber(e.target.value)}
+                placeholder="VD: BA001"
+              />
+            </div>
+
+            <div className="repair-form-modal__section">
+              <div className="repair-form-modal__section-title">Thông tin tài sản</div>
+              <div className="repair-form-modal__readonly-grid">
+                <div>
+                  <b>Mã tài sản:</b>
+                  {repairCompleteAsset?.code ?? repairCompleteRow.assetCode}
+                </div>
+                <div>
+                  <b>Giá trị tài sản:</b>
+                  {repairCompleteAsset ? formatVnd(repairCompleteAsset.originalPrice) : '—'}
+                </div>
+                <div>
+                  <b>Tên tài sản:</b>
+                  {repairCompleteAsset?.name ?? repairCompleteRow.assetName}
+                </div>
+                <div>
+                  <b>Giá trị còn lại:</b>
+                  {repairCompleteAsset?.remainingValue != null
+                    ? formatVnd(repairCompleteAsset.remainingValue)
+                    : repairCompleteAsset
+                      ? formatVnd(repairCompleteAsset.currentValue)
+                      : '—'}
+                </div>
+                <div>
+                  <b>Loại tài sản:</b>
+                  {repairCompleteAsset?.assetTypeName ?? '—'}
+                </div>
+                <div>
+                  <b>Vị trí tài sản:</b>
+                  {repairCompleteAsset?.warehouseName ||
+                    repairCompleteAsset?.currentDepartmentName ||
+                    repairCompleteRow.location ||
+                    '—'}
+                </div>
+                <div>
+                  <b>Quy cách tài sản:</b>
+                  {repairCompleteAsset
+                    ? [
+                        repairCompleteAsset.unit ? `Đơn vị: ${repairCompleteAsset.unit}` : null,
+                        `SL: ${repairCompleteAsset.quantity}`,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
+                    : '—'}
+                </div>
+                <div>
+                  <b>Tình trạng:</b>
+                  {repairCompleteAsset?.statusName ?? '—'}
+                </div>
+                <div>
+                  <b>Hạn bảo hành:</b>{' '}
+                  {repairCompleteAsset?.warrantyEndDate
+                    ? formatDate(repairCompleteAsset.warrantyEndDate)
+                    : '—'}
+                </div>
+                <div>
+                  <b>Phòng ban SD:</b>
+                  {repairCompleteAsset?.currentDepartmentName ?? repairCompleteRow.department ?? '—'}
+                </div>
+              </div>
+            </div>
+
+            <div className="repair-form-modal__section">
+              <div className="repair-form-modal__section-title">Thông tin hoàn thành sửa chữa</div>
+              <Row gutter={[16, 12]}>
+                <Col xs={24} md={12}>
+                  <div className="repair-form-modal__label repair-form-modal__label--req">
+                    Ngày hoàn thành sửa chữa
+                  </div>
+                  <DatePicker
+                    className="repair-form-modal__field-input"
+                    style={{ width: '100%', marginTop: 4 }}
+                    format="DD/MM/YYYY"
+                    value={repairCompleteCompletionDate}
+                    onChange={(v) => setRepairCompleteCompletionDate(v)}
+                  />
+                </Col>
+                <Col xs={24} md={12}>
+                  <div className="repair-form-modal__label repair-form-modal__label--req">
+                    Ngày đưa vào sử dụng lại
+                  </div>
+                  <DatePicker
+                    className="repair-form-modal__field-input"
+                    style={{ width: '100%', marginTop: 4 }}
+                    format="DD/MM/YYYY"
+                    value={repairCompleteReturnDate}
+                    onChange={(v) => setRepairCompleteReturnDate(v)}
+                  />
+                </Col>
+                <Col xs={24} md={12}>
+                  <div className="repair-form-modal__label repair-form-modal__label--req">
+                    Chi phí thực tế
+                  </div>
+                  <InputNumber
+                    className="repair-form-modal__field-input"
+                    style={{ width: '100%', marginTop: 4 }}
+                    min={0}
+                    value={repairCompleteActualCost ?? undefined}
+                    onChange={(v) =>
+                      setRepairCompleteActualCost(typeof v === 'number' ? v : null)
+                    }
+                    formatter={(v) =>
+                      v != null && String(v) !== ''
+                        ? `${String(v).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}₫`
+                        : ''
+                    }
+                    parser={(v) => {
+                      const n = Number(String(v ?? '').replace(/\./g, '').replace('₫', '').trim());
+                      return Number.isFinite(n) ? n : 0;
+                    }}
+                  />
+                </Col>
+                <Col span={24}>
+                  <div className="repair-form-modal__label">Kết quả sửa chữa</div>
+                  <Input
+                    className="repair-form-modal__field-input"
+                    style={{ marginTop: 4 }}
+                    value={repairCompleteResult}
+                    onChange={(e) => setRepairCompleteResult(e.target.value)}
+                    placeholder="Tóm tắt kết quả"
+                  />
+                </Col>
+                <Col span={24}>
+                  <div className="repair-form-modal__label">Mô tả chi tiết</div>
+                  <Input.TextArea
+                    className="repair-form-modal__field-input"
+                    rows={3}
+                    style={{ marginTop: 4 }}
+                    value={repairCompleteDetail}
+                    onChange={(e) => setRepairCompleteDetail(e.target.value)}
+                  />
+                </Col>
+              </Row>
+
+              <div className="repair-form-modal__label" style={{ marginTop: 14 }}>
+                Tài liệu đính kèm
+              </div>
+              <div className="repair-form-modal__attachments">
+                {repairCompleteAttachments.map((att) => (
+                  <div key={att.key} className="repair-form-modal__attach-row">
+                    {repairEditingAttachKey === att.key ? (
+                      <Input
+                        size="small"
+                        defaultValue={att.name}
+                        onBlur={(e) => {
+                          const v = e.target.value.trim() || att.name;
+                          setRepairCompleteAttachments((prev) =>
+                            prev.map((x) => (x.key === att.key ? { ...x, name: v } : x))
+                          );
+                          setRepairEditingAttachKey(null);
+                        }}
+                        onPressEnter={(e) => (e.target as HTMLInputElement).blur()}
+                        autoFocus
+                      />
+                    ) : (
+                      <span>{att.name}</span>
+                    )}
+                    <span>
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={() =>
+                          setRepairEditingAttachKey(
+                            repairEditingAttachKey === att.key ? null : att.key
+                          )
+                        }
+                      />
+                      <Button
+                        type="text"
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() =>
+                          setRepairCompleteAttachments((prev) =>
+                            prev.filter((x) => x.key !== att.key)
+                          )
+                        }
+                      />
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <Button
+                type="primary"
+                ghost
+                icon={<PlusOutlined />}
+                style={{ marginTop: 8 }}
+                onClick={() =>
+                  setRepairCompleteAttachments((prev) => [
+                    ...prev,
+                    { key: `att-${Date.now()}`, name: `Tài liệu ${prev.length + 1}` },
+                  ])
+                }
+              >
+                Thêm file đính kèm
+              </Button>
             </div>
           </div>
         )}

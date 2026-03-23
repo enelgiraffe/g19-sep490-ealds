@@ -54,7 +54,7 @@ public class DisposalRequestsController : ControllerBase
             Title = dto.Title,
             Description = dto.Description,
             ProposedData = null,
-            Status = (int)AssetRequestStatus.Draft,
+            Status = 0,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow,
             StepId = 0
@@ -87,8 +87,8 @@ public class DisposalRequestsController : ControllerBase
         var record = new AssetRequestRecord
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            FromStatus = (int)AssetRequestStatus.Draft,
-            ToStatus = (int)AssetRequestStatus.Draft,
+            FromStatus = 0,
+            ToStatus = 0,
             Action = 0,
             ActionByUserId = dto.CreatedBy,
             ActionRoleId = actionRoleId,

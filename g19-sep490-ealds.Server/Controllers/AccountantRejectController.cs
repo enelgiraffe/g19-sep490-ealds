@@ -28,8 +28,11 @@ public class AccountantRejectController : ControllerBase
         var ar = await _db.AssetRequests.FindAsync(id);
         if (ar==null) return NotFound();
         var fromStatus = ar.Status;
-        if (ar.Status != (int)AssetRequestStatus.Draft)
-            return BadRequest("Only draft requests can be rejected by accountant.");
+        var isTransfer =
+            ar.RequestTypeId == _transferRequestTypeId
+            || await _db.TransferRecords.AsNoTracking().AnyAsync(tr => tr.AssetRequestId == ar.AssetRequestId);
+        if (!(ar.Status == 0 || (isTransfer && ar.Status == 1)))
+            return BadRequest("Only requests with status=0 (Sent) can be rejected by accountant.");
 
         var userRole = await _db.UserRoles.AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.ApprovedBy);
 
@@ -66,8 +69,11 @@ public class AccountantRejectController : ControllerBase
             _db.Approvals.Add(approval);
         }
         
-        ar.Status = (int)AssetRequestStatus.Rejected;
-        ar.ApproveDate = DateTime.UtcNow;
+        // Accounting rejection:
+        // - Purchase/etc: return to draft for creator to edit/resend => 0 -> -1
+        // - Transfer: mark request as rejected => 1 -> 3
+        ar.Status = isTransfer ? 3 : -1;
+        ar.ApproveDate = null;
 
         var record = new AssetRequestRecord
         {

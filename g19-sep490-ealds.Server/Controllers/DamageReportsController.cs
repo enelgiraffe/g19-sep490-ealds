@@ -46,7 +46,8 @@ public class DamageReportsController : ControllerBase
             Description = dto.Description,
             // store document reference (if any) in ProposedData so frontend can retrieve it
             ProposedData = dto.DocumentId.HasValue ? dto.DocumentId.Value.ToString() : null,
-            Status = (int)AssetRequestStatus.Draft,
+            // Submitted to approval flow immediately
+            Status = 1,
             CreatedBy = dto.ReportedBy,
             CreateDate = DateTime.UtcNow,
             StepId = 0
@@ -65,8 +66,8 @@ public class DamageReportsController : ControllerBase
         var record = new AssetRequestRecord
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            FromStatus = (int)AssetRequestStatus.Draft,
-            ToStatus = (int)AssetRequestStatus.Draft,
+            FromStatus = 1,
+            ToStatus = 1,
             Action = 0,
             ActionByUserId = dto.ReportedBy,
             ActionRoleId = actionRoleId,
@@ -85,8 +86,8 @@ public class DamageReportsController : ControllerBase
                 return BadRequest("Document not found.");
         }
 
-        // Return Created pointing to the repair request path where frontend can proceed to create a repair request.
-        var location = $"/api/Assets/Requests/repair";
+        // Return location of the created request resource.
+        var location = $"/api/Assets/Requests/{assetRequest.AssetRequestId}";
         return Created(location, new { assetRequestId = assetRequest.AssetRequestId });
     }
 

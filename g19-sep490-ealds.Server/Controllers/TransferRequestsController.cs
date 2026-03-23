@@ -137,7 +137,8 @@ public class TransferRequestsController : ControllerBase
             Title = title,
             Description = dto.Description,
             ProposedData = null,
-            Status = (int)AssetRequestStatus.Draft,
+            // User is submitting a transfer request (not saving draft)
+            Status = 1,
             CreatedBy = userId,
             CreateDate = DateTime.UtcNow,
             StepId = 0
@@ -166,8 +167,8 @@ public class TransferRequestsController : ControllerBase
         var record = new AssetRequestRecord
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            FromStatus = (int)AssetRequestStatus.Draft,
-            ToStatus = (int)AssetRequestStatus.Draft,
+            FromStatus = 0,
+            ToStatus = 1,
             Action = 0,
             ActionByUserId = userId,
             ActionRoleId = actionRoleId,

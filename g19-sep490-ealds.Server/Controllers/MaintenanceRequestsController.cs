@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -99,7 +101,8 @@ public class MaintenanceRequestsController : ControllerBase
             Title = title,
             Description = dto.Description,
             ProposedData = null,
-            Status = (int)AssetRequestStatus.Draft,
+            // Vừa tạo là "Đã nộp" để tránh hiển thị "Chưa gửi"
+            Status = 1,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow,
             StepId = 0
@@ -136,8 +139,8 @@ public class MaintenanceRequestsController : ControllerBase
         var record = new AssetRequestRecord
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            FromStatus = (int)AssetRequestStatus.Draft,
-            ToStatus = (int)AssetRequestStatus.Draft,
+            FromStatus = assetRequest.Status,
+            ToStatus = assetRequest.Status,
             Action = 0,
             ActionByUserId = dto.CreatedBy,
             ActionRoleId = actionRoleId,
@@ -198,9 +201,9 @@ public class MaintenanceRequestsController : ControllerBase
         if (ar == null)
             return NotFound(new { message = $"Maintenance request {assetRequestId} not found." });
 
-        // Only allow deleting when request is still in Draft state.
-        if (ar.Status != (int)AssetRequestStatus.Draft)
-            return BadRequest("Chỉ được xóa đề xuất bảo dưỡng khi đang ở trạng thái Nháp.");
+        // Allow delete only when request is Draft(0) or Submitted(1)
+        if (ar.Status > 1)
+            return BadRequest("Chỉ được xóa đề xuất bảo dưỡng khi đang ở trạng thái Nháp hoặc Đã nộp.");
 
         await using var tx = await _db.Database.BeginTransactionAsync();
         try
@@ -227,15 +230,21 @@ public class MaintenanceRequestsController : ControllerBase
     }
 
     [HttpPost("{id}/start")]
-    public async Task<IActionResult> StartMaintenance(int id, [FromBody] ApprovalActionDto dto)
+    public async Task<IActionResult> StartMaintenance(int id, [FromBody] MaintenanceStartDto dto)
     {
+        if (dto == null)
+            return BadRequest("Request body is required.");
+        if (dto.StartedBy <= 0)
+            return BadRequest("StartedBy is required.");
+
         var ar = await _db.AssetRequests.FindAsync(id);
         if (ar == null) return NotFound();
 
-        if (ar.Status != (int)AssetRequestStatus.Approved)
-            return BadRequest("Only approved requests can be started.");
+        var isFinalApproved = await IsFinalApprovedByWorkflowAsync(ar);
+        if (!isFinalApproved)
+            return BadRequest("Only requests approved at final workflow step can be started.");
 
-        var userRole = await _db.UserRoles.Include(ur => ur.Role).AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.ApprovedBy);
+        var userRole = await _db.UserRoles.Include(ur => ur.Role).AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.StartedBy);
         var role = userRole?.Role;
         var allowed = role != null && (
             (role.Code != null && (role.Code.Equals("DepartmentManager", StringComparison.OrdinalIgnoreCase) || role.Code.Equals("Accountant", StringComparison.OrdinalIgnoreCase)))
@@ -245,15 +254,46 @@ public class MaintenanceRequestsController : ControllerBase
         if (!allowed) return Forbid();
 
         var from = ar.Status;
-        ar.Status = (int)AssetRequestStatus.ConfirmedStart;
+        ar.Status = 4;
 
         // mark related maintenance task as in-progress
         var task = await _db.MaintenaceTasks.FirstOrDefaultAsync(t => t.AssetRequestId == ar.AssetRequestId);
         if (task != null)
         {
+            if (dto.MaintenanceDate.HasValue)
+                task.PlannedDate = dto.MaintenanceDate.Value;
+            if (dto.PerformerUserId.HasValue && dto.PerformerUserId.Value > 0)
+                task.AssignTo = dto.PerformerUserId.Value;
+            if (!string.IsNullOrWhiteSpace(dto.Location))
+                task.Address = dto.Location;
             task.Status = 1; // in-progress
             _db.MaintenaceTasks.Update(task);
         }
+
+        if (!string.IsNullOrWhiteSpace(dto.DetailedDescription))
+            ar.Description = dto.DetailedDescription;
+
+        Dictionary<string, object?> startData = new()
+        {
+            ["flowType"] = "maintenance-start",
+            ["reportNumber"] = dto.ReportNumber,
+            ["maintenanceDate"] = dto.MaintenanceDate,
+            ["performerUserId"] = dto.PerformerUserId,
+            ["maintenanceProvider"] = dto.MaintenanceProvider,
+            ["estimatedCost"] = dto.EstimatedCost,
+            ["expectedCompletionDate"] = dto.ExpectedCompletionDate,
+            ["expectedCompletionFrom"] = dto.ExpectedCompletionFrom,
+            ["expectedCompletionTo"] = dto.ExpectedCompletionTo,
+            ["maintenanceContent"] = dto.MaintenanceContent,
+            ["detailedDescription"] = dto.DetailedDescription,
+            ["locationType"] = dto.LocationType,
+            ["location"] = dto.Location,
+            ["attachmentDocumentIds"] = dto.AttachmentDocumentIds,
+            ["attachmentUrls"] = dto.AttachmentUrls
+        };
+        if (!string.IsNullOrWhiteSpace(ar.ProposedData))
+            startData["legacyProposedData"] = ar.ProposedData;
+        ar.ProposedData = JsonSerializer.Serialize(startData);
 
         var record = new AssetRequestRecord
         {
@@ -261,7 +301,7 @@ public class MaintenanceRequestsController : ControllerBase
             FromStatus = from,
             ToStatus = ar.Status,
             Action = 2,
-            ActionByUserId = dto.ApprovedBy,
+            ActionByUserId = dto.StartedBy,
             ActionRoleId = userRole?.RoleId ?? 0,
             Comment = dto.Comment,
             OccurredAt = DateTime.UtcNow
@@ -273,21 +313,80 @@ public class MaintenanceRequestsController : ControllerBase
         return Ok(new { assetRequestId = ar.AssetRequestId, status = ar.Status, taskId = task?.TaskId });
     }
 
+    private async Task<bool> IsFinalApprovedByWorkflowAsync(AssetRequest ar)
+    {
+        var workflowId = await _db.RequestTypes.AsNoTracking()
+            .Where(rt => rt.RequestTypeId == ar.RequestTypeId)
+            .Select(rt => (int?)rt.WorkflowId)
+            .FirstOrDefaultAsync();
+
+        if (!workflowId.HasValue || workflowId.Value == 0)
+            return ar.Status == 2 || ar.Status == 4;
+
+        var finalStepId = await _db.WorkflowSteps.AsNoTracking()
+            .Where(ws => ws.WorkflowId == workflowId.Value)
+            .OrderBy(ws => ws.StepOrder)
+            .Select(ws => (int?)ws.StepId)
+            .LastOrDefaultAsync();
+
+        if (!finalStepId.HasValue)
+            return ar.Status == 2 || ar.Status == 4;
+
+        return await _db.Approvals.AsNoTracking().AnyAsync(a =>
+            a.AssetRequestId == ar.AssetRequestId
+            && a.StepId == finalStepId.Value
+            && a.Decision == 1);
+    }
+
     [HttpPost("tasks/{taskId}/complete")]
     public async Task<IActionResult> CompleteMaintenance(int taskId, [FromBody] Models.DTOs.MaintenanceCompleteDto dto)
     {
+        if (dto == null)
+            return BadRequest("Request body is required.");
+        if (dto.CompletedBy <= 0)
+            return BadRequest("CompletedBy is required.");
+
         var task = await _db.MaintenaceTasks.FindAsync(taskId);
         if (task == null) return NotFound();
+
+        // Chỉ cho phép hoàn thành khi task đã được bắt đầu (Start) — Status = 1 đang thực hiện.
+        if (task.Status != 1)
+            return BadRequest("Maintenance can only be completed while the task is in progress.");
+
+        AssetRequest? linkedRequest = null;
+        if (task.AssetRequestId.HasValue)
+        {
+            linkedRequest = await _db.AssetRequests.FindAsync(task.AssetRequestId.Value);
+            if (linkedRequest != null
+                && linkedRequest.RequestTypeId == _maintenanceRequestTypeId
+                && linkedRequest.Status != 4)
+                return BadRequest("Maintenance can only be completed for requests in the in-progress maintenance state (status 4).");
+        }
+
+        var executionDate = dto.CompletionDate ?? dto.ExecutionDate ?? DateTime.UtcNow;
+        var totalCost = dto.ActualCost ?? dto.TotalCost;
+        var workPerformed = dto.MaintenanceContent ?? dto.WorkPerformed ?? string.Empty;
+        var conditionBefore = dto.ConditionBefore ?? string.Empty;
+        var conditionAfter = dto.DetailedDescription ?? dto.ConditionAfter ?? string.Empty;
+
+        var noteParts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(dto.ReportNumber))
+            noteParts.Add($"ReportNumber: {dto.ReportNumber}");
+        if (dto.ReturnToUseDate.HasValue)
+            noteParts.Add($"ReturnToUseDate: {dto.ReturnToUseDate.Value:O}");
+        if (!string.IsNullOrWhiteSpace(dto.TechnicalNote))
+            noteParts.Add(dto.TechnicalNote);
+        var technicalNote = noteParts.Count > 0 ? string.Join("\n", noteParts) : null;
 
         var mr = new MaintenanceRecord
         {
             TaskId = task.TaskId,
-            ExecutionDate = dto.ExecutionDate ?? DateTime.UtcNow,
-            TotalCost = dto.TotalCost,
-            WorkPerformed = dto.WorkPerformed ?? string.Empty,
-            ConditionBefore = dto.ConditionBefore ?? string.Empty,
-            ConditionAfter = dto.ConditionAfter ?? string.Empty,
-            TechnicalNote = dto.TechnicalNote,
+            ExecutionDate = executionDate,
+            TotalCost = totalCost,
+            WorkPerformed = workPerformed,
+            ConditionBefore = conditionBefore,
+            ConditionAfter = conditionAfter,
+            TechnicalNote = technicalNote,
             Status = 1
         };
 
@@ -296,26 +395,58 @@ public class MaintenanceRequestsController : ControllerBase
         task.Status = 2; // completed
         _db.MaintenaceTasks.Update(task);
 
-        // add asset request record if linked
-        if (task.AssetRequestId.HasValue)
+        if (linkedRequest != null)
         {
-            var ar = await _db.AssetRequests.FindAsync(task.AssetRequestId.Value);
-            if (ar != null)
+            var completionNode = new JsonObject
             {
-                var rec = new AssetRequestRecord
-                {
-                    AssetRequestId = ar.AssetRequestId,
-                    FromStatus = ar.Status,
-                    ToStatus = ar.Status,
-                    Action = 3,
-                    ActionByUserId = dto.CompletedBy,
-                    ActionRoleId = 0,
-                    Comment = "Maintenance completed",
-                    OccurredAt = DateTime.UtcNow
-                };
+                ["flowType"] = "maintenance-complete",
+                ["reportNumber"] = dto.ReportNumber,
+                ["completionDate"] = JsonSerializer.SerializeToNode(executionDate),
+                ["returnToUseDate"] = dto.ReturnToUseDate.HasValue
+                    ? JsonSerializer.SerializeToNode(dto.ReturnToUseDate.Value)
+                    : null,
+                ["actualCost"] = totalCost,
+                ["attachmentDocumentIds"] = dto.AttachmentDocumentIds != null
+                    ? JsonSerializer.SerializeToNode(dto.AttachmentDocumentIds)
+                    : null,
+                ["attachmentUrls"] = dto.AttachmentUrls != null
+                    ? JsonSerializer.SerializeToNode(dto.AttachmentUrls)
+                    : null,
+                ["completedAt"] = JsonSerializer.SerializeToNode(DateTime.UtcNow)
+            };
 
-                _db.AssetRequestRecords.Add(rec);
+            JsonObject root;
+            if (string.IsNullOrWhiteSpace(linkedRequest.ProposedData))
+                root = new JsonObject();
+            else
+            {
+                try
+                {
+                    var parsed = JsonNode.Parse(linkedRequest.ProposedData);
+                    root = parsed as JsonObject ?? new JsonObject { ["legacy"] = parsed };
+                }
+                catch
+                {
+                    root = new JsonObject { ["legacyProposedDataRaw"] = linkedRequest.ProposedData };
+                }
             }
+
+            root["maintenanceCompletion"] = completionNode;
+            linkedRequest.ProposedData = root.ToJsonString();
+
+            var rec = new AssetRequestRecord
+            {
+                AssetRequestId = linkedRequest.AssetRequestId,
+                FromStatus = linkedRequest.Status,
+                ToStatus = linkedRequest.Status,
+                Action = 3,
+                ActionByUserId = dto.CompletedBy,
+                ActionRoleId = 0,
+                Comment = "Maintenance completed",
+                OccurredAt = DateTime.UtcNow
+            };
+
+            _db.AssetRequestRecords.Add(rec);
         }
 
         await _db.SaveChangesAsync();

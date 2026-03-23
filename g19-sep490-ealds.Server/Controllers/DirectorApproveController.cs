@@ -26,8 +26,15 @@ public class DirectorApproveController : ControllerBase
         var ar = await _db.AssetRequests.FindAsync(id);
         if (ar==null) return NotFound();
         var fromStatus = ar.Status;
-        if (ar.Status != (int)AssetRequestStatus.Draft)
-            return BadRequest("Only draft requests can be approved by director.");
+        var isTransfer =
+            ar.RequestTypeId == _transferRequestTypeId
+            || await _db.TransferRecords.AsNoTracking().AnyAsync(tr => tr.AssetRequestId == ar.AssetRequestId);
+
+        // Director approval:
+        // - Purchase/etc: status=1 (Waiting director approval) -> 2 (Approved)
+        // - Transfer: status=2 (Waiting director approval after accountant) -> 4 (Approved)
+        if (!(ar.Status == 1 || (isTransfer && ar.Status == 2)))
+            return BadRequest("Only requests awaiting director decision can be approved by director.");
 
         var userRole = await _db.UserRoles.AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.ApprovedBy);
         
@@ -72,10 +79,6 @@ public class DirectorApproveController : ControllerBase
         if (step == null)
             return BadRequest("No workflow steps exist in the system. Please configure WorkflowStep data first.");
 
-        // Prevent approving when the workflow is still on a different step.
-        if (ar.StepId != 0 && ar.StepId != step.StepId)
-            return BadRequest("Only the current workflow step can be approved by director.");
-
         ar.StepId = step.StepId;
         var approval = new Approval
         {
@@ -89,7 +92,8 @@ public class DirectorApproveController : ControllerBase
         };
         _db.Approvals.Add(approval);
 
-        ar.Status = (int)AssetRequestStatus.Approved; ar.ApproveDate = DateTime.UtcNow;
+        ar.Status = isTransfer ? 4 : 2; // approved
+        ar.ApproveDate = DateTime.UtcNow;
 
         var record = new AssetRequestRecord
         {

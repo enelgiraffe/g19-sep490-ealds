@@ -22,7 +22,10 @@ public class RequestStartController : ControllerBase
         var ar = await _db.AssetRequests.FindAsync(id);
         if (ar == null) return NotFound();
 
-        if (ar.Status != (int)AssetRequestStatus.Approved)
+        // Hard-coded workflow statuses:
+        // - non-transfer approved = 2
+        // - transfer approved = 4
+        if (ar.Status != 2 && ar.Status != 4)
             return BadRequest("Only approved requests can be confirmed to start.");
 
         // permission: allow users with Manager/Director/Accountant roles
@@ -36,7 +39,8 @@ public class RequestStartController : ControllerBase
         if (!allowed) return Forbid();
 
         var from = ar.Status;
-        ar.Status = (int)AssetRequestStatus.ConfirmedStart;
+        // Keep within the shared hard-coded status flow (-1..4).
+        ar.Status = 4;
 
         var record = new AssetRequestRecord
         {
