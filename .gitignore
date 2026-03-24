@@ -164,3 +164,4 @@ bin/
 obj/
 .buildtmp/
 .build-temp/
+g19-sep490-ealds.Server/Mappers/IAssetTypeMapper.cs

@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Models;
 
@@ -69,4 +69,11 @@ public partial class MaintenaceTask
     [ForeignKey("ScheduleId")]
     [InverseProperty("MaintenaceTasks")]
     public virtual MaintenanceSchedule? Schedule { get; set; }
+
+    [NotMapped]
+    public MaintenanceTaskStatus StatusEnum
+    {
+        get => (MaintenanceTaskStatus)Status;
+        set => Status = (int)value;
+    }
 }

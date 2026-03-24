@@ -89,6 +89,9 @@ public partial class Asset
     [InverseProperty("Asset")]
     public virtual ICollection<TransferRecord> TransferRecords { get; set; } = new List<TransferRecord>();
 
+    [InverseProperty("Asset")]
+    public virtual ICollection<MaintenanceRecord> MaintenanceRecords { get; set; } = new List<MaintenanceRecord>();
+
     [ForeignKey("WarehouseId")]
     [InverseProperty("Assets")]
     public virtual WarehouseAsset Warehouse { get; set; } = null!;

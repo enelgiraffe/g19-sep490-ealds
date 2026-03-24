@@ -28,6 +28,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.*" />
+    <PackageReference Include="Quartz.Extensions.Hosting" Version="3.16.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.*" />
     <PackageReference Include="MailKit" Version="4.15.1" />
@@ -43,6 +44,27 @@
     <Content Update="appsettings.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Controllers\AssetCapitalizationController.cs" />
+    <Compile Remove="Controllers\AssetTypeController.cs" />
+    <Compile Remove="DTO\EntitiesDTO\AssetCapitaliztionDTO.cs" />
+    <Compile Remove="DTO\RequestDTO\AssetCapitalizationFromRequestDTO.cs" />
+    <Compile Remove="DTO\RequestDTO\AssetCapitalizationRequestDTO.cs" />
+    <Compile Remove="DTO\RequestDTO\AssetType\**\*.cs" />
+    <Compile Remove="DTO\ResponseDTO\AssetCapitalizationResponseDTO.cs" />
+    <Compile Remove="DTO\ResponseDTO\AssetTypeResponseDTO.cs" />
+    <Compile Remove="Mappers\IAssetCapitalizationMapper.cs" />
+    <Compile Remove="Mappers\IAssetTypeMapper.cs" />
+    <Compile Remove="Mappers\Implementation\AssetCapitalizationMapper.cs" />
+    <Compile Remove="Mappers\Implementation\AssetTypeMapper.cs" />
+    <Compile Remove="Models\DTO\RequestDTO\AssetCapitalizationFromRequestDTO.cs" />
+    <Compile Remove="Models\DTO\RequestDTO\AssetCapitalizationRequestDTO.cs" />
+    <Compile Remove="Services\Implementation\AssetCapitalizationService.cs" />
+    <Compile Remove="Services\Implementation\AssetTypeService.cs" />
+    <Compile Remove="Services\Interface\IAssetCapitalizationService.cs" />
+    <Compile Remove="Services\Interface\IAssetTypeService.cs" />
   </ItemGroup>
 
 </Project>

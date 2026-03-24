@@ -1,8 +1,8 @@
 using g19_sep490_ealds.Server.Events.Command;
 using g19_sep490_ealds.Server.Mappers;
-using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTO.RequestDTO;
 using g19_sep490_ealds.Server.Models.DTO.ResponseDTO;
+using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.ServiceInterface;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using MediatR;
@@ -20,15 +20,18 @@ public class AssetCapitalizationService : IAssetCapitalizationService
     private readonly EaldsDbContext _context;
     private readonly IAssetCapitalizationMapper _mapper;
     private readonly IMediator _mediator;
+    private readonly ILogger<AssetCapitalizationService> _logger;
 
     public AssetCapitalizationService(
         EaldsDbContext context,
         IAssetCapitalizationMapper mapper,
-        IMediator mediator)
+        IMediator mediator,
+        ILogger<AssetCapitalizationService> logger)
     {
         _context = context;
         _mapper = mapper;
         _mediator = mediator;
+        _logger = logger;
     }
 
     public async Task<AssetCapitalizationResponseDTO> CapitalizeAssetAsync(AssetCapitalizationRequestDTO request, int userId)
@@ -51,6 +54,11 @@ public class AssetCapitalizationService : IAssetCapitalizationService
         {
             var oldStatus = (int)asset.StatusEnum;
             var role = 1;
+            //tam check, sau tao validate sau
+            if(asset.OriginalPrice <= 30000000)
+            {
+                _logger.LogWarning("Tai san khong du dieu kien la TSCD");
+            }
 
             var entity = _mapper.ToEntity(request.AssetId, request.Note, userId);
 

@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
-namespace g19_sep490_ealds.Server.Models.DTO.EntitiesDTO;
+namespace g19_sep490_ealds.Server.DTO.EntitiesDTO;
 
 public class AssetCapitaliztionDTO 
 {
