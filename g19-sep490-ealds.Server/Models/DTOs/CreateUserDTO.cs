@@ -6,15 +6,32 @@ namespace g19_sep490_ealds.Server.Models.DTOs;
 public class CreateUserDTO
 {
     [Required]
+    [MaxLength(255)]
+    public string FullName { get; set; } = null!;
+
+    [Required]
+    [MaxLength(50)]
+    public string EmployeeCode { get; set; } = null!;
+
+    [Required]
     [EmailAddress]
-    [MaxLength(255)] // Assuming maximum length based on common practices
+    [MaxLength(255)]
     public string Email { get; set; } = null!;
 
     [Required]
     [MinLength(6)]
     public string Password { get; set; } = null!;
 
-    public int Status { get; set; } = 1; // Default active
+    [Required]
+    [MaxLength(50)]
+    public string Phone { get; set; } = null!;
+
+    [Required]
+    public int DepartmentId { get; set; }
+
+    public string? ImageUrl { get; set; }
+
+    public int Status { get; set; } = 1;
 
     public List<int> RoleIds { get; set; } = new List<int>();
 }

@@ -1,12 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Input, Select, Tabs, Modal, Form, Radio, message } from 'antd';
-import { SearchOutlined, FilterOutlined, DownloadOutlined, SettingOutlined } from '@ant-design/icons';
+import { Button, Form, Tabs, message } from 'antd';
+import { isAxiosError } from 'axios';
 import './CategoriesPage.css';
 import { assetCategoryService, type AssetCategoryItem } from '../services/assetCategoryService';
 import { assetTypeService, type AssetTypeListItem } from '../services/assetTypeService';
 import { assetLocationService, type AssetLocationItem } from '../services/assetLocationService';
-
-const { Option } = Select;
+import { supplierService, type SupplierItem } from '../services/supplierService';
+import { AssetTypesSection } from '../components/AssetTypesSection';
+import { AssetGroupsSection } from '../components/AssetGroupsSection';
+import { AssetLocationsSection } from '../components/AssetLocationsSection';
+import { CategoriesModals, type AssetManagementMethod } from '../components/CategoriesModals';
+import {
+  SuppliersSection,
+  type SupplierDraft,
+  type SupplierFormErrors,
+  type SupplierRow,
+  type SupplierStatus,
+} from '../components/SuppliersSection';
 
 type CategoryStatus = 'tracking' | 'stopped';
 
@@ -41,6 +51,12 @@ const STATUS_LABELS: Record<CategoryStatus, { label: string; className: string }
   stopped: { label: 'Ngừng theo dõi', className: 'categories-status-pill categories-status-pill--inactive' },
 };
 
+const SUPPLIER_CODE_MAX_LENGTH = 50;
+const SUPPLIER_NAME_MAX_LENGTH = 200;
+const SUPPLIER_ADDRESS_MAX_LENGTH = 255;
+const SUPPLIER_TAX_CODE_REGEX = /^(\d{10}|\d{13})$/;
+const SUPPLIER_PHONE_REGEX = /^(?:\+84|0)(?:3|5|7|8|9)\d{8}$/;
+
 const mapAssetTypeToCategoryRow = (item: AssetTypeListItem): CategoryRow => ({
   key: item.assetTypeId,
   code: String(item.assetTypeId),
@@ -50,8 +66,6 @@ const mapAssetTypeToCategoryRow = (item: AssetTypeListItem): CategoryRow => ({
   quantityTracking: item.assetCount,
   displayStatus: 'tracking',
 });
-
-type AssetManagementMethod = 'code' | 'quantity';
 
 const mapCategoryToGroupRow = (item: AssetCategoryItem): AssetGroupRow => ({
   key: item.categoryId,
@@ -69,6 +83,19 @@ const mapLocationToRow = (item: AssetLocationItem, index: number): AssetLocation
   status: item.isCurrent ? 'tracking' : 'stopped',
 });
 
+const mapSupplierToRow = (item: SupplierItem, index: number): SupplierRow => ({
+  key: item.supplierId,
+  supplierId: item.supplierId,
+  index: index + 1,
+  code: item.code,
+  name: item.name,
+  taxCode: item.taxCode ?? null,
+  phone: item.phone ?? null,
+  address: item.address ?? null,
+  email: item.email ?? null,
+  status: item.status === 1 ? 'active' : 'inactive',
+});
+
 export function CategoriesPage() {
   const [activeCatalogTab, setActiveCatalogTab] = useState('asset-types');
   const [activeSubTab, setActiveSubTab] = useState('type');
@@ -80,11 +107,31 @@ export function CategoriesPage() {
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [isLoadingAssetTypes, setIsLoadingAssetTypes] = useState(false);
   const [locationRows, setLocationRows] = useState<AssetLocationRow[]>([]);
+  const [supplierRows, setSupplierRows] = useState<SupplierRow[]>([]);
+  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
+  const [supplierStatusFilter, setSupplierStatusFilter] = useState<'all' | SupplierStatus>('all');
   const [isCreateAssetTypeOpen, setIsCreateAssetTypeOpen] = useState(false);
   const [isCreateAssetGroupOpen, setIsCreateAssetGroupOpen] = useState(false);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [locationModalMode, setLocationModalMode] = useState<'create' | 'edit'>('create');
   const [editingLocation, setEditingLocation] = useState<AssetLocationRow | null>(null);
+  const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+  const [supplierModalMode, setSupplierModalMode] = useState<'create' | 'edit'>('create');
+  const [editingSupplier, setEditingSupplier] = useState<SupplierRow | null>(null);
+  const [isSavingSupplier, setIsSavingSupplier] = useState(false);
+  const [supplierDraft, setSupplierDraft] = useState<SupplierDraft>({
+    code: '',
+    name: '',
+    taxCode: '',
+    address: '',
+    phone: '',
+    email: '',
+    status: 'active',
+  });
+  const [supplierFormErrors, setSupplierFormErrors] = useState<SupplierFormErrors>({});
+  const [isSupplierDeleteConfirmOpen, setIsSupplierDeleteConfirmOpen] = useState(false);
+  const [supplierDeleteTarget, setSupplierDeleteTarget] = useState<SupplierRow | null>(null);
+  const [isDeletingSupplier, setIsDeletingSupplier] = useState(false);
   const [createForm] = Form.useForm<{
     name: string;
     code: string;
@@ -161,6 +208,28 @@ export function CategoriesPage() {
     fetchLocations();
   }, [activeCatalogTab]);
 
+  const loadSuppliers = async (keyword?: string) => {
+    try {
+      setIsLoadingSuppliers(true);
+      const data = await supplierService.getAll(keyword);
+      setSupplierRows(data.map((item, index) => mapSupplierToRow(item, index)));
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to load suppliers', error);
+      message.error('Không tải được danh sách nhà cung cấp từ hệ thống.');
+    } finally {
+      setIsLoadingSuppliers(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeCatalogTab !== 'suppliers') {
+      return;
+    }
+
+    loadSuppliers(searchText.trim() || undefined);
+  }, [activeCatalogTab, searchText]);
+
   const filteredRows = useMemo(() => {
     const kw = searchText.trim().toLowerCase();
     return assetTypeRows.filter((row) => {
@@ -197,6 +266,13 @@ export function CategoriesPage() {
     });
   }, [locationRows, searchText, statusFilter]);
 
+  const filteredSupplierRows = useMemo(() => {
+    return supplierRows.filter((row) => {
+      const matchStatus = supplierStatusFilter === 'all' || row.status === supplierStatusFilter;
+      return matchStatus;
+    });
+  }, [supplierRows, supplierStatusFilter]);
+
   const handleOpenCreateLocation = () => {
     setLocationModalMode('create');
     setEditingLocation(null);
@@ -207,6 +283,183 @@ export function CategoriesPage() {
     setLocationModalMode('edit');
     setEditingLocation(row);
     setIsLocationModalOpen(true);
+  };
+
+  const handleOpenCreateSupplier = () => {
+    setSupplierModalMode('create');
+    setEditingSupplier(null);
+    setIsSupplierModalOpen(true);
+    setSupplierFormErrors({});
+    setSupplierDraft({
+      code: '',
+      name: '',
+      taxCode: '',
+      address: '',
+      phone: '',
+      email: '',
+      status: 'active',
+    });
+  };
+
+  const handleOpenEditSupplier = (row: SupplierRow) => {
+    setSupplierModalMode('edit');
+    setEditingSupplier(row);
+    setIsSupplierModalOpen(true);
+    setSupplierFormErrors({});
+    setSupplierDraft({
+      code: row.code,
+      name: row.name,
+      taxCode: row.taxCode ?? '',
+      address: row.address ?? '',
+      phone: row.phone ?? '',
+      email: row.email ?? '',
+      status: row.status,
+    });
+  };
+
+  const handleDeleteSupplier = (row: SupplierRow) => {
+    setSupplierDeleteTarget(row);
+    setIsSupplierDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDeleteSupplier = async () => {
+    if (!supplierDeleteTarget) return;
+    setIsDeletingSupplier(true);
+    try {
+      await supplierService.delete(supplierDeleteTarget.supplierId);
+      message.success('Xóa nhà cung cấp thành công.');
+      setIsSupplierDeleteConfirmOpen(false);
+      setSupplierDeleteTarget(null);
+      await loadSuppliers(searchText.trim() || undefined);
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to delete supplier', error);
+      message.error('Không thể xóa nhà cung cấp.');
+    } finally {
+      setIsDeletingSupplier(false);
+    }
+  };
+
+  const handleSubmitSupplier = async () => {
+    const nextErrors: typeof supplierFormErrors = {};
+    const code = supplierDraft.code.trim();
+    const name = supplierDraft.name.trim();
+    const taxCode = supplierDraft.taxCode.trim();
+    const address = supplierDraft.address.trim();
+    const phone = supplierDraft.phone.trim();
+    const email = supplierDraft.email.trim();
+
+    if (!code) nextErrors.code = 'Vui lòng nhập mã nhà cung cấp.';
+    else if (code.length > SUPPLIER_CODE_MAX_LENGTH) {
+      nextErrors.code = `Mã nhà cung cấp tối đa ${SUPPLIER_CODE_MAX_LENGTH} ký tự.`;
+    }
+
+    if (!name) nextErrors.name = 'Vui lòng nhập tên nhà cung cấp.';
+    else if (name.length > SUPPLIER_NAME_MAX_LENGTH) {
+      nextErrors.name = `Tên nhà cung cấp tối đa ${SUPPLIER_NAME_MAX_LENGTH} ký tự.`;
+    }
+
+    if (taxCode && !SUPPLIER_TAX_CODE_REGEX.test(taxCode)) {
+      nextErrors.taxCode = 'MST phải gồm đúng 10 hoặc 13 chữ số.';
+    }
+
+    if (address.length > SUPPLIER_ADDRESS_MAX_LENGTH) {
+      nextErrors.address = `Địa chỉ tối đa ${SUPPLIER_ADDRESS_MAX_LENGTH} ký tự.`;
+    }
+
+    if (phone && !SUPPLIER_PHONE_REGEX.test(phone)) {
+      nextErrors.phone = 'Số điện thoại phải có 10 số (ví dụ: 0912345678) hoặc dạng +84 (ví dụ: +84912345678).';
+    }
+
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      nextErrors.email = 'Email không đúng định dạng.';
+    }
+
+    if (!supplierDraft.status) nextErrors.status = 'Vui lòng chọn trạng thái.';
+
+    if (Object.keys(nextErrors).length > 0) {
+      setSupplierFormErrors(nextErrors);
+      return;
+    }
+
+    setSupplierFormErrors({});
+    setIsSavingSupplier(true);
+    try {
+      const payloadBase = {
+        code,
+        name,
+        taxCode: taxCode || undefined,
+        address: address || undefined,
+        phone: phone || undefined,
+        email: email || undefined,
+        status: supplierDraft.status === 'active' ? 1 : 0,
+      };
+
+      if (supplierModalMode === 'create') {
+        await supplierService.create(payloadBase);
+        message.success('Tạo nhà cung cấp thành công.');
+      } else {
+        if (!editingSupplier) {
+          message.error('Không tìm thấy dữ liệu nhà cung cấp.');
+          return;
+        }
+        await supplierService.update(editingSupplier.supplierId, payloadBase);
+        message.success('Cập nhật nhà cung cấp thành công.');
+      }
+
+      setIsSupplierModalOpen(false);
+      await loadSuppliers(searchText.trim() || undefined);
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 400) {
+        const responseData = error.response.data as
+          | { errors?: Record<string, string[]>; title?: string; detail?: string }
+          | undefined;
+        const apiErrors = responseData?.errors ?? {};
+
+        const mapFieldError = (fieldName: string): string | undefined => {
+          const key = Object.keys(apiErrors).find((k) => k.toLowerCase() === fieldName.toLowerCase());
+          return key && apiErrors[key]?.length ? apiErrors[key][0] : undefined;
+        };
+
+        const nextErrors: typeof supplierFormErrors = {
+          code: mapFieldError('Code'),
+          name: mapFieldError('Name'),
+          taxCode: mapFieldError('TaxCode'),
+          address: mapFieldError('Address'),
+          phone: mapFieldError('Phone'),
+          email: mapFieldError('Email'),
+          status: mapFieldError('Status'),
+        };
+        setSupplierFormErrors(nextErrors);
+
+        const allMessages = Object.values(apiErrors).flat().filter(Boolean);
+        if (allMessages.length > 0) {
+          message.error(allMessages.join(' | '));
+        } else {
+          message.error(responseData?.title || 'Dữ liệu không hợp lệ.');
+        }
+        return;
+      }
+
+      // eslint-disable-next-line no-console
+      console.error('Failed to save supplier', error);
+      message.error('Không thể lưu nhà cung cấp.');
+    } finally {
+      setIsSavingSupplier(false);
+    }
+  };
+
+  const handleSupplierDraftFieldChange = (field: keyof SupplierDraft, value: string) => {
+    setSupplierDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleClearSupplierFieldError = (field: keyof SupplierFormErrors) => {
+    setSupplierFormErrors((current) => ({ ...current, [field]: undefined }));
+  };
+
+  const handleCloseSupplierDeleteConfirm = () => {
+    setIsSupplierDeleteConfirmOpen(false);
+    setSupplierDeleteTarget(null);
   };
 
   return (
@@ -235,6 +488,10 @@ export function CategoriesPage() {
               handleOpenCreateLocation();
               return;
             }
+            if (activeCatalogTab === 'suppliers') {
+              handleOpenCreateSupplier();
+              return;
+            }
             message.info('Chức năng tạo mới sẽ được bổ sung cho tab này sau.');
           }}
         >
@@ -250,6 +507,7 @@ export function CategoriesPage() {
             // Reset some filters when đổi tab chính cho dễ nhìn
             setSearchText('');
             setStatusFilter('all');
+            setSupplierStatusFilter('all');
           }}
           className="categories-tabs categories-tabs--primary"
           items={[
@@ -290,280 +548,78 @@ export function CategoriesPage() {
         )}
 
         {activeCatalogTab === 'asset-types' && activeSubTab === 'type' && (
-          <>
-            <div className="categories-filters">
-              <Input
-                placeholder="Tìm kiếm"
-                prefix={<SearchOutlined />}
-                className="categories-search"
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-              />
-              <Select
-                placeholder="Trạng thái"
-                className="categories-select"
-                suffixIcon={<FilterOutlined />}
-                value={statusFilter}
-                onChange={(v) => setStatusFilter(v as 'all' | CategoryStatus)}
-              >
-                <Option value="all">Tất cả</Option>
-                <Option value="tracking">Đang theo dõi</Option>
-                <Option value="stopped">Ngừng theo dõi</Option>
-              </Select>
-              <Button
-                className="categories-filter-reset"
-                icon={<FilterOutlined />}
-                onClick={() => {
-                  setSearchText('');
-                  setStatusFilter('all');
-                }}
-              >
-                Gỡ bộ lọc
-              </Button>
-              <Button
-                icon={<DownloadOutlined />}
-                className="categories-export-btn"
-              >
-                Export
-              </Button>
-            </div>
-
-            <div className="asset-table-wrapper categories-table-wrapper">
-              <table className="asset-table categories-table">
-                <thead>
-                  <tr>
-                    <th className="asset-table__cell asset-table__cell--checkbox">
-                      <input type="checkbox" />
-                    </th>
-                    <th>MÃ LOẠI TÀI SẢN</th>
-                    <th>TÊN LOẠI TÀI SẢN</th>
-                    <th>NHÓM TÀI SẢN</th>
-                    <th>CÁCH QUẢN LÝ</th>
-                    <th>SỐ LƯỢNG</th>
-                    <th>SỐ LƯỢNG</th>
-                    <th className="asset-table__cell asset-table__cell--actions" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="categories-table-empty">
-                        Không có dữ liệu.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredRows.map((row) => (
-                      <tr key={row.key} className="asset-row">
-                        <td className="asset-table__cell asset-table__cell--checkbox">
-                          <input type="checkbox" />
-                        </td>
-                        <td>{row.code}</td>
-                        <td>{row.name}</td>
-                        <td>{row.group}</td>
-                        <td>{row.managementMethod}</td>
-                        <td className="asset-align-right">{row.quantityTracking}</td>
-                        <td>
-                          <span className={STATUS_LABELS[row.displayStatus].className}>
-                            {STATUS_LABELS[row.displayStatus].label}
-                          </span>
-                        </td>
-                        <td className="asset-table__cell asset-table__cell--actions">
-                          <button type="button" className="categories-action-btn">
-                            ✎
-                          </button>
-                          <button type="button" className="categories-action-btn categories-action-btn--danger">
-                            🗑
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </>
+          <AssetTypesSection
+            searchText={searchText}
+            onSearchTextChange={setSearchText}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            onResetFilters={() => {
+              setSearchText('');
+              setStatusFilter('all');
+            }}
+            isLoadingAssetTypes={isLoadingAssetTypes}
+            rows={filteredRows}
+            statusLabels={STATUS_LABELS}
+          />
         )}
 
         {activeCatalogTab === 'asset-types' && activeSubTab === 'group' && (
-          <>
-            <div className="categories-filters categories-filters--group">
-              <div className="categories-filters__left">
-                <Input
-                  placeholder="Tìm kiếm"
-                  prefix={<SearchOutlined />}
-                  className="categories-search"
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                />
-                <Button
-                  icon={<SettingOutlined />}
-                  className="categories-settings-btn"
-                />
-              </div>
-              <Button
-                icon={<DownloadOutlined />}
-                className="categories-import-btn"
-              >
-                Nhập excel
-              </Button>
-            </div>
-
-            <div className="asset-table-wrapper categories-table-wrapper">
-              <table className="asset-table categories-table categories-table--groups">
-                <thead>
-                  <tr>
-                    <th className="categories-groups-toggle-col" />
-                    <th>MÃ NHÓM TÀI SẢN</th>
-                    <th>TÊN NHÓM TÀI SẢN</th>
-                    <th>THUỘC NHÓM</th>
-                    <th className="asset-table__cell asset-table__cell--actions" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleGroupRows.rows.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="categories-table-empty">
-                        Không có dữ liệu.
-                      </td>
-                    </tr>
-                  ) : (
-                    visibleGroupRows.rows.map((row) => {
-                      const isParent = row.parentCode === null;
-                      const hasChildren = isParent && (visibleGroupRows.childrenByParent[row.code]?.length ?? 0) > 0;
-                      const isExpanded = isParent && expandedGroupCodes.includes(row.code);
-
-                      return (
-                        <tr
-                          key={row.key}
-                          className={
-                            isParent
-                              ? 'categories-group-row categories-group-row--parent'
-                              : 'categories-group-row categories-group-row--child'
-                          }
-                        >
-                          <td className="categories-group-cell categories-group-cell--toggle">
-                            {isParent && hasChildren ? (
-                              <button
-                                type="button"
-                                className="categories-group-toggle-btn"
-                                onClick={() => {
-                                  setExpandedGroupCodes((current) =>
-                                    current.includes(row.code)
-                                      ? current.filter((code) => code !== row.code)
-                                      : [...current, row.code],
-                                  );
-                                }}
-                              >
-                                {isExpanded ? '▾' : '▸'}
-                              </button>
-                            ) : (
-                              <span className="categories-group-toggle-placeholder" />
-                            )}
-                          </td>
-                          <td className="categories-group-cell">{row.code}</td>
-                          <td className="categories-group-cell categories-group-cell--name">
-                            {row.name}
-                          </td>
-                          <td className="categories-group-cell">
-                            {row.parentCode ?? '—'}
-                          </td>
-                          <td className="asset-table__cell asset-table__cell--actions">
-                            <button type="button" className="categories-action-btn">
-                              ✎
-                            </button>
-                            <button
-                              type="button"
-                              className="categories-action-btn categories-action-btn--danger"
-                            >
-                              🗑
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </>
+          <AssetGroupsSection
+            searchText={searchText}
+            onSearchTextChange={setSearchText}
+            isLoadingCategories={isLoadingCategories}
+            rows={visibleGroupRows.rows}
+            expandedGroupCodes={expandedGroupCodes}
+            onToggleGroup={(code) => {
+              setExpandedGroupCodes((current) =>
+                current.includes(code)
+                  ? current.filter((c) => c !== code)
+                  : [...current, code],
+              );
+            }}
+          />
         )}
 
         {activeCatalogTab === 'asset-locations' && (
-          <>
-            <div className="categories-filters">
-              <Input
-                placeholder="Tìm kiếm"
-                prefix={<SearchOutlined />}
-                className="categories-search"
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-              />
-              <Select
-                placeholder="Trạng thái"
-                className="categories-select"
-                suffixIcon={<FilterOutlined />}
-                value={statusFilter}
-                onChange={(v) => setStatusFilter(v as 'all' | CategoryStatus)}
-              >
-                <Option value="all">Tất cả</Option>
-                <Option value="tracking">Đang theo dõi</Option>
-                <Option value="stopped">Không theo dõi</Option>
-              </Select>
-            </div>
+          <AssetLocationsSection
+            searchText={searchText}
+            onSearchTextChange={setSearchText}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            rows={filteredLocationRows}
+            statusLabels={STATUS_LABELS}
+            onOpenEditLocation={handleOpenEditLocation}
+          />
+        )}
 
-            <div className="asset-table-wrapper categories-table-wrapper">
-              <table className="asset-table categories-table categories-table--locations">
-                <thead>
-                  <tr>
-                    <th>STT</th>
-                    <th>TÊN VỊ TRÍ</th>
-                    <th>THUỘC</th>
-                    <th>GHI CHÚ</th>
-                    <th>TRẠNG THÁI</th>
-                    <th className="asset-table__cell asset-table__cell--actions" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredLocationRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="categories-table-empty">
-                        Không có dữ liệu.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredLocationRows.map((row) => (
-                      <tr key={row.key} className="asset-row">
-                        <td className="asset-align-right">{row.index}</td>
-                        <td>{row.name}</td>
-                        <td>{row.parentName ?? '—'}</td>
-                        <td>{row.note ?? '—'}</td>
-                        <td>
-                          <span className={STATUS_LABELS[row.status].className}>
-                            {STATUS_LABELS[row.status].label}
-                          </span>
-                        </td>
-                        <td className="asset-table__cell asset-table__cell--actions">
-                          <button
-                            type="button"
-                            className="categories-action-btn"
-                            onClick={() => handleOpenEditLocation(row)}
-                          >
-                            ✎
-                          </button>
-                          <button
-                            type="button"
-                            className="categories-action-btn categories-action-btn--danger"
-                          >
-                            🗑
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </>
+        {activeCatalogTab === 'suppliers' && (
+          <SuppliersSection
+            searchText={searchText}
+            onSearchTextChange={setSearchText}
+            supplierStatusFilter={supplierStatusFilter}
+            onSupplierStatusFilterChange={setSupplierStatusFilter}
+            isLoadingSuppliers={isLoadingSuppliers}
+            rows={filteredSupplierRows}
+            onOpenEditSupplier={handleOpenEditSupplier}
+            onDeleteSupplier={handleDeleteSupplier}
+            isSupplierDeleteConfirmOpen={isSupplierDeleteConfirmOpen}
+            supplierDeleteTarget={supplierDeleteTarget}
+            onCloseSupplierDeleteConfirm={handleCloseSupplierDeleteConfirm}
+            onConfirmDeleteSupplier={handleConfirmDeleteSupplier}
+            isDeletingSupplier={isDeletingSupplier}
+            isSupplierModalOpen={isSupplierModalOpen}
+            supplierModalMode={supplierModalMode}
+            supplierDraft={supplierDraft}
+            supplierFormErrors={supplierFormErrors}
+            onSupplierDraftFieldChange={handleSupplierDraftFieldChange}
+            onClearSupplierFieldError={handleClearSupplierFieldError}
+            onCloseSupplierModal={() => setIsSupplierModalOpen(false)}
+            onSubmitSupplier={handleSubmitSupplier}
+            isSavingSupplier={isSavingSupplier}
+            supplierCodeMaxLength={SUPPLIER_CODE_MAX_LENGTH}
+            supplierNameMaxLength={SUPPLIER_NAME_MAX_LENGTH}
+            supplierAddressMaxLength={SUPPLIER_ADDRESS_MAX_LENGTH}
+          />
         )}
 
         <div className="categories-card__footer">
@@ -594,237 +650,18 @@ export function CategoriesPage() {
         </div>
       </div>
 
-      <Modal
-        open={isCreateAssetTypeOpen}
-        onCancel={() => setIsCreateAssetTypeOpen(false)}
-        footer={null}
-        centered
-        destroyOnClose
-        closeIcon={<span className="categories-modal__close">×</span>}
-        className="categories-create-modal"
-        title={<span className="categories-modal__title">Tạo loại tài sản</span>}
-      >
-        <Form
-          form={createForm}
-          layout="vertical"
-          className="categories-modal__form"
-          initialValues={{
-            managementMethod: 'code' as AssetManagementMethod,
-            groupCode: 'MM',
-          }}
-          onFinish={() => {
-            message.success('Tạo loại tài sản thành công (mock).');
-            setIsCreateAssetTypeOpen(false);
-          }}
-        >
-          <Form.Item
-            label="Tên loại tài sản"
-            name="name"
-            rules={[{ required: true, message: 'Vui lòng nhập tên loại tài sản.' }]}
-            required
-          >
-            <Input placeholder="-" />
-          </Form.Item>
-
-          <Form.Item
-            label="Mã loại tài sản"
-            name="code"
-            rules={[{ required: true, message: 'Vui lòng nhập mã loại tài sản.' }]}
-            required
-          >
-            <Input placeholder="-" />
-          </Form.Item>
-
-          <Form.Item
-            label="Nhóm tài sản"
-            name="groupCode"
-          >
-            <Select disabled placeholder="Nhóm tài sản (backend sẽ bổ sung sau)" />
-          </Form.Item>
-
-          <Form.Item label="Ghi chú" name="note">
-            <Input.TextArea placeholder="Nội dung Ghi chú" rows={6} />
-          </Form.Item>
-
-          <Form.Item
-            label="Cách quản lý"
-            name="managementMethod"
-            rules={[{ required: true, message: 'Vui lòng chọn cách quản lý.' }]}
-            required
-          >
-            <Radio.Group className="categories-management-group">
-              <Radio value="code" className="categories-management-option">
-                Quản lý theo mã
-              </Radio>
-              <Radio value="quantity" className="categories-management-option">
-                Quản lý theo số lượng
-              </Radio>
-            </Radio.Group>
-          </Form.Item>
-
-          <div className="categories-modal__footer">
-            <Button
-              type="primary"
-              danger
-              htmlType="submit"
-              className="categories-modal__btn categories-modal__btn--primary"
-            >
-              ✓ Xác nhận
-            </Button>
-            <Button
-              onClick={() => setIsCreateAssetTypeOpen(false)}
-              className="categories-modal__btn categories-modal__btn--secondary"
-            >
-              ✕ Hủy
-            </Button>
-          </div>
-        </Form>
-      </Modal>
-
-      <Modal
-        open={isLocationModalOpen}
-        onCancel={() => setIsLocationModalOpen(false)}
-        footer={null}
-        centered
-        destroyOnClose
-        closeIcon={<span className="categories-modal__close">×</span>}
-        className="categories-create-modal"
-        title={
-          <span className="categories-modal__title">
-            {locationModalMode === 'create' ? 'Tạo vị trí' : 'Chỉnh sửa vị trí'}
-          </span>
-        }
-      >
-        <Form
-          layout="vertical"
-          className="categories-modal__form"
-          initialValues={{
-            name: editingLocation?.name ?? '',
-            parentName: editingLocation?.parentName ?? 'Kho A',
-            status: editingLocation?.status ?? 'tracking',
-            note: editingLocation?.note ?? '',
-          }}
-          onFinish={() => {
-            message.success(
-              locationModalMode === 'create'
-                ? 'Tạo vị trí tài sản thành công (mock).'
-                : 'Cập nhật vị trí tài sản thành công (mock).',
-            );
-            setIsLocationModalOpen(false);
-          }}
-        >
-          <Form.Item
-            label="Tên vị trí"
-            name="name"
-            rules={[{ required: true, message: 'Vui lòng nhập tên vị trí.' }]}
-            required
-          >
-            <Input placeholder="Tên vị trí" />
-          </Form.Item>
-
-          <Form.Item label="Thuộc" name="parentName">
-            <Select placeholder="Kho A">
-              <Option value="Kho A">Kho A</Option>
-              <Option value="Kho B">Kho B</Option>
-            </Select>
-          </Form.Item>
-
-          <Form.Item
-            label="Trạng thái"
-            name="status"
-            rules={[{ required: true, message: 'Vui lòng chọn trạng thái.' }]}
-            required
-          >
-            <Select>
-              <Option value="tracking">Đang theo dõi</Option>
-              <Option value="stopped">Không theo dõi</Option>
-            </Select>
-          </Form.Item>
-
-          <Form.Item label="Ghi chú" name="note">
-            <Input placeholder="IDL" />
-          </Form.Item>
-
-          <div className="categories-modal__footer">
-            <Button
-              type="primary"
-              danger
-              htmlType="submit"
-              className="categories-modal__btn categories-modal__btn--primary"
-            >
-              {locationModalMode === 'create' ? '✓ Tạo' : '✎ Chỉnh sửa'}
-            </Button>
-            <Button
-              onClick={() => setIsLocationModalOpen(false)}
-              className="categories-modal__btn categories-modal__btn--secondary"
-            >
-              ✕ Đóng
-            </Button>
-          </div>
-        </Form>
-      </Modal>
-
-      <Modal
-        open={isCreateAssetGroupOpen}
-        onCancel={() => setIsCreateAssetGroupOpen(false)}
-        footer={null}
-        centered
-        destroyOnClose
-        closeIcon={<span className="categories-modal__close">×</span>}
-        className="categories-create-modal"
-        title={<span className="categories-modal__title">Thêm nhóm tài sản</span>}
-      >
-        <Form
-          form={createGroupForm}
-          layout="vertical"
-          className="categories-modal__form"
-          onFinish={() => {
-            message.success('Tạo nhóm tài sản thành công (mock).');
-            setIsCreateAssetGroupOpen(false);
-          }}
-        >
-          <Form.Item
-            label="Tên nhóm tài sản"
-            name="name"
-            rules={[{ required: true, message: 'Vui lòng nhập tên nhóm tài sản.' }]}
-            required
-          >
-            <Input placeholder="-" />
-          </Form.Item>
-
-          <Form.Item
-            label="Mã nhóm tài sản"
-            name="code"
-            rules={[{ required: true, message: 'Vui lòng nhập mã nhóm tài sản.' }]}
-            required
-          >
-            <Input placeholder="-" />
-          </Form.Item>
-
-          <Form.Item label="Thuộc nhóm" name="parentCode">
-            <Select allowClear placeholder="Chọn nhóm cha" disabled>
-              <Option value="root">root</Option>
-            </Select>
-          </Form.Item>
-
-          <div className="categories-modal__footer">
-            <Button
-              type="primary"
-              danger
-              htmlType="submit"
-              className="categories-modal__btn categories-modal__btn--primary"
-            >
-              ✓ Xác nhận
-            </Button>
-            <Button
-              onClick={() => setIsCreateAssetGroupOpen(false)}
-              className="categories-modal__btn categories-modal__btn--secondary"
-            >
-              ✕ Hủy
-            </Button>
-          </div>
-        </Form>
-      </Modal>
+      <CategoriesModals
+        isCreateAssetTypeOpen={isCreateAssetTypeOpen}
+        setIsCreateAssetTypeOpen={setIsCreateAssetTypeOpen}
+        createForm={createForm}
+        isLocationModalOpen={isLocationModalOpen}
+        setIsLocationModalOpen={setIsLocationModalOpen}
+        locationModalMode={locationModalMode}
+        editingLocation={editingLocation}
+        isCreateAssetGroupOpen={isCreateAssetGroupOpen}
+        setIsCreateAssetGroupOpen={setIsCreateAssetGroupOpen}
+        createGroupForm={createGroupForm}
+      />
     </div>
   );
 }

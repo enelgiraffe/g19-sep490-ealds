@@ -1,0 +1,218 @@
+.user-detail-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: #f5f6f8;
+  border-radius: 12px;
+}
+
+.user-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+}
+
+.user-detail-header h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.user-detail-back {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.user-detail-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+
+.user-detail-tab {
+  border: none;
+  border-radius: 999px;
+  background: #e5e7eb;
+  padding: 10px 16px;
+  cursor: pointer;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.user-detail-tab--active {
+  color: #fe3720;
+}
+
+.user-detail-content {
+  padding: 0 24px;
+  flex: 1;
+}
+
+.user-detail-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-detail-grid {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px 80px;
+  max-width: 860px;
+}
+
+.user-detail-label {
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+.user-detail-value {
+  margin-top: 4px;
+  color: #111827;
+  font-size: 18px;
+}
+
+.user-detail-status {
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-detail-loading {
+  padding: 24px;
+  color: #6b7280;
+}
+
+.user-detail-footer {
+  padding: 16px 24px;
+  display: flex;
+  gap: 10px;
+}
+
+.user-detail-btn {
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0 16px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.user-detail-btn:disabled {
+  opacity: 0.9;
+}
+
+.user-detail-btn--primary {
+  background: #3b82f6;
+}
+
+.user-detail-btn--secondary {
+  background: #94a3b8;
+}
+
+.user-detail-btn--danger {
+  background: #ef4444;
+}
+
+.user-detail-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.user-detail-form label {
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.user-password-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.user-password-modal {
+  position: relative;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  width: 560px;
+  display: flex;
+  flex-direction: column;
+}
+
+.user-password-modal__close-btn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.user-password-modal__close {
+  font-size: 24px;
+  color: #fe3720;
+  font-weight: 300;
+}
+
+.user-password-modal__header {
+  background: #ffe5e0;
+  padding: 16px 24px;
+  border-bottom: 1px solid #ffd4cc;
+}
+
+.user-password-modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #fe3720;
+}
+
+.user-password-modal__body {
+  padding: 20px 24px;
+}
+
+.user-password-modal__footer {
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  justify-content: flex-end;
+}
+
+.user-password-btn-submit {
+  background: #fe3720;
+  border: 1px solid #fe3720;
+  height: 40px;
+  padding: 0 28px;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+}
+
+.user-password-btn-submit--danger {
+  background: #ef4444;
+  border-color: #ef4444;
+}
+
+.user-password-btn-cancel {
+  background: #6b7280;
+  border: 1px solid #6b7280;
+  color: #fff;
+  height: 40px;
+  padding: 0 28px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+

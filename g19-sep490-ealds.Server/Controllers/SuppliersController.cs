@@ -21,9 +21,25 @@ public class SuppliersController : ControllerBase
 
     // GET: api/Suppliers
     [HttpGet]
-    public async Task<IActionResult> GetSuppliers()
+    public async Task<IActionResult> GetSuppliers([FromQuery] string? keyword)
     {
-        var suppliers = await _context.Suppliers
+        var query = _context.Suppliers
+            .AsNoTracking()
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var kw = keyword.Trim().ToLower();
+
+            query = query.Where(s =>
+                s.Code.ToLower().Contains(kw) ||
+                s.Name.ToLower().Contains(kw) ||
+                (s.TaxCode ?? string.Empty).ToLower().Contains(kw) ||
+                (s.Phone ?? string.Empty).ToLower().Contains(kw) ||
+                (s.Email ?? string.Empty).ToLower().Contains(kw));
+        }
+
+        var suppliers = await query
             .Select(s => new SupplierDTO
             {
                 SupplierId = s.SupplierId,
@@ -91,7 +107,7 @@ public class SuppliersController : ControllerBase
             Address = dto.Address,
             Phone = dto.Phone,
             Email = dto.Email,
-            Status = 1, // 1 for Active
+            Status = dto.Status,
             CreateDate = DateTime.UtcNow
         };
 

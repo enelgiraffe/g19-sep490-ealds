@@ -12,6 +12,7 @@ import {
 import { transferRequestService } from '../services/transferRequestService';
 import { maintenanceRequestService } from '../services/maintenanceRequestService';
 import { damageReportService } from '../services/damageReportService';
+import { disposalRequestService } from '../services/disposalRequestService';
 import { MarkDamagedAssetModal } from '../components/MarkDamagedAssetModal';
 import { LiquidationRequestModal } from '../components/LiquidationRequestModal';
 import { TransferAssetModal } from '../components/TransferAssetModal';
@@ -352,9 +353,70 @@ export function AssetListPage() {
     }
   };
 
-  const handleSubmitLiquidation = (values: unknown) => {
-    console.log('Liquidation request:', values);
-    // TODO: Call API to submit liquidation request
+  const handleSubmitLiquidation = async (values: {
+    liquidationDate: Date | null;
+    reason?: string;
+    disposalMethod?: string;
+    notes?: string;
+  }) => {
+    const createdBy = profile?.id ?? getStoredUserId();
+    const assetId = selectedAssetInfo?.assetId;
+    if (!createdBy || !assetId) {
+      message.error('Không xác định được người dùng hoặc tài sản để gửi đề nghị thanh lý.');
+      return;
+    }
+
+    const disposalMethod = Number(values.disposalMethod);
+    const methodValue = Number.isFinite(disposalMethod) ? disposalMethod : 0;
+    const submittedAt = values.liquidationDate ?? new Date();
+    const noteText = values.notes?.trim();
+    const reasonText = values.reason?.trim();
+
+    try {
+      await disposalRequestService.create({
+        userId: createdBy,
+        assetId,
+        createdBy,
+        title: `Đề nghị thanh lý tài sản ${selectedAssetInfo?.code ?? assetId}`,
+        description: noteText || null,
+        diposalMethod: methodValue,
+        diposalValue: 0,
+        diposalDate: submittedAt.toISOString(),
+        reason: reasonText || null,
+      });
+      message.success('Gửi yêu cầu thanh lý thành công.');
+      await fetchAssets();
+      handleCloseLiquidationModal();
+    } catch (e: any) {
+      const data = e?.response?.data;
+      const errors = data?.errors as Record<string, string[] | string> | undefined;
+      if (errors && typeof errors === 'object') {
+        const flat = Object.entries(errors)
+          .flatMap(([k, v]) => {
+            if (Array.isArray(v)) return v.map((m) => `${k}: ${m}`);
+            if (typeof v === 'string') return [`${k}: ${v}`];
+            return [];
+          })
+          .filter(Boolean);
+        message.error(flat.join(' | ') || data?.title || 'Gửi yêu cầu thanh lý thất bại.');
+      } else if (e?.response?.status === 403) {
+        const actorUserId = data?.actorUserId;
+        const roleNames = Array.isArray(data?.currentUserRoleNames)
+          ? data.currentUserRoleNames.filter(Boolean).join(', ')
+          : '';
+        const detail = [
+          data?.message || 'Bạn không có quyền gửi yêu cầu thanh lý (chỉ trưởng phòng ban).',
+          actorUserId ? `UserId token: ${actorUserId}` : null,
+          roleNames ? `Role hiện tại: ${roleNames}` : null,
+        ]
+          .filter(Boolean)
+          .join(' | ');
+        message.error(detail);
+      } else {
+        const msg = data?.title ?? data ?? 'Gửi yêu cầu thanh lý thất bại.';
+        message.error(typeof msg === 'string' ? msg : 'Gửi yêu cầu thanh lý thất bại.');
+      }
+    }
   };
 
   const handleSubmitMaintenance = async (values: {

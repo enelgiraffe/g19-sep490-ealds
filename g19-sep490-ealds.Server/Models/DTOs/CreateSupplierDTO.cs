@@ -9,16 +9,22 @@ public class CreateSupplierDTO
     public string Code { get; set; } = null!;
 
     [Required]
-    [MaxLength(255)]
+    [MaxLength(200)]
     public string Name { get; set; } = null!;
 
-    [MaxLength(50)]
+    [Required]
+    [Range(0, 1)]
+    public int Status { get; set; }
+
+    [MaxLength(13)]
+    [RegularExpression(@"^(\d{10}|\d{13})$", ErrorMessage = "MST must contain exactly 10 or 13 digits.")]
     public string? TaxCode { get; set; }
 
     [MaxLength(255)]
     public string? Address { get; set; }
 
-    [MaxLength(50)]
+    [MaxLength(20)]
+    [RegularExpression(@"^(?:\+84|0)(?:3|5|7|8|9)\d{8}$", ErrorMessage = "Số điện thoại phải có 10 số (ví dụ: 0912345678) hoặc dạng +84 (ví dụ: +84912345678).")]
     public string? Phone { get; set; }
 
     [MaxLength(255)]

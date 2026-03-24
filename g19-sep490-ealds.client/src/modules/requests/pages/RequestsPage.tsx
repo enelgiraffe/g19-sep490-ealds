@@ -150,6 +150,15 @@ export function RequestsPage() {
   const [transferLoading, setTransferLoading] = useState(false);
   const [isTransferDetailOpen, setIsTransferDetailOpen] = useState(false);
   const [selectedTransfer, setSelectedTransfer] = useState<TransferTableRow | null>(null);
+  const [liquidationRows, setLiquidationRows] = useState<AccountantRequestListItem[]>([]);
+  const [liquidationLoading, setLiquidationLoading] = useState(false);
+  const [selectedLiquidationItem, setSelectedLiquidationItem] = useState<AccountantRequestListItem | null>(
+    null,
+  );
+  const [isLiquidationApproveOpen, setIsLiquidationApproveOpen] = useState(false);
+  const [liquidationDecision, setLiquidationDecision] = useState<'approved' | 'rejected'>('approved');
+  const [liquidationComment, setLiquidationComment] = useState('');
+  const [liquidationSubmitting, setLiquidationSubmitting] = useState(false);
 
   const [directorRows, setDirectorRows] = useState<DirectorRequestListItem[]>([]);
   const [directorTotal, setDirectorTotal] = useState(0);
@@ -206,8 +215,22 @@ export function RequestsPage() {
       }
     };
 
+    const loadLiquidations = async () => {
+      setLiquidationLoading(true);
+      try {
+        const list = await accountantRequestService.getLiquidationRequests();
+        setLiquidationRows(list);
+      } catch {
+        message.error('Không tải được danh sách yêu cầu thanh lý.');
+        setLiquidationRows([]);
+      } finally {
+        setLiquidationLoading(false);
+      }
+    };
+
     loadPurchase();
     loadTransfers();
+    loadLiquidations();
     loadProfile();
   }, []);
 
@@ -238,13 +261,12 @@ export function RequestsPage() {
   const isDirectorRole = normalizedRole === 'DIRECTOR';
   const isAccountantRole = normalizedRole === 'ACCOUNTANT';
 
-  const shouldUseDirectorView = (isDirectorRole &&
+  const shouldUseDirectorView = isDirectorRole &&
     (activeTab === 'purchase' ||
       activeTab === 'transfer' ||
       activeTab === 'maintenance' ||
       activeTab === 'repair' ||
-      activeTab === 'liquidation')) ||
-    (!isDirectorRole && activeTab === 'liquidation');
+      activeTab === 'liquidation');
 
   const directorRequestTypeId = shouldUseDirectorView ? REQUEST_TYPE_IDS[activeTab] : null;
 
@@ -256,6 +278,8 @@ export function RequestsPage() {
       ? 1
       : isDirectorRole && activeTab === 'transfer'
         ? 2
+        : isDirectorRole && activeTab === 'liquidation'
+          ? 1
         : undefined;
 
   const canDirectorApprove =
@@ -264,6 +288,9 @@ export function RequestsPage() {
     (selectedDirectorItem.status === 1 ||
       (selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.transfer &&
         selectedDirectorItem.status === 2));
+
+  const canAccountantLiquidationApprove =
+    !!userProfile?.id && !!selectedLiquidationItem && selectedLiquidationItem.status === 0;
 
   const prevDirectorTypeIdRef = useRef<number | null>(null);
   const effectiveDirectorPage =
@@ -364,6 +391,27 @@ export function RequestsPage() {
     });
   }, [transferRows, searchText, statusFilter, departmentFilter, sentDateFilter]);
 
+  const filteredLiquidationRows = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+    return liquidationRows.filter((row) => {
+      const matchStatus = statusFilter === 'all' || row.status === statusFilter;
+      let matchDate = true;
+      if (sentDateFilter) {
+        try {
+          const rowDate = new Date(row.createDate).toISOString().slice(0, 10);
+          matchDate = rowDate === sentDateFilter;
+        } catch {
+          matchDate = true;
+        }
+      }
+      const matchKeyword =
+        !keyword ||
+        row.title.toLowerCase().includes(keyword) ||
+        `yc-${row.assetRequestId}`.includes(keyword);
+      return matchStatus && matchDate && matchKeyword;
+    });
+  }, [liquidationRows, searchText, statusFilter, sentDateFilter]);
+
   const departmentOptions = useMemo(
     () =>
       Array.from(new Set(transferRows.map((row) => row.fromDepartment)))
@@ -374,17 +422,22 @@ export function RequestsPage() {
 
   const isPurchaseTab = activeTab === 'purchase';
   const isTransferTab = activeTab === 'transfer';
-  const hasDataTable = isPurchaseTab || isTransferTab || shouldUseDirectorView;
+  const isLiquidationTab = activeTab === 'liquidation';
+  const hasDataTable = isPurchaseTab || isTransferTab || isLiquidationTab || shouldUseDirectorView;
 
   const currentRows = isPurchaseTab
     ? filteredPurchaseRows
     : isTransferTab
       ? filteredTransferRows
+      : isLiquidationTab
+        ? filteredLiquidationRows
       : [];
   const loading = isPurchaseTab
     ? purchaseLoading
     : isTransferTab
       ? transferLoading
+      : isLiquidationTab && !shouldUseDirectorView
+        ? liquidationLoading
       : shouldUseDirectorView
         ? directorLoading
         : false;
@@ -532,7 +585,11 @@ export function RequestsPage() {
   };
 
   const renderStatusFilterOptions = () => {
-    const map = isPurchaseTab ? PURCHASE_STATUS_MAP : TRANSFER_STATUS_MAP;
+    const map = isPurchaseTab
+      ? PURCHASE_STATUS_MAP
+      : isTransferTab
+        ? TRANSFER_STATUS_MAP
+        : DIRECTOR_STATUS_MAP;
     return Object.entries(map).map(([k, v]) => (
       <Option key={k} value={Number(k)}>
         {v.label}
@@ -583,7 +640,7 @@ export function RequestsPage() {
         />
 
         <div className="requests-filters">
-          {(isPurchaseTab || isTransferTab) && (
+          {(isPurchaseTab || isTransferTab || isLiquidationTab) && (
             <Input
               placeholder="Tìm kiếm"
               className="requests-search"
@@ -606,6 +663,26 @@ export function RequestsPage() {
                   </Option>
                 ))}
               </Select>
+              <Select
+                placeholder="Trạng thái"
+                className="requests-select"
+                value={statusFilter}
+                onChange={(v) => setStatusFilter(v)}
+              >
+                <Option value="all">Tất cả</Option>
+                {renderStatusFilterOptions()}
+              </Select>
+              <DatePicker
+                placeholder="Ngày gửi"
+                className="requests-date-picker"
+                onChange={(_, dateString) => {
+                  setSentDateFilter(dateString || null);
+                }}
+              />
+            </>
+          )}
+          {isLiquidationTab && !shouldUseDirectorView && (
+            <>
               <Select
                 placeholder="Trạng thái"
                 className="requests-select"
@@ -831,6 +908,82 @@ export function RequestsPage() {
                 )}
               </tbody>
             </table>
+          ) : isLiquidationTab ? (
+            <table className="asset-table requests-table">
+              <thead>
+                <tr>
+                  <th>MÃ YÊU CẦU</th>
+                  <th>NGÀY GỬI</th>
+                  <th>NỘI DUNG</th>
+                  <th>TRẠNG THÁI</th>
+                  <th className="asset-table__cell asset-table__cell--actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {pagedRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="requests-table-empty">
+                      Không có dữ liệu.
+                    </td>
+                  </tr>
+                ) : (
+                  (pagedRows as AccountantRequestListItem[]).map((row) => {
+                    const config = DIRECTOR_STATUS_MAP[row.status] ?? DIRECTOR_STATUS_MAP[0];
+                    return (
+                      <tr key={row.assetRequestId} className="asset-row">
+                        <td>
+                          <button
+                            type="button"
+                            className="asset-code asset-code--link"
+                            onClick={() => {
+                              setSelectedLiquidationItem(row);
+                              setLiquidationDecision('approved');
+                              setLiquidationComment('');
+                              setIsLiquidationApproveOpen(true);
+                            }}
+                          >
+                            YC-{row.assetRequestId}
+                          </button>
+                        </td>
+                        <td>{formatDate(row.createDate)}</td>
+                        <td>{row.title ?? '—'}</td>
+                        <td>
+                          <span
+                            className={
+                              config.color === 'success'
+                                ? 'asset-status-pill asset-status-pill--active'
+                                : config.color === 'default'
+                                  ? 'asset-status-pill asset-status-pill--inactive'
+                                : config.color === 'processing'
+                                  ? 'asset-status-pill asset-status-pill--processing'
+                                  : config.color === 'warning'
+                                    ? 'asset-status-pill asset-status-pill--warning'
+                                    : config.color === 'error'
+                                      ? 'asset-status-pill asset-status-pill--danger'
+                                      : 'asset-status-pill'
+                            }
+                          >
+                            {config.label}
+                          </span>
+                        </td>
+                        <td className="asset-table__cell asset-table__cell--actions">
+                          <Button
+                            type="text"
+                            icon={<EyeOutlined />}
+                            onClick={() => {
+                              setSelectedLiquidationItem(row);
+                              setLiquidationDecision('approved');
+                              setLiquidationComment('');
+                              setIsLiquidationApproveOpen(true);
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           ) : (
             <table className="asset-table requests-table">
               <thead>
@@ -1005,6 +1158,94 @@ export function RequestsPage() {
           }
         }}
       />
+
+      {canAccountantLiquidationApprove && isLiquidationApproveOpen && (
+        <div className="acct-transfer-approve-overlay" role="dialog" aria-modal="true">
+          <div className="acct-transfer-approve-modal">
+            <div className="acct-transfer-approve-modal__header">
+              <h3 className="acct-transfer-approve-modal__title">Duyệt yêu cầu thanh lý</h3>
+            </div>
+
+            <div className="acct-transfer-approve-modal__body">
+              <div className="acct-transfer-approve-form">
+                <div className="acct-transfer-approve-form__row">
+                  <div className="acct-transfer-approve-form__field">
+                    <label>Phê duyệt</label>
+                    <select
+                      className="acct-transfer-approve-select"
+                      value={liquidationDecision}
+                      onChange={(e) =>
+                        setLiquidationDecision(e.target.value === 'rejected' ? 'rejected' : 'approved')
+                      }
+                    >
+                      <option value="approved">Phê duyệt</option>
+                      <option value="rejected">Từ chối</option>
+                    </select>
+                  </div>
+                  <div className="acct-transfer-approve-form__field">
+                    <label>Ghi chú</label>
+                    <textarea
+                      className="acct-transfer-approve-textarea"
+                      placeholder="Không cần thiết"
+                      value={liquidationComment}
+                      onChange={(e) => setLiquidationComment(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="acct-transfer-approve-modal__footer">
+              <button
+                type="button"
+                className="acct-transfer-approve-btn-back"
+                onClick={() => setIsLiquidationApproveOpen(false)}
+                disabled={liquidationSubmitting}
+              >
+                ← Quay lại
+              </button>
+              <button
+                type="button"
+                className="acct-transfer-approve-btn-submit"
+                disabled={liquidationSubmitting}
+                onClick={async () => {
+                  if (!selectedLiquidationItem || !userProfile?.id) return;
+                  setLiquidationSubmitting(true);
+                  try {
+                    const payload = {
+                      approvedBy: userProfile.id,
+                      comment: liquidationComment.trim() || null,
+                    };
+                    if (liquidationDecision === 'approved') {
+                      await accountantRequestService.approve(selectedLiquidationItem.assetRequestId, payload);
+                      message.success('Đã phê duyệt yêu cầu thanh lý.');
+                    } else {
+                      await accountantRequestService.reject(selectedLiquidationItem.assetRequestId, payload);
+                      message.success('Đã từ chối yêu cầu thanh lý.');
+                    }
+
+                    setIsLiquidationApproveOpen(false);
+                    setSelectedLiquidationItem(null);
+
+                    setLiquidationLoading(true);
+                    const list = await accountantRequestService.getLiquidationRequests();
+                    setLiquidationRows(list);
+                  } catch (e: unknown) {
+                    const err = e as { response?: { data?: string } };
+                    message.error(err?.response?.data ?? 'Thao tác duyệt thanh lý thất bại.');
+                  } finally {
+                    setLiquidationSubmitting(false);
+                    setLiquidationLoading(false);
+                  }
+                }}
+              >
+                <span className="acct-transfer-btn-approve-icon">📋</span>
+                <span>Xác nhận</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isDirectorDetailOpen && selectedDirectorItem && (
         <div className="acct-transfer-modal-overlay" role="dialog" aria-modal="true">
