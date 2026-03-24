@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -31,6 +31,21 @@ public partial class MaintenaceTask
     public DateTime CreatDate { get; set; }
 
     public int CreateBy { get; set; }
+
+    // Fields populated when maintenance is started (nullable until then)
+    public int? PerformerUserId { get; set; }
+
+    public string? MaintenanceProvider { get; set; }
+
+    [Column(TypeName = "decimal(18, 2)")]
+    public decimal? EstimatedCost { get; set; }
+
+    [Column(TypeName = "datetime")]
+    public DateTime? ExpectedCompletionDate { get; set; }
+
+    public string? MaintenanceContent { get; set; }
+
+    public string? LocationType { get; set; }
 
     [ForeignKey("AssetId")]
     [InverseProperty("MaintenaceTasks")]
