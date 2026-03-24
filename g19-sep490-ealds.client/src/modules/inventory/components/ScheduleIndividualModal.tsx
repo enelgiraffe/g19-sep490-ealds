@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Modal, Form, Input, Select, DatePicker, Button, message } from 'antd';
 import type { Dayjs } from 'dayjs';
+import { useAppStore } from '../../../stores/appStore';
 import {
   inventoryService,
   getCurrentUserId,
@@ -27,6 +28,7 @@ export function ScheduleIndividualModal({
   onClose,
   onSubmit,
 }: ScheduleIndividualModalProps) {
+  const isDeptHead = useAppStore((s) => s.currentRole) === 'department_head';
   const [form] = Form.useForm<ScheduleIndividualFormValues>();
   const [submitting, setSubmitting] = useState(false);
   const [departments, setDepartments] = useState<DropdownItem[]>([]);
@@ -44,6 +46,9 @@ export function ScheduleIndividualModal({
     try {
       const deps = await inventoryService.getDepartments();
       setDepartments(deps);
+      if (isDeptHead && deps.length === 1) {
+        form.setFieldsValue({ departmentId: deps[0].id });
+      }
     } catch {
       message.error('Không thể tải dữ liệu. Vui lòng thử lại.');
     } finally {
@@ -53,6 +58,11 @@ export function ScheduleIndividualModal({
 
   const handleSubmit = () => {
     form.validateFields().then(async (values) => {
+      const departmentId = isDeptHead ? departments[0]?.id : values.departmentId;
+      if (departmentId == null) {
+        message.error('Không xác định được phòng ban.');
+        return;
+      }
       setSubmitting(true);
       try {
         const checkDate = values.checkDate.toISOString();
@@ -60,7 +70,7 @@ export function ScheduleIndividualModal({
           purpose: values.purpose ?? '',
           startDate: checkDate,
           endDate: checkDate,
-          departmentId: values.departmentId,
+          departmentId,
           createdBy: getCurrentUserId(),
         });
         message.success('Đã lập lịch kiểm kê thành công!');
@@ -110,19 +120,26 @@ export function ScheduleIndividualModal({
           />
         </Form.Item>
 
-        <Form.Item
-          label="Phòng ban"
-          name="departmentId"
-          rules={[{ required: true, message: 'Vui lòng chọn phòng ban' }]}
-        >
-          <Select
-            placeholder="Chọn phòng ban"
-            loading={loadingMeta}
-            showSearch
-            optionFilterProp="label"
-            options={departments.map((d) => ({ value: d.id, label: d.name }))}
-          />
-        </Form.Item>
+        {!isDeptHead && (
+          <Form.Item
+            label="Phòng ban"
+            name="departmentId"
+            rules={[{ required: true, message: 'Vui lòng chọn phòng ban' }]}
+          >
+            <Select
+              placeholder="Chọn phòng ban"
+              loading={loadingMeta}
+              showSearch
+              optionFilterProp="label"
+              options={departments.map((d) => ({ value: d.id, label: d.name }))}
+            />
+          </Form.Item>
+        )}
+        {isDeptHead && departments[0] && (
+          <p className="schedule-modal__dept-hint">
+            Phòng ban: <strong>{departments[0].name}</strong>
+          </p>
+        )}
 
         <Form.Item label="Mục đích" name="purpose">
           <TextArea rows={3} placeholder="Ví dụ: Kiểm kê tài sản định kỳ tháng 3" className="schedule-form__textarea" />

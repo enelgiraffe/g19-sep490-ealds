@@ -1,7 +1,9 @@
+using System.Security.Claims;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.DTOs.Inventory;
 using g19_sep490_ealds.Server.Utils;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,6 +11,7 @@ namespace g19_sep490_ealds.Server.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class InventoryController : ControllerBase
 {
     private readonly EaldsDbContext _context;
@@ -29,6 +32,13 @@ public class InventoryController : ControllerBase
         [FromQuery] int? status,
         [FromQuery] string? keyword)
     {
+        var access = await GetInventoryAccessAsync();
+        if (access.RestrictToDepartment)
+        {
+            if (!access.DepartmentId.HasValue)
+                return BadRequest(new { message = "Không xác định được phòng ban của bạn." });
+        }
+
         var query = _context.InventorySessions
             .Include(s => s.Department)
             .Include(s => s.AssetCategory)
@@ -37,7 +47,9 @@ public class InventoryController : ControllerBase
             .AsNoTracking()
             .AsQueryable();
 
-        if (departmentId.HasValue)
+        if (access.RestrictToDepartment)
+            query = query.Where(s => s.DepartmentId == access.DepartmentId!.Value);
+        else if (departmentId.HasValue)
             query = query.Where(s => s.DepartmentId == departmentId.Value);
 
         if (status.HasValue)
@@ -97,6 +109,9 @@ public class InventoryController : ControllerBase
     [HttpGet("sessions/{id:int}")]
     public async Task<ActionResult<InventorySessionDetailDTO>> GetSessionById(int id)
     {
+        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        if (gate != null) return gate;
+
         var session = await _context.InventorySessions
             .Include(s => s.Department)
             .Include(s => s.AssetCategory)
@@ -258,6 +273,9 @@ public class InventoryController : ControllerBase
         [FromQuery] string? keyword,
         [FromQuery] int? checkStatus)
     {
+        var gate = await EnsureInventorySessionDepartmentAccessAsync(sessionId);
+        if (gate != null) return gate;
+
         var sessionExists = await _context.InventorySessions.AnyAsync(s => s.SessionId == sessionId);
         if (!sessionExists) return NotFound();
 
@@ -315,6 +333,9 @@ public class InventoryController : ControllerBase
     public async Task<ActionResult<AssetInventoryDetailDTO>> GetAssetInventoryDetail(
         int sessionId, int assetId)
     {
+        var gate = await EnsureInventorySessionDepartmentAccessAsync(sessionId);
+        if (gate != null) return gate;
+
         var task = await _context.InventoryTasks
             .Where(t => t.SessionId == sessionId && t.AssetId == assetId)
             .Include(t => t.Asset)
@@ -391,6 +412,9 @@ public class InventoryController : ControllerBase
     public async Task<ActionResult> SaveAssetInventory(
         int sessionId, int assetId, [FromBody] SaveAssetInventoryDTO dto)
     {
+        var gate = await EnsureInventorySessionDepartmentAccessAsync(sessionId);
+        if (gate != null) return gate;
+
         var session = await _context.InventorySessions.FindAsync(sessionId);
         if (session == null) return NotFound(new { message = "Phiên kiểm kê không tồn tại." });
 
@@ -548,6 +572,19 @@ public class InventoryController : ControllerBase
     [HttpPost("sessions")]
     public async Task<ActionResult> CreateSession([FromBody] CreateInventorySessionDTO dto)
     {
+        if (!TryGetCurrentUserId(out var currentUserId))
+            return Unauthorized();
+
+        var access = await GetInventoryAccessAsync();
+        if (access.RestrictToDepartment)
+        {
+            if (!access.DepartmentId.HasValue)
+                return BadRequest(new { message = "Không xác định được phòng ban của bạn." });
+            dto.DepartmentId = access.DepartmentId.Value;
+        }
+
+        dto.CreatedBy = currentUserId;
+
         var department = await _context.Departments.FindAsync(dto.DepartmentId);
         if (department == null)
             return BadRequest(new { message = "Phòng ban không tồn tại." });
@@ -631,6 +668,9 @@ public class InventoryController : ControllerBase
     public async Task<ActionResult> SubmitTaskRecord(
         int id, int taskId, [FromBody] SubmitInventoryTaskDTO dto)
     {
+        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        if (gate != null) return gate;
+
         var session = await _context.InventorySessions.FindAsync(id);
         if (session == null)
             return NotFound(new { message = "Phiên kiểm kê không tồn tại." });
@@ -779,6 +819,9 @@ public class InventoryController : ControllerBase
     [HttpPost("sessions/{id:int}/complete")]
     public async Task<ActionResult> CompleteSession(int id)
     {
+        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        if (gate != null) return gate;
+
         var session = await _context.InventorySessions
             .Include(s => s.InventoryTasks)
             .FirstOrDefaultAsync(s => s.SessionId == id);
@@ -826,6 +869,9 @@ public class InventoryController : ControllerBase
     [HttpGet("sessions/{id:int}/review-summary")]
     public async Task<ActionResult<InventoryReviewSummaryDTO>> GetReviewSummary(int id)
     {
+        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        if (gate != null) return gate;
+
         var session = await _context.InventorySessions
             .Include(s => s.Department)
             .Include(s => s.AssetCategory)
@@ -918,6 +964,9 @@ public class InventoryController : ControllerBase
     [HttpPost("sessions/{id:int}/director-approve")]
     public async Task<ActionResult> DirectorApproveSession(int id, [FromBody] ReviewInventorySessionDTO dto)
     {
+        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        if (gate != null) return gate;
+
         var session = await _context.InventorySessions
             .Include(s => s.InventoryTasks)
                 .ThenInclude(t => t.Asset)
@@ -997,6 +1046,9 @@ public class InventoryController : ControllerBase
     [HttpPost("sessions/{id:int}/reject")]
     public async Task<ActionResult> RequestInventoryRecheck(int id, [FromBody] ReviewInventorySessionDTO dto)
     {
+        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        if (gate != null) return gate;
+
         var session = await _context.InventorySessions
             .Include(s => s.InventoryTasks)
                 .ThenInclude(t => t.InventoryRecords)
@@ -1032,6 +1084,9 @@ public class InventoryController : ControllerBase
     [HttpPost("sessions/{id:int}/confirm")]
     public async Task<ActionResult> AccountantConfirmSession(int id, [FromBody] ReviewInventorySessionDTO dto)
     {
+        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        if (gate != null) return gate;
+
         var session = await _context.InventorySessions.FindAsync(id);
         if (session == null)
             return NotFound();
@@ -1057,6 +1112,9 @@ public class InventoryController : ControllerBase
     [HttpPut("sessions/{id:int}")]
     public async Task<ActionResult> UpdateSession(int id, [FromBody] UpdateInventorySessionDTO dto)
     {
+        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        if (gate != null) return gate;
+
         var session = await _context.InventorySessions.FindAsync(id);
         if (session == null)
             return NotFound();
@@ -1085,6 +1143,9 @@ public class InventoryController : ControllerBase
     [HttpPost("sessions/{id:int}/activate")]
     public async Task<ActionResult> ActivateSession(int id)
     {
+        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        if (gate != null) return gate;
+
         var session = await _context.InventorySessions.FindAsync(id);
         if (session == null)
             return NotFound();
@@ -1115,6 +1176,9 @@ public class InventoryController : ControllerBase
     [HttpPost("sessions/{id:int}/cancel")]
     public async Task<ActionResult> CancelSession(int id, [FromBody] ReviewInventorySessionDTO dto)
     {
+        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        if (gate != null) return gate;
+
         var session = await _context.InventorySessions
             .Include(s => s.InventoryTasks)
             .FirstOrDefaultAsync(s => s.SessionId == id);
@@ -1176,6 +1240,9 @@ public class InventoryController : ControllerBase
     [HttpGet("sessions/{id:int}/discrepancies")]
     public async Task<ActionResult<IEnumerable<InventoryDiscrepancyDTO>>> GetDiscrepancies(int id)
     {
+        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        if (gate != null) return gate;
+
         var sessionExists = await _context.InventorySessions.AnyAsync(s => s.SessionId == id);
         if (!sessionExists) return NotFound();
 
@@ -1227,6 +1294,19 @@ public class InventoryController : ControllerBase
     [HttpGet("meta/departments")]
     public async Task<ActionResult<IEnumerable<DropdownItemDTO>>> GetDepartments()
     {
+        var access = await GetInventoryAccessAsync();
+        if (access.RestrictToDepartment)
+        {
+            if (!access.DepartmentId.HasValue)
+                return Ok(Array.Empty<DropdownItemDTO>());
+            var one = await _context.Departments
+                .AsNoTracking()
+                .Where(d => d.DepartmentId == access.DepartmentId.Value)
+                .Select(d => new DropdownItemDTO { Id = d.DepartmentId, Name = d.Name })
+                .ToListAsync();
+            return Ok(one);
+        }
+
         var items = await _context.Departments
             .AsNoTracking()
             .Select(d => new DropdownItemDTO { Id = d.DepartmentId, Name = d.Name })
@@ -1261,11 +1341,93 @@ public class InventoryController : ControllerBase
     [HttpGet("meta/users")]
     public async Task<ActionResult<IEnumerable<DropdownItemDTO>>> GetUsers()
     {
-        var items = await _context.Employees
-            .AsNoTracking()
+        var access = await GetInventoryAccessAsync();
+        var q = _context.Employees.AsNoTracking().AsQueryable();
+        if (access.RestrictToDepartment && access.DepartmentId.HasValue)
+            q = q.Where(e => e.DepartmentId == access.DepartmentId.Value);
+
+        var items = await q
             .Select(e => new DropdownItemDTO { Id = e.UserId, Name = e.Name })
             .ToListAsync();
         return Ok(items);
+    }
+
+    // ── Department head: scope to employee department ─────────────────────────
+
+    private sealed class InventoryAccessInfo
+    {
+        public bool RestrictToDepartment { get; init; }
+        public int? DepartmentId { get; init; }
+    }
+
+    private bool TryGetCurrentUserId(out int userId)
+    {
+        userId = 0;
+        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return int.TryParse(claim, out userId) && userId > 0;
+    }
+
+    private async Task<InventoryAccessInfo> GetInventoryAccessAsync()
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return new InventoryAccessInfo { RestrictToDepartment = false };
+
+        var roleCodes = await _context.UserRoles
+            .AsNoTracking()
+            .Where(ur => ur.UserId == userId)
+            .Select(ur => ur.Role.Code)
+            .ToListAsync();
+
+        if (roleCodes.Any(IsGlobalInventoryRole))
+            return new InventoryAccessInfo { RestrictToDepartment = false };
+
+        if (!roleCodes.Any(IsDepartmentHeadRole))
+            return new InventoryAccessInfo { RestrictToDepartment = false };
+
+        var deptId = await _context.Employees
+            .AsNoTracking()
+            .Where(e => e.UserId == userId)
+            .Select(e => (int?)e.DepartmentId)
+            .FirstOrDefaultAsync();
+
+        return new InventoryAccessInfo { RestrictToDepartment = true, DepartmentId = deptId };
+    }
+
+    private async Task<ActionResult?> EnsureInventorySessionDepartmentAccessAsync(int sessionId)
+    {
+        var access = await GetInventoryAccessAsync();
+        if (!access.RestrictToDepartment || !access.DepartmentId.HasValue)
+            return null;
+
+        var row = await _context.InventorySessions
+            .AsNoTracking()
+            .Where(s => s.SessionId == sessionId)
+            .Select(s => new { s.DepartmentId })
+            .FirstOrDefaultAsync();
+
+        if (row == null)
+            return NotFound();
+
+        if (row.DepartmentId != access.DepartmentId.Value)
+            return Forbid();
+
+        return null;
+    }
+
+    private static bool IsDepartmentHeadRole(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return false;
+        var c = code.Trim().ToLowerInvariant().Replace(' ', '_');
+        return c is "department_head" or "departmenthead" or "trưởng_phòng" or "truong_phong";
+    }
+
+    private static bool IsGlobalInventoryRole(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return false;
+        var c = code.Trim().ToLowerInvariant().Replace(' ', '_');
+        return c is "director" or "accountant" or "admin"
+            or "kế_toán" or "ke_toan"
+            or "giám_đốc" or "giam_doc";
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

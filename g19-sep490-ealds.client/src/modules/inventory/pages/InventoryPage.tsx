@@ -6,6 +6,7 @@ import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { SchedulePeriodicModal } from '../components/SchedulePeriodicModal';
 import { ScheduleIndividualModal } from '../components/ScheduleIndividualModal';
+import { useAppStore } from '../../../stores/appStore';
 import {
   inventoryService,
   SESSION_STATUS,
@@ -51,6 +52,7 @@ interface EditFormValues {
 
 export function InventoryPage() {
   const navigate = useNavigate();
+  const isDeptHead = useAppStore((s) => s.currentRole) === 'department_head';
   const [isPeriodicModalOpen, setIsPeriodicModalOpen] = useState(false);
   const [isIndividualModalOpen, setIsIndividualModalOpen] = useState(false);
 
@@ -215,17 +217,19 @@ export function InventoryPage() {
             onChange={(e) => setSearchText(e.target.value)}
             allowClear
           />
-          <Select
-            placeholder="Phòng ban"
-            className="inventory-filter-select"
-            value={departmentFilter}
-            onChange={(v) => setDepartmentFilter(v)}
-            allowClear
-          >
-            {uniqueDepartments.map((d) => (
-              <Option key={d} value={d}>{d}</Option>
-            ))}
-          </Select>
+          {!isDeptHead && (
+            <Select
+              placeholder="Phòng ban"
+              className="inventory-filter-select"
+              value={departmentFilter}
+              onChange={(v) => setDepartmentFilter(v)}
+              allowClear
+            >
+              {uniqueDepartments.map((d) => (
+                <Option key={d} value={d}>{d}</Option>
+              ))}
+            </Select>
+          )}
           <Select
             placeholder="Trạng thái"
             className="inventory-filter-select"

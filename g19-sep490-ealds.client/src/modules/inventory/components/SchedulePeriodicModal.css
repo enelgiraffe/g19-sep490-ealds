@@ -31,6 +31,12 @@
   margin: 4px 0 0;
 }
 
+.schedule-modal__dept-hint {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #595959;
+}
+
 .schedule-periodic-form {
   padding: 20px 24px 0;
 }
