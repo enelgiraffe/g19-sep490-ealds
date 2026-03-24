@@ -75,3 +75,31 @@
   min-width: 80px;
   background-color: #1677ff;
 }
+
+.schedule-periodic-form__date-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.schedule-periodic-form__enddate-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -8px 0 16px;
+  padding: 8px 12px;
+  background: #f0f7ff;
+  border: 1px solid #bae0ff;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #333;
+}
+
+.schedule-periodic-form__enddate-label {
+  color: #555;
+}
+
+.schedule-periodic-form__enddate-value {
+  color: #1677ff;
+  font-size: 14px;
+}

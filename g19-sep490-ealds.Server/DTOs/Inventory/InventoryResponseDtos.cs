@@ -9,14 +9,16 @@ public class InventorySessionListItemDTO
     public DateTime EndDate { get; set; }
     public int DepartmentId { get; set; }
     public string DepartmentName { get; set; } = null!;
-    public string AssetCategoryName { get; set; } = null!;
-    public string AssetTypeName { get; set; } = null!;
+    public string? AssetCategoryName { get; set; }
+    public string? AssetTypeName { get; set; }
     public int Status { get; set; }
     public string StatusName { get; set; } = null!;
     public int? ProgressPercent { get; set; }
     public int TotalTasks { get; set; }
     public int CompletedTasks { get; set; }
     public DateTime? CreateDate { get; set; }
+    public bool IsPeriodic { get; set; }
+    public int? PeriodDays { get; set; }
 }
 
 public class InventorySessionDetailDTO : InventorySessionListItemDTO
@@ -104,6 +106,12 @@ public class InventoryDiscrepancyDTO
     public int DiscrepancyType { get; set; }
     public string DiscrepancyTypeName { get; set; } = null!;
     public decimal BookValue { get; set; }
+    /// <summary>Quantity on books (from asset).</summary>
+    public int BookQuantity { get; set; }
+    /// <summary>Quantity counted on site; null if not recorded.</summary>
+    public int? ActualQuantity { get; set; }
+    /// <summary>Note from department head on the inventory task.</summary>
+    public string? TaskNote { get; set; }
     public string? BookDepartmentName { get; set; }
     public int? BookUserId { get; set; }
     public string? BookUserName { get; set; }
@@ -121,7 +129,7 @@ public class DropdownItemDTO
     public string Name { get; set; } = null!;
 }
 
-/// <summary>Aggregate review summary shown to the director before they confirm/reject.</summary>
+/// <summary>Aggregate discrepancy summary (reserved for clients; not returned by current API).</summary>
 public class InventoryReviewSummaryDTO
 {
     public int SessionId { get; set; }
@@ -130,8 +138,8 @@ public class InventoryReviewSummaryDTO
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
     public string DepartmentName { get; set; } = null!;
-    public string AssetCategoryName { get; set; } = null!;
-    public string AssetTypeName { get; set; } = null!;
+    public string? AssetCategoryName { get; set; }
+    public string? AssetTypeName { get; set; }
     public int Status { get; set; }
     public string StatusName { get; set; } = null!;
     public int TotalTasks { get; set; }
@@ -139,6 +147,7 @@ public class InventoryReviewSummaryDTO
     public int? ProgressPercent { get; set; }
     public int TotalDiscrepancies { get; set; }
     public int AssetNotFoundCount { get; set; }
+    public int QuantityMismatchCount { get; set; }
     public int LocationMismatchCount { get; set; }
     public int UserMismatchCount { get; set; }
     public int ValueMismatchCount { get; set; }

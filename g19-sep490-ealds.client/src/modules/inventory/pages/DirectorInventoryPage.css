@@ -177,6 +177,13 @@
   color: #444;
 }
 
+.dir-inv-modal-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #666;
+}
+
 .dir-inv-modal-corrections {
   padding: 10px 12px;
   background: #f6ffed;

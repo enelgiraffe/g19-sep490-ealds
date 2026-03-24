@@ -106,56 +106,20 @@
   color: #1677ff !important;
 }
 
-/* ── Stats bar ── */
-.exec-stats {
-  display: flex;
-  align-items: center;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-  padding: 14px 24px;
-  flex-shrink: 0;
-}
-
-.exec-stat-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.exec-stat-value {
-  font-size: 22px;
-  font-weight: 700;
-  color: #1a1a1a;
-  line-height: 1;
-}
-
-.exec-stat-label {
-  font-size: 12px;
-  color: #888;
-}
-
-.exec-stat-divider {
-  width: 1px;
-  height: 36px;
-  background: #e8e8e8;
-  margin: 0 24px;
-  flex-shrink: 0;
-}
-
-/* ── Main content area ── */
+/* ── Main content area (asset list above detail) ── */
 .exec-content {
   display: flex;
+  flex-direction: column;
   gap: 12px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
 }
 
-/* ── Left panel ── */
+/* ── Top panel – asset list ── */
 .exec-left-panel {
-  width: 380px;
+  width: 100%;
+  max-height: min(42vh, 420px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -163,6 +127,7 @@
   border-radius: 8px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   overflow: hidden;
+  min-height: 0;
 }
 
 .exec-left-search {
@@ -275,9 +240,10 @@
   font-size: 13px;
 }
 
-/* ── Right panel ── */
+/* ── Bottom panel – asset detail ── */
 .exec-right-panel {
   flex: 1;
+  min-height: 0;
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
@@ -384,6 +350,43 @@
 .exec-status-row--total td {
   background: #f0f0f0;
   border-top: 2px solid #e0e0e0;
+}
+
+.exec-note-cell {
+  padding: 10px 16px !important;
+  text-align: left !important;
+  background: #fafbff;
+  border-top: 1px solid #e8ecf8;
+}
+
+.exec-note-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #555;
+  margin-bottom: 5px;
+}
+
+.exec-note-input {
+  width: 100%;
+  padding: 5px 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #1a1a1a;
+  background: #fff;
+  outline: none;
+}
+
+.exec-note-input:focus {
+  border-color: #1677ff;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1);
+}
+
+.exec-note-value {
+  font-size: 13px;
+  color: #555;
+  font-style: italic;
 }
 
 /* Numeric input inside status table */
@@ -542,6 +545,15 @@
   margin: 0;
   font-size: 14px;
   color: #333;
+}
+
+.exec-complete-modal__notify {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #595959;
+  line-height: 1.5;
+  text-align: left;
+  width: 100%;
 }
 
 .exec-complete-modal__footer {

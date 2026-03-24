@@ -1,19 +1,40 @@
 import { Dropdown } from 'antd';
 import type { DropdownProps } from 'antd';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { NotificationPopover } from './NotificationPopover';
-import { MOCK_NOTIFICATIONS } from '../data/notificationsMockData';
+import { notificationService } from '../services/notificationService';
 import './Topbar.css';
-
-const unreadCount = () => MOCK_NOTIFICATIONS.filter((n) => !n.read).length;
 
 export function Topbar() {
   const [open, setOpen] = useState(false);
-  const count = unreadCount();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const refreshUnread = useCallback(() => {
+    notificationService
+      .getUnreadCount()
+      .then(setUnreadCount)
+      .catch(() => setUnreadCount(0));
+  }, []);
+
+  useEffect(() => {
+    refreshUnread();
+  }, [refreshUnread]);
+
+  useEffect(() => {
+    const onChanged = () => refreshUnread();
+    window.addEventListener('ealds-notifications-changed', onChanged);
+    return () => window.removeEventListener('ealds-notifications-changed', onChanged);
+  }, [refreshUnread]);
+
+  useEffect(() => {
+    if (open) {
+      refreshUnread();
+    }
+  }, [open, refreshUnread]);
 
   const dropdownRender: DropdownProps['dropdownRender'] = () => (
-    <div onClick={() => setOpen(false)} onKeyDown={() => {}} role="presentation">
-      <NotificationPopover onClose={() => setOpen(false)} />
+    <div role="presentation">
+      <NotificationPopover onClose={() => setOpen(false)} onUnreadChange={refreshUnread} />
     </div>
   );
 
@@ -29,8 +50,8 @@ export function Topbar() {
       >
         <button type="button" className="topbar__bell" aria-label="Notifications">
           <span className="topbar__bell-icon">🔔</span>
-          {count > 0 && (
-            <span className="topbar__bell-badge">{count > 99 ? '99+' : count}</span>
+          {unreadCount > 0 && (
+            <span className="topbar__bell-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
           )}
         </button>
       </Dropdown>

@@ -4,7 +4,6 @@ import { Button, Input, Select, Tag, Spin, message, Modal, Input as AntInput } f
 import {
   CheckOutlined,
   FileTextOutlined,
-  ReloadOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
 import {
@@ -19,9 +18,8 @@ import './DirectorInventoryPage.css';
 const { Option } = Select;
 const { TextArea } = AntInput;
 
-/** Giám đốc chỉ xem: Chờ xác nhận (2), Đã xử lý (4) — không hiển thị Chờ xử lý (6). */
-const DIRECTOR_STATUS_FILTER: { value: number; label: string }[] = [
-  { value: SESSION_STATUS.Completed, label: SESSION_STATUS_LABEL[SESSION_STATUS.Completed] },
+const ACCOUNTANT_STATUS_FILTER: { value: number; label: string }[] = [
+  { value: SESSION_STATUS.PendingAccountant, label: SESSION_STATUS_LABEL[SESSION_STATUS.PendingAccountant] },
   { value: SESSION_STATUS.Confirmed, label: SESSION_STATUS_LABEL[SESSION_STATUS.Confirmed] },
 ];
 
@@ -35,27 +33,43 @@ const STATUS_COLOR: Record<number, string> = {
   6: 'purple',
 };
 
-type DirectorActionType = 'approve' | 'recheck';
-
-interface DirectorActionMeta {
-  type: DirectorActionType;
+interface ConfirmMeta {
   session: InventorySessionListItem;
 }
 
-const DIRECTOR_ACTION_CONFIG: Record<
-  DirectorActionType,
-  { title: string; okText: string; okDanger?: boolean }
-> = {
-  approve: {
-    title: 'Xác nhận kiểm kê',
-    okText: 'Xác nhận',
-  },
-  recheck: {
-    title: 'Yêu cầu kiểm kê lại',
-    okText: 'Gửi yêu cầu',
-    okDanger: true,
-  },
-};
+function ConfirmModalBody({
+  session,
+  notes,
+  onNotesChange,
+}: {
+  readonly session: InventorySessionListItem;
+  readonly notes: string;
+  readonly onNotesChange: (v: string) => void;
+}) {
+  return (
+    <div className="dir-inv-modal-body">
+      <p className="dir-inv-modal-session-info">
+        Phiên kiểm kê: <strong>{session.code}</strong>
+        {' '}
+        —
+        {session.departmentName}
+      </p>
+
+      <div className="dir-inv-modal-notes">
+        <label htmlFor="acc-inv-action-notes" className="dir-inv-modal-label">
+          Ghi chú xác nhận
+        </label>
+        <TextArea
+          id="acc-inv-action-notes"
+          rows={3}
+          value={notes}
+          onChange={(e) => onNotesChange(e.target.value)}
+          placeholder="Nhập ghi chú xác nhận (nếu có)..."
+        />
+      </div>
+    </div>
+  );
+}
 
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '-';
@@ -64,7 +78,7 @@ function formatDate(dateStr: string | null | undefined): string {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 }
 
-export function DirectorInventoryPage() {
+export function AccountantInventoryPage() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<InventorySessionListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,8 +88,8 @@ export function DirectorInventoryPage() {
   const [departmentFilter, setDepartmentFilter] = useState<string | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
 
-  const [actionMeta, setActionMeta] = useState<DirectorActionMeta | null>(null);
-  const [actionNotes, setActionNotes] = useState('');
+  const [confirmMeta, setConfirmMeta] = useState<ConfirmMeta | null>(null);
+  const [notes, setNotes] = useState('');
 
   const fetchSessions = useCallback(async () => {
     setLoading(true);
@@ -102,51 +116,43 @@ export function DirectorInventoryPage() {
     .filter((s) => !departmentFilter || s.departmentName === departmentFilter)
     .filter(
       (s) =>
-        s.status === SESSION_STATUS.Completed /* Chờ xác nhận */
-        || s.status === SESSION_STATUS.Confirmed /* Đã xử lý */,
+        s.status === SESSION_STATUS.PendingAccountant
+        || s.status === SESSION_STATUS.Confirmed,
     );
 
-  const openDirectorAction = (type: DirectorActionType, session: InventorySessionListItem) => {
-    setActionMeta({ type, session });
-    setActionNotes('');
+  const openConfirmModal = (session: InventorySessionListItem) => {
+    setConfirmMeta({ session });
+    setNotes('');
   };
 
-  const closeDirectorAction = () => {
-    setActionMeta(null);
-    setActionNotes('');
+  const closeConfirmModal = () => {
+    setConfirmMeta(null);
+    setNotes('');
   };
 
-  const handleDirectorActionOk = async () => {
-    if (!actionMeta) return;
+  const handleConfirmAction = async () => {
+    if (!confirmMeta) return;
     setSubmitting(true);
-    const directorId = getCurrentUserId();
+
+    const accountantId = getCurrentUserId();
     const payload = {
-      reviewedBy: directorId,
-      reviewerRoleId: 3,
-      reviewNotes: actionNotes || undefined,
+      reviewedBy: accountantId,
+      reviewerRoleId: 4,
+      reviewNotes: notes || undefined,
       applyCorrections: false,
     };
+
     try {
-      if (actionMeta.type === 'approve') {
-        const res = await inventoryService.directorApproveSession(
-          actionMeta.session.sessionId,
-          payload,
-        );
-        message.success(
-          res.message
-            ?? 'Đã xác nhận.',
-        );
-      } else {
-        const res = await inventoryService.rejectSession(actionMeta.session.sessionId, payload);
-        message.success(res.message ?? 'Đã gửi yêu cầu kiểm kê lại.');
-      }
-      closeDirectorAction();
+      const res = await inventoryService.confirmSession(confirmMeta.session.sessionId, payload);
+      message.success(res.message ?? 'Đã chuyển trạng thái sang Đã xử lý.');
+      closeConfirmModal();
       fetchSessions();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
       message.error(
         axiosErr?.response?.data?.message ?? 'Thao tác thất bại. Vui lòng thử lại.',
       );
+      throw err;
     } finally {
       setSubmitting(false);
     }
@@ -158,37 +164,30 @@ export function DirectorInventoryPage() {
   };
 
   const renderActions = (row: InventorySessionListItem) => {
-    if (row.status === SESSION_STATUS.Completed) {
+    const viewReport = (
+      <Button
+        size="small"
+        icon={<FileTextOutlined />}
+        onClick={(e) => goReport(e, row.sessionId)}
+      >
+        Báo cáo
+      </Button>
+    );
+
+    if (row.status === SESSION_STATUS.PendingAccountant) {
       return (
         <div className="dir-inv-row-actions">
-          <Button
-            size="small"
-            type="primary"
-            icon={<FileTextOutlined />}
-            onClick={(e) => goReport(e, row.sessionId)}
-          >
-            Xem báo cáo
-          </Button>
+          {viewReport}
           <Button
             size="small"
             type="primary"
             icon={<CheckOutlined />}
             onClick={(e) => {
               e.stopPropagation();
-              openDirectorAction('approve', row);
+              openConfirmModal(row);
             }}
           >
-            Xác nhận
-          </Button>
-          <Button
-            size="small"
-            icon={<ReloadOutlined />}
-            onClick={(e) => {
-              e.stopPropagation();
-              openDirectorAction('recheck', row);
-            }}
-          >
-            Yêu cầu kiểm kê lại
+            Hoàn tất
           </Button>
         </div>
       );
@@ -197,14 +196,7 @@ export function DirectorInventoryPage() {
     if (row.status === SESSION_STATUS.Confirmed) {
       return (
         <div className="dir-inv-row-actions">
-          <Button
-            size="small"
-            type="primary"
-            icon={<FileTextOutlined />}
-            onClick={(e) => goReport(e, row.sessionId)}
-          >
-            Xem báo cáo
-          </Button>
+          {viewReport}
         </div>
       );
     }
@@ -212,12 +204,10 @@ export function DirectorInventoryPage() {
     return null;
   };
 
-  const directorModalConfig = actionMeta ? DIRECTOR_ACTION_CONFIG[actionMeta.type] : null;
-
   return (
     <div className="dir-inv-page">
       <div className="dir-inv-page__header">
-        <h1 className="dir-inv-page__title">Kiểm kê tài sản</h1>
+        <h1 className="dir-inv-page__title">Xử lý chênh lệch kiểm kê</h1>
       </div>
 
       <div className="dir-inv-card">
@@ -250,7 +240,7 @@ export function DirectorInventoryPage() {
             onChange={(v) => setStatusFilter(v)}
             allowClear
           >
-            {DIRECTOR_STATUS_FILTER.map(({ value, label }) => (
+            {ACCOUNTANT_STATUS_FILTER.map(({ value, label }) => (
               <Option key={value} value={value}>
                 {label}
               </Option>
@@ -273,20 +263,21 @@ export function DirectorInventoryPage() {
                   <th>ĐẾN NGÀY</th>
                   <th>PHÒNG BAN</th>
                   <th>TRẠNG THÁI</th>
+                  <th>TIẾN ĐỘ</th>
                   <th>THAO TÁC</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredSessions.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="dir-inv-table__empty">
+                    <td colSpan={8} className="dir-inv-table__empty">
                       Không có dữ liệu
                     </td>
                   </tr>
                 ) : (
                   filteredSessions.map((row) => {
                     const isViewable =
-                      row.status === SESSION_STATUS.Completed
+                      row.status === SESSION_STATUS.PendingAccountant
                       || row.status === SESSION_STATUS.Confirmed;
                     return (
                       <tr
@@ -311,6 +302,20 @@ export function DirectorInventoryPage() {
                             {row.statusName}
                           </Tag>
                         </td>
+                        <td className="dir-inv-table__progress-cell">
+                          <div className="dir-inv-progress">
+                            <div className="dir-inv-progress__bar">
+                              <div
+                                className="dir-inv-progress__fill"
+                                style={{ width: `${row.progressPercent ?? 0}%` }}
+                              />
+                            </div>
+                            <span className="dir-inv-progress__label">
+                              {row.progressPercent ?? 0}
+                              %
+                            </span>
+                          </div>
+                        </td>
                         <td className="dir-inv-table__actions-cell">{renderActions(row)}</td>
                       </tr>
                     );
@@ -323,42 +328,22 @@ export function DirectorInventoryPage() {
       </div>
 
       <Modal
-        open={!!actionMeta}
-        title={directorModalConfig?.title}
-        okText={directorModalConfig?.okText}
+        open={!!confirmMeta}
+        title="Hoàn tất xử lý chênh lệch"
+        okText="Hoàn tất"
         cancelText="Hủy bỏ"
-        okButtonProps={{
-          danger: directorModalConfig?.okDanger,
-          loading: submitting,
-        }}
-        onOk={handleDirectorActionOk}
-        onCancel={closeDirectorAction}
+        okButtonProps={{ loading: submitting }}
+        onOk={handleConfirmAction}
+        onCancel={closeConfirmModal}
         centered
         width={480}
       >
-        {actionMeta && (
-          <div className="dir-inv-modal-body">
-            <p className="dir-inv-modal-session-info">
-              Phiên kiểm kê: <strong>{actionMeta.session.code}</strong> —{' '}
-              {actionMeta.session.departmentName}
-            </p>
-            <div className="dir-inv-modal-notes">
-              <label htmlFor="dir-inv-action-notes" className="dir-inv-modal-label">
-                {actionMeta.type === 'approve' ? 'Ghi chú (tuỳ chọn)' : 'Lý do yêu cầu kiểm kê lại'}
-              </label>
-              <TextArea
-                id="dir-inv-action-notes"
-                rows={3}
-                value={actionNotes}
-                onChange={(e) => setActionNotes(e.target.value)}
-                placeholder={
-                  actionMeta.type === 'approve'
-                    ? 'Nhập ghi chú...'
-                    : 'Nhập lý do yêu cầu kiểm kê lại...'
-                }
-              />
-            </div>
-          </div>
+        {confirmMeta && (
+          <ConfirmModalBody
+            session={confirmMeta.session}
+            notes={notes}
+            onNotesChange={setNotes}
+          />
         )}
       </Modal>
     </div>

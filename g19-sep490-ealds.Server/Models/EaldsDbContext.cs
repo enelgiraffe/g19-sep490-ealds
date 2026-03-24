@@ -527,11 +527,13 @@ public partial class EaldsDbContext :
 
             entity.HasOne(d => d.AssetCategory).WithMany(p => p.InventorySessions)
                 .HasForeignKey(d => d.AssetCategoryId)
+                .IsRequired(false)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__Inventory__Asset__43D61337");
 
             entity.HasOne(d => d.AssetType).WithMany(p => p.InventorySessions)
                 .HasForeignKey(d => d.AssetTypeId)
+                .IsRequired(false)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__Inventory__Asset__44CA3770");
 

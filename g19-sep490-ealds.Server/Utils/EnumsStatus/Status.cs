@@ -37,7 +37,9 @@ public enum InventorySessionStatus
     InProgress = 1,
     Completed = 2,
     Cancelled = 3,
-    Confirmed = 4
+    Confirmed = 4,
+    /// <summary>Legacy: awaiting book-side reconciliation (may exist on historical rows).</summary>
+    PendingAccountant = 6
 }
 
 public enum InventoryTaskStatus
@@ -54,5 +56,6 @@ public enum DiscrepancyType
     UserMismatch = 2,
     ValueMismatch = 4,
     ConditionMismatch = 8,
-    AssetNotFound = 16
+    AssetNotFound = 16,
+    QuantityMismatch = 32
 }

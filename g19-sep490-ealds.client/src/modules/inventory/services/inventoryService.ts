@@ -87,6 +87,7 @@ export interface SaveAssetInventoryPayload {
   actualLocationId: number | null;
   actualManagerId: number | null;
   checkedBy: number;
+  actualCondition?: string;
 }
 
 export interface CompleteSessionResult {
@@ -103,12 +104,60 @@ export interface ReviewSessionPayload {
   applyCorrections?: boolean;
 }
 
+export interface InventoryDiscrepancyDetail {
+  discrepancyId: number;
+  taskId: number;
+  assetId: number;
+  assetCode: string;
+  assetName: string;
+  discrepancyType: number;
+  discrepancyTypeName: string;
+  bookValue: number;
+  bookQuantity: number;
+  actualQuantity: number | null;
+  bookDepartmentName?: string;
+  bookUserId?: number;
+  bookUserName?: string;
+  bookCondition: string;
+  actualValue: number;
+  actualDepartmentName?: string;
+  actualUserId?: number;
+  actualUserName?: string;
+  actualCondition: string;
+}
+
+export interface InventoryReviewSummary {
+  sessionId: number;
+  code: string;
+  purpose: string;
+  startDate: string;
+  endDate: string;
+  departmentName: string;
+  assetCategoryName?: string;
+  assetTypeName?: string;
+  status: number;
+  statusName: string;
+  totalTasks: number;
+  completedTasks: number;
+  progressPercent: number | null;
+  totalDiscrepancies: number;
+  assetNotFoundCount: number;
+  quantityMismatchCount: number;
+  locationMismatchCount: number;
+  userMismatchCount: number;
+  valueMismatchCount: number;
+  conditionMismatchCount: number;
+  discrepancies: InventoryDiscrepancyDetail[];
+}
+
 export const SESSION_STATUS = {
   Scheduled: 0,
   InProgress: 1,
   Completed: 2,
   Cancelled: 3,
   Confirmed: 4,
+  Due: 5,
+  PendingAccountant: 6,
 } as const;
 
 export const SESSION_STATUS_LABEL: Record<number, string> = {
@@ -116,7 +165,9 @@ export const SESSION_STATUS_LABEL: Record<number, string> = {
   1: 'Đang thực hiện',
   2: 'Chờ xác nhận',
   3: 'Đã hủy',
-  4: 'Đã xác nhận',
+  4: 'Đã xử lý',
+  5: 'Đến lịch',
+  6: 'Chờ xử lý',
 };
 
 export interface InventorySessionListItem {
@@ -135,6 +186,8 @@ export interface InventorySessionListItem {
   totalTasks: number;
   completedTasks: number;
   createDate: string | null;
+  isPeriodic: boolean;
+  periodDays: number | null;
 }
 
 export interface CreateInventorySessionPayload {
@@ -142,9 +195,11 @@ export interface CreateInventorySessionPayload {
   startDate: string;
   endDate: string;
   departmentId: number;
-  assetCategoryId: number;
-  assetTypeId: number;
+  assetCategoryId?: number;
+  assetTypeId?: number;
   createdBy: number;
+  isPeriodic?: boolean;
+  periodDays?: number;
 }
 
 export function getCurrentUserId(): number {
@@ -234,19 +289,42 @@ export const inventoryService = {
     return res.data;
   },
 
-  async confirmSession(sessionId: number, payload: ReviewSessionPayload): Promise<unknown> {
+  async getReviewSummary(sessionId: number): Promise<InventoryReviewSummary> {
+    const res = await inventoryApi.get<InventoryReviewSummary>(
+      `/api/inventory/sessions/${sessionId}/review-summary`,
+    );
+    return res.data;
+  },
+
+  async directorApproveSession(
+    sessionId: number,
+    payload: ReviewSessionPayload,
+  ): Promise<{
+    message?: string;
+    newStatus?: number;
+    statusName?: string;
+    hasQuantityOrUserDiscrepancy?: boolean;
+  }> {
     const res = await inventoryApi.post(
-      `/api/inventory/sessions/${sessionId}/confirm`,
+      `/api/inventory/sessions/${sessionId}/director-approve`,
       payload,
     );
     return res.data;
   },
 
-  async rejectSession(sessionId: number, payload: ReviewSessionPayload): Promise<unknown> {
-    const res = await inventoryApi.post(
-      `/api/inventory/sessions/${sessionId}/reject`,
-      payload,
-    );
+  async confirmSession(
+    sessionId: number,
+    payload: ReviewSessionPayload,
+  ): Promise<{ message?: string; sessionId?: number }> {
+    const res = await inventoryApi.post(`/api/inventory/sessions/${sessionId}/confirm`, payload);
+    return res.data;
+  },
+
+  async rejectSession(
+    sessionId: number,
+    payload: ReviewSessionPayload,
+  ): Promise<{ message?: string; sessionId?: number }> {
+    const res = await inventoryApi.post(`/api/inventory/sessions/${sessionId}/reject`, payload);
     return res.data;
   },
 
@@ -265,7 +343,7 @@ export const inventoryService = {
 
   async updateSession(
     sessionId: number,
-    payload: { purpose: string; startDate: string; endDate: string },
+    payload: { purpose: string; startDate: string; endDate: string; periodDays?: number },
   ): Promise<unknown> {
     const res = await inventoryApi.put(`/api/inventory/sessions/${sessionId}`, payload);
     return res.data;

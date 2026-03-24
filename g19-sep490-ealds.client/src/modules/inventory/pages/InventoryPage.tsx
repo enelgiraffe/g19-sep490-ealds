@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Input, Select, Tag, Spin, message, Modal, Form, DatePicker } from 'antd';
+import { Button, Input, Select, Tag, Spin, message, Modal, Form, DatePicker, InputNumber } from 'antd';
 import { SearchOutlined, PlayCircleOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
@@ -21,7 +21,9 @@ const STATUS_COLOR: Record<number, string> = {
   1: 'processing',  // Đang thực hiện
   2: 'warning',     // Chờ xác nhận
   3: 'error',       // Đã hủy
-  4: 'success',     // Đã xác nhận
+  4: 'success',     // Đã xử lý
+  5: 'orange',      // Đến lịch
+  6: 'purple',      // Chờ xử lý
 };
 
 function formatDate(dateStr: string | null | undefined): string {
@@ -31,10 +33,20 @@ function formatDate(dateStr: string | null | undefined): string {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 }
 
+function execDurationLabel(startStr: string | null | undefined, endStr: string | null | undefined): string {
+  if (!startStr || !endStr) return '-';
+  const start = new Date(startStr);
+  const end = new Date(endStr);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '-';
+  const days = Math.round((end.getTime() - start.getTime()) / 86_400_000);
+  return days > 0 ? `${days} ngày` : '-';
+}
+
 interface EditFormValues {
   purpose: string;
   startDate: Dayjs;
-  endDate: Dayjs;
+  executionDays: number;
+  periodDays?: number;
 }
 
 export function InventoryPage() {
@@ -47,7 +59,6 @@ export function InventoryPage() {
 
   const [searchText, setSearchText] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string | undefined>(undefined);
-  const [groupFilter, setGroupFilter] = useState<string | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
 
   // Execute confirmation
@@ -84,15 +95,9 @@ export function InventoryPage() {
   }, [fetchSessions]);
 
   const uniqueDepartments = Array.from(new Set(sessions.map((s) => s.departmentName)));
-  const uniqueGroups = Array.from(
-    new Set(sessions.map((s) => `${s.assetCategoryName} - ${s.assetTypeName}`))
-  );
 
   const filteredSessions = sessions.filter((s) => {
-    const matchDept = !departmentFilter || s.departmentName === departmentFilter;
-    const matchGroup =
-      !groupFilter || `${s.assetCategoryName} - ${s.assetTypeName}` === groupFilter;
-    return matchDept && matchGroup;
+    return !departmentFilter || s.departmentName === departmentFilter;
   });
 
   const handleSubmitPeriodic = () => {
@@ -123,10 +128,14 @@ export function InventoryPage() {
   // --- Edit ---
   const openEditModal = (row: InventorySessionListItem) => {
     setEditTarget(row);
+    const start = dayjs(row.startDate);
+    const end = dayjs(row.endDate);
+    const execDays = Math.max(1, end.diff(start, 'day'));
     editForm.setFieldsValue({
       purpose: row.purpose,
-      startDate: dayjs(row.startDate),
-      endDate: dayjs(row.endDate),
+      startDate: start,
+      executionDays: execDays,
+      periodDays: row.periodDays ?? undefined,
     });
   };
 
@@ -135,10 +144,12 @@ export function InventoryPage() {
     const values = await editForm.validateFields();
     setEditSubmitting(true);
     try {
+      const endDate = values.startDate.add(values.executionDays, 'day');
       await inventoryService.updateSession(editTarget.sessionId, {
         purpose: values.purpose,
         startDate: values.startDate.toISOString(),
-        endDate: values.endDate.toISOString(),
+        endDate: endDate.toISOString(),
+        periodDays: editTarget.isPeriodic ? values.periodDays : undefined,
       });
       message.success('Đã cập nhật thông tin phiên kiểm kê.');
       setEditTarget(null);
@@ -216,17 +227,6 @@ export function InventoryPage() {
             ))}
           </Select>
           <Select
-            placeholder="Nhóm tài sản"
-            className="inventory-filter-select"
-            value={groupFilter}
-            onChange={(v) => setGroupFilter(v)}
-            allowClear
-          >
-            {uniqueGroups.map((g) => (
-              <Option key={g} value={g}>{g}</Option>
-            ))}
-          </Select>
-          <Select
             placeholder="Trạng thái"
             className="inventory-filter-select"
             value={statusFilter}
@@ -234,10 +234,12 @@ export function InventoryPage() {
             allowClear
           >
             <Option value={0}>Đã lên lịch</Option>
+            <Option value={5}>Đến lịch</Option>
             <Option value={1}>Đang thực hiện</Option>
             <Option value={2}>Chờ xác nhận</Option>
             <Option value={3}>Đã hủy</Option>
-            <Option value={4}>Đã xác nhận</Option>
+            <Option value={4}>Đã xử lý</Option>
+            <Option value={6}>Chờ xử lý</Option>
           </Select>
         </div>
 
@@ -250,11 +252,10 @@ export function InventoryPage() {
             <table className="inventory-table">
               <thead>
                 <tr>
-                  <th>NGÀY TẠO LỊCH</th>
+                  <th>NGÀY BẮT ĐẦU</th>
                   <th>MỤC ĐÍCH</th>
-                  <th>ĐẾN NGÀY</th>
+                  <th>THỜI GIAN THỰC HIỆN</th>
                   <th>PHÒNG BAN</th>
-                  <th>NHÓM TÀI SẢN</th>
                   <th>TRẠNG THÁI</th>
                   <th>TIẾN ĐỘ</th>
                   <th />
@@ -263,24 +264,23 @@ export function InventoryPage() {
               <tbody>
                 {filteredSessions.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="inventory-table__empty">
+                    <td colSpan={7} className="inventory-table__empty">
                       Không có dữ liệu
                     </td>
                   </tr>
                 ) : (
                   filteredSessions.map((row) => {
-                    const isScheduled = row.status === SESSION_STATUS.Scheduled;
+                    const isScheduled = row.status === SESSION_STATUS.Scheduled || row.status === SESSION_STATUS.Due;
                     return (
                       <tr
                         key={row.sessionId}
                         className={`inventory-table__row${isScheduled ? '' : ' inventory-table__row--clickable'}`}
                         onClick={isScheduled ? undefined : () => navigate(`/inventory/${row.sessionId}`)}
                       >
-                        <td>{formatDate(row.createDate)}</td>
+                        <td>{formatDate(row.startDate)}</td>
                         <td>{row.purpose}</td>
-                        <td>{formatDate(row.endDate)}</td>
+                        <td>{execDurationLabel(row.startDate, row.endDate)}</td>
                         <td>{row.departmentName}</td>
-                        <td>{`${row.assetCategoryName} - ${row.assetTypeName}`}</td>
                         <td>
                           <Tag
                             color={STATUS_COLOR[row.status] ?? 'default'}
@@ -384,6 +384,7 @@ export function InventoryPage() {
           >
             <TextArea rows={3} placeholder="Nhập mục đích kiểm kê" />
           </Form.Item>
+
           <div style={{ display: 'flex', gap: 12 }}>
             <Form.Item
               label="Ngày bắt đầu"
@@ -394,24 +395,45 @@ export function InventoryPage() {
               <DatePicker format="DD/MM/YYYY" placeholder="Chọn ngày" style={{ width: '100%' }} />
             </Form.Item>
             <Form.Item
-              label="Ngày kết thúc"
-              name="endDate"
+              label="Thời gian thực hiện (ngày)"
+              name="executionDays"
               style={{ flex: 1 }}
               rules={[
-                { required: true, message: 'Vui lòng chọn ngày kết thúc' },
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    if (!value || !getFieldValue('startDate') || value.isAfter(getFieldValue('startDate'))) {
-                      return Promise.resolve();
-                    }
-                    return Promise.reject(new Error('Ngày kết thúc phải sau ngày bắt đầu'));
-                  },
-                }),
+                { required: true, message: 'Vui lòng nhập số ngày' },
+                { type: 'number', min: 1, message: 'Phải ít nhất 1 ngày' },
               ]}
             >
-              <DatePicker format="DD/MM/YYYY" placeholder="Chọn ngày" style={{ width: '100%' }} />
+              <InputNumber min={1} max={365} style={{ width: '100%' }} placeholder="Ví dụ: 7" />
             </Form.Item>
           </div>
+
+          {/* Live end-date preview */}
+          <Form.Item shouldUpdate noStyle>
+            {() => {
+              const startDate = editForm.getFieldValue('startDate') as Dayjs | undefined;
+              const execDays = editForm.getFieldValue('executionDays') as number | undefined;
+              if (!startDate || !execDays || execDays <= 0) return null;
+              return (
+                <div style={{ marginBottom: 16, color: '#595959', fontSize: 13 }}>
+                  Hạn hoàn thành:{' '}
+                  <strong>{startDate.add(execDays, 'day').format('DD/MM/YYYY')}</strong>
+                </div>
+              );
+            }}
+          </Form.Item>
+
+          {editTarget?.isPeriodic && (
+            <Form.Item
+              label="Chu kỳ kiểm kê (ngày)"
+              name="periodDays"
+              rules={[
+                { required: true, message: 'Vui lòng nhập chu kỳ' },
+                { type: 'number', min: 1, message: 'Chu kỳ phải ít nhất 1 ngày' },
+              ]}
+            >
+              <InputNumber min={1} max={3650} style={{ width: '100%' }} placeholder="Ví dụ: 90" />
+            </Form.Item>
+          )}
         </Form>
       </Modal>
 
@@ -429,10 +451,16 @@ export function InventoryPage() {
       >
         {cancelTarget && (
           <div>
-            <p style={{ marginBottom: 12 }}>
+            <p style={{ marginBottom: 8 }}>
               Bạn có chắc muốn hủy lịch kiểm kê <strong>{cancelTarget.purpose}</strong>?
               Trạng thái sẽ chuyển sang <strong>Đã hủy</strong>.
             </p>
+            {cancelTarget.isPeriodic && (
+              <p style={{ marginBottom: 12, color: '#cf1322', fontSize: 13 }}>
+                Đây là lịch kiểm kê định kỳ. Tất cả các phiên định kỳ tiếp theo chưa bắt đầu
+                của phòng ban này cũng sẽ bị hủy.
+              </p>
+            )}
             <TextArea
               rows={3}
               value={cancelNote}

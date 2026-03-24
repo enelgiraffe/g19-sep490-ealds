@@ -6,7 +6,6 @@ import {
   ArrowLeftOutlined,
   CheckCircleOutlined,
   PrinterOutlined,
-  WarningOutlined,
 } from '@ant-design/icons';
 import {
   inventoryService,
@@ -45,6 +44,7 @@ export function PeriodicInventoryExecutionPage() {
   const [actualQties, setActualQties] = useState<Record<string, number | null>>({});
   const [actualLocationId, setActualLocationId] = useState<number | null>(null);
   const [actualManagerId, setActualManagerId] = useState<number | null>(null);
+  const [actualCondition, setActualCondition] = useState<string>('');
 
   const [searchText, setSearchText] = useState('');
   const [checkStatusFilter, setCheckStatusFilter] = useState<number | undefined>(undefined);
@@ -102,6 +102,7 @@ export function PeriodicInventoryExecutionPage() {
       setActualQties(qties);
       setActualLocationId(detail.actualLocationId);
       setActualManagerId(detail.actualManagerId);
+      setActualCondition('');
     } catch {
       message.error('Không thể tải chi tiết tài sản.');
     } finally {
@@ -116,6 +117,7 @@ export function PeriodicInventoryExecutionPage() {
     setActualQties(qties);
     setActualLocationId(assetDetail.actualLocationId);
     setActualManagerId(assetDetail.actualManagerId);
+    setActualCondition('');
   };
 
   const handleSave = async () => {
@@ -131,6 +133,7 @@ export function PeriodicInventoryExecutionPage() {
         actualLocationId,
         actualManagerId,
         checkedBy: getCurrentUserId(),
+        actualCondition: actualCondition.trim() || undefined,
       });
       message.success('Đã lưu thông tin kiểm kê.');
       fetchAssets();
@@ -313,6 +316,27 @@ export function PeriodicInventoryExecutionPage() {
                   <strong>{diffTotal}</strong>
                 </td>
               </tr>
+              <tr className="exec-status-row--note">
+                <td colSpan={4} className="exec-note-cell">
+                  <label htmlFor="exec-actual-condition" className="exec-note-label">
+                    Ghi chú tình trạng
+                  </label>
+                  {isEditable ? (
+                    <input
+                      id="exec-actual-condition"
+                      type="text"
+                      className="exec-note-input"
+                      value={actualCondition}
+                      onChange={(e) => setActualCondition(e.target.value)}
+                      placeholder="Nhập ghi chú tình trạng tài sản (tùy chọn)"
+                    />
+                  ) : (
+                    <span className="exec-note-value">
+                      {actualCondition || '-'}
+                    </span>
+                  )}
+                </td>
+              </tr>
             </tbody>
           </table>
 
@@ -394,16 +418,18 @@ export function PeriodicInventoryExecutionPage() {
                 Lưu
               </Button>
             </>
-          ) : (
+          )
+           : (
             <>
-              <Button icon={<WarningOutlined />}>
+              {/* <Button icon={<WarningOutlined />}>
                 Xử lý chênh lệch
-              </Button>
+              </Button> */}
               <Button type="primary" icon={<PrinterOutlined />}>
                 In biên bản
               </Button>
             </>
-          )}
+          )
+          }
         </div>
       </>
     );
@@ -443,32 +469,9 @@ export function PeriodicInventoryExecutionPage() {
         )}
       </div>
 
-      {/* ── Stats ── */}
-      <div className="exec-stats">
-        <div className="exec-stat-item">
-          <div className="exec-stat-value">{sessionDetail?.quantityDiffCount ?? 0}</div>
-          <div className="exec-stat-label">Chênh lệch số lượng</div>
-        </div>
-        <div className="exec-stat-divider" />
-        <div className="exec-stat-item">
-          <div className="exec-stat-value">{sessionDetail?.departmentChangeCount ?? 0}</div>
-          <div className="exec-stat-label">Thay đổi phòng ban quản lý</div>
-        </div>
-        <div className="exec-stat-divider" />
-        <div className="exec-stat-item">
-          <div className="exec-stat-value">{sessionDetail?.locationChangeCount ?? 0}</div>
-          <div className="exec-stat-label">Thay đổi vị trí tài sản</div>
-        </div>
-        <div className="exec-stat-divider" />
-        <div className="exec-stat-item">
-          <div className="exec-stat-value">{sessionDetail?.conditionChangeCount ?? 0}</div>
-          <div className="exec-stat-label">Thay đổi tình trạng</div>
-        </div>
-      </div>
-
       {/* ── Main content ── */}
       <div className="exec-content">
-        {/* Left panel – asset list */}
+        {/* Asset list (above detail) */}
         <div className="exec-left-panel">
           <div className="exec-left-search">
             <Input
@@ -537,7 +540,7 @@ export function PeriodicInventoryExecutionPage() {
           </div>
         </div>
 
-        {/* Right panel – asset detail form */}
+        {/* Asset detail form */}
         <div className="exec-right-panel">
           {renderRightPanelContent()}
         </div>
@@ -575,6 +578,9 @@ export function PeriodicInventoryExecutionPage() {
               <strong>{completeResult?.conditionChangeCount ?? 0} tài sản</strong>
             </p>
           </div>
+          <p className="exec-complete-modal__notify">
+            Hệ thống đã gửi thông báo tới Kế toán (xử lý chênh lệch) và Giám đốc (xem báo cáo).
+          </p>
           <div className="exec-complete-modal__footer">
             <Button onClick={() => setIsCompleteModalOpen(false)}>Đóng</Button>
           </div>

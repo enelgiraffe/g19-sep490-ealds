@@ -22,6 +22,8 @@ import { RepairsPage } from './modules/repairs/pages/RepairsPage';
 import { InventoryPage } from './modules/inventory/pages/InventoryPage';
 import { PeriodicInventoryExecutionPage } from './modules/inventory/pages/PeriodicInventoryExecutionPage';
 import { DirectorInventoryPage } from './modules/inventory/pages/DirectorInventoryPage';
+import { AccountantInventoryPage } from './modules/inventory/pages/AccountantInventoryPage';
+import { InventoryReviewPage } from './modules/inventory/pages/InventoryReviewPage';
 import './App.css';
 
 function App() {
@@ -67,6 +69,8 @@ function App() {
           <Route path="maintenance" element={<ModulePlaceholder title="Bảo trì" />} />
           <Route path="inventory" element={<InventoryPage />} />
           <Route path="inventory/:sessionId" element={<PeriodicInventoryExecutionPage />} />
+          <Route path="inventory-review/:sessionId" element={<InventoryReviewPage />} />
+          <Route path="accountant-inventory" element={<AccountantInventoryPage />} />
           <Route path="reports" element={<DirectorInventoryPage />} />
           <Route path="liquidation" element={<ModulePlaceholder title="Thanh lý" />} />
           <Route path="allocations" element={<ModulePlaceholder title="Cấp phát-Thu hồi" />} />
@@ -74,7 +78,6 @@ function App() {
           <Route path="requests" element={<ModulePlaceholder title="Yêu cầu" />} />
           <Route path="dashboard" element={<DirectorDashboardPage />} />
           <Route path="approval-detail/:id" element={<ApprovalDetailPage />} />
-          <Route path="reports" element={<ModulePlaceholder title="Báo cáo" />} />
           {/* Admin */}
           <Route path="users" element={<ModulePlaceholder title="Người dùng" />} />
           <Route path="roles" element={<ModulePlaceholder title="Vai trò" />} />
