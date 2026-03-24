@@ -31,10 +31,15 @@ public class AssetCapitalizationController : ControllerBase
         {
             return Unauthorized("Invalid user identity.");
         }
-
-        var result = await _service.CapitalizeAssetAsync(request, userId);
-
-        return Ok(result);
+        try
+        {
+            var result = await _service.CapitalizeAssetAsync(request, userId);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPut("capitalize-purchase-request")]
@@ -48,8 +53,14 @@ public class AssetCapitalizationController : ControllerBase
         {
             return Unauthorized("Invalid user identity.");
         }
-
-        var result = await _service.CapitalizeFromPurchaseRequestAsync(request, userId);
-        return Ok(result);
+        try
+        {
+            var result = await _service.CapitalizeFromPurchaseRequestAsync(request, userId);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 }

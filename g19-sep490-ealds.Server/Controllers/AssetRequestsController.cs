@@ -40,8 +40,14 @@ public class AssetRequestsController : ControllerBase
                 ProposedData = r.ProposedData,
                 Status = r.Status,
                 CreateDate = r.CreateDate,
+                UserId = r.UserId,
                 CreatedBy = r.CreatedBy,
-                CreatorName = r.User != null ? r.User.Email : null
+                CreatorName = r.User != null ? r.User.Email : null,
+                CreatorDepartmentName = r.User != null
+                    ? r.User.EmployeeUsers.Select(e => e.Department != null ? e.Department.Name : null).FirstOrDefault()
+                    : null,
+                AssetCode = r.Asset != null ? r.Asset.Code : null,
+                AssetName = r.Asset != null ? r.Asset.Name : null
             })
             .ToListAsync();
         return Ok(list);
@@ -62,8 +68,14 @@ public class AssetRequestsController : ControllerBase
                 r.ProposedData,
                 r.Status,
                 r.CreateDate,
+                r.UserId,
                 r.CreatedBy,
-                CreatorName = r.User != null ? r.User.Email : null
+                CreatorName = r.User != null ? r.User.Email : null,
+                CreatorDepartmentName = r.User != null
+                    ? r.User.EmployeeUsers.Select(e => e.Department != null ? e.Department.Name : null).FirstOrDefault()
+                    : null,
+                AssetCode = r.Asset != null ? r.Asset.Code : null,
+                AssetName = r.Asset != null ? r.Asset.Name : null
             })
             .FirstOrDefaultAsync();
         if (request == null)

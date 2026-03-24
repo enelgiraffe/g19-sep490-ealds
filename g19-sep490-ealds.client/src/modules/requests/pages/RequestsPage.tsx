@@ -38,6 +38,7 @@ const PURCHASE_STATUS_MAP: Record<number, { label: string; color: string }> = {
   2: { label: 'Duyệt', color: 'success' },
   3: { label: 'Từ chối', color: 'error' },
   4: { label: 'Chờ ngân sách', color: 'warning' },
+  5: { label: 'Đã ghi tăng', color: 'success' },
 };
 
 const TRANSFER_STATUS_MAP: Record<number, { label: string; color: string }> = {
@@ -1128,8 +1129,19 @@ export function RequestsPage() {
         data={selectedPurchaseDetail}
         currentUserId={userProfile?.id ?? null}
         currentUserRole={userProfile?.role ?? null}
-        onActionCompleted={async (assetRequestId) => {
-          // Refresh detail + list so status pill updates immediately after approve/reject
+        onActionCompleted={async (assetRequestId, nextStatus) => {
+          // Optimistic update to reflect status immediately on UI.
+          if (typeof nextStatus === 'number') {
+            setPurchaseRows((prev) =>
+              prev.map((row) =>
+                row.assetRequestId === assetRequestId ? { ...row, status: nextStatus } : row,
+              ),
+            );
+            setSelectedPurchaseDetail((prev) =>
+              prev && prev.assetRequestId === assetRequestId ? { ...prev, status: nextStatus } : prev,
+            );
+          }
+          // Refresh detail + list so status pill updates immediately after approve/reject.
           try {
             const detail = await purchaseOrderService.getById(assetRequestId);
             setSelectedPurchaseDetail(detail);

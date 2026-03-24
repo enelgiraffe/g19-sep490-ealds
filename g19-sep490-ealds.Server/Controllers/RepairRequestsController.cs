@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -105,18 +106,58 @@ public class RepairRequestsController : ControllerBase
 
         var userRole = await _db.UserRoles.Include(ur => ur.Role).AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.StartedBy);
         var role = userRole?.Role;
-        var allowed = role != null && (
-            (role.Code != null && (role.Code.Equals("DepartmentManager", StringComparison.OrdinalIgnoreCase) || role.Code.Equals("Accountant", StringComparison.OrdinalIgnoreCase)))
-            || (role.Name != null && (role.Name.IndexOf("Manager", StringComparison.OrdinalIgnoreCase) >= 0 || role.Name.IndexOf("Director", StringComparison.OrdinalIgnoreCase) >= 0 || role.Name.IndexOf("Accountant", StringComparison.OrdinalIgnoreCase) >= 0))
-        );
+        var normalizedCode = role?.Code?.Trim().ToUpperInvariant();
+        var codeAllowed =
+            normalizedCode == "DEPARTMENTMANAGER"
+            || normalizedCode == "DEPARTMENT_MANAGER"
+            || normalizedCode == "DEPT_MANAGER"
+            || normalizedCode == "DEPARTMENT_HEAD"
+            || normalizedCode == "HEAD_OF_DEPARTMENT"
+            || normalizedCode == "TRUONG_BAN"
+            || normalizedCode == "TRUONGBAN"
+            || normalizedCode == "TRUONG_PHONG"
+            || normalizedCode == "TRUONGPHONG"
+            || normalizedCode == "ACCOUNTANT"
+            || normalizedCode == "DIRECTOR";
+
+        var roleName = role?.Name ?? string.Empty;
+        var nameAllowed =
+            roleName.IndexOf("Manager", StringComparison.OrdinalIgnoreCase) >= 0
+            || roleName.IndexOf("Director", StringComparison.OrdinalIgnoreCase) >= 0
+            || roleName.IndexOf("Accountant", StringComparison.OrdinalIgnoreCase) >= 0
+            || roleName.IndexOf("Head", StringComparison.OrdinalIgnoreCase) >= 0
+            || roleName.IndexOf("Trưởng ban", StringComparison.OrdinalIgnoreCase) >= 0
+            || roleName.IndexOf("Truong ban", StringComparison.OrdinalIgnoreCase) >= 0
+            || roleName.IndexOf("Trưởng phòng", StringComparison.OrdinalIgnoreCase) >= 0
+            || roleName.IndexOf("Truong phong", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        var allowed = role != null && (codeAllowed || nameAllowed);
 
         if (!allowed) return Forbid();
 
         var from = ar.Status;
         ar.Status = 4;
 
+        if (!ar.AssetId.HasValue || ar.AssetId.Value <= 0)
+            return BadRequest("Repair request must be linked to an asset.");
+
         var task = await _db.RepairTasks.FirstOrDefaultAsync(t => t.AssetRequestId == ar.AssetRequestId);
-        if (task != null)
+        if (task == null)
+        {
+            task = new RepairTask
+            {
+                AssetRequestId = ar.AssetRequestId,
+                AssetId = ar.AssetId.Value,
+                EstimatedCost = dto.EstimatedCost ?? 0,
+                Reason = dto.DamageCondition ?? string.Empty,
+                RepairDate = dto.RepairDate,
+                ExpectedCompletionDate = dto.ExpectedCompletionDate ?? dto.ExpectedCompletionTo,
+                RepairProgressStatus = dto.RepairProgressStatus,
+                Status = 1 // in-progress
+            };
+            _db.RepairTasks.Add(task);
+        }
+        else
         {
             if (!string.IsNullOrWhiteSpace(dto.DamageCondition))
                 task.Reason = dto.DamageCondition;
@@ -128,6 +169,30 @@ public class RepairRequestsController : ControllerBase
             task.RepairProgressStatus = dto.RepairProgressStatus;
             task.Status = 1; // in-progress
             _db.RepairTasks.Update(task);
+        }
+
+        // Move asset status out of Damaged when repair really starts.
+        var linkedAssetId = task.AssetId > 0 ? task.AssetId : ar.AssetId;
+        if (linkedAssetId.HasValue && linkedAssetId.Value > 0)
+        {
+            var linkedAsset = await _db.Assets.FindAsync(linkedAssetId.Value);
+            if (linkedAsset != null && linkedAsset.Status != (int)AssetStatus.InRepair)
+            {
+                var oldStatus = linkedAsset.Status;
+                linkedAsset.Status = (int)AssetStatus.InRepair;
+                _db.Assets.Update(linkedAsset);
+                _db.AssetLifeCycles.Add(new AssetLifeCycle
+                {
+                    AssetId = linkedAsset.AssetId,
+                    ActionType = (int)AssetLifeActionType.StatusChanged,
+                    RelatedEntityType = 1,
+                    RelatedEntityId = linkedAsset.AssetId,
+                    ActorUserId = dto.StartedBy,
+                    ActorRoleId = userRole?.RoleId ?? 0,
+                    Description = $"Status changed from {(AssetStatus)oldStatus} to {(AssetStatus)AssetStatus.InRepair} (repair started)",
+                    OccurredAt = DateTime.UtcNow
+                });
+            }
         }
 
         Dictionary<string, object?> startData = new()
@@ -241,8 +306,21 @@ public class RepairRequestsController : ControllerBase
         task.Status = 2; // completed
         _db.RepairTasks.Update(task);
 
+        var completedByRoleId = await _db.UserRoles
+            .AsNoTracking()
+            .Where(ur => ur.UserId == dto.CompletedBy)
+            .Join(
+                _db.Roles.AsNoTracking(),
+                ur => ur.RoleId,
+                r => r.RoleId,
+                (ur, r) => (int?)r.RoleId)
+            .FirstOrDefaultAsync();
+
         if (ar != null)
         {
+            var requestFromStatus = ar.Status;
+            ar.Status = 5; // completed
+
             var completionNode = new JsonObject
             {
                 ["flowType"] = "repair-complete",
@@ -280,19 +358,46 @@ public class RepairRequestsController : ControllerBase
             root["repairCompletion"] = completionNode;
             ar.ProposedData = root.ToJsonString();
 
-            var rec = new AssetRequestRecord
+            // If return-to-use date is today (or in the past), move asset back to InUse.
+            if (dto.ReturnToUseDate.HasValue && task.AssetId > 0)
             {
-                AssetRequestId = ar.AssetRequestId,
-                FromStatus = ar.Status,
-                ToStatus = ar.Status,
-                Action = 3,
-                ActionByUserId = dto.CompletedBy,
-                ActionRoleId = 0,
-                Comment = "Repair completed",
-                OccurredAt = DateTime.UtcNow
-            };
+                var linkedAsset = await _db.Assets.FindAsync(task.AssetId);
+                if (linkedAsset != null && dto.ReturnToUseDate.Value.Date <= DateTime.UtcNow.Date)
+                {
+                    var oldStatus = linkedAsset.Status;
+                    linkedAsset.Status = (int)AssetStatus.InUse;
+                    linkedAsset.InUseDate = DateOnly.FromDateTime(dto.ReturnToUseDate.Value.Date);
+                    _db.Assets.Update(linkedAsset);
+                    _db.AssetLifeCycles.Add(new AssetLifeCycle
+                    {
+                        AssetId = linkedAsset.AssetId,
+                        ActionType = (int)AssetLifeActionType.StatusChanged,
+                        RelatedEntityType = 1,
+                        RelatedEntityId = linkedAsset.AssetId,
+                        ActorUserId = dto.CompletedBy,
+                        ActorRoleId = completedByRoleId ?? 0,
+                        Description = $"Status changed from {(AssetStatus)oldStatus} to {(AssetStatus)AssetStatus.InUse} (repair completed)",
+                        OccurredAt = DateTime.UtcNow
+                    });
+                }
+            }
 
-            _db.AssetRequestRecords.Add(rec);
+            if (completedByRoleId.HasValue)
+            {
+                var rec = new AssetRequestRecord
+                {
+                    AssetRequestId = ar.AssetRequestId,
+                    FromStatus = requestFromStatus,
+                    ToStatus = ar.Status,
+                    Action = 3,
+                    ActionByUserId = dto.CompletedBy,
+                    ActionRoleId = completedByRoleId.Value,
+                    Comment = "Repair completed",
+                    OccurredAt = DateTime.UtcNow
+                };
+
+                _db.AssetRequestRecords.Add(rec);
+            }
         }
 
         await _db.SaveChangesAsync();

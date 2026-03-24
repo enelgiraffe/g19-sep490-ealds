@@ -70,6 +70,14 @@ public class MaintenanceScheduleDTO
     public bool? IsActive { get; set; }
 }
 
+public class AssetDocumentDTO
+{
+    public int DocumentId { get; set; }
+    public int DocumentType { get; set; }
+    public string FileUrl { get; set; } = null!;
+    public DateTime UploadedDate { get; set; }
+}
+
 /// <summary>
 /// Response DTO for asset read operations.
 /// </summary>
@@ -112,4 +120,7 @@ public class AssetResponseDTO
 
     // Maintenance (optional; populated in GET by id)
     public List<MaintenanceScheduleDTO>? MaintenanceSchedules { get; set; }
+
+    // Documents (optional; populated in GET by id)
+    public List<AssetDocumentDTO>? Documents { get; set; }
 }

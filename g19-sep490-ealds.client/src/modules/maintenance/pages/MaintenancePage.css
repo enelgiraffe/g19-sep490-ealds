@@ -209,67 +209,97 @@
   color: #b91c1c;
 }
 
-/* Modal "Bảo dưỡng tài sản" — cùng phong cách mockup (header đỏ) */
-.maintenance-form-modal .ant-modal-content {
-  padding: 0;
-  overflow: hidden;
+/* Modal bảo dưỡng - không dùng antd cho 2 form */
+.maintenance-form-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+}
+
+.maintenance-form-modal {
+  position: relative;
+  background: #fff;
   border-radius: 8px;
+  overflow: hidden;
+  max-height: 85vh;
+  width: min(920px, 96vw);
+  display: flex;
+  flex-direction: column;
 }
 
-.maintenance-form-modal .ant-modal-header {
+.maintenance-form-modal__header {
+  padding: 16px 24px;
+  background: #ffe5e0;
+  border-bottom: 1px solid #ffd4cc;
+}
+
+.maintenance-form-modal__title {
   margin: 0;
-  padding: 14px 20px;
-  background: #fe3720;
-  border-bottom: none;
-}
-
-.maintenance-form-modal .ant-modal-title {
-  color: #fff !important;
+  color: #fe3720;
   font-weight: 600;
-  font-size: 16px;
+  font-size: 18px;
 }
 
-.maintenance-form-modal .ant-modal-close {
-  color: #fff !important;
-  top: 14px;
+.maintenance-form-modal__close-btn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
 }
 
-.maintenance-form-modal .ant-modal-close:hover {
-  color: #fff !important;
-  opacity: 0.85;
+.maintenance-form-modal__close {
+  font-size: 24px;
+  color: #fe3720;
+  font-weight: 300;
 }
 
-.maintenance-form-modal .ant-modal-body {
+.maintenance-form-modal__body {
+  padding: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.maintenance-form-modal__loading {
   padding: 20px 24px;
-  background: #f3f4f6;
 }
 
-.maintenance-form-modal .ant-modal-footer {
-  margin: 0;
-  padding: 14px 20px;
+.maintenance-form-modal__footer {
+  padding: 16px 24px;
   border-top: 1px solid #e5e7eb;
   background: #fff;
 }
 
+.maintenance-form-modal__content {
+  padding: 24px;
+}
+
 .maintenance-form-modal__section {
-  background: #fff;
-  border-radius: 8px;
-  padding: 14px 16px;
-  margin-bottom: 12px;
-  border: 1px solid #e5e7eb;
+  margin-bottom: 20px;
 }
 
 .maintenance-form-modal__section-title {
-  font-weight: 700;
-  font-size: 14px;
+  font-weight: 600;
+  font-size: 15px;
   margin-bottom: 12px;
   color: #111827;
 }
 
+.maintenance-form-modal__form-item {
+  margin-bottom: 18px;
+}
+
 .maintenance-form-modal__label {
   font-size: 13px;
-  color: #374151;
-  margin-bottom: 4px;
+  color: #6b7280;
+  margin-bottom: 6px;
+  font-weight: 500;
+  display: inline-block;
 }
 
 .maintenance-form-modal__label--req::before {
@@ -277,18 +307,86 @@
   color: #fe3720;
 }
 
-.maintenance-form-modal__readonly-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px 24px;
-  font-size: 13px;
-  color: #1f2937;
+.maintenance-form-modal__input,
+.maintenance-form-modal__textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  font-size: 14px;
 }
 
-.maintenance-form-modal__readonly-grid b {
+.maintenance-form-modal__input--narrow {
+  max-width: 280px;
+}
+
+.maintenance-form-modal__textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+
+.maintenance-form-modal__form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+
+.maintenance-form-modal__form-grid-full {
+  grid-column: 1 / -1;
+}
+
+.maintenance-form-modal__checkbox-label {
+  display: block;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.maintenance-form-modal__radio-group {
+  display: flex;
+  gap: 18px;
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.maintenance-form-modal__location-field {
+  margin-top: 8px;
+}
+
+.maintenance-form-modal__label--top-gap {
+  margin-top: 14px;
+}
+
+.maintenance-form-modal__info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.maintenance-form-modal__info-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.maintenance-form-modal__info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.maintenance-form-modal__info-item label {
+  font-size: 13px;
   color: #6b7280;
   font-weight: 500;
-  margin-right: 6px;
+}
+
+.maintenance-form-modal__info-value {
+  font-size: 14px;
+  color: #111827;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
 }
 
 .maintenance-form-modal__attachments {
@@ -302,11 +400,30 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 8px 12px;
   background: #f9fafb;
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   font-size: 13px;
+}
+
+.maintenance-form-modal__attach-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.maintenance-form-modal__attach-btn {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.maintenance-form-modal__attach-btn--danger {
+  color: #ef4444;
+  border-color: #fecaca;
 }
 
 .maintenance-form-modal__footer-actions {
@@ -333,5 +450,33 @@
 .maintenance-form-modal__btn-cancel {
   min-width: 88px;
   height: 40px;
+  background: #6b7280;
+  border: 1px solid #6b7280;
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
 }
 
+.maintenance-form-modal__btn-upload {
+  margin-top: 8px;
+  background: #10b981;
+  border: 1px solid #10b981;
+  color: #fff;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .maintenance-form-modal__info-row {
+    grid-template-columns: 1fr;
+  }
+
+  .maintenance-form-modal__form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .maintenance-form-modal__input--narrow {
+    max-width: 100%;
+  }
+}

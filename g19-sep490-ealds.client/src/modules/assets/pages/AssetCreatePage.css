@@ -89,6 +89,18 @@
   color: #111827;
 }
 
+.asset-create__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.asset-create__section-header .asset-create__section-title {
+  margin-bottom: 0;
+}
+
 .asset-create__grid {
   display: grid;
   gap: 16px 32px;
@@ -205,6 +217,34 @@
 .asset-create__file-actions {
   display: flex;
   gap: 12px;
+}
+
+.asset-create__maintenance-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.asset-create__maintenance-table thead th {
+  background: #f3f4f6;
+  color: #4b5563;
+  text-align: left;
+  font-weight: 600;
+  padding: 10px 12px;
+}
+
+.asset-create__maintenance-table td {
+  border-top: 1px solid #e5e7eb;
+  padding: 10px 12px;
+  color: #111827;
+}
+
+.asset-create__field--current-value {
+  margin-top: 12px;
+  max-width: 320px;
 }
 
 .asset-create__btn {

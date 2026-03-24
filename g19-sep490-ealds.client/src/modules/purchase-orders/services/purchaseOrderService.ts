@@ -18,7 +18,7 @@ purchaseApi.interceptors.request.use((config) => {
   return config;
 });
 
-/** Backend Status: -1=Nháp, 0=Đã gửi (kế toán), 1=Chờ duyệt (giám đốc), 2=Duyệt, 3=Từ chối, 4=Chờ ngân sách */
+/** Backend Status: -1=Nháp, 0=Đã gửi (kế toán), 1=Chờ duyệt (giám đốc), 2=Duyệt, 3=Từ chối, 4=Chờ ngân sách, 5=Đã ghi tăng */
 export interface PurchaseOrderListItem {
   assetRequestId: number;
   assetId?: number | null;
@@ -27,8 +27,12 @@ export interface PurchaseOrderListItem {
   proposedData: string | null;
   status: number;
   createDate: string;
+  userId: number;
   createdBy: number;
   creatorName: string | null;
+  creatorDepartmentName?: string | null;
+  assetCode?: string | null;
+  assetName?: string | null;
 }
 
 export interface PurchaseOrderDetail extends PurchaseOrderListItem {}

@@ -24,6 +24,22 @@ export function AssetEditPage() {
   const [warehouseId, setWarehouseId] = useState('');
   const [warrantyEndDate, setWarrantyEndDate] = useState('');
 
+  const [supplier, setSupplier] = useState('');
+  const [contractNumber, setContractNumber] = useState('');
+  const [serialNumber, setSerialNumber] = useState('');
+  const [specification, setSpecification] = useState('');
+  const [note, setNote] = useState('');
+  const [origin, setOrigin] = useState('');
+  const [manager, setManager] = useState('');
+  const [warrantyMonths, setWarrantyMonths] = useState('');
+  const [warrantyCondition, setWarrantyCondition] = useState('');
+  const [depreciationBaseValue, setDepreciationBaseValue] = useState('');
+  const [depreciationStartDate, setDepreciationStartDate] = useState('');
+  const [depreciationMonths, setDepreciationMonths] = useState('');
+  const [depreciationRemainingMonths, setDepreciationRemainingMonths] = useState('');
+  const [depreciationAccumulated, setDepreciationAccumulated] = useState('');
+  const [depreciationRemainingValue, setDepreciationRemainingValue] = useState('');
+
   useEffect(() => {
     if (!assetId || Number.isNaN(assetId)) {
       setError('ID tài sản không hợp lệ.');
@@ -105,7 +121,7 @@ export function AssetEditPage() {
     <div className="asset-create-page">
       <div className="asset-create__header">
         <Link to="/accountant-assets" className="asset-create__back">
-          ← Danh sách tài sản (kế toán)
+          ← Tất cả tài sản
         </Link>
         <div className="asset-create__title-row">
           <h1 className="asset-create__title">Sửa tài sản</h1>
@@ -149,13 +165,11 @@ export function AssetEditPage() {
               </div>
 
               <div className="asset-create__field">
-                <label className="asset-create__label">
-                  Tên tài sản<span className="asset-create__required">*</span>
-                </label>
+                <label className="asset-create__label">Người quản lý</label>
                 <input
                   className="asset-create__input"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  value={manager}
+                  onChange={(e) => setManager(e.target.value)}
                 />
               </div>
 
@@ -173,6 +187,17 @@ export function AssetEditPage() {
                   <option value="2">Thiết bị</option>
                   <option value="3">Khác</option>
                 </select>
+              </div>
+
+              <div className="asset-create__field">
+                <label className="asset-create__label">
+                  Tên tài sản<span className="asset-create__required">*</span>
+                </label>
+                <input
+                  className="asset-create__input"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
               </div>
 
               <div className="asset-create__field asset-create__field--inline">
@@ -195,9 +220,49 @@ export function AssetEditPage() {
                   />
                 </div>
               </div>
+
+              <div className="asset-create__field">
+                <label className="asset-create__label">Giá trị</label>
+                <input
+                  type="number"
+                  min={0}
+                  className="asset-create__input"
+                  value={originalPrice}
+                  onChange={(e) => setOriginalPrice(e.target.value)}
+                />
+              </div>
+
+              <div className="asset-create__field">
+                <label className="asset-create__label">Nguồn gốc</label>
+                <input
+                  className="asset-create__input"
+                  value={origin}
+                  onChange={(e) => setOrigin(e.target.value)}
+                />
+              </div>
+
+              <label className="asset-create__checkbox-row">
+                <input type="checkbox" checked readOnly />
+                <span>Là tài sản cố định</span>
+              </label>
             </div>
 
             <div className="asset-create__column">
+              <div className="asset-create__field">
+                <label className="asset-create__label">
+                  Vị trí tài sản<span className="asset-create__required">*</span>
+                </label>
+                <select
+                  className="asset-create__select"
+                  value={warehouseId}
+                  onChange={(e) => setWarehouseId(e.target.value)}
+                >
+                  <option value="">Chọn vị trí tài sản</option>
+                  <option value="1">Kho Hà Nội</option>
+                  <option value="2">Kho Thạch Thất</option>
+                </select>
+              </div>
+
               <div className="asset-create__field">
                 <label className="asset-create__label">
                   Ngày mua<span className="asset-create__required">*</span>
@@ -211,52 +276,232 @@ export function AssetEditPage() {
               </div>
 
               <div className="asset-create__field">
-                <label className="asset-create__label">Giá gốc</label>
+                <label className="asset-create__label">Nhà cung cấp</label>
                 <input
-                  type="number"
-                  min={0}
                   className="asset-create__input"
-                  value={originalPrice}
-                  onChange={(e) => setOriginalPrice(e.target.value)}
+                  value={supplier}
+                  onChange={(e) => setSupplier(e.target.value)}
                 />
               </div>
 
               <div className="asset-create__field">
-                <label className="asset-create__label">Giá trị hiện tại</label>
+                <label className="asset-create__label">Số hợp đồng</label>
                 <input
-                  type="number"
-                  min={0}
                   className="asset-create__input"
-                  value={currentValue}
-                  onChange={(e) => setCurrentValue(e.target.value)}
+                  value={contractNumber}
+                  onChange={(e) => setContractNumber(e.target.value)}
                 />
               </div>
 
               <div className="asset-create__field">
-                <label className="asset-create__label">Kho / Vị trí tài sản</label>
-                <select
-                  className="asset-create__select"
-                  value={warehouseId}
-                  onChange={(e) => setWarehouseId(e.target.value)}
-                >
-                  <option value="">Chọn kho</option>
-                  <option value="1">Kho Hà Nội</option>
-                  <option value="2">Kho Thạch Thất</option>
-                </select>
+                <label className="asset-create__label">Số serial</label>
+                <input
+                  className="asset-create__input"
+                  value={serialNumber}
+                  onChange={(e) => setSerialNumber(e.target.value)}
+                />
               </div>
 
               <div className="asset-create__field">
-                <label className="asset-create__label">Hạn bảo hành</label>
+                <label className="asset-create__label">Quy cách tài sản</label>
                 <input
-                  type="date"
                   className="asset-create__input"
-                  value={warrantyEndDate}
-                  onChange={(e) => setWarrantyEndDate(e.target.value)}
+                  value={specification}
+                  onChange={(e) => setSpecification(e.target.value)}
+                />
+              </div>
+
+              <div className="asset-create__field">
+                <label className="asset-create__label">Ghi chú</label>
+                <textarea
+                  className="asset-create__textarea"
+                  rows={2}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
                 />
               </div>
             </div>
           </div>
         </section>
+
+        <section className="asset-create__section">
+          <div className="asset-create__section-header">
+            <h2 className="asset-create__section-title">Quy định bảo dưỡng</h2>
+            <button type="button" className="asset-create__btn asset-create__btn--danger">
+              + Thêm nội dung bảo dưỡng
+            </button>
+          </div>
+          <table className="asset-create__maintenance-table">
+            <thead>
+              <tr>
+                <th>Nội dung bảo dưỡng</th>
+                <th>Thời điểm</th>
+                <th>Lặp lại theo</th>
+                <th>Bảo dưỡng lại sau</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Thay dầu</td>
+                <td>12/08/2024</td>
+                <td>Tháng</td>
+                <td>-</td>
+              </tr>
+              <tr>
+                <td>Kiểm tra an toàn</td>
+                <td>12/08/2024</td>
+                <td>Quý</td>
+                <td>-</td>
+              </tr>
+              <tr>
+                <td>Đo sai số</td>
+                <td>12/08/2024</td>
+                <td>Năm</td>
+                <td>-</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section className="asset-create__section">
+          <h2 className="asset-create__section-title">Bảo hành</h2>
+          <div className="asset-create__grid asset-create__grid--three">
+            <div className="asset-create__field">
+              <label className="asset-create__label">Thời gian bảo hành</label>
+              <div className="asset-create__field--inline">
+                <input
+                  type="number"
+                  min={0}
+                  className="asset-create__input"
+                  value={warrantyMonths}
+                  onChange={(e) => setWarrantyMonths(e.target.value)}
+                />
+                <span className="asset-create__suffix">Tháng</span>
+              </div>
+            </div>
+            <div className="asset-create__field">
+              <label className="asset-create__label">Điều kiện bảo hành</label>
+              <input
+                className="asset-create__input"
+                value={warrantyCondition}
+                onChange={(e) => setWarrantyCondition(e.target.value)}
+              />
+            </div>
+            <div className="asset-create__field">
+              <label className="asset-create__label">Hạn bảo hành</label>
+              <input
+                type="date"
+                className="asset-create__input"
+                value={warrantyEndDate}
+                onChange={(e) => setWarrantyEndDate(e.target.value)}
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="asset-create__section">
+          <h2 className="asset-create__section-title">Thông tin khấu hao</h2>
+          <div className="asset-create__grid asset-create__grid--three">
+            <div className="asset-create__field">
+              <label className="asset-create__label">Giá trị tính khấu hao</label>
+              <input
+                type="number"
+                min={0}
+                className="asset-create__input"
+                value={depreciationBaseValue}
+                onChange={(e) => setDepreciationBaseValue(e.target.value)}
+              />
+            </div>
+            <div className="asset-create__field">
+              <label className="asset-create__label">Thời gian còn lại</label>
+              <div className="asset-create__field--inline">
+                <input
+                  type="number"
+                  min={0}
+                  className="asset-create__input"
+                  value={depreciationRemainingMonths}
+                  onChange={(e) => setDepreciationRemainingMonths(e.target.value)}
+                />
+                <span className="asset-create__suffix">Tháng</span>
+              </div>
+            </div>
+            <div className="asset-create__field">
+              <label className="asset-create__label">Giá trị còn lại</label>
+              <input
+                type="number"
+                min={0}
+                className="asset-create__input"
+                value={depreciationRemainingValue}
+                onChange={(e) => setDepreciationRemainingValue(e.target.value)}
+              />
+            </div>
+            <div className="asset-create__field">
+              <label className="asset-create__label">Ngày bắt đầu khấu hao</label>
+              <input
+                type="date"
+                className="asset-create__input"
+                value={depreciationStartDate}
+                onChange={(e) => setDepreciationStartDate(e.target.value)}
+              />
+            </div>
+            <div className="asset-create__field">
+              <label className="asset-create__label">Khấu hao lũy kế</label>
+              <input
+                type="number"
+                min={0}
+                className="asset-create__input"
+                value={depreciationAccumulated}
+                onChange={(e) => setDepreciationAccumulated(e.target.value)}
+              />
+            </div>
+            <div className="asset-create__field">
+              <label className="asset-create__label">Thời gian khấu hao</label>
+              <div className="asset-create__field--inline">
+                <input
+                  type="number"
+                  min={0}
+                  className="asset-create__input"
+                  value={depreciationMonths}
+                  onChange={(e) => setDepreciationMonths(e.target.value)}
+                />
+                <span className="asset-create__suffix">Tháng</span>
+              </div>
+            </div>
+          </div>
+          <div className="asset-create__field asset-create__field--current-value">
+            <label className="asset-create__label">Giá trị hiện tại (để lưu dữ liệu)</label>
+            <input
+              type="number"
+              min={0}
+              className="asset-create__input"
+              value={currentValue}
+              onChange={(e) => setCurrentValue(e.target.value)}
+            />
+          </div>
+        </section>
+
+        <section className="asset-create__section">
+          <h2 className="asset-create__section-title">Tài liệu</h2>
+          <div className="asset-create__files">
+            <div className="asset-create__file">
+              <span className="asset-create__file-index">#1</span>
+              <span className="asset-create__file-name">Tài liệu đính kèm</span>
+            </div>
+            <div className="asset-create__file">
+              <span className="asset-create__file-index">#2</span>
+              <span className="asset-create__file-name">Tài liệu đính kèm</span>
+            </div>
+          </div>
+          <div className="asset-create__file-actions">
+            <button type="button" className="asset-create__btn asset-create__btn--danger">
+              Tải toàn bộ
+            </button>
+            <button type="button" className="asset-create__btn asset-create__btn--danger">
+              Thêm tài liệu
+            </button>
+          </div>
+        </section>
+
       </form>
     </div>
   );

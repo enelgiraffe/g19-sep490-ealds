@@ -20,6 +20,17 @@ function formatDate(iso?: string | null): string {
   }
 }
 
+function getFileNameFromUrl(url: string): string {
+  try {
+    const cleanUrl = url.split('?')[0];
+    const parts = cleanUrl.split('/');
+    const last = parts[parts.length - 1];
+    return decodeURIComponent(last || url);
+  } catch {
+    return url;
+  }
+}
+
 export function AssetDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id ? Number(params.id) : NaN;
@@ -347,7 +358,23 @@ export function AssetDetailPage() {
         <div className="asset-detail__section">
           <h2 className="asset-detail__section-title">Tài liệu</h2>
           <div className="asset-detail__files">
-            <p className="asset-detail__empty">Chưa có tài liệu đính kèm.</p>
+            {asset.documents && asset.documents.length > 0 ? (
+              asset.documents.map((doc, idx) => (
+                <div key={doc.documentId} className="asset-detail__file">
+                  <span className="asset-detail__file-index">#{idx + 1}</span>
+                  <a
+                    className="asset-detail__file-name"
+                    href={doc.fileUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {getFileNameFromUrl(doc.fileUrl)}
+                  </a>
+                </div>
+              ))
+            ) : (
+              <p className="asset-detail__empty">Chưa có tài liệu đính kèm.</p>
+            )}
           </div>
         </div>
       </div>

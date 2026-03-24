@@ -11,7 +11,7 @@ import './PurchaseOrdersPage.css';
 
 const { Option } = Select;
 
-/** Backend status: -1=Nháp, 0=Đã gửi (kế toán), 1=Chờ duyệt (giám đốc), 2=Duyệt, 3=Từ chối, 4=Chờ ngân sách */
+/** Backend status: -1=Nháp, 0=Đã gửi (kế toán), 1=Chờ duyệt (giám đốc), 2=Duyệt, 3=Từ chối, 4=Chờ ngân sách, 5=Đã ghi tăng */
 const STATUS_MAP: Record<number, { label: string; color: string }> = {
   [-1]: { label: 'Nháp', color: 'default' },
   0: { label: 'Đã gửi', color: 'processing' },
@@ -19,6 +19,7 @@ const STATUS_MAP: Record<number, { label: string; color: string }> = {
   2: { label: 'Duyệt', color: 'success' },
   3: { label: 'Từ chối', color: 'error' },
   4: { label: 'Chờ ngân sách', color: 'warning' },
+  5: { label: 'Đã ghi tăng', color: 'success' },
 };
 
 interface TableRow extends PurchaseOrderListItem {
@@ -202,7 +203,10 @@ export function PurchaseOrdersPage() {
     }
     try {
       if (detail.proposedData) {
-        const parsed = JSON.parse(detail.proposedData) as { equipment?: any[] };
+        const parsed = JSON.parse(detail.proposedData) as { equipment?: any[]; assetTypeId?: number | null };
+        if (parsed.assetTypeId != null) {
+          values.assetType = String(parsed.assetTypeId);
+        }
         if (Array.isArray(parsed.equipment) && parsed.equipment.length > 0) {
           values.equipment = parsed.equipment.map((e) => ({
             name: e.name ?? '',
@@ -442,6 +446,25 @@ export function PurchaseOrdersPage() {
         data={selectedDetail}
         currentUserId={profile?.id ?? null}
         currentUserRole={profile?.role ?? null}
+        onActionCompleted={async (assetRequestId, nextStatus) => {
+          if (typeof nextStatus === 'number') {
+            setData((prev) =>
+              prev.map((row) =>
+                row.assetRequestId === assetRequestId ? { ...row, status: nextStatus } : row,
+              ),
+            );
+            setSelectedDetail((prev) =>
+              prev && prev.assetRequestId === assetRequestId ? { ...prev, status: nextStatus } : prev,
+            );
+          }
+          try {
+            const detail = await purchaseOrderService.getById(assetRequestId);
+            setSelectedDetail(detail);
+          } catch {
+            // ignore detail refresh error
+          }
+          await loadList();
+        }}
       />
     </div>
   );

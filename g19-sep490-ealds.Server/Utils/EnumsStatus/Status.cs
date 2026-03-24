@@ -14,6 +14,7 @@ public enum AssetStatus
     Available = 0,
     InUse = 1,
     InMaintenance = 2,
+    InRepair = 9,
     Reserved = 3,
     Disposed = 4,
     Lost = 5,

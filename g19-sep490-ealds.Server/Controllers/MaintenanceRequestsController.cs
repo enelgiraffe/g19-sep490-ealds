@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
@@ -216,6 +217,11 @@ public class MaintenanceRequestsController : ControllerBase
         if (dto.StartedBy <= 0)
             return BadRequest("StartedBy is required.");
 
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var actorUserId = int.TryParse(userIdClaim, out var parsedUserId) && parsedUserId > 0
+            ? parsedUserId
+            : dto.StartedBy;
+
         var ar = await _db.AssetRequests.FindAsync(id);
         if (ar == null) return NotFound();
 
@@ -223,14 +229,83 @@ public class MaintenanceRequestsController : ControllerBase
         if (!isFinalApproved)
             return BadRequest("Only requests approved at final workflow step can be started.");
 
-        var userRole = await _db.UserRoles.Include(ur => ur.Role).AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.StartedBy);
-        var role = userRole?.Role;
-        var allowed = role != null && (
-            (role.Code != null && (role.Code.Equals("DepartmentManager", StringComparison.OrdinalIgnoreCase) || role.Code.Equals("Accountant", StringComparison.OrdinalIgnoreCase)))
-            || (role.Name != null && (role.Name.IndexOf("Manager", StringComparison.OrdinalIgnoreCase) >= 0 || role.Name.IndexOf("Director", StringComparison.OrdinalIgnoreCase) >= 0 || role.Name.IndexOf("Accountant", StringComparison.OrdinalIgnoreCase) >= 0))
+        var hasAllowedRoleFromToken =
+            User.IsInRole("DIRECTOR") ||
+            User.IsInRole("DepartmentManager") ||
+            User.IsInRole("DEPARTMENT_MANAGER") ||
+            User.IsInRole("DEPT_MANAGER") ||
+            User.IsInRole("DEPARTMENT_HEAD") ||
+            User.IsInRole("HEAD_OF_DEPARTMENT") ||
+            User.IsInRole("TRUONG_PHONG") ||
+            User.IsInRole("TRUONGPHONG") ||
+            User.IsInRole("ACCOUNTANT");
+
+        var userRoles = await _db.UserRoles
+            .Include(ur => ur.Role)
+            .AsNoTracking()
+            .Where(ur => ur.UserId == actorUserId)
+            .ToListAsync();
+
+        var allowedRoleIds = await _db.Roles
+            .AsNoTracking()
+            .Where(r =>
+                (r.Code != null &&
+                    (
+                        r.Code.ToUpper() == "DIRECTOR" ||
+                        r.Code.ToUpper() == "DEPARTMENTMANAGER" ||
+                        r.Code.ToUpper() == "DEPARTMENT_MANAGER" ||
+                        r.Code.ToUpper() == "DEPT_MANAGER" ||
+                        r.Code.ToUpper() == "DEPARTMENT_HEAD" ||
+                        r.Code.ToUpper() == "HEAD_OF_DEPARTMENT" ||
+                        r.Code.ToUpper() == "TRUONG_PHONG" ||
+                        r.Code.ToUpper() == "TRUONGPHONG" ||
+                        r.Code.ToUpper() == "ACCOUNTANT"
+                    )) ||
+                (r.Name != null &&
+                    (
+                        r.Name.ToUpper().Contains("MANAGER") ||
+                        r.Name.ToUpper().Contains("DIRECTOR") ||
+                        r.Name.ToUpper().Contains("ACCOUNTANT") ||
+                        r.Name.ToUpper().Contains("TRUONG PHONG")
+                    ))
+            )
+            .Select(r => r.RoleId)
+            .ToListAsync();
+
+        var allowed = hasAllowedRoleFromToken || userRoles.Any(ur =>
+            allowedRoleIds.Contains(ur.RoleId) ||
+            (ur.Role?.Code != null &&
+                (
+                    ur.Role.Code.ToUpper() == "DIRECTOR" ||
+                    ur.Role.Code.ToUpper() == "DEPARTMENTMANAGER" ||
+                    ur.Role.Code.ToUpper() == "DEPARTMENT_MANAGER" ||
+                    ur.Role.Code.ToUpper() == "DEPT_MANAGER" ||
+                    ur.Role.Code.ToUpper() == "DEPARTMENT_HEAD" ||
+                    ur.Role.Code.ToUpper() == "HEAD_OF_DEPARTMENT" ||
+                    ur.Role.Code.ToUpper() == "TRUONG_PHONG" ||
+                    ur.Role.Code.ToUpper() == "TRUONGPHONG" ||
+                    ur.Role.Code.ToUpper() == "ACCOUNTANT"
+                )) ||
+            (ur.Role?.Name != null &&
+                (
+                    ur.Role.Name.ToUpper().Contains("MANAGER") ||
+                    ur.Role.Name.ToUpper().Contains("DIRECTOR") ||
+                    ur.Role.Name.ToUpper().Contains("ACCOUNTANT") ||
+                    ur.Role.Name.ToUpper().Contains("TRUONG PHONG")
+                ))
         );
 
-        if (!allowed) return Forbid();
+        if (!allowed)
+        {
+            return StatusCode(403, new
+            {
+                message = "Bạn không có quyền bắt đầu bảo dưỡng.",
+                actorUserId,
+                currentUserRoleIds = userRoles.Select(x => x.RoleId).Distinct().ToArray(),
+                currentUserRoleCodes = userRoles.Select(x => x.Role?.Code).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToArray(),
+                currentUserRoleNames = userRoles.Select(x => x.Role?.Name).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToArray()
+            });
+        }
 
         var from = ar.Status;
         ar.Status = 4;
@@ -276,8 +351,8 @@ public class MaintenanceRequestsController : ControllerBase
                     ActionType = (int)AssetLifeActionType.StatusChanged,
                     RelatedEntityType = 1,
                     RelatedEntityId = linkedAsset.AssetId,
-                    ActorUserId = dto.StartedBy,
-                    ActorRoleId = userRole?.RoleId ?? 0,
+                    ActorUserId = actorUserId,
+                    ActorRoleId = userRoles.FirstOrDefault()?.RoleId ?? 0,
                     Description = $"Status changed from {(AssetStatus)oldStatus} to {(AssetStatus)AssetStatus.InMaintenance} (maintenance started)",
                     OccurredAt = DateTime.UtcNow
                 });
@@ -312,8 +387,8 @@ public class MaintenanceRequestsController : ControllerBase
             FromStatus = from,
             ToStatus = ar.Status,
             Action = 2,
-            ActionByUserId = dto.StartedBy,
-            ActionRoleId = userRole?.RoleId ?? 0,
+            ActionByUserId = actorUserId,
+            ActionRoleId = userRoles.FirstOrDefault()?.RoleId ?? 0,
             Comment = dto.Comment,
             OccurredAt = DateTime.UtcNow
         };
@@ -356,6 +431,29 @@ public class MaintenanceRequestsController : ControllerBase
             return BadRequest("Request body is required.");
         if (dto.CompletedBy <= 0)
             return BadRequest("CompletedBy is required.");
+
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var actorUserId = int.TryParse(userIdClaim, out var parsedUserId) && parsedUserId > 0
+            ? parsedUserId
+            : dto.CompletedBy;
+
+        var actionRoleId = await _db.UserRoles
+            .AsNoTracking()
+            .Where(ur => ur.UserId == actorUserId)
+            .Select(ur => (int?)ur.RoleId)
+            .FirstOrDefaultAsync();
+
+        if (!actionRoleId.HasValue)
+        {
+            actionRoleId = await _db.Roles
+                .AsNoTracking()
+                .OrderBy(r => r.RoleId)
+                .Select(r => (int?)r.RoleId)
+                .FirstOrDefaultAsync();
+        }
+
+        if (!actionRoleId.HasValue)
+            return BadRequest("Không tìm thấy Role hợp lệ để ghi nhận lịch sử hoàn thành bảo dưỡng.");
 
         var task = await _db.MaintenaceTasks.FindAsync(taskId);
         if (task == null) return NotFound();
@@ -408,6 +506,10 @@ public class MaintenanceRequestsController : ControllerBase
 
         if (linkedRequest != null)
         {
+            var fromRequestStatus = linkedRequest.Status;
+            // Close maintenance workflow request after task completion.
+            linkedRequest.Status = 2;
+
             var completionNode = new JsonObject
             {
                 ["flowType"] = "maintenance-complete",
@@ -448,16 +550,40 @@ public class MaintenanceRequestsController : ControllerBase
             var rec = new AssetRequestRecord
             {
                 AssetRequestId = linkedRequest.AssetRequestId,
-                FromStatus = linkedRequest.Status,
+                FromStatus = fromRequestStatus,
                 ToStatus = linkedRequest.Status,
                 Action = 3,
-                ActionByUserId = dto.CompletedBy,
-                ActionRoleId = 0,
+                ActionByUserId = actorUserId,
+                ActionRoleId = actionRoleId.Value,
                 Comment = "Maintenance completed",
                 OccurredAt = DateTime.UtcNow
             };
 
             _db.AssetRequestRecords.Add(rec);
+        }
+
+        // Bring asset out of maintenance state when task is completed.
+        var linkedAssetId = task.AssetId;
+        if (linkedAssetId > 0)
+        {
+            var linkedAsset = await _db.Assets.FindAsync(linkedAssetId);
+            if (linkedAsset != null && linkedAsset.Status == (int)AssetStatus.InMaintenance)
+            {
+                var oldStatus = linkedAsset.Status;
+                linkedAsset.Status = (int)AssetStatus.InUse;
+                _db.Assets.Update(linkedAsset);
+                _db.AssetLifeCycles.Add(new AssetLifeCycle
+                {
+                    AssetId = linkedAsset.AssetId,
+                    ActionType = (int)AssetLifeActionType.StatusChanged,
+                    RelatedEntityType = 1,
+                    RelatedEntityId = linkedAsset.AssetId,
+                    ActorUserId = actorUserId,
+                    ActorRoleId = actionRoleId.Value,
+                    Description = $"Status changed from {(AssetStatus)oldStatus} to {(AssetStatus)AssetStatus.InUse} (maintenance completed)",
+                    OccurredAt = DateTime.UtcNow
+                });
+            }
         }
 
         await _db.SaveChangesAsync();

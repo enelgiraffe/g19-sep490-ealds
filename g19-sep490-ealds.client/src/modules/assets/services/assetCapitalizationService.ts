@@ -20,12 +20,15 @@ capitalizationApi.interceptors.request.use((config) => {
 
 export interface AssetCapitalizationPayload {
   assetId: number;
+  assetRequestId?: number;
   note?: string | null;
+  documents?: { name?: string; url: string }[] | null;
 }
 
 export interface CapitalizePurchaseRequestPayload {
   assetRequestId: number;
   note?: string | null;
+  documents?: { name?: string; url: string }[] | null;
   code: string;
   name: string;
   assetTypeId: number;
@@ -41,7 +44,9 @@ export const assetCapitalizationService = {
   async changeStatus(payload: AssetCapitalizationPayload) {
     const response = await capitalizationApi.put('/api/AssetCapitalization/change-status', {
       assetId: payload.assetId,
+      assetRequestId: payload.assetRequestId ?? null,
       note: payload.note ?? null,
+      documents: payload.documents ?? null,
     });
     return response.data;
   },
@@ -50,6 +55,7 @@ export const assetCapitalizationService = {
     const response = await capitalizationApi.put('/api/AssetCapitalization/capitalize-purchase-request', {
       assetRequestId: payload.assetRequestId,
       note: payload.note ?? null,
+      documents: payload.documents ?? null,
       code: payload.code,
       name: payload.name,
       assetTypeId: payload.assetTypeId,

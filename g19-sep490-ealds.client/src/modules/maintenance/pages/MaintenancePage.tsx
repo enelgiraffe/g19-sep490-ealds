@@ -1,28 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Button,
-  DatePicker,
   Input,
-  InputNumber,
   Modal,
   Popconfirm,
-  Radio,
-  Row,
-  Col,
   Select,
   Tabs,
   message,
 } from 'antd';
-import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import {
-  CheckOutlined,
   DeleteOutlined,
-  DownloadOutlined,
-  EditOutlined,
   EyeOutlined,
   FilterOutlined,
-  PlusOutlined,
   SearchOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
@@ -91,6 +81,14 @@ function formatDate(value?: string | null): string {
   return d.toLocaleDateString('vi-VN');
 }
 
+function toIsoDate(value: string): string {
+  return new Date(`${value}T00:00:00`).toISOString();
+}
+
+function toTodayInputDate(): string {
+  return dayjs().format('YYYY-MM-DD');
+}
+
 function mapStatus(status: number): MaintenanceStatus {
   // -1=Nháp, 0=Đã gửi, 1=Chờ phê duyệt, 2=Đã duyệt (chưa bắt đầu), 3=Từ chối, 4=Đang thực hiện (đã start)
   if (status === -1) return 'draft';
@@ -143,9 +141,9 @@ export function MaintenancePage() {
   const [startLoading, setStartLoading] = useState(false);
   const [startSubmitting, setStartSubmitting] = useState(false);
   const [reportNumber, setReportNumber] = useState('');
-  const [maintenanceDate, setMaintenanceDate] = useState<Dayjs | null>(null);
+  const [maintenanceDate, setMaintenanceDate] = useState('');
   const [markCompleted, setMarkCompleted] = useState(false);
-  const [expectedRange, setExpectedRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
+  const [expectedCompletionDate, setExpectedCompletionDate] = useState('');
   const [maintenanceContent, setMaintenanceContent] = useState('');
   const [detailedDescription, setDetailedDescription] = useState('');
   const [performerUserId, setPerformerUserId] = useState<number | null>(null);
@@ -162,8 +160,8 @@ export function MaintenancePage() {
   const [completeSubmitting, setCompleteSubmitting] = useState(false);
   const [completeReportNumber, setCompleteReportNumber] = useState('');
   const [completeMaintenanceDateLabel, setCompleteMaintenanceDateLabel] = useState('');
-  const [completeCompletionDate, setCompleteCompletionDate] = useState<Dayjs | null>(null);
-  const [completeReturnDate, setCompleteReturnDate] = useState<Dayjs | null>(null);
+  const [completeCompletionDate, setCompleteCompletionDate] = useState('');
+  const [completeReturnDate, setCompleteReturnDate] = useState('');
   const [completeActualCost, setCompleteActualCost] = useState<number | null>(null);
   const [completeMaintenanceContent, setCompleteMaintenanceContent] = useState('');
   const [completeDetailedDescription, setCompleteDetailedDescription] = useState('');
@@ -235,9 +233,9 @@ export function MaintenancePage() {
         setLocationText(row.assetState || '');
       }
       setReportNumber('');
-      setMaintenanceDate(dayjs());
+      setMaintenanceDate(toTodayInputDate());
       setMarkCompleted(false);
-      setExpectedRange(null);
+      setExpectedCompletionDate('');
       setMaintenanceContent('');
       setDetailedDescription(row.purpose || '');
       setPerformerUserId(null);
@@ -267,30 +265,19 @@ export function MaintenancePage() {
           ? startAsset?.currentDepartmentName ?? locationText
           : locationText;
 
-      let expectedCompletionDate: string | undefined;
-      let expectedCompletionFrom: string | undefined;
-      let expectedCompletionTo: string | undefined;
-      const er = expectedRange;
-      if (er?.[0] && er[1]) {
-        if (er[0].isSame(er[1], 'day')) {
-          expectedCompletionDate = er[0].toISOString();
-        } else {
-          expectedCompletionFrom = er[0].toISOString();
-          expectedCompletionTo = er[1].toISOString();
-        }
-      }
+      const expectedCompletionDateIso = expectedCompletionDate
+        ? toIsoDate(expectedCompletionDate)
+        : undefined;
 
       const payload: MaintenanceStartPayload = {
         startedBy: profile.id,
         comment: markCompleted ? 'Đánh dấu đã hoàn thành (ghi nhận lúc bắt đầu)' : null,
         reportNumber: reportNumber.trim() || null,
-        maintenanceDate: maintenanceDate.toISOString(),
+        maintenanceDate: toIsoDate(maintenanceDate),
         performerUserId: performerUserId ?? undefined,
         maintenanceProvider: maintenanceProvider.trim() || null,
         estimatedCost: estimatedCost ?? undefined,
-        expectedCompletionDate,
-        expectedCompletionFrom,
-        expectedCompletionTo,
+        expectedCompletionDate: expectedCompletionDateIso,
         maintenanceContent: maintenanceContent.trim() || null,
         detailedDescription: detailedDescription.trim() || null,
         locationType,
@@ -348,8 +335,8 @@ export function MaintenancePage() {
       }
       setCompleteMaintenanceDateLabel(maintLabel);
       setCompleteReportNumber(rep);
-      setCompleteCompletionDate(dayjs());
-      setCompleteReturnDate(dayjs());
+      setCompleteCompletionDate(toTodayInputDate());
+      setCompleteReturnDate(toTodayInputDate());
       setCompleteActualCost(null);
       setCompleteMaintenanceContent(contentFromStart);
       setCompleteDetailedDescription(detailFromStart || row.purpose || '');
@@ -389,8 +376,8 @@ export function MaintenancePage() {
       const payload: MaintenanceCompletePayload = {
         completedBy: profile.id,
         reportNumber: completeReportNumber.trim() || null,
-        completionDate: completeCompletionDate.toISOString(),
-        returnToUseDate: completeReturnDate.toISOString(),
+        completionDate: toIsoDate(completeCompletionDate),
+        returnToUseDate: toIsoDate(completeReturnDate),
         actualCost: completeActualCost,
         totalCost: completeActualCost,
         maintenanceContent: completeMaintenanceContent.trim() || null,
@@ -693,50 +680,39 @@ export function MaintenancePage() {
         )}
       </Modal>
 
-      <Modal
-        className="maintenance-form-modal"
-        open={startOpen}
-        title="Bảo dưỡng tài sản"
-        width={920}
-        onCancel={() => {
-          setStartOpen(false);
-          setStartRow(null);
-          setStartAsset(null);
-        }}
-        footer={
-          <div className="maintenance-form-modal__footer-actions">
-            <Button
-              className="maintenance-form-modal__btn-cancel"
+      {startOpen ? (
+        <div className="maintenance-form-modal-overlay" role="dialog" aria-modal="true">
+          <div className="maintenance-form-modal">
+            <button
+              type="button"
+              className="maintenance-form-modal__close-btn"
               onClick={() => {
+                if (startSubmitting) return;
                 setStartOpen(false);
                 setStartRow(null);
                 setStartAsset(null);
               }}
+              aria-label="Đóng"
             >
-              Hủy
-            </Button>
-            <Button
-              className="maintenance-form-modal__btn-confirm"
-              type="primary"
-              loading={startSubmitting}
-              onClick={submitStartMaintenance}
-            >
-              Xác nhận bảo dưỡng
-            </Button>
-          </div>
-        }
-        destroyOnClose
-      >
-        {startLoading ? (
-          <div>Đang tải...</div>
-        ) : !startRow ? (
-          <div>Không có dữ liệu.</div>
-        ) : (
-          <div>
-            <div className="maintenance-form-modal__section">
-              <div className="maintenance-form-modal__label">Số biên bản</div>
-              <Input
-                style={{ maxWidth: 280, marginTop: 6 }}
+              <span className="maintenance-form-modal__close">×</span>
+            </button>
+            <div className="maintenance-form-modal__header">
+              <h2 className="maintenance-form-modal__title">Bảo dưỡng tài sản</h2>
+            </div>
+            <div className="maintenance-form-modal__body">
+              {startLoading ? (
+                <div className="maintenance-form-modal__loading">Đang tải...</div>
+              ) : !startRow ? (
+                <div className="maintenance-form-modal__loading">Không có dữ liệu.</div>
+              ) : (
+                <div className="maintenance-form-modal__content">
+            <div className="maintenance-form-modal__form-item">
+              <label className="maintenance-form-modal__label" htmlFor="maintenance-start-report-number">
+                Số biên bản
+              </label>
+              <input
+                id="maintenance-start-report-number"
+                className="maintenance-form-modal__input maintenance-form-modal__input--narrow"
                 placeholder="VD: BA001"
                 value={reportNumber}
                 onChange={(e) => setReportNumber(e.target.value)}
@@ -745,83 +721,117 @@ export function MaintenancePage() {
 
             <div className="maintenance-form-modal__section">
               <div className="maintenance-form-modal__section-title">Thông tin tài sản</div>
-              <div className="maintenance-form-modal__readonly-grid">
-                <div>
-                  <b>Mã tài sản:</b>
-                  {startAsset?.code ?? startRow.assetCode}
+              <div className="maintenance-form-modal__info-grid">
+                <div className="maintenance-form-modal__info-row">
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Mã tài sản</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {startAsset?.code ?? startRow.assetCode}
+                    </div>
+                  </div>
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Giá trị tài sản</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {startAsset ? formatVnd(startAsset.originalPrice) : '—'}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <b>Giá trị tài sản:</b>
-                  {startAsset ? formatVnd(startAsset.originalPrice) : '—'}
+                <div className="maintenance-form-modal__info-row">
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Tên tài sản</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {startAsset?.name ?? startRow.assetName}
+                    </div>
+                  </div>
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Giá trị còn lại</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {startAsset?.remainingValue != null
+                        ? formatVnd(startAsset.remainingValue)
+                        : startAsset
+                          ? formatVnd(startAsset.currentValue)
+                          : '—'}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <b>Tên tài sản:</b>
-                  {startAsset?.name ?? startRow.assetName}
+                <div className="maintenance-form-modal__info-row">
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Loại tài sản</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {startAsset?.assetTypeName ?? '—'}
+                    </div>
+                  </div>
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Vị trí tài sản</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {startAsset?.warehouseName ||
+                        startAsset?.currentDepartmentName ||
+                        startRow.assetState ||
+                        '—'}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <b>Giá trị còn lại:</b>
-                  {startAsset?.remainingValue != null
-                    ? formatVnd(startAsset.remainingValue)
-                    : startAsset
-                      ? formatVnd(startAsset.currentValue)
-                      : '—'}
+                <div className="maintenance-form-modal__info-row">
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Quy cách tài sản</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {startAsset
+                        ? [startAsset.unit ? `Đơn vị: ${startAsset.unit}` : null, `SL: ${startAsset.quantity}`]
+                            .filter(Boolean)
+                            .join(' · ')
+                        : '—'}
+                    </div>
+                  </div>
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Tình trạng</label>
+                    <div className="maintenance-form-modal__info-value">{startAsset?.statusName ?? '—'}</div>
+                  </div>
                 </div>
-                <div>
-                  <b>Loại tài sản:</b>
-                  {startAsset?.assetTypeName ?? '—'}
+                <div className="maintenance-form-modal__info-row">
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Ngày mua</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {startAsset?.purchaseDate ? formatDate(startAsset.purchaseDate) : '—'}
+                    </div>
+                  </div>
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Ngày đưa vào SD</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {startAsset?.inUseDate ? formatDate(startAsset.inUseDate) : '—'}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <b>Vị trí tài sản:</b>
-                  {startAsset?.warehouseName ||
-                    startAsset?.currentDepartmentName ||
-                    startRow.assetState ||
-                    '—'}
-                </div>
-                <div>
-                  <b>Quy cách tài sản:</b>
-                  {startAsset
-                    ? [startAsset.unit ? `Đơn vị: ${startAsset.unit}` : null, `SL: ${startAsset.quantity}`]
-                        .filter(Boolean)
-                        .join(' · ')
-                    : '—'}
-                </div>
-                <div>
-                  <b>Tình trạng:</b>
-                  {startAsset?.statusName ?? '—'}
-                </div>
-                <div>
-                  <b>Ngày mua:</b>{' '}
-                  {startAsset?.purchaseDate ? formatDate(startAsset.purchaseDate) : '—'}
-                </div>
-                <div>
-                  <b>Ngày đưa vào SD:</b>{' '}
-                  {startAsset?.inUseDate ? formatDate(startAsset.inUseDate) : '—'}
-                </div>
-                <div>
-                  <b>Hạn bảo hành:</b>{' '}
-                  {startAsset?.warrantyEndDate ? formatDate(startAsset.warrantyEndDate) : '—'}
-                </div>
-                <div>
-                  <b>Phòng ban SD:</b>
-                  {startAsset?.currentDepartmentName ?? '—'}
+                <div className="maintenance-form-modal__info-row">
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Hạn bảo hành</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {startAsset?.warrantyEndDate ? formatDate(startAsset.warrantyEndDate) : '—'}
+                    </div>
+                  </div>
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Phòng ban SD</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {startAsset?.currentDepartmentName ?? '—'}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
 
             <div className="maintenance-form-modal__section">
               <div className="maintenance-form-modal__section-title">Thông tin bảo dưỡng tài sản</div>
-              <Row gutter={[16, 12]}>
-                <Col xs={24} md={12}>
+              <div className="maintenance-form-modal__form-grid">
+                <div>
                   <div className="maintenance-form-modal__label maintenance-form-modal__label--req">
                     Ngày bảo dưỡng
                   </div>
-                  <DatePicker
-                    style={{ width: '100%', marginTop: 4 }}
-                    format="DD/MM/YYYY"
+                  <input
+                    type="date"
+                    className="maintenance-form-modal__input"
                     value={maintenanceDate}
-                    onChange={(v) => setMaintenanceDate(v)}
+                    onChange={(e) => setMaintenanceDate(e.target.value)}
                   />
-                  <label style={{ display: 'block', marginTop: 10, fontSize: 13 }}>
+                  <label className="maintenance-form-modal__checkbox-label">
                     <input
                       type="checkbox"
                       checked={markCompleted}
@@ -829,104 +839,110 @@ export function MaintenancePage() {
                     />{' '}
                     Đã hoàn thành
                   </label>
-                </Col>
-                <Col xs={24} md={12}>
+                </div>
+                <div>
                   <div className="maintenance-form-modal__label">Người thực hiện (mã user)</div>
-                  <InputNumber
-                    style={{ width: '100%', marginTop: 4 }}
+                  <input
+                    className="maintenance-form-modal__input"
+                    type="number"
                     min={1}
                     placeholder="UserId"
-                    value={performerUserId ?? undefined}
-                    onChange={(v) => setPerformerUserId(typeof v === 'number' ? v : null)}
+                    value={performerUserId ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setPerformerUserId(v ? Number(v) : null);
+                    }}
                   />
-                  <div className="maintenance-form-modal__label" style={{ marginTop: 8 }}>
-                    Đơn vị bảo dưỡng
-                  </div>
-                  <Input
-                    style={{ marginTop: 4 }}
+                </div>
+                <div>
+                  <div className="maintenance-form-modal__label">Đơn vị bảo dưỡng</div>
+                  <input
+                    className="maintenance-form-modal__input"
                     value={maintenanceProvider}
                     onChange={(e) => setMaintenanceProvider(e.target.value)}
                     placeholder="Tên đơn vị"
                   />
-                </Col>
-                <Col xs={24} md={12}>
+                </div>
+                <div>
                   <div className="maintenance-form-modal__label">Chi phí dự kiến</div>
-                  <InputNumber
-                    style={{ width: '100%', marginTop: 4 }}
+                  <input
+                    className="maintenance-form-modal__input"
+                    type="number"
                     min={0}
-                    value={estimatedCost ?? undefined}
-                    onChange={(v) => setEstimatedCost(typeof v === 'number' ? v : null)}
-                    formatter={(v) =>
-                      v != null && String(v) !== ''
-                        ? `${String(v).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}₫`
-                        : ''
-                    }
-                    parser={(v) => {
-                      const n = Number(String(v ?? '').replace(/\./g, '').replace('₫', '').trim());
-                      return Number.isFinite(n) ? n : 0;
+                    value={estimatedCost ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setEstimatedCost(v ? Number(v) : null);
                     }}
                   />
-                </Col>
-                <Col xs={24} md={12}>
-                  <div className="maintenance-form-modal__label">Ngày dự kiến hoàn thành (khoảng)</div>
-                  <DatePicker.RangePicker
-                    style={{ width: '100%', marginTop: 4 }}
-                    format="DD/MM/YYYY"
-                    value={
-                      expectedRange?.[0] && expectedRange[1]
-                        ? [expectedRange[0], expectedRange[1]]
-                        : null
-                    }
-                    onChange={(vals) => {
-                      if (vals?.[0] && vals[1]) setExpectedRange([vals[0], vals[1]]);
-                      else setExpectedRange(null);
-                    }}
+                </div>
+                <div>
+                  <div className="maintenance-form-modal__label">Ngày dự kiến hoàn thành</div>
+                  <input
+                    type="date"
+                    className="maintenance-form-modal__input"
+                    value={expectedCompletionDate}
+                    onChange={(e) => setExpectedCompletionDate(e.target.value)}
                   />
-                </Col>
-                <Col span={24}>
+                </div>
+                <div className="maintenance-form-modal__form-grid-full">
                   <div className="maintenance-form-modal__label">Nội dung bảo dưỡng</div>
-                  <Input
-                    style={{ marginTop: 4 }}
+                  <input
+                    className="maintenance-form-modal__input"
                     value={maintenanceContent}
                     onChange={(e) => setMaintenanceContent(e.target.value)}
                   />
-                </Col>
-                <Col span={24}>
+                </div>
+                <div className="maintenance-form-modal__form-grid-full">
                   <div className="maintenance-form-modal__label">Mô tả chi tiết</div>
-                  <Input.TextArea
-                    rows={3}
-                    style={{ marginTop: 4 }}
+                  <textarea
+                    className="maintenance-form-modal__textarea"
                     value={detailedDescription}
                     onChange={(e) => setDetailedDescription(e.target.value)}
                   />
-                </Col>
-                <Col span={24}>
+                </div>
+                <div className="maintenance-form-modal__form-grid-full">
                   <div className="maintenance-form-modal__label">Địa điểm bảo dưỡng</div>
-                  <Radio.Group
-                    style={{ marginTop: 4 }}
-                    value={locationType}
-                    onChange={(e) => setLocationType(e.target.value)}
-                  >
-                    <Radio value="at-unit">Tại đơn vị</Radio>
-                    <Radio value="provider">Nhà cung cấp</Radio>
-                  </Radio.Group>
-                  <div style={{ marginTop: 8 }}>
+                  <div className="maintenance-form-modal__radio-group">
+                    <label>
+                      <input
+                        type="radio"
+                        name="maintenance-start-location-type"
+                        value="at-unit"
+                        checked={locationType === 'at-unit'}
+                        onChange={() => setLocationType('at-unit')}
+                      />
+                      Tại đơn vị
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="maintenance-start-location-type"
+                        value="provider"
+                        checked={locationType === 'provider'}
+                        onChange={() => setLocationType('provider')}
+                      />
+                      Nhà cung cấp
+                    </label>
+                  </div>
+                  <div className="maintenance-form-modal__location-field">
                     {locationType === 'at-unit' ? (
                       <span>
                         <b>Địa chỉ:</b>{' '}
                         {(startAsset?.currentDepartmentName ?? locationText) || '—'}
                       </span>
                     ) : (
-                      <Input
+                      <input
+                        className="maintenance-form-modal__input"
                         placeholder="Địa chỉ nhà cung cấp / chi tiết"
                         value={locationText}
                         onChange={(e) => setLocationText(e.target.value)}
                       />
                     )}
                   </div>
-                </Col>
-              </Row>
-              <div className="maintenance-form-modal__label" style={{ marginTop: 14 }}>
+                </div>
+              </div>
+              <div className="maintenance-form-modal__label maintenance-form-modal__label--top-gap">
                 Tài liệu đính kèm
               </div>
               <div className="maintenance-form-modal__attachments">
@@ -935,60 +951,77 @@ export function MaintenancePage() {
                     <span>
                       #{i + 1} {name}
                     </span>
-                    <Button type="text" icon={<DownloadOutlined />} disabled title="Tích hợp tải file sau" />
+                    <button type="button" className="maintenance-form-modal__attach-btn" disabled>
+                      Tải xuống
+                    </button>
                   </div>
                 ))}
               </div>
             </div>
           </div>
-        )}
-      </Modal>
+              )}
+            </div>
+            <div className="maintenance-form-modal__footer">
+              <div className="maintenance-form-modal__footer-actions">
+                <button
+                  type="button"
+                  className="maintenance-form-modal__btn-cancel"
+                  disabled={startSubmitting}
+                  onClick={() => {
+                    setStartOpen(false);
+                    setStartRow(null);
+                    setStartAsset(null);
+                  }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  className="maintenance-form-modal__btn-confirm"
+                  disabled={startSubmitting || startLoading}
+                  onClick={submitStartMaintenance}
+                >
+                  {startSubmitting ? 'Đang gửi...' : 'Xác nhận bảo dưỡng'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
-      <Modal
-        className="maintenance-form-modal"
-        open={completeOpen}
-        title="Hoàn thành bảo dưỡng tài sản"
-        width={920}
-        onCancel={() => {
-          setCompleteOpen(false);
-          setCompleteRow(null);
-          setCompleteAsset(null);
-        }}
-        footer={
-          <div className="maintenance-form-modal__footer-actions">
-            <Button
-              className="maintenance-form-modal__btn-cancel"
+      {completeOpen ? (
+        <div className="maintenance-form-modal-overlay" role="dialog" aria-modal="true">
+          <div className="maintenance-form-modal">
+            <button
+              type="button"
+              className="maintenance-form-modal__close-btn"
               onClick={() => {
+                if (completeSubmitting) return;
                 setCompleteOpen(false);
                 setCompleteRow(null);
                 setCompleteAsset(null);
               }}
+              aria-label="Đóng"
             >
-              Hủy
-            </Button>
-            <Button
-              className="maintenance-form-modal__btn-confirm"
-              type="primary"
-              icon={<CheckOutlined />}
-              loading={completeSubmitting}
-              onClick={submitCompleteMaintenance}
-            >
-              Lưu
-            </Button>
-          </div>
-        }
-        destroyOnClose
-      >
-        {completeLoading ? (
-          <div>Đang tải...</div>
-        ) : !completeRow ? (
-          <div>Không có dữ liệu.</div>
-        ) : (
-          <div>
-            <div className="maintenance-form-modal__section">
-              <div className="maintenance-form-modal__label">Số biên bản</div>
-              <Input
-                style={{ maxWidth: 280, marginTop: 6 }}
+              <span className="maintenance-form-modal__close">×</span>
+            </button>
+            <div className="maintenance-form-modal__header">
+              <h2 className="maintenance-form-modal__title">Hoàn thành bảo dưỡng tài sản</h2>
+            </div>
+            <div className="maintenance-form-modal__body">
+              {completeLoading ? (
+                <div className="maintenance-form-modal__loading">Đang tải...</div>
+              ) : !completeRow ? (
+                <div className="maintenance-form-modal__loading">Không có dữ liệu.</div>
+              ) : (
+                <div className="maintenance-form-modal__content">
+            <div className="maintenance-form-modal__form-item">
+              <label className="maintenance-form-modal__label" htmlFor="maintenance-complete-report-number">
+                Số biên bản
+              </label>
+              <input
+                id="maintenance-complete-report-number"
+                className="maintenance-form-modal__input maintenance-form-modal__input--narrow"
                 placeholder="VD: BA001"
                 value={completeReportNumber}
                 onChange={(e) => setCompleteReportNumber(e.target.value)}
@@ -997,65 +1030,100 @@ export function MaintenancePage() {
 
             <div className="maintenance-form-modal__section">
               <div className="maintenance-form-modal__section-title">Thông tin tài sản</div>
-              <div className="maintenance-form-modal__readonly-grid">
-                <div>
-                  <b>Mã tài sản:</b>
-                  {completeAsset?.code ?? completeRow.assetCode}
+              <div className="maintenance-form-modal__info-grid">
+                <div className="maintenance-form-modal__info-row">
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Mã tài sản</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {completeAsset?.code ?? completeRow.assetCode}
+                    </div>
+                  </div>
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Giá trị tài sản</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {completeAsset ? formatVnd(completeAsset.originalPrice) : '—'}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <b>Giá trị tài sản:</b>
-                  {completeAsset ? formatVnd(completeAsset.originalPrice) : '—'}
+                <div className="maintenance-form-modal__info-row">
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Tên tài sản</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {completeAsset?.name ?? completeRow.assetName}
+                    </div>
+                  </div>
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Giá trị còn lại</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {completeAsset?.remainingValue != null
+                        ? formatVnd(completeAsset.remainingValue)
+                        : completeAsset
+                          ? formatVnd(completeAsset.currentValue)
+                          : '—'}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <b>Tên tài sản:</b>
-                  {completeAsset?.name ?? completeRow.assetName}
+                <div className="maintenance-form-modal__info-row">
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Loại tài sản</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {completeAsset?.assetTypeName ?? '—'}
+                    </div>
+                  </div>
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Vị trí tài sản</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {completeAsset?.warehouseName ||
+                        completeAsset?.currentDepartmentName ||
+                        completeRow.assetState ||
+                        '—'}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <b>Giá trị còn lại:</b>
-                  {completeAsset?.remainingValue != null
-                    ? formatVnd(completeAsset.remainingValue)
-                    : completeAsset
-                      ? formatVnd(completeAsset.currentValue)
-                      : '—'}
+                <div className="maintenance-form-modal__info-row">
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Quy cách tài sản</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {completeAsset
+                        ? [
+                            completeAsset.unit ? `Đơn vị: ${completeAsset.unit}` : null,
+                            `SL: ${completeAsset.quantity}`,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')
+                        : '—'}
+                    </div>
+                  </div>
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Tình trạng</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {completeAsset?.statusName ?? '—'}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <b>Loại tài sản:</b>
-                  {completeAsset?.assetTypeName ?? '—'}
+                <div className="maintenance-form-modal__info-row">
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Hạn bảo hành</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {completeAsset?.warrantyEndDate
+                        ? formatDate(completeAsset.warrantyEndDate)
+                        : '—'}
+                    </div>
+                  </div>
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Ngày bảo dưỡng</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {completeMaintenanceDateLabel || '—'}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <b>Vị trí tài sản:</b>
-                  {completeAsset?.warehouseName ||
-                    completeAsset?.currentDepartmentName ||
-                    completeRow.assetState ||
-                    '—'}
-                </div>
-                <div>
-                  <b>Quy cách tài sản:</b>
-                  {completeAsset
-                    ? [
-                        completeAsset.unit ? `Đơn vị: ${completeAsset.unit}` : null,
-                        `SL: ${completeAsset.quantity}`,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')
-                    : '—'}
-                </div>
-                <div>
-                  <b>Tình trạng:</b>
-                  {completeAsset?.statusName ?? '—'}
-                </div>
-                <div>
-                  <b>Hạn bảo hành:</b>{' '}
-                  {completeAsset?.warrantyEndDate
-                    ? formatDate(completeAsset.warrantyEndDate)
-                    : '—'}
-                </div>
-                <div>
-                  <b>Ngày bảo dưỡng:</b> {completeMaintenanceDateLabel || '—'}
-                </div>
-                <div>
-                  <b>Phòng ban SD:</b>
-                  {completeAsset?.currentDepartmentName ?? '—'}
+                <div className="maintenance-form-modal__info-row">
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Phòng ban SD</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {completeAsset?.currentDepartmentName ?? '—'}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1064,79 +1132,73 @@ export function MaintenancePage() {
               <div className="maintenance-form-modal__section-title">
                 Thông tin hoàn thành bảo dưỡng
               </div>
-              <Row gutter={[16, 12]}>
-                <Col xs={24} md={12}>
+              <div className="maintenance-form-modal__form-grid">
+                <div>
                   <div className="maintenance-form-modal__label maintenance-form-modal__label--req">
                     Ngày hoàn thành bảo dưỡng
                   </div>
-                  <DatePicker
-                    style={{ width: '100%', marginTop: 4 }}
-                    format="DD/MM/YYYY"
+                  <input
+                    type="date"
+                    className="maintenance-form-modal__input"
                     value={completeCompletionDate}
-                    onChange={(v) => setCompleteCompletionDate(v)}
+                    onChange={(e) => setCompleteCompletionDate(e.target.value)}
                   />
-                </Col>
-                <Col xs={24} md={12}>
+                </div>
+                <div>
                   <div className="maintenance-form-modal__label maintenance-form-modal__label--req">
                     Ngày đưa vào sử dụng lại
                   </div>
-                  <DatePicker
-                    style={{ width: '100%', marginTop: 4 }}
-                    format="DD/MM/YYYY"
+                  <input
+                    type="date"
+                    className="maintenance-form-modal__input"
                     value={completeReturnDate}
-                    onChange={(v) => setCompleteReturnDate(v)}
+                    onChange={(e) => setCompleteReturnDate(e.target.value)}
                   />
-                </Col>
-                <Col xs={24} md={12}>
+                </div>
+                <div>
                   <div className="maintenance-form-modal__label maintenance-form-modal__label--req">
                     Chi phí thực tế
                   </div>
-                  <InputNumber
-                    style={{ width: '100%', marginTop: 4 }}
+                  <input
+                    className="maintenance-form-modal__input"
+                    type="number"
                     min={0}
-                    value={completeActualCost ?? undefined}
-                    onChange={(v) => setCompleteActualCost(typeof v === 'number' ? v : null)}
-                    formatter={(v) =>
-                      v != null && String(v) !== ''
-                        ? `${String(v).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}₫`
-                        : ''
-                    }
-                    parser={(v) => {
-                      const n = Number(String(v ?? '').replace(/\./g, '').replace('₫', '').trim());
-                      return Number.isFinite(n) ? n : 0;
+                    value={completeActualCost ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setCompleteActualCost(v ? Number(v) : null);
                     }}
                   />
-                </Col>
-                <Col span={24}>
+                </div>
+                <div className="maintenance-form-modal__form-grid-full">
                   <div className="maintenance-form-modal__label">Nội dung bảo dưỡng</div>
-                  <Input
-                    style={{ marginTop: 4 }}
+                  <input
+                    className="maintenance-form-modal__input"
                     value={completeMaintenanceContent}
                     onChange={(e) => setCompleteMaintenanceContent(e.target.value)}
                     placeholder="VD: Thay dầu"
                   />
-                </Col>
-                <Col span={24}>
+                </div>
+                <div className="maintenance-form-modal__form-grid-full">
                   <div className="maintenance-form-modal__label">Mô tả chi tiết</div>
-                  <Input.TextArea
-                    rows={3}
-                    style={{ marginTop: 4 }}
+                  <textarea
+                    className="maintenance-form-modal__textarea"
                     value={completeDetailedDescription}
                     onChange={(e) => setCompleteDetailedDescription(e.target.value)}
                     placeholder="VD: Hỏng nhẹ"
                   />
-                </Col>
-              </Row>
+                </div>
+              </div>
 
-              <div className="maintenance-form-modal__label" style={{ marginTop: 14 }}>
+              <div className="maintenance-form-modal__label maintenance-form-modal__label--top-gap">
                 Tài liệu đính kèm
               </div>
               <div className="maintenance-form-modal__attachments">
                 {completeAttachments.map((att) => (
                   <div key={att.key} className="maintenance-form-modal__attach-row">
                     {editingAttachKey === att.key ? (
-                      <Input
-                        size="small"
+                      <input
+                        className="maintenance-form-modal__input"
                         defaultValue={att.name}
                         onBlur={(e) => {
                           const v = e.target.value.trim() || att.name;
@@ -1145,39 +1207,40 @@ export function MaintenancePage() {
                           );
                           setEditingAttachKey(null);
                         }}
-                        onPressEnter={(e) => (e.target as HTMLInputElement).blur()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                        }}
                         autoFocus
                       />
                     ) : (
                       <span>{att.name}</span>
                     )}
-                    <span>
-                      <Button
-                        type="text"
-                        size="small"
-                        icon={<EditOutlined />}
+                    <div className="maintenance-form-modal__attach-actions">
+                      <button
+                        type="button"
+                        className="maintenance-form-modal__attach-btn"
                         onClick={() =>
                           setEditingAttachKey(editingAttachKey === att.key ? null : att.key)
                         }
-                      />
-                      <Button
-                        type="text"
-                        size="small"
-                        danger
-                        icon={<DeleteOutlined />}
+                      >
+                        Sửa
+                      </button>
+                      <button
+                        type="button"
+                        className="maintenance-form-modal__attach-btn maintenance-form-modal__attach-btn--danger"
                         onClick={() =>
                           setCompleteAttachments((prev) => prev.filter((x) => x.key !== att.key))
                         }
-                      />
-                    </span>
+                      >
+                        Xóa
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
-              <Button
-                type="primary"
-                ghost
-                icon={<PlusOutlined />}
-                style={{ marginTop: 8 }}
+              <button
+                type="button"
+                className="maintenance-form-modal__btn-upload"
                 onClick={() =>
                   setCompleteAttachments((prev) => [
                     ...prev,
@@ -1189,11 +1252,38 @@ export function MaintenancePage() {
                 }
               >
                 Thêm file đính kèm
-              </Button>
+              </button>
             </div>
           </div>
-        )}
-      </Modal>
+              )}
+            </div>
+            <div className="maintenance-form-modal__footer">
+              <div className="maintenance-form-modal__footer-actions">
+                <button
+                  type="button"
+                  className="maintenance-form-modal__btn-cancel"
+                  disabled={completeSubmitting}
+                  onClick={() => {
+                    setCompleteOpen(false);
+                    setCompleteRow(null);
+                    setCompleteAsset(null);
+                  }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  className="maintenance-form-modal__btn-confirm"
+                  disabled={completeSubmitting || completeLoading}
+                  onClick={submitCompleteMaintenance}
+                >
+                  {completeSubmitting ? 'Đang lưu...' : 'Lưu'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <Modal
         open={approveOpen}

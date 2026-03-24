@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Form, Input, Button, Table, InputNumber, Select, DatePicker } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
+import { assetService, type AssetTypeItem } from '../../assets/services/assetService';
 import './CreatePurchaseOrderModal.css';
 
 const { TextArea } = Input;
@@ -48,16 +49,34 @@ export function CreatePurchaseOrderModal({
   mode = 'create',
 }: CreatePurchaseOrderModalProps) {
   const [form] = Form.useForm<CreatePurchaseFormValues>();
+  const [assetTypes, setAssetTypes] = useState<AssetTypeItem[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    assetService
+      .getAssetTypes()
+      .then((types) => setAssetTypes(types))
+      .catch(() => setAssetTypes([]));
+  }, [open]);
 
   useEffect(() => {
     if (open) {
       form.resetFields();
       if (initialValues) {
+        const rawAssetType = String(initialValues.assetType ?? '').trim();
+        const mappedAssetTypeId = rawAssetType
+          ? assetTypes.find((t) => {
+              const a = t.name.trim().toLowerCase();
+              const b = rawAssetType.toLowerCase();
+              return a === b;
+            })?.assetTypeId
+          : undefined;
         form.setFieldsValue({
           equipment: [
             { name: '', quantity: 1, machineCode: '', unit: 'Cái', estimatedPrice: '' },
           ],
           ...initialValues,
+          assetType: mappedAssetTypeId != null ? String(mappedAssetTypeId) : initialValues.assetType,
         });
       } else {
         form.setFieldsValue({
@@ -67,7 +86,7 @@ export function CreatePurchaseOrderModal({
         });
       }
     }
-  }, [open, form, initialValues]);
+  }, [open, form, initialValues, assetTypes]);
 
   const buildProposedData = (values: CreatePurchaseFormValues): string | undefined => {
     const equipment = values.equipment?.filter(
@@ -88,7 +107,15 @@ export function CreatePurchaseOrderModal({
         estimatedPrice: e.estimatedPrice ?? '0',
       };
     });
+    const selectedAssetTypeId = values.assetType ? Number(values.assetType) : null;
+    const selectedAssetType =
+      selectedAssetTypeId != null && !Number.isNaN(selectedAssetTypeId)
+        ? assetTypes.find((t) => t.assetTypeId === selectedAssetTypeId)
+        : null;
+
     return JSON.stringify({
+      assetTypeId: selectedAssetType?.assetTypeId ?? null,
+      assetTypeName: selectedAssetType?.name ?? null,
       equipment: rows,
       totalPrice: total.toLocaleString('vi-VN') + 'đ',
     });
@@ -105,11 +132,17 @@ export function CreatePurchaseOrderModal({
         values.needDate && typeof (values.needDate as any).format === 'function'
           ? (values.needDate as Dayjs).format('DD/MM/YYYY')
           : undefined;
+      const selectedAssetTypeId = values.assetType ? Number(values.assetType) : null;
+      const selectedAssetTypeName =
+        selectedAssetTypeId != null && !Number.isNaN(selectedAssetTypeId)
+          ? assetTypes.find((t) => t.assetTypeId === selectedAssetTypeId)?.name
+          : undefined;
+
       const description = [
         values.reason && `Lý do: ${values.reason}`,
         needDateText && `Thời gian cần: ${needDateText}`,
         values.supplier && `Nhà cung cấp đề xuất: ${values.supplier}`,
-        values.assetType && `Loại tài sản: ${values.assetType}`,
+        selectedAssetTypeName && `Loại tài sản: ${selectedAssetTypeName}`,
         values.purpose && `Mục đích: ${values.purpose}`,
       ]
         .filter(Boolean)
@@ -206,10 +239,11 @@ export function CreatePurchaseOrderModal({
                 className="create-purchase-form__item"
               >
                 <Select placeholder="Chọn loại tài sản" allowClear>
-                  <Option value="Máy móc">Máy móc</Option>
-                  <Option value="Thiết bị">Thiết bị</Option>
-                  <Option value="Công cụ">Công cụ</Option>
-                  <Option value="Vật tư">Vật tư</Option>
+                  {assetTypes.map((t) => (
+                    <Option key={t.assetTypeId} value={String(t.assetTypeId)}>
+                      {t.name}
+                    </Option>
+                  ))}
                 </Select>
               </Form.Item>
             </div>

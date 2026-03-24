@@ -7,11 +7,16 @@ using g19_sep490_ealds.Server.Services.ServiceInterface;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using System.Text.Json;
 
 namespace g19_sep490_ealds.Server.Services.ServiceImplementation;
 
 public class AssetCapitalizationService : IAssetCapitalizationService
 {
+    private const int PurchaseRequestApprovedStatus = 2;
+    private const int PurchaseRequestCapitalizedStatus = 5;
+
     private readonly EaldsDbContext _context;
     private readonly IAssetCapitalizationMapper _mapper;
     private readonly IMediator _mediator;
@@ -36,14 +41,18 @@ public class AssetCapitalizationService : IAssetCapitalizationService
         if (asset.StatusEnum == AssetStatus.Capitalized)
             throw new Exception("Asset is already Capitalized");
 
-        using var transaction = await _context.Database.BeginTransactionAsync();
+        var ownsTransaction = _context.Database.CurrentTransaction == null;
+        IDbContextTransaction? transaction = null;
+        if (ownsTransaction)
+        {
+            transaction = await _context.Database.BeginTransactionAsync();
+        }
         try
         {
             var oldStatus = (int)asset.StatusEnum;
             var role = 1;
 
             var entity = _mapper.ToEntity(request.AssetId, request.Note, userId);
-            _context.AssetCapitalizations.Add(entity);
 
             asset.StatusEnum = AssetStatus.Capitalized;
 
@@ -59,14 +68,33 @@ public class AssetCapitalizationService : IAssetCapitalizationService
                 )
             );
 
-            await transaction.CommitAsync();
+            if (request.AssetRequestId.HasValue && request.AssetRequestId.Value > 0)
+            {
+                await SaveProcurementDocumentsAsync(request.AssetRequestId.Value, request.Documents, userId);
+                await MarkRequestAsCapitalizedAsync(request.AssetRequestId.Value, userId);
+            }
+
+            if (ownsTransaction && transaction != null)
+            {
+                await transaction.CommitAsync();
+            }
 
             return _mapper.ToResponse(entity);
         }
         catch
         {
-            await transaction.RollbackAsync();
+            if (ownsTransaction && transaction != null)
+            {
+                await transaction.RollbackAsync();
+            }
             throw;
+        }
+        finally
+        {
+            if (transaction != null)
+            {
+                await transaction.DisposeAsync();
+            }
         }
     }
 
@@ -81,15 +109,25 @@ public class AssetCapitalizationService : IAssetCapitalizationService
             if (ar == null)
                 throw new Exception("AssetRequest not found");
 
-            // "Approved by accountant" in current workflow is status=1 (waiting director approval)
-            if (ar.Status != 1)
-                throw new Exception("Only purchase requests with status=1 (Accountant approved) can be capitalized.");
+            // Capitalization is allowed only after final approval by director (status=2).
+            if (ar.Status != PurchaseRequestApprovedStatus)
+            {
+                if (ar.Status == PurchaseRequestCapitalizedStatus)
+                    throw new Exception("Purchase request has already been capitalized.");
+                throw new Exception("Only purchase requests with status=2 (Director approved) can be capitalized.");
+            }
 
             if (ar.AssetId.HasValue)
             {
                 // Already has asset => just capitalize
                 var resultExisting = await CapitalizeAssetAsync(
-                    new AssetCapitalizationRequestDTO { AssetId = ar.AssetId.Value, Note = request.Note },
+                    new AssetCapitalizationRequestDTO
+                    {
+                        AssetId = ar.AssetId.Value,
+                        Note = request.Note,
+                        AssetRequestId = ar.AssetRequestId,
+                        Documents = request.Documents
+                    },
                     userId);
                 await transaction.CommitAsync();
                 return resultExisting;
@@ -102,7 +140,7 @@ public class AssetCapitalizationService : IAssetCapitalizationService
             var asset = new Asset
             {
                 Code = request.Code,
-                Name = request.Name,
+                Name = ResolveAssetNameFromRequest(ar, request.Name),
                 AssetTypeId = request.AssetTypeId,
                 PurchaseDate = request.PurchaseDate,
                 OriginalPrice = request.OriginalPrice,
@@ -121,7 +159,13 @@ public class AssetCapitalizationService : IAssetCapitalizationService
             await _context.SaveChangesAsync();
 
             var result = await CapitalizeAssetAsync(
-                new AssetCapitalizationRequestDTO { AssetId = asset.AssetId, Note = request.Note },
+                new AssetCapitalizationRequestDTO
+                {
+                    AssetId = asset.AssetId,
+                    Note = request.Note,
+                    AssetRequestId = ar.AssetRequestId,
+                    Documents = request.Documents
+                },
                 userId);
 
             await transaction.CommitAsync();
@@ -132,5 +176,114 @@ public class AssetCapitalizationService : IAssetCapitalizationService
             await transaction.RollbackAsync();
             throw;
         }
+    }
+
+    private async Task SaveProcurementDocumentsAsync(
+        int assetRequestId,
+        IEnumerable<CapitalizationDocumentInputDTO>? documents,
+        int userId)
+    {
+        if (documents == null) return;
+
+        var normalizedDocs = documents
+            .Where(d => d != null && !string.IsNullOrWhiteSpace(d.Url))
+            .Select(d => d.Url.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (normalizedDocs.Count == 0) return;
+
+        var procurement = await _context.Procurements
+            .AsNoTracking()
+            .Where(p => p.AssetRequestId == assetRequestId)
+            .OrderByDescending(p => p.ProcurementId)
+            .FirstOrDefaultAsync();
+        if (procurement == null) return;
+
+        var existingUrls = await _context.Documents
+            .AsNoTracking()
+            .Where(d => d.ProcurementId == procurement.ProcurementId)
+            .Select(d => d.FileUrl)
+            .ToListAsync();
+        var existingSet = existingUrls
+            .Where(u => !string.IsNullOrWhiteSpace(u))
+            .Select(u => u.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var toInsert = normalizedDocs
+            .Where(u => !existingSet.Contains(u))
+            .Select(u => new Document
+            {
+                ProcurementId = procurement.ProcurementId,
+                DocumentType = 0,
+                FileUrl = u,
+                UploadedBy = userId,
+                UploadedDate = DateTime.UtcNow
+            })
+            .ToList();
+
+        if (toInsert.Count == 0) return;
+        _context.Documents.AddRange(toInsert);
+        await _context.SaveChangesAsync();
+    }
+
+    private async Task MarkRequestAsCapitalizedAsync(int assetRequestId, int userId)
+    {
+        var request = await _context.AssetRequests.FirstOrDefaultAsync(x => x.AssetRequestId == assetRequestId);
+        if (request == null || request.Status == PurchaseRequestCapitalizedStatus) return;
+
+        var fromStatus = request.Status;
+        request.Status = PurchaseRequestCapitalizedStatus;
+
+        var actionRoleId = await _context.UserRoles
+            .AsNoTracking()
+            .Where(ur => ur.UserId == userId)
+            .Select(ur => ur.RoleId)
+            .FirstOrDefaultAsync();
+
+        _context.AssetRequestRecords.Add(new AssetRequestRecord
+        {
+            AssetRequestId = request.AssetRequestId,
+            FromStatus = fromStatus,
+            ToStatus = request.Status,
+            Action = 1,
+            ActionByUserId = userId,
+            ActionRoleId = actionRoleId,
+            Comment = "Capitalized to fixed asset",
+            OccurredAt = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync();
+    }
+
+    private static string ResolveAssetNameFromRequest(AssetRequest request, string? fallbackName)
+    {
+        if (!string.IsNullOrWhiteSpace(request.ProposedData))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(request.ProposedData);
+                if (doc.RootElement.TryGetProperty("equipment", out var equipment)
+                    && equipment.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in equipment.EnumerateArray())
+                    {
+                        if (!item.TryGetProperty("name", out var nameElement)) continue;
+                        var name = nameElement.GetString()?.Trim();
+                        if (!string.IsNullOrWhiteSpace(name))
+                            return name;
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore malformed proposedData and fallback safely.
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(fallbackName))
+            return fallbackName.Trim();
+
+        return request.Title;
     }
 }

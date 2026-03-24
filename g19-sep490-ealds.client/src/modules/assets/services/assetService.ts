@@ -23,6 +23,7 @@ export type AssetStatus =
   | 'Available'
   | 'InUse'
   | 'InMaintenance'
+  | 'InRepair'
   | 'Reserved'
   | 'Disposed'
   | 'Lost'
@@ -41,6 +42,13 @@ export interface MaintenanceSchedule {
   nextDueDate?: string | null;
   endDate?: string | null;
   isActive?: boolean | null;
+}
+
+export interface AssetDocumentItem {
+  documentId: number;
+  documentType: number;
+  fileUrl: string;
+  uploadedDate: string;
 }
 
 export interface AssetResponse {
@@ -77,11 +85,18 @@ export interface AssetResponse {
 
   // Maintenance (optional; populated in GET by id)
   maintenanceSchedules?: MaintenanceSchedule[] | null;
+  documents?: AssetDocumentItem[] | null;
 }
 
 export interface AssetTypeItem {
   assetTypeId: number;
   name: string;
+}
+
+export interface WarehouseItem {
+  warehouseId: number;
+  name: string;
+  description?: string | null;
 }
 
 export interface GetAssetsParams {
@@ -147,6 +162,7 @@ export function getStatusLabel(statusName: string): string {
     Available: 'Sẵn có',
     InUse: 'Đang sử dụng',
     InMaintenance: 'Đang bảo trì',
+    InRepair: 'Đang sửa chữa',
     Reserved: 'Đã đặt trước',
     Disposed: 'Đã thanh lý',
     Lost: 'Mất',
@@ -196,6 +212,11 @@ export const assetService = {
 
   async getAssetTypes(): Promise<AssetTypeItem[]> {
     const response = await assetApi.get<AssetTypeItem[]>('/api/assettypes');
+    return response.data;
+  },
+
+  async getWarehouses(): Promise<WarehouseItem[]> {
+    const response = await assetApi.get<WarehouseItem[]>('/api/warehouseassets');
     return response.data;
   },
 };

@@ -109,6 +109,30 @@
   margin-bottom: 12px;
 }
 
+.view-purchase-form-grid-2 {
+  margin-top: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.view-purchase-form-grid-2-full {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.view-purchase-form-grid-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.view-purchase-form-grid-field label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
 .view-purchase-equipment-table {
   width: 100%;
   border-collapse: collapse;

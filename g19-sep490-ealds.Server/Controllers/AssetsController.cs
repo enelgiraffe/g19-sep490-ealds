@@ -165,7 +165,21 @@ public class AssetsController : ControllerBase
             .ThenByDescending(s => s.StartDate)
             .ToListAsync();
 
+        var documents = await _context.Documents
+            .AsNoTracking()
+            .Where(d => d.Procurement.AssetRequest.AssetId == id)
+            .OrderByDescending(d => d.UploadedDate)
+            .Select(d => new AssetDocumentDTO
+            {
+                DocumentId = d.DocumentId,
+                DocumentType = d.DocumentType,
+                FileUrl = d.FileUrl,
+                UploadedDate = d.UploadedDate
+            })
+            .ToListAsync();
+
         var dto = ToResponseDTO(asset, latestDep, schedules);
+        dto.Documents = documents;
         if (hasDamageReport)
         {
             dto.Status = AssetStatus.Damaged;

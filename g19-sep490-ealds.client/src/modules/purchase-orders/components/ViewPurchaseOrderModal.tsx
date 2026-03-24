@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { message } from 'antd';
 import { purchaseOrderService, type PurchaseOrderDetail } from '../services/purchaseOrderService';
 import { assetCapitalizationService } from '../../assets/services/assetCapitalizationService';
-import { assetService, type AssetTypeItem } from '../../assets/services/assetService';
+import { assetService, type AssetTypeItem, type WarehouseItem } from '../../assets/services/assetService';
+import { purchaseOrderFileService } from '../services/purchaseOrderFileService';
 import './ViewPurchaseOrderModal.css';
 
 const STATUS_MAP: Record<number, { label: string; color: string }> = {
@@ -12,6 +13,7 @@ const STATUS_MAP: Record<number, { label: string; color: string }> = {
   2: { label: 'Duyệt', color: 'success' },
   3: { label: 'Từ chối', color: 'error' },
   4: { label: 'Chờ ngân sách', color: 'warning' },
+  5: { label: 'Đã ghi tăng', color: 'success' },
 };
 
 function formatDate(iso: string): string {
@@ -28,7 +30,7 @@ interface ViewPurchaseOrderModalProps {
   data: PurchaseOrderDetail | null;
   currentUserId?: number | null;
   currentUserRole?: string | null;
-  onActionCompleted?: (assetRequestId: number) => void | Promise<void>;
+  onActionCompleted?: (assetRequestId: number, nextStatus?: number) => void | Promise<void>;
 }
 
 export function ViewPurchaseOrderModal({
@@ -52,32 +54,28 @@ export function ViewPurchaseOrderModal({
   const [editDescription, setEditDescription] = useState(data.description ?? '');
   const [editDocuments, setEditDocuments] = useState<{ name: string; url: string }[]>([]);
   const [docName, setDocName] = useState('');
-  const [docUrl, setDocUrl] = useState('');
+  const [docUploading, setDocUploading] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [assetTypes, setAssetTypes] = useState<AssetTypeItem[]>([]);
-  const [newAssetCode, setNewAssetCode] = useState('');
-  const [newAssetName, setNewAssetName] = useState('');
-  const [newAssetTypeId, setNewAssetTypeId] = useState('');
-  const [newAssetPurchaseDate, setNewAssetPurchaseDate] = useState('');
-  const [newAssetOriginalPrice, setNewAssetOriginalPrice] = useState('');
-  const [newAssetCurrentValue, setNewAssetCurrentValue] = useState('');
-  const [newAssetUnit, setNewAssetUnit] = useState('Cái');
-  const [newAssetQuantity, setNewAssetQuantity] = useState('1');
+  const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
   const [newAssetWarehouseId, setNewAssetWarehouseId] = useState('');
+  const [fallbackAssetTypeId, setFallbackAssetTypeId] = useState('');
+  const [capitalizationDocuments, setCapitalizationDocuments] = useState<{ id: string; name: string; file: File }[]>(
+    [],
+  );
 
   const normalizedRole = String(currentUserRole ?? '').toUpperCase();
   const isAccountantRole = normalizedRole === 'ACCOUNTANT';
 
   // Accountant action points:
   // - status=0: accountant approves/rejects (forward to director / return to draft)
-  // - status=1: accountant already approved => accountant can still update info/attachments
-  // - status=1/2: accountant can capitalize asset (if AssetId exists)
+  // - status=2: director approved => accountant can update info/attachments
+  // - status=2: accountant can capitalize asset (with or without AssetId)
   const canAccountantApprove = isAccountantRole && !!currentUserId && data.status === 0;
-  const canRecordCapitalization =
-    isAccountantRole && !!currentUserId && (data.status === 1 || data.status === 2) && !!data.assetId;
-  const canEditAfterAccountantApprove = isAccountantRole && !!currentUserId && data.status === 1;
+  const canRecordCapitalization = isAccountantRole && !!currentUserId && data.status === 2 && !!data.assetId;
+  const canEditAfterAccountantApprove = isAccountantRole && !!currentUserId && data.status === 2;
   const canCapitalizeWithoutAsset =
-    isAccountantRole && !!currentUserId && data.status === 1 && !data.assetId;
+    isAccountantRole && !!currentUserId && data.status === 2 && !data.assetId;
 
   const parsedProposedData = useMemo(() => {
     try {
@@ -106,32 +104,38 @@ export function ViewPurchaseOrderModal({
     }
     setIsEditing(false);
     setDocName('');
-    setDocUrl('');
+    setDocUploading(false);
   }, [open, data, parsedProposedData]);
 
   useEffect(() => {
     if (!open) return;
-    assetService
-      .getAssetTypes()
-      .then((list) => setAssetTypes(list))
+    Promise.all([assetService.getAssetTypes(), assetService.getWarehouses()])
+      .then(([types, whs]) => {
+        setAssetTypes(types);
+        setWarehouses(whs);
+      })
       .catch(() => {
-        // ignore; will fallback to manual id input
+        // ignore
       });
   }, [open]);
 
   useEffect(() => {
     if (!open || !data) return;
-    // Best-effort prefills for new asset creation
-    setNewAssetName(data.title ?? '');
-    setNewAssetPurchaseDate(new Date().toISOString().slice(0, 10));
-    setNewAssetCurrentValue('');
-    setNewAssetOriginalPrice('');
-    setNewAssetCode('');
-    setNewAssetTypeId('');
     setNewAssetWarehouseId('');
-    setNewAssetUnit('Cái');
-    setNewAssetQuantity('1');
+    setFallbackAssetTypeId('');
+    setCapitalizationDocuments([]);
   }, [open, data]);
+
+  const uploadCapitalizationDocuments = async (): Promise<{ name: string; url: string }[]> => {
+    if (capitalizationDocuments.length === 0) return [];
+    const uploaded = await Promise.all(
+      capitalizationDocuments.map(async (doc) => {
+        const uploadedFile = await purchaseOrderFileService.upload(doc.file);
+        return { name: doc.name, url: uploadedFile.url };
+      }),
+    );
+    return uploaded;
+  };
 
   const handleSubmitApproval = async () => {
     if (!currentUserId) {
@@ -153,7 +157,7 @@ export function ViewPurchaseOrderModal({
         });
         message.success('Đã trả yêu cầu về Nháp.');
       }
-      await onActionCompleted?.(data.assetRequestId);
+      await onActionCompleted?.(data.assetRequestId, 5);
       setIsApproveOpen(false);
     } catch (e: unknown) {
       const err = e as { response?: { data?: string } };
@@ -169,14 +173,17 @@ export function ViewPurchaseOrderModal({
       return;
     }
     if (!data.assetId) {
-      message.error('Đơn mua này chưa được gắn AssetId nên chưa thể ghi tăng.');
+        message.error('Đơn mua chưa liên kết tài sản nên chưa thể ghi tăng trực tiếp.');
       return;
     }
     setCapitalizing(true);
     try {
+      const uploadedDocs = await uploadCapitalizationDocuments();
       await assetCapitalizationService.changeStatus({
         assetId: data.assetId,
+        assetRequestId: data.assetRequestId,
         note: capitalizeNote.trim() || null,
+        documents: uploadedDocs,
       });
       message.success('Đã biến đơn mua thành tài sản cố định (ghi tăng).');
       await onActionCompleted?.(data.assetRequestId);
@@ -211,11 +218,11 @@ export function ViewPurchaseOrderModal({
         description: editDescription.trim() || null,
         proposedData: JSON.stringify(nextProposed),
         createdBy: currentUserId,
-        status: 1,
+        status: 2,
       });
-      message.success('Đã cập nhật đơn mua sau khi kế toán phê duyệt.');
+      message.success('Đã cập nhật đơn mua sau khi giám đốc phê duyệt.');
       setIsEditing(false);
-      await onActionCompleted?.(data.assetRequestId);
+      await onActionCompleted?.(data.assetRequestId, 5);
     } catch (e: unknown) {
       const err = e as { response?: { data?: string } };
       message.error(err?.response?.data ?? 'Cập nhật thất bại.');
@@ -229,49 +236,33 @@ export function ViewPurchaseOrderModal({
       message.error('Không lấy được thông tin người dùng.');
       return;
     }
-    if (!newAssetCode.trim() || !newAssetName.trim()) {
-      message.error('Vui lòng nhập mã và tên tài sản.');
-      return;
-    }
-    const assetTypeIdNum = Number(newAssetTypeId);
     const warehouseIdNum = Number(newAssetWarehouseId);
-    const qtyNum = Number(newAssetQuantity);
-    const originalNum = Number(newAssetOriginalPrice);
-    const currentNum = Number(newAssetCurrentValue || newAssetOriginalPrice);
-    if (!assetTypeIdNum || Number.isNaN(assetTypeIdNum)) {
-      message.error('Vui lòng chọn loại tài sản.');
-      return;
-    }
     if (!warehouseIdNum || Number.isNaN(warehouseIdNum)) {
-      message.error('Vui lòng nhập kho (WarehouseId).');
+      message.error('Vui lòng chọn kho lưu tài sản.');
       return;
     }
-    if (!newAssetPurchaseDate) {
-      message.error('Vui lòng chọn ngày mua.');
-      return;
-    }
-    if (!qtyNum || Number.isNaN(qtyNum) || qtyNum <= 0) {
-      message.error('Số lượng không hợp lệ.');
-      return;
-    }
-    if (Number.isNaN(originalNum) || originalNum < 0 || Number.isNaN(currentNum) || currentNum < 0) {
-      message.error('Giá trị không hợp lệ.');
+
+    const inferredAssetTypeId = inferredAssetTypeIdFromText ?? (fallbackAssetTypeId ? Number(fallbackAssetTypeId) : null);
+    if (!inferredAssetTypeId) {
+      message.error('Không xác định được loại tài sản từ dữ liệu đơn mua. Vui lòng chọn loại tài sản.');
       return;
     }
 
     setCapitalizing(true);
     try {
+      const uploadedDocs = await uploadCapitalizationDocuments();
       await assetCapitalizationService.capitalizePurchaseRequest({
         assetRequestId: data.assetRequestId,
         note: capitalizeNote.trim() || null,
-        code: newAssetCode.trim(),
-        name: newAssetName.trim(),
-        assetTypeId: assetTypeIdNum,
-        purchaseDate: newAssetPurchaseDate,
-        originalPrice: originalNum,
-        currentValue: currentNum,
-        unit: (newAssetUnit || 'Cái').trim(),
-        quantity: qtyNum,
+        documents: uploadedDocs,
+        code: inferredAssetCode,
+        name: inferredAssetName,
+        assetTypeId: inferredAssetTypeId,
+        purchaseDate: inferredPurchaseDate,
+        originalPrice: inferredOriginalPrice,
+        currentValue: inferredOriginalPrice,
+        unit: inferredUnit,
+        quantity: inferredQuantity,
         warehouseId: warehouseIdNum,
       });
       message.success('Đã tạo tài sản và ghi tăng (biến đơn mua thành TSCĐ).');
@@ -310,6 +301,80 @@ export function ViewPurchaseOrderModal({
     // keep empty
   }
 
+  const parseMoney = (value: string): number => {
+    const raw = String(value || '').trim();
+    if (!raw) return 0;
+    // Support vi-VN formatted amounts, e.g. "1.234.567đ" or "1,234,567"
+    const digitsOnly = raw.replace(/[^\d,.-]/g, '');
+    const normalized = digitsOnly
+      .replace(/\./g, '')
+      .replace(/,/g, '.');
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const inferredAssetTypeName = (() => {
+    const fromProposed = parsedProposedData && typeof parsedProposedData === 'object'
+      ? String((parsedProposedData as { assetTypeName?: string | null }).assetTypeName ?? '').trim()
+      : '';
+    if (fromProposed) return fromProposed;
+    const descriptionText = String(data.description ?? '');
+    const marker = 'Loại tài sản:';
+    const idx = descriptionText.indexOf(marker);
+    if (idx < 0) return null;
+    const line = descriptionText.slice(idx + marker.length).split('\n')[0].trim();
+    return line || null;
+  })();
+  const extractedSupplierName = (() => {
+    const descriptionText = String(data.description ?? '');
+    const marker = 'Nhà cung cấp đề xuất:';
+    const idx = descriptionText.indexOf(marker);
+    if (idx < 0) return null;
+    const line = descriptionText.slice(idx + marker.length).split('\n')[0].trim();
+    return line || null;
+  })();
+  const requestAssetDisplay = (() => {
+    if (data.assetCode || data.assetName) {
+      return [data.assetCode, data.assetName].filter(Boolean).join(' - ');
+    }
+    if (equipment.length > 0) {
+      const names = equipment.map((e) => e.name).filter(Boolean);
+      if (names.length === 0) return null;
+      return names.length === 1 ? names[0] : `${names.length} vật tư (${names[0]}...)`;
+    }
+    return null;
+  })();
+  const inferredAssetCode = `TS-PO-${data.assetRequestId}`;
+  const inferredAssetName = (() => {
+    const equipmentNames = equipment
+      .map((item) => String(item.name ?? '').trim())
+      .filter((name) => name && name !== '—');
+    if (equipmentNames.length === 1) return equipmentNames[0];
+    if (equipmentNames.length > 1) return `${equipmentNames[0]} va ${equipmentNames.length - 1} vat tu khac`;
+    return String(data.title ?? '').trim() || `Tai san tu don mua YC-${data.assetRequestId}`;
+  })();
+  const inferredPurchaseDate = String(data.createDate).slice(0, 10);
+  const inferredQuantity = Math.max(1, equipment.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0));
+  const inferredUnit = equipment.length === 1 ? String(equipment[0]?.unit || 'Cái') : 'Bộ';
+  const inferredOriginalPrice = Math.max(0, parseMoney(totalPrice));
+  const normalizeText = (value: string): string =>
+    value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase();
+  const inferredAssetTypeIdFromText = (() => {
+    if (!inferredAssetTypeName) return null;
+    const normalizedTarget = normalizeText(inferredAssetTypeName);
+    const exact = assetTypes.find((t) => normalizeText(t.name) === normalizedTarget);
+    if (exact) return exact.assetTypeId;
+    const fuzzy = assetTypes.find(
+      (t) =>
+        normalizeText(t.name).includes(normalizedTarget) ||
+        normalizedTarget.includes(normalizeText(t.name)),
+    );
+    return fuzzy?.assetTypeId ?? null;
+  })();
+
   const statusClassName =
     statusConfig.color === 'success'
       ? 'view-purchase-status-tag view-purchase-status-tag--success'
@@ -340,7 +405,7 @@ export function ViewPurchaseOrderModal({
                 </div>
                 <div className="view-purchase-form__field">
                   <label>Phòng ban</label>
-                  <div className="view-purchase-form__value">—</div>
+                  <div className="view-purchase-form__value">{data.creatorDepartmentName ?? '—'}</div>
                 </div>
               </div>
 
@@ -367,11 +432,18 @@ export function ViewPurchaseOrderModal({
               <div className="view-purchase-form__row">
                 <div className="view-purchase-form__field">
                   <label>Nhà cung cấp đề xuất</label>
-                  <div className="view-purchase-form__value">—</div>
+                  <div className="view-purchase-form__value">{extractedSupplierName ?? '—'}</div>
                 </div>
                 <div className="view-purchase-form__field">
                   <label>Loại tài sản</label>
-                  <div className="view-purchase-form__value">—</div>
+                  <div className="view-purchase-form__value">{inferredAssetTypeName ?? '—'}</div>
+                </div>
+              </div>
+
+              <div className="view-purchase-form__row">
+                <div className="view-purchase-form__field">
+                  <label>Tài sản / Vật tư</label>
+                  <div className="view-purchase-form__value">{requestAssetDisplay ?? '—'}</div>
                 </div>
               </div>
 
@@ -491,129 +563,180 @@ export function ViewPurchaseOrderModal({
                       onChange={(e) => setDocName(e.target.value)}
                     />
                     <input
-                      className="approve-purchase-textarea"
-                      style={{ height: 40 }}
-                      placeholder="Link tài liệu (URL)"
-                      value={docUrl}
-                      onChange={(e) => setDocUrl(e.target.value)}
+                      id={`edit-doc-upload-${data.assetRequestId}`}
+                      type="file"
+                      style={{ display: 'none' }}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setDocUploading(true);
+                        try {
+                          const uploaded = await purchaseOrderFileService.upload(file);
+                          const name = docName.trim() || file.name || `Tài liệu ${editDocuments.length + 1}`;
+                          setEditDocuments((prev) => [...prev, { name, url: uploaded.url }]);
+                          setDocName('');
+                        } catch {
+                          message.error('Tải tài liệu thất bại.');
+                        } finally {
+                          setDocUploading(false);
+                          e.currentTarget.value = '';
+                        }
+                      }}
                     />
                     <button
                       type="button"
                       className="view-purchase-btn-approve"
                       onClick={() => {
-                        const name = docName.trim() || `Tài liệu ${editDocuments.length + 1}`;
-                        const url = docUrl.trim();
-                        if (!url) {
-                          message.error('Vui lòng nhập URL tài liệu.');
-                          return;
-                        }
-                        setEditDocuments((prev) => [...prev, { name, url }]);
-                        setDocName('');
-                        setDocUrl('');
+                        const input = document.getElementById(`edit-doc-upload-${data.assetRequestId}`) as
+                          | HTMLInputElement
+                          | null;
+                        input?.click();
                       }}
                     >
-                      Thêm tài liệu
+                      {docUploading ? 'Đang tải tài liệu...' : 'Chọn tài liệu từ máy tính'}
                     </button>
                   </div>
                 )}
               </div>
 
-              {isAccountantRole && data.status === 1 && (
+              {isAccountantRole && data.status === 2 && (
                 <div className="view-purchase-form__section">
                   <h3 className="view-purchase-form__section-title">Kế toán xử lý sau duyệt</h3>
-                  <div className="view-purchase-form__row">
-                    <div className="view-purchase-form__field">
-                      <label>Ghi chú ghi tăng (không bắt buộc)</label>
-                      <textarea
-                        className="approve-purchase-textarea"
-                        placeholder="Không cần thiết"
-                        value={capitalizeNote}
-                        onChange={(e) => setCapitalizeNote(e.target.value)}
-                      />
-                      {canCapitalizeWithoutAsset && (
-                        <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
-                          <div className="view-purchase-form__value">
-                            Đơn mua chưa có <b>AssetId</b> → hệ thống sẽ <b>tạo Asset</b> trước rồi ghi tăng.
-                          </div>
-                          <input
-                            className="approve-purchase-textarea"
-                            style={{ height: 40 }}
-                            placeholder="Mã tài sản (Code)"
-                            value={newAssetCode}
-                            onChange={(e) => setNewAssetCode(e.target.value)}
-                          />
-                          <input
-                            className="approve-purchase-textarea"
-                            style={{ height: 40 }}
-                            placeholder="Tên tài sản"
-                            value={newAssetName}
-                            onChange={(e) => setNewAssetName(e.target.value)}
-                          />
+                  <div className="view-purchase-form-grid-field">
+                    <label>Ghi chú ghi tăng (không bắt buộc)</label>
+                    <textarea
+                      className="approve-purchase-textarea"
+                      placeholder="Không cần thiết"
+                      value={capitalizeNote}
+                      onChange={(e) => setCapitalizeNote(e.target.value)}
+                    />
+                  </div>
+                  {canCapitalizeWithoutAsset && (
+                    <div className="view-purchase-form-grid-2">
+                      <div className="view-purchase-form__value">
+                        Đơn mua chưa liên kết tài sản, hệ thống sẽ tạo tài sản mới trước rồi ghi tăng.
+                      </div>
+                      <div className="view-purchase-form-grid-2-full">
+                        <div className="view-purchase-form-grid-field">
+                          <label>Mã tài sản (tự sinh)</label>
+                          <div className="view-purchase-form__value">{inferredAssetCode}</div>
+                        </div>
+                        <div className="view-purchase-form-grid-field">
+                          <label>Tên tài sản (từ danh mục vật tư)</label>
+                          <div className="view-purchase-form__value">{inferredAssetName}</div>
+                        </div>
+                        <div className="view-purchase-form-grid-field">
+                          <label>Loại tài sản (từ đơn mua)</label>
+                          {inferredAssetTypeIdFromText ? (
+                            <div className="view-purchase-form__value">{inferredAssetTypeName ?? '—'}</div>
+                          ) : (
+                            <select
+                              className="approve-purchase-textarea"
+                              style={{ height: 40 }}
+                              value={fallbackAssetTypeId}
+                              onChange={(e) => setFallbackAssetTypeId(e.target.value)}
+                            >
+                              <option value="">Chọn loại tài sản</option>
+                              {assetTypes.map((t) => (
+                                <option key={t.assetTypeId} value={t.assetTypeId}>
+                                  {t.name}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                        <div className="view-purchase-form-grid-field">
+                          <label>Ngày mua</label>
+                          <div className="view-purchase-form__value">{formatDate(inferredPurchaseDate)}</div>
+                        </div>
+                        <div className="view-purchase-form-grid-field">
+                          <label>Giá gốc (tổng tiền đơn mua)</label>
+                          <div className="view-purchase-form__value">{totalPrice}</div>
+                        </div>
+                        <div className="view-purchase-form-grid-field">
+                          <label>Giá trị hiện tại</label>
+                          <div className="view-purchase-form__value">{totalPrice}</div>
+                        </div>
+                        <div className="view-purchase-form-grid-field">
+                          <label>Đơn vị tính</label>
+                          <div className="view-purchase-form__value">{inferredUnit}</div>
+                        </div>
+                        <div className="view-purchase-form-grid-field">
+                          <label>Số lượng</label>
+                          <div className="view-purchase-form__value">{inferredQuantity}</div>
+                        </div>
+                        <div className="view-purchase-form-grid-field">
+                          <label>Kho lưu tài sản</label>
                           <select
                             className="approve-purchase-textarea"
                             style={{ height: 40 }}
-                            value={newAssetTypeId}
-                            onChange={(e) => setNewAssetTypeId(e.target.value)}
+                            value={newAssetWarehouseId}
+                            onChange={(e) => setNewAssetWarehouseId(e.target.value)}
                           >
-                            <option value="">Chọn loại tài sản</option>
-                            {assetTypes.map((t) => (
-                              <option key={t.assetTypeId} value={t.assetTypeId}>
-                                {t.name}
+                            <option value="">Chọn kho lưu tài sản</option>
+                            {warehouses.map((w) => (
+                              <option key={w.warehouseId} value={w.warehouseId}>
+                                {w.name}
                               </option>
                             ))}
                           </select>
-                          <input
-                            type="date"
-                            className="approve-purchase-textarea"
-                            style={{ height: 40 }}
-                            value={newAssetPurchaseDate}
-                            onChange={(e) => setNewAssetPurchaseDate(e.target.value)}
-                          />
-                          <input
-                            type="number"
-                            className="approve-purchase-textarea"
-                            style={{ height: 40 }}
-                            placeholder="Giá gốc"
-                            value={newAssetOriginalPrice}
-                            onChange={(e) => setNewAssetOriginalPrice(e.target.value)}
-                          />
-                          <input
-                            type="number"
-                            className="approve-purchase-textarea"
-                            style={{ height: 40 }}
-                            placeholder="Giá trị hiện tại (mặc định = giá gốc)"
-                            value={newAssetCurrentValue}
-                            onChange={(e) => setNewAssetCurrentValue(e.target.value)}
-                          />
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                            <input
-                              className="approve-purchase-textarea"
-                              style={{ height: 40 }}
-                              placeholder="Đơn vị tính"
-                              value={newAssetUnit}
-                              onChange={(e) => setNewAssetUnit(e.target.value)}
-                            />
-                            <input
-                              type="number"
-                              min={1}
-                              className="approve-purchase-textarea"
-                              style={{ height: 40 }}
-                              placeholder="Số lượng"
-                              value={newAssetQuantity}
-                              onChange={(e) => setNewAssetQuantity(e.target.value)}
-                            />
-                          </div>
-                          <input
-                            type="number"
-                            className="approve-purchase-textarea"
-                            style={{ height: 40 }}
-                            placeholder="WarehouseId (kho)"
-                            value={newAssetWarehouseId}
-                            onChange={(e) => setNewAssetWarehouseId(e.target.value)}
-                          />
                         </div>
-                      )}
+                      </div>
                     </div>
+                  )}
+
+                  <div style={{ marginTop: 16, display: 'grid', gap: 8 }}>
+                    <label>Tài liệu mua hàng lưu vào chi tiết tài sản</label>
+                    {capitalizationDocuments.length === 0 ? (
+                      <div className="view-purchase-form__value">Chưa có tài liệu.</div>
+                    ) : (
+                      capitalizationDocuments.map((doc, idx) => (
+                        <div key={`${doc.id}-${idx}`} className="view-purchase-attachment-item">
+                          <span className="view-purchase-attachment-number">#{idx + 1}</span>
+                          <span className="view-purchase-attachment-name">{doc.name || `Tài liệu ${idx + 1}`}</span>
+                          <button
+                            type="button"
+                            className="view-purchase-attachment-download"
+                            onClick={() =>
+                              setCapitalizationDocuments((prev) => prev.filter((_, i) => i !== idx))
+                            }
+                          >
+                            Xoá
+                          </button>
+                        </div>
+                      ))
+                    )}
+                    <input
+                      id={`cap-upload-${data.assetRequestId}`}
+                      type="file"
+                      multiple
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files ?? []);
+                        if (files.length === 0) return;
+                        setCapitalizationDocuments((prev) => [
+                          ...prev,
+                          ...files.map((f, i) => ({
+                            id: `${Date.now()}-${i}-${f.name}`,
+                            name: f.name,
+                            file: f,
+                          })),
+                        ]);
+                        e.currentTarget.value = '';
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="view-purchase-btn-approve"
+                      onClick={() => {
+                        const input = document.getElementById(`cap-upload-${data.assetRequestId}`) as
+                          | HTMLInputElement
+                          | null;
+                        input?.click();
+                      }}
+                    >
+                      Chọn tài liệu từ máy tính
+                    </button>
                   </div>
                 </div>
               )}
@@ -681,7 +804,6 @@ export function ViewPurchaseOrderModal({
               disabled={capitalizing}
               onClick={handleRecordCapitalization}
             >
-              <span className="view-purchase-btn-approve-icon">🏷</span>
               <span>{capitalizing ? 'Đang ghi tăng...' : 'Biến thành tài sản cố định'}</span>
             </button>
           )}
@@ -692,7 +814,6 @@ export function ViewPurchaseOrderModal({
               disabled={capitalizing}
               onClick={handleCapitalizeFromRequest}
             >
-              <span className="view-purchase-btn-approve-icon">🏷</span>
               <span>{capitalizing ? 'Đang ghi tăng...' : 'Biến thành tài sản cố định'}</span>
             </button>
           )}

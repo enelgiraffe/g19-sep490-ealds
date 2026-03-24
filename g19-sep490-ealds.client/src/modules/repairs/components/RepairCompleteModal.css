@@ -1,0 +1,236 @@
+.repair-complete-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+}
+
+.repair-complete-modal {
+  position: relative;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 85vh;
+  width: min(920px, 96vw);
+  display: flex;
+  flex-direction: column;
+}
+
+.repair-complete-modal__header {
+  background: #ffe5e0;
+  padding: 16px 24px;
+  border-bottom: 1px solid #ffd4cc;
+}
+
+.repair-complete-modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #fe3720;
+}
+
+.repair-complete-modal__close-btn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.repair-complete-modal__close {
+  font-size: 24px;
+  color: #fe3720;
+  font-weight: 300;
+}
+
+.repair-complete-modal__body {
+  padding: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.repair-complete-modal__content {
+  padding: 24px;
+}
+
+.repair-complete-modal__loading {
+  padding: 20px 24px;
+}
+
+.repair-complete-form__item {
+  margin-bottom: 18px;
+}
+
+.repair-complete-form__item label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+  display: inline-block;
+  margin-bottom: 6px;
+}
+
+.repair-complete-input,
+.repair-complete-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  font-size: 14px;
+}
+
+.repair-complete-textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+
+.repair-complete-required {
+  color: #ef4444;
+}
+
+.repair-complete-info-section,
+.repair-complete-form-section {
+  margin-bottom: 20px;
+}
+
+.repair-complete-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 12px;
+}
+
+.repair-complete-info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.repair-complete-info-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.repair-complete-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.repair-complete-info-item label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.repair-complete-info-value {
+  font-size: 14px;
+  color: #111827;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.repair-complete-attachments-section {
+  margin-top: 16px;
+}
+
+.repair-complete-attachments-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 12px;
+}
+
+.repair-complete-attachments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.repair-complete-attachment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.repair-complete-attachment-name {
+  font-size: 14px;
+}
+
+.repair-complete-attachment-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.repair-complete-attachment-btn {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.repair-complete-attachment-btn--danger {
+  color: #ef4444;
+  border-color: #fecaca;
+}
+
+.repair-complete-btn-upload {
+  margin-top: 10px;
+  background: #10b981;
+  border: 1px solid #10b981;
+  color: #fff;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.repair-complete-modal__footer {
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  justify-content: flex-end;
+}
+
+.repair-complete-btn-submit {
+  background: #fe3720;
+  border: 1px solid #fe3720;
+  height: 40px;
+  padding: 0 24px;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+}
+
+.repair-complete-btn-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.repair-complete-btn-cancel {
+  background: #6b7280;
+  border: 1px solid #6b7280;
+  color: #fff;
+  height: 40px;
+  padding: 0 24px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .repair-complete-info-row {
+    grid-template-columns: 1fr;
+  }
+}
