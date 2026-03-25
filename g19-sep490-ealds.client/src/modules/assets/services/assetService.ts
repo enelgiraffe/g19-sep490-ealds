@@ -33,7 +33,8 @@ export type AssetStatus =
 
 export interface MaintenanceSchedule {
   scheduleId: number;
-  templateId: number;
+  templateId?: number | null;
+  content?: string | null;
   templateName?: string | null;
   scheduleType: number;
   intervalMonths?: number | null;

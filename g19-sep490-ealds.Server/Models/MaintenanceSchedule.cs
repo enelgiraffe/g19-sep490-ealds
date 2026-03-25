@@ -9,7 +9,9 @@ public partial class MaintenanceSchedule
 
     public int AssetId { get; set; }
 
-    public int TemplateId { get; set; }
+    public int? TemplateId { get; set; }
+
+    public string? Content { get; set; }
 
     public int ScheduleType { get; set; }
 
@@ -37,7 +39,7 @@ public partial class MaintenanceSchedule
     [ForeignKey("CreateBy")]
     public virtual User CreateByNavigation { get; set; } = null!;
 
-    public virtual MaintenanceTemplate Template { get; set; } = null!;
+    public virtual MaintenanceTemplate? Template { get; set; }
 
     public virtual ICollection<MaintenaceTask> MaintenaceTasks { get; set; } = new List<MaintenaceTask>();
 

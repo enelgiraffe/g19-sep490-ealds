@@ -290,3 +290,152 @@
   }
 }
 
+.schedule-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.schedule-modal {
+  position: relative;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  width: min(920px, calc(100vw - 32px));
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.schedule-modal__close-btn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.schedule-modal__close {
+  font-size: 24px;
+  color: #fe3720;
+  font-weight: 300;
+}
+
+.schedule-modal__header {
+  background: #ffe5e0;
+  padding: 16px 24px;
+  border-bottom: 1px solid #ffd4cc;
+}
+
+.schedule-modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #fe3720;
+}
+
+.schedule-modal__body {
+  padding: 0;
+  overflow-y: auto;
+}
+
+.schedule-modal__content {
+  padding: 24px;
+}
+
+.schedule-form__item {
+  margin-bottom: 20px;
+}
+
+.schedule-form__item label {
+  display: block;
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.schedule-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  font-size: 14px;
+}
+
+.schedule-input--textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+
+.schedule-radio-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  color: #111827;
+}
+
+.schedule-timepoint-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 120px auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.schedule-input--days {
+  text-align: center;
+}
+
+.schedule-timepoint-unit {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.schedule-modal__footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.schedule-btn-submit {
+  background: #fe3720;
+  border: 1px solid #fe3720;
+  height: 40px;
+  padding: 0 28px;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+}
+
+.schedule-btn-submit:hover {
+  background: #e5321c;
+  border-color: #e5321c;
+}
+
+.schedule-btn-submit:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.schedule-btn-close {
+  background: #6b7280;
+  border: 1px solid #6b7280;
+  color: #fff;
+  height: 40px;
+  padding: 0 28px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.schedule-btn-close:hover {
+  background: #4b5563;
+  border-color: #4b5563;
+}
+

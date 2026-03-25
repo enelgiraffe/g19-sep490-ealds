@@ -59,7 +59,8 @@ public class DeleteAssetDTO
 public class MaintenanceScheduleDTO
 {
     public int ScheduleId { get; set; }
-    public int TemplateId { get; set; }
+    public int? TemplateId { get; set; }
+    public string? Content { get; set; }
     public string? TemplateName { get; set; }
     public int ScheduleType { get; set; }
     public int? IntervalMonths { get; set; }

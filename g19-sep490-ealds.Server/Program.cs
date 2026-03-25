@@ -5,6 +5,8 @@ using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services;
 using g19_sep490_ealds.Server.Services.Implementation;
 using g19_sep490_ealds.Server.Services.Interface;
+using g19_sep490_ealds.Server.Services.ServiceImplementation;
+using g19_sep490_ealds.Server.Services.ServiceInterface;
 using g19_sep490_ealds.Server.Utils;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -97,6 +99,14 @@ builder.Services.AddScoped<IMaintenanceScheduleMapper, MaintenanceScheduleMapper
 builder.Services.AddScoped<IMaintenanceRecordService, MaintenanceRecordService>();
 builder.Services.AddScoped<IMaintenanceRecordMapper, MaintenanceRecordMapper>();
 builder.Services.AddScoped<IMaintenanceTaskService, MaintenanceTaskService>();
+
+// Asset capitalization
+builder.Services.AddScoped<IAssetCapitalizationMapper, AssetCapitalizationMapper>();
+builder.Services.AddScoped<IAssetCapitalizationService, AssetCapitalizationService>();
+
+// Asset type (controller/service exists)
+builder.Services.AddScoped<IAssetTypeMapper, AssetTypeMapper>();
+builder.Services.AddScoped<IAssetTypeService, AssetTypeService>();
 
 builder.Services.AddMediatR(typeof(Program));
 

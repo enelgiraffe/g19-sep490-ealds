@@ -13,6 +13,8 @@ import {
   DeleteOutlined,
   EyeOutlined,
   FilterOutlined,
+  EditOutlined,
+  PlusOutlined,
   SearchOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
@@ -27,6 +29,7 @@ import { assetRequestService } from '../../assets/services/assetRequestService';
 import { assetService, formatVnd, type AssetResponse } from '../../assets/services/assetService';
 import { directorRequestService } from '../../requests/services/directorRequestService';
 import { profileService, type UserProfile } from '../../profile/services/profileService';
+import { maintenanceTemplateService, type MaintenanceTemplateItem } from '../services/maintenanceTemplateService';
 
 type MaintenanceStatus =
   | 'draft'
@@ -117,6 +120,43 @@ function mapListToRows(list: MaintenanceRequestListItemDTO[]): MaintenanceRow[] 
 }
 
 type CompleteAttachmentRow = { key: string; name: string };
+type MaintenanceTemplateForm = {
+  assetTypeId: number | null;
+  name: string;
+  content: string;
+  frequencyType: 1 | 2;
+  repeatIntervalValue: number;
+  repeatIntervalUnit: 1 | 2 | 3 | 4;
+  isActive: boolean;
+};
+
+function parseEnumNumber(value: number | string | null | undefined): number {
+  if (typeof value === 'number') return value;
+  if (!value) return 0;
+  const parsed = Number(value);
+  if (Number.isFinite(parsed)) return parsed;
+  const normalized = String(value).toLowerCase();
+  if (normalized === 'onetime') return 1;
+  if (normalized === 'periodic') return 2;
+  if (normalized === 'day') return 1;
+  if (normalized === 'week') return 2;
+  if (normalized === 'month') return 3;
+  if (normalized === 'year') return 4;
+  return 0;
+}
+
+function getFrequencyLabel(value: number | string): string {
+  return parseEnumNumber(value) === 1 ? 'Một lần' : 'Định kỳ';
+}
+
+function getRepeatUnitLabel(value: number | string): string {
+  const parsed = parseEnumNumber(value);
+  if (parsed === 1) return 'Ngày';
+  if (parsed === 2) return 'Tuần';
+  if (parsed === 3) return 'Tháng';
+  if (parsed === 4) return 'Năm';
+  return '—';
+}
 
 export function MaintenancePage() {
   const [activeTab, setActiveTab] = useState<'need-maintenance' | 'in-maintenance'>(
@@ -167,6 +207,25 @@ export function MaintenancePage() {
   const [completeDetailedDescription, setCompleteDetailedDescription] = useState('');
   const [completeAttachments, setCompleteAttachments] = useState<CompleteAttachmentRow[]>([]);
   const [editingAttachKey, setEditingAttachKey] = useState<string | null>(null);
+  const [assetTypes, setAssetTypes] = useState<Array<{ assetTypeId: number; name: string }>>([]);
+
+  /** Modal thiết lập quy định bảo dưỡng */
+  const [setupTemplateOpen, setSetupTemplateOpen] = useState(false);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templates, setTemplates] = useState<MaintenanceTemplateItem[]>([]);
+  const [templateSearch, setTemplateSearch] = useState('');
+  const [templateFormOpen, setTemplateFormOpen] = useState(false);
+  const [templateFormSubmitting, setTemplateFormSubmitting] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
+  const [templateForm, setTemplateForm] = useState<MaintenanceTemplateForm>({
+    assetTypeId: null,
+    name: '',
+    content: '',
+    frequencyType: 2,
+    repeatIntervalValue: 1,
+    repeatIntervalUnit: 3,
+    isActive: true,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -208,12 +267,144 @@ export function MaintenancePage() {
   const isDirector = String(profile?.role ?? '').toUpperCase() === 'DIRECTOR';
   const canDirectorApprove = isDirector && !!selected && selected.rawStatus === 1;
 
+  const loadTemplates = async () => {
+    setTemplatesLoading(true);
+    try {
+      const data = await maintenanceTemplateService.getAll();
+      setTemplates(Array.isArray(data) ? data : []);
+    } catch {
+      message.error('Không tải được danh sách quy định bảo dưỡng.');
+      setTemplates([]);
+    } finally {
+      setTemplatesLoading(false);
+    }
+  };
+
   const reload = async () => {
     try {
       const list = await maintenanceRequestService.list();
       setRows(mapListToRows(list));
     } catch {
       // ignore
+    }
+  };
+
+  const openTemplateSetupModal = async () => {
+    setSetupTemplateOpen(true);
+    try {
+      if (assetTypes.length === 0) {
+        const types = await assetService.getAssetTypes();
+        setAssetTypes(types ?? []);
+      }
+    } catch {
+      setAssetTypes([]);
+    }
+    await loadTemplates();
+  };
+
+  const resetTemplateForm = () => {
+    setEditingTemplateId(null);
+    setTemplateForm({
+      assetTypeId: null,
+      name: '',
+      content: '',
+      frequencyType: 2,
+      repeatIntervalValue: 1,
+      repeatIntervalUnit: 3,
+      isActive: true,
+    });
+  };
+
+  const openCreateTemplateForm = () => {
+    resetTemplateForm();
+    setTemplateFormOpen(true);
+  };
+
+  const openEditTemplateForm = async (templateId: number) => {
+    setTemplateFormOpen(true);
+    setTemplateFormSubmitting(true);
+    try {
+      const detail = await maintenanceTemplateService.getById(templateId);
+      setEditingTemplateId(templateId);
+      setTemplateForm({
+        assetTypeId: detail.assetTypeId,
+        name: detail.name ?? '',
+        content: detail.content ?? '',
+        frequencyType: parseEnumNumber(detail.frequencyType) === 1 ? 1 : 2,
+        repeatIntervalValue: Math.max(1, Number(detail.repeatIntervalValue || 1)),
+        repeatIntervalUnit: ([1, 2, 3, 4].includes(parseEnumNumber(detail.repeatIntervalUnit))
+          ? parseEnumNumber(detail.repeatIntervalUnit)
+          : 3) as 1 | 2 | 3 | 4,
+        isActive: Boolean(detail.isActive),
+      });
+    } catch {
+      message.error('Không tải được chi tiết quy định bảo dưỡng.');
+      setTemplateFormOpen(false);
+    } finally {
+      setTemplateFormSubmitting(false);
+    }
+  };
+
+  const submitTemplateForm = async () => {
+    if (!templateForm.assetTypeId) {
+      message.warning('Vui lòng chọn loại tài sản.');
+      return;
+    }
+    if (!templateForm.name.trim()) {
+      message.warning('Vui lòng nhập tên quy định.');
+      return;
+    }
+    if (!templateForm.content.trim()) {
+      message.warning('Vui lòng nhập nội dung bảo dưỡng.');
+      return;
+    }
+
+    const payload = {
+      assetTypeId: templateForm.assetTypeId,
+      name: templateForm.name.trim(),
+      content: templateForm.content.trim(),
+      frequencyType: templateForm.frequencyType,
+      repeatIntervalValue: Math.max(1, Number(templateForm.repeatIntervalValue || 1)),
+      repeatIntervalUnit: templateForm.repeatIntervalUnit,
+      isActive: templateForm.isActive,
+    } as const;
+
+    setTemplateFormSubmitting(true);
+    try {
+      if (editingTemplateId) {
+        await maintenanceTemplateService.update(editingTemplateId, payload);
+        message.success('Cập nhật quy định bảo dưỡng thành công.');
+      } else {
+        await maintenanceTemplateService.create(payload);
+        message.success('Thêm quy định bảo dưỡng thành công.');
+      }
+      setTemplateFormOpen(false);
+      resetTemplateForm();
+      await loadTemplates();
+    } catch {
+      message.error('Lưu quy định bảo dưỡng thất bại.');
+    } finally {
+      setTemplateFormSubmitting(false);
+    }
+  };
+
+  const toggleTemplateStatus = async (templateId: number) => {
+    try {
+      await maintenanceTemplateService.changeStatus(templateId);
+      message.success('Đã cập nhật trạng thái quy định.');
+      await loadTemplates();
+    } catch {
+      message.error('Không thể đổi trạng thái quy định.');
+    }
+  };
+
+  const deleteTemplatePermanent = async (templateId: number) => {
+    try {
+      await maintenanceTemplateService.deletePermanent(templateId);
+      message.success('Đã xóa quy định bảo dưỡng.');
+      await loadTemplates();
+    } catch {
+      message.error('Không thể xóa quy định bảo dưỡng.');
     }
   };
 
@@ -441,11 +632,25 @@ export function MaintenancePage() {
     });
   }, [rows, search, statusFilter, activeTab]);
 
+  const filteredTemplates = useMemo(() => {
+    const keyword = templateSearch.trim().toLowerCase();
+    if (!keyword) return templates;
+    return templates.filter((t) => {
+      const assetTypeName =
+        assetTypes.find((a) => a.assetTypeId === t.assetTypeId)?.name?.toLowerCase() ?? '';
+      return (
+        String(t.name ?? '').toLowerCase().includes(keyword) ||
+        String(t.content ?? '').toLowerCase().includes(keyword) ||
+        assetTypeName.includes(keyword)
+      );
+    });
+  }, [assetTypes, templateSearch, templates]);
+
   return (
     <div className="maintenance-page">
       <div className="maintenance-header">
         <h1 className="maintenance-page__title">Bảo dưỡng</h1>
-        <Button type="primary" className="maintenance-btn-add">
+        <Button type="primary" className="maintenance-btn-add" onClick={openTemplateSetupModal}>
           + Thiết lập quy định bảo dưỡng
         </Button>
       </div>
@@ -624,6 +829,200 @@ export function MaintenancePage() {
           </div>
         </div>
       </div>
+
+      <Modal
+        open={setupTemplateOpen}
+        title="Thiết lập quy định bảo dưỡng"
+        width={980}
+        onCancel={() => setSetupTemplateOpen(false)}
+        footer={[
+          <Button key="close-setup" onClick={() => setSetupTemplateOpen(false)}>
+            Đóng
+          </Button>,
+        ]}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+          <Input
+            placeholder="Tìm kiếm loại tài sản"
+            prefix={<SearchOutlined />}
+            value={templateSearch}
+            onChange={(e) => setTemplateSearch(e.target.value)}
+            style={{ maxWidth: 320 }}
+          />
+          <Button type="default" icon={<PlusOutlined />} onClick={openCreateTemplateForm}>
+            Thêm quy định bảo dưỡng
+          </Button>
+        </div>
+        <div className="asset-table-wrapper maintenance-table-wrapper">
+          <table className="asset-table maintenance-table">
+            <thead>
+              <tr>
+                <th>Loại tài sản</th>
+                <th>Nội dung bảo dưỡng</th>
+                <th>Xác định bảo dưỡng theo</th>
+                <th>Tần suất bảo dưỡng</th>
+                <th>Lặp lại theo</th>
+                <th>Trạng thái</th>
+                <th className="asset-table__cell asset-table__cell--actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {templatesLoading ? (
+                <tr>
+                  <td colSpan={7} className="maintenance-table-empty">
+                    Đang tải dữ liệu...
+                  </td>
+                </tr>
+              ) : filteredTemplates.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="maintenance-table-empty">
+                    Không có dữ liệu.
+                  </td>
+                </tr>
+              ) : (
+                filteredTemplates.map((template) => (
+                  <tr key={template.templateId} className="asset-row">
+                    <td>{assetTypes.find((a) => a.assetTypeId === template.assetTypeId)?.name ?? '—'}</td>
+                    <td>{template.content || '—'}</td>
+                    <td>Thời gian</td>
+                    <td>{getFrequencyLabel(template.frequencyType)}</td>
+                    <td>
+                      {Number(template.repeatIntervalValue || 0) > 0
+                        ? `${template.repeatIntervalValue} ${getRepeatUnitLabel(template.repeatIntervalUnit)}`
+                        : '—'}
+                    </td>
+                    <td>
+                      <Button
+                        size="small"
+                        onClick={() => toggleTemplateStatus(template.templateId)}
+                        type={template.isActive ? 'primary' : 'default'}
+                      >
+                        {template.isActive ? 'Đang áp dụng' : 'Ngưng áp dụng'}
+                      </Button>
+                    </td>
+                    <td className="asset-table__cell asset-table__cell--actions">
+                      <Button
+                        type="text"
+                        icon={<EditOutlined />}
+                        onClick={() => openEditTemplateForm(template.templateId)}
+                      />
+                      <Popconfirm
+                        title="Xóa vĩnh viễn quy định này?"
+                        okText="Xóa"
+                        cancelText="Hủy"
+                        onConfirm={() => deleteTemplatePermanent(template.templateId)}
+                      >
+                        <Button type="text" danger icon={<DeleteOutlined />} />
+                      </Popconfirm>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Modal>
+
+      <Modal
+        open={templateFormOpen}
+        title={editingTemplateId ? 'Cập nhật quy định bảo dưỡng' : 'Quy định bảo dưỡng'}
+        onCancel={() => {
+          setTemplateFormOpen(false);
+          resetTemplateForm();
+        }}
+        onOk={submitTemplateForm}
+        confirmLoading={templateFormSubmitting}
+        okText="Lưu"
+        cancelText="Hủy"
+      >
+        <div style={{ display: 'grid', gap: 12 }}>
+          <div>
+            <label>Loại tài sản</label>
+            <Select
+              style={{ width: '100%', marginTop: 6 }}
+              value={templateForm.assetTypeId ?? undefined}
+              placeholder="Chọn loại tài sản"
+              onChange={(v) =>
+                setTemplateForm((prev) => ({ ...prev, assetTypeId: Number(v) || null }))
+              }
+              options={assetTypes.map((t) => ({ value: t.assetTypeId, label: t.name }))}
+            />
+          </div>
+          <div>
+            <label>Tên quy định</label>
+            <Input
+              style={{ marginTop: 6 }}
+              value={templateForm.name}
+              onChange={(e) => setTemplateForm((prev) => ({ ...prev, name: e.target.value }))}
+              placeholder="Nhập tên quy định"
+            />
+          </div>
+          <div>
+            <label>Nội dung bảo dưỡng</label>
+            <Input.TextArea
+              style={{ marginTop: 6 }}
+              rows={4}
+              value={templateForm.content}
+              onChange={(e) => setTemplateForm((prev) => ({ ...prev, content: e.target.value }))}
+              placeholder="Nhập nội dung bảo dưỡng"
+            />
+          </div>
+          <div>
+            <label>Tần suất bảo dưỡng</label>
+            <div style={{ display: 'flex', gap: 18, marginTop: 6 }}>
+              <label>
+                <input
+                  type="radio"
+                  checked={templateForm.frequencyType === 1}
+                  onChange={() => setTemplateForm((prev) => ({ ...prev, frequencyType: 1 }))}
+                />{' '}
+                Một lần
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  checked={templateForm.frequencyType === 2}
+                  onChange={() => setTemplateForm((prev) => ({ ...prev, frequencyType: 2 }))}
+                />{' '}
+                Định kỳ
+              </label>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label>Giá trị lặp lại</label>
+              <Input
+                style={{ marginTop: 6 }}
+                type="number"
+                min={1}
+                value={templateForm.repeatIntervalValue}
+                onChange={(e) =>
+                  setTemplateForm((prev) => ({
+                    ...prev,
+                    repeatIntervalValue: Math.max(1, Number(e.target.value || 1)),
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <label>Lặp lại theo</label>
+              <Select
+                style={{ width: '100%', marginTop: 6 }}
+                value={templateForm.repeatIntervalUnit}
+                onChange={(v) =>
+                  setTemplateForm((prev) => ({ ...prev, repeatIntervalUnit: v as 1 | 2 | 3 | 4 }))
+                }
+                options={[
+                  { value: 1, label: 'Ngày' },
+                  { value: 2, label: 'Tuần' },
+                  { value: 3, label: 'Tháng' },
+                  { value: 4, label: 'Năm' },
+                ]}
+              />
+            </div>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={detailOpen}

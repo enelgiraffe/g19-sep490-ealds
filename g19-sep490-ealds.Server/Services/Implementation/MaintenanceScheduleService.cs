@@ -23,9 +23,16 @@ public class MaintenanceScheduleService : IMaintenanceScheduleService
     {
         var asset = await _context.Assets.FindAsync(create.AssetId)
         ?? throw new Exception("Asset not found");
+        var hasTemplate = create.TemplateId.HasValue && create.TemplateId.Value > 0;
+        var hasContent = !string.IsNullOrWhiteSpace(create.Content);
+        if (!hasTemplate && !hasContent)
+            throw new Exception("Vui lòng nh?p n?i dung b?o d??ng ho?c ch?n m?u quy ??nh.");
 
-        var template = await _context.MaintenanceTemplates.FindAsync(create.TemplateId)
-            ?? throw new Exception("Template not found");
+        if (hasTemplate)
+        {
+            var template = await _context.MaintenanceTemplates.FindAsync(create.TemplateId!.Value)
+                ?? throw new Exception("Template not found");
+        }
 
         var schedule = _mapper.CreateToEntity(create);
         schedule.NextDueDate = CalculateNextDueDate(schedule);

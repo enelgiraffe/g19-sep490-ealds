@@ -157,13 +157,9 @@ public class AssetsController : ControllerBase
             .ThenByDescending(r => r.CreateDate)
             .FirstOrDefaultAsync();
 
-        var schedules = await _context.MaintenanceSchedules
-            .Include(s => s.Template)
-            .AsNoTracking()
-            .Where(s => s.AssetId == id)
-            .OrderByDescending(s => s.IsActive)
-            .ThenByDescending(s => s.StartDate)
-            .ToListAsync();
+        // Avoid querying MaintenanceSchedule here because some environments
+        // don't have IntervalUnit/IntervalValue columns yet.
+        var schedules = new List<MaintenanceSchedule>();
 
         var documents = await _context.Documents
             .AsNoTracking()
@@ -253,13 +249,9 @@ public class AssetsController : ControllerBase
             .ThenByDescending(r => r.CreateDate)
             .FirstOrDefaultAsync();
 
-        var schedules = await _context.MaintenanceSchedules
-            .Include(s => s.Template)
-            .AsNoTracking()
-            .Where(s => s.AssetId == asset.AssetId)
-            .OrderByDescending(s => s.IsActive)
-            .ThenByDescending(s => s.StartDate)
-            .ToListAsync();
+        // Avoid querying MaintenanceSchedule here because some environments
+        // don't have IntervalUnit/IntervalValue columns yet.
+        var schedules = new List<MaintenanceSchedule>();
 
         return CreatedAtAction(nameof(GetById), new { id = asset.AssetId }, ToResponseDTO(asset, latestDep, schedules));
     }
@@ -343,13 +335,9 @@ public class AssetsController : ControllerBase
             .ThenByDescending(r => r.CreateDate)
             .FirstOrDefaultAsync();
 
-        var schedules = await _context.MaintenanceSchedules
-            .Include(s => s.Template)
-            .AsNoTracking()
-            .Where(s => s.AssetId == id)
-            .OrderByDescending(s => s.IsActive)
-            .ThenByDescending(s => s.StartDate)
-            .ToListAsync();
+        // Avoid querying MaintenanceSchedule here because some environments
+        // don't have IntervalUnit/IntervalValue columns yet.
+        var schedules = new List<MaintenanceSchedule>();
 
         return Ok(ToResponseDTO(asset, latestDep, schedules));
     }
@@ -447,6 +435,7 @@ public class AssetsController : ControllerBase
         {
             ScheduleId = s.ScheduleId,
             TemplateId = s.TemplateId,
+            Content = s.Content,
             TemplateName = s.Template?.Name,
             ScheduleType = s.ScheduleType,
             IntervalMonths = s.IntervalMonths,

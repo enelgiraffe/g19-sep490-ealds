@@ -1,0 +1,90 @@
+import axios from 'axios';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+const maintenanceTemplateApi = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+maintenanceTemplateApi.interceptors.request.use((config) => {
+  const token = localStorage.getItem('accessToken');
+  if (token) {
+    config.headers = config.headers ?? {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+export type MaintenanceFrequencyType = 1 | 2; // 1: OneTime, 2: Periodic
+export type MaintenanceRepeatIntervalUnit = 1 | 2 | 3 | 4; // Day/Week/Month/Year
+
+export interface MaintenanceTemplatePayload {
+  assetTypeId: number;
+  name: string;
+  content: string;
+  frequencyType: MaintenanceFrequencyType;
+  repeatIntervalValue: number;
+  repeatIntervalUnit: MaintenanceRepeatIntervalUnit;
+  isActive?: boolean;
+}
+
+export interface MaintenanceTemplateItem {
+  templateId: number;
+  assetTypeId: number;
+  name: string;
+  content: string;
+  frequencyType: number | string;
+  repeatIntervalValue: number;
+  repeatIntervalUnit: number | string;
+  isActive: boolean;
+}
+
+export const maintenanceTemplateService = {
+  async getAll(): Promise<MaintenanceTemplateItem[]> {
+    const response = await maintenanceTemplateApi.get<MaintenanceTemplateItem[]>(
+      '/api/MaintenanceTemplate/get-all'
+    );
+    return response.data;
+  },
+
+  async getById(id: number): Promise<MaintenanceTemplateItem> {
+    const response = await maintenanceTemplateApi.get<MaintenanceTemplateItem>(
+      `/api/MaintenanceTemplate/find-id/${id}`
+    );
+    return response.data;
+  },
+
+  async create(payload: MaintenanceTemplatePayload): Promise<MaintenanceTemplateItem> {
+    const response = await maintenanceTemplateApi.post<MaintenanceTemplateItem>(
+      '/api/MaintenanceTemplate/add-template',
+      payload
+    );
+    return response.data;
+  },
+
+  async update(id: number, payload: MaintenanceTemplatePayload): Promise<MaintenanceTemplateItem> {
+    const response = await maintenanceTemplateApi.put<MaintenanceTemplateItem>(
+      `/api/MaintenanceTemplate/update/${id}`,
+      payload
+    );
+    return response.data;
+  },
+
+  async changeStatus(id: number): Promise<MaintenanceTemplateItem> {
+    const response = await maintenanceTemplateApi.put<MaintenanceTemplateItem>(
+      `/api/MaintenanceTemplate/change-status/${id}`
+    );
+    return response.data;
+  },
+
+  async deletePermanent(id: number): Promise<boolean> {
+    const response = await maintenanceTemplateApi.delete<boolean>(
+      `/api/MaintenanceTemplate/delete-permanent/${id}`
+    );
+    return response.data;
+  },
+};
+

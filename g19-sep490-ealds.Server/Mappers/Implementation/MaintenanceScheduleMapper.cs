@@ -1,4 +1,4 @@
-﻿using g19_sep490_ealds.Server.DTO.RequestDTO.AssetMaintenance.MaintenanceSchedule;
+using g19_sep490_ealds.Server.DTO.RequestDTO.AssetMaintenance.MaintenanceSchedule;
 using g19_sep490_ealds.Server.DTO.ResponseDTO.AssetMaintenance;
 using g19_sep490_ealds.Server.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -12,6 +12,7 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
         MaintenanceSchedule schedule = new MaintenanceSchedule();
         schedule.AssetId = create.AssetId;
         schedule.TemplateId = create.TemplateId;
+        schedule.Content = string.IsNullOrWhiteSpace(create.Content) ? null : create.Content.Trim();
         schedule.ScheduleTypeEnum = create.ScheduleType;
         schedule.IntervalValue = create.IntervalValue;
         schedule.IntervalUnitEnum = create.IntervalUnit;
@@ -29,6 +30,7 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
         schedule.ScheduleId = delete.ScheduleId;
         schedule.AssetId = delete.AssetId;
         schedule.TemplateId = delete.TemplateId;
+        schedule.Content = string.IsNullOrWhiteSpace(delete.Content) ? null : delete.Content.Trim();
         schedule.ScheduleTypeEnum = delete.ScheduleType;
         schedule.IntervalValue = delete.IntervalValue;
         schedule.IntervalUnitEnum = delete.IntervalUnit;
@@ -46,6 +48,7 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
         response.ScheduleId = entity.ScheduleId;
         response.AssetId = entity.AssetId;
         response.TemplateId = entity.TemplateId;
+        response.Content = entity.Content;
         response.ScheduleType = entity.ScheduleTypeEnum;
         response.IntervalValue = entity.IntervalValue;
         response.IntervalUnit = entity.IntervalUnitEnum;
@@ -68,6 +71,7 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
         MaintenanceSchedule schedule = new MaintenanceSchedule();
         schedule.AssetId = update.AssetId;
         schedule.TemplateId = update.TemplateId;
+        schedule.Content = string.IsNullOrWhiteSpace(update.Content) ? null : update.Content.Trim();
         schedule.ScheduleTypeEnum = update.ScheduleType;
         schedule.IntervalValue = update.IntervalValue;
         schedule.IntervalUnitEnum = update.IntervalUnit;

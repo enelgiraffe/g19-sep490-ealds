@@ -1,7 +1,65 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { assetService, type AssetResponse, type UpdateAssetPayload } from '../services/assetService';
+import {
+  maintenanceScheduleService,
+  type MaintenanceScheduleResponse,
+} from '../services/maintenanceScheduleService';
 import './AssetCreatePage.css';
+
+function getStoredUserId(): number | null {
+  const raw = localStorage.getItem('user');
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { id?: string | number | null };
+    const idNum = typeof parsed.id === 'number' ? parsed.id : Number(parsed.id);
+    return Number.isFinite(idNum) && idNum > 0 ? idNum : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatDate(iso?: string | null): string {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('vi-VN');
+  } catch {
+    return iso;
+  }
+}
+
+function parseEnumNumber(value: number | string | null | undefined): number {
+  if (typeof value === 'number') return value;
+  if (!value) return 0;
+  const parsed = Number(value);
+  if (Number.isFinite(parsed)) return parsed;
+  const normalized = String(value).toLowerCase();
+  if (normalized === 'onetime') return 1;
+  if (normalized === 'periodic') return 2;
+  if (normalized === 'day') return 1;
+  if (normalized === 'week') return 2;
+  if (normalized === 'month') return 3;
+  if (normalized === 'year') return 4;
+  return 0;
+}
+
+function getRepeatUnitLabel(value?: number | string | null): string {
+  const parsed = parseEnumNumber(value);
+  if (parsed === 1) return 'Ngày';
+  if (parsed === 2) return 'Tuần';
+  if (parsed === 3) return 'Tháng';
+  if (parsed === 4) return 'Năm';
+  return '—';
+}
+
+function toIsoWithOffset(baseDateIso: string | null | undefined, days: number): string {
+  const fallback = new Date();
+  const base = baseDateIso ? new Date(baseDateIso) : fallback;
+  const safeBase = Number.isNaN(base.getTime()) ? fallback : base;
+  safeBase.setDate(safeBase.getDate() + Math.max(0, days));
+  return safeBase.toISOString();
+}
 
 export function AssetEditPage() {
   const { id } = useParams<{ id: string }>();
@@ -39,6 +97,17 @@ export function AssetEditPage() {
   const [depreciationRemainingMonths, setDepreciationRemainingMonths] = useState('');
   const [depreciationAccumulated, setDepreciationAccumulated] = useState('');
   const [depreciationRemainingValue, setDepreciationRemainingValue] = useState('');
+  const [maintenanceSchedules, setMaintenanceSchedules] = useState<MaintenanceScheduleResponse[]>(
+    []
+  );
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [scheduleSubmitting, setScheduleSubmitting] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [maintenanceContent, setMaintenanceContent] = useState('');
+  const [scheduleType, setScheduleType] = useState<1 | 2>(2);
+  const [startPointMode, setStartPointMode] = useState<'inUse' | 'purchase'>('inUse');
+  const [startOffsetDays, setStartOffsetDays] = useState<number>(0);
+  const [repeatIntervalUnit, setRepeatIntervalUnit] = useState<1 | 2 | 3 | 4>(3);
 
   useEffect(() => {
     if (!assetId || Number.isNaN(assetId)) {
@@ -52,7 +121,7 @@ export function AssetEditPage() {
 
     assetService
       .getById(assetId)
-      .then((data) => {
+      .then(async (data) => {
         if (!isMounted) return;
         setAsset(data);
         setCode(data.code);
@@ -65,6 +134,9 @@ export function AssetEditPage() {
         setQuantity(String(data.quantity));
         setWarehouseId(String(data.warehouseId));
         setWarrantyEndDate(data.warrantyEndDate ?? '');
+        const schedules = await maintenanceScheduleService.findByAssetId(assetId).catch(() => []);
+        if (!isMounted) return;
+        setMaintenanceSchedules(schedules);
       })
       .catch(() => {
         if (!isMounted) return;
@@ -78,6 +150,67 @@ export function AssetEditPage() {
       isMounted = false;
     };
   }, [assetId]);
+
+  const openScheduleModal = () => {
+    setScheduleError(null);
+    setScheduleType(2);
+    setStartPointMode('inUse');
+    setStartOffsetDays(0);
+    setRepeatIntervalUnit(3);
+    setMaintenanceContent('');
+    setScheduleModalOpen(true);
+  };
+
+  const handleCreateSchedule = async () => {
+    if (!asset) return;
+    const createBy = getStoredUserId();
+    if (!createBy) {
+      setScheduleError('Không xác định được người dùng tạo lịch bảo dưỡng.');
+      return;
+    }
+    if (!maintenanceContent.trim()) {
+      setScheduleError('Vui lòng nhập nội dung bảo dưỡng.');
+      return;
+    }
+
+    setScheduleSubmitting(true);
+    setScheduleError(null);
+    try {
+      const startDate =
+        startPointMode === 'inUse'
+          ? toIsoWithOffset(asset.inUseDate, startOffsetDays)
+          : toIsoWithOffset(asset.purchaseDate, startOffsetDays);
+
+      await maintenanceScheduleService.addSchedule({
+        assetId: asset.assetId,
+        templateId: null,
+        content: maintenanceContent.trim(),
+        scheduleType,
+        intervalUnit: scheduleType === 2 ? repeatIntervalUnit : null,
+        intervalValue: scheduleType === 2 ? 1 : null,
+        startDate,
+        endDate: null,
+        isActive: true,
+        createBy,
+        createDate: new Date().toISOString(),
+      });
+
+      const refreshed = await maintenanceScheduleService
+        .findByAssetId(asset.assetId)
+        .catch(() => []);
+      setMaintenanceSchedules(refreshed);
+      setScheduleModalOpen(false);
+    } catch (e: any) {
+      const serverMessage = e?.response?.data;
+      setScheduleError(
+        typeof serverMessage === 'string' && serverMessage.trim()
+          ? serverMessage
+          : 'Thêm quy định bảo dưỡng thất bại. Vui lòng thử lại.'
+      );
+    } finally {
+      setScheduleSubmitting(false);
+    }
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -327,10 +460,15 @@ export function AssetEditPage() {
         <section className="asset-create__section">
           <div className="asset-create__section-header">
             <h2 className="asset-create__section-title">Quy định bảo dưỡng</h2>
-            <button type="button" className="asset-create__btn asset-create__btn--danger">
+            <button
+              type="button"
+              className="asset-create__btn asset-create__btn--danger"
+              onClick={openScheduleModal}
+            >
               + Thêm nội dung bảo dưỡng
             </button>
           </div>
+          {scheduleError && <div className="asset-create__error">{scheduleError}</div>}
           <table className="asset-create__maintenance-table">
             <thead>
               <tr>
@@ -341,24 +479,27 @@ export function AssetEditPage() {
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>Thay dầu</td>
-                <td>12/08/2024</td>
-                <td>Tháng</td>
-                <td>-</td>
-              </tr>
-              <tr>
-                <td>Kiểm tra an toàn</td>
-                <td>12/08/2024</td>
-                <td>Quý</td>
-                <td>-</td>
-              </tr>
-              <tr>
-                <td>Đo sai số</td>
-                <td>12/08/2024</td>
-                <td>Năm</td>
-                <td>-</td>
-              </tr>
+              {maintenanceSchedules.length > 0 ? (
+                maintenanceSchedules.map((schedule) => (
+                  <tr key={schedule.scheduleId}>
+                    <td>
+                      {schedule.content?.trim() ||
+                        (schedule.templateId ? `Mẫu #${schedule.templateId}` : '—')}
+                    </td>
+                    <td>{formatDate(schedule.startDate)}</td>
+                    <td>{parseEnumNumber(schedule.scheduleType) === 1 ? 'Một lần' : 'Định kỳ'}</td>
+                    <td>
+                      {schedule.intervalValue && schedule.intervalUnit
+                        ? `${schedule.intervalValue} ${getRepeatUnitLabel(schedule.intervalUnit)}`
+                        : '—'}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4}>Chưa có quy định bảo dưỡng.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </section>
@@ -501,8 +642,125 @@ export function AssetEditPage() {
             </button>
           </div>
         </section>
-
       </form>
+
+      {scheduleModalOpen && asset && (
+        <div className="schedule-modal-overlay" role="dialog" aria-modal="true">
+          <div className="schedule-modal">
+            <button
+              type="button"
+              className="schedule-modal__close-btn"
+              onClick={() => setScheduleModalOpen(false)}
+              aria-label="Đóng"
+            >
+              <span className="schedule-modal__close">×</span>
+            </button>
+
+            <div className="schedule-modal__header">
+              <h2 className="schedule-modal__title">Quy định bảo dưỡng</h2>
+            </div>
+
+            <div className="schedule-modal__body">
+              <div className="schedule-modal__content">
+                <div className="schedule-form__item">
+                  <label>
+                    Nội dung bảo dưỡng<span className="asset-create__required">*</span>
+                  </label>
+                  <textarea
+                    className="schedule-input schedule-input--textarea"
+                    rows={4}
+                    placeholder="-"
+                    value={maintenanceContent}
+                    onChange={(e) => setMaintenanceContent(e.target.value)}
+                  />
+                </div>
+
+                <div className="schedule-form__item">
+                  <label>Tần suất bảo dưỡng</label>
+                  <div className="schedule-radio-row">
+                    <label>
+                      <input
+                        type="radio"
+                        checked={scheduleType === 1}
+                        onChange={() => setScheduleType(1)}
+                      />{' '}
+                      Một lần
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        checked={scheduleType === 2}
+                        onChange={() => setScheduleType(2)}
+                      />{' '}
+                      Định kỳ
+                    </label>
+                  </div>
+                </div>
+
+                <div className="schedule-form__item">
+                  <label>Thời điểm bảo dưỡng</label>
+                  <div className="schedule-timepoint-row">
+                    <select
+                      className="schedule-input"
+                      value={startPointMode}
+                      onChange={(e) =>
+                        setStartPointMode(e.target.value === 'purchase' ? 'purchase' : 'inUse')
+                      }
+                    >
+                      <option value="inUse">Sau ngày bắt đầu sử dụng</option>
+                      <option value="purchase">Sau ngày mua</option>
+                    </select>
+                    <input
+                      type="number"
+                      min={0}
+                      className="schedule-input schedule-input--days"
+                      value={startOffsetDays}
+                      onChange={(e) => setStartOffsetDays(Math.max(0, Number(e.target.value || 0)))}
+                    />
+                    <span className="schedule-timepoint-unit">Ngày</span>
+                  </div>
+                </div>
+
+                <div className="schedule-form__item">
+                  <label>Bảo dưỡng lặp lại theo</label>
+                  <select
+                    className="schedule-input"
+                    value={repeatIntervalUnit}
+                    onChange={(e) => setRepeatIntervalUnit(Number(e.target.value) as 1 | 2 | 3 | 4)}
+                    disabled={scheduleType === 1}
+                  >
+                    <option value={1}>Ngày</option>
+                    <option value={2}>Tuần</option>
+                    <option value={3}>Tháng</option>
+                    <option value={4}>Năm</option>
+                  </select>
+                </div>
+
+                {scheduleError && <div className="mark-damaged-error-text">{scheduleError}</div>}
+              </div>
+            </div>
+
+            <div className="schedule-modal__footer">
+              <button
+                type="button"
+                className="schedule-btn-submit"
+                onClick={handleCreateSchedule}
+                disabled={scheduleSubmitting}
+              >
+                {scheduleSubmitting ? 'Đang lưu...' : 'Xác nhận'}
+              </button>
+              <button
+                type="button"
+                className="schedule-btn-close"
+                onClick={() => setScheduleModalOpen(false)}
+                disabled={scheduleSubmitting}
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
