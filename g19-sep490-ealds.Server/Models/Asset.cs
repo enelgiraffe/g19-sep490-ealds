@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -89,7 +89,9 @@ public partial class Asset
     [InverseProperty("Asset")]
     public virtual ICollection<TransferRecord> TransferRecords { get; set; } = new List<TransferRecord>();
 
-    [InverseProperty("Asset")]
+    // DB hiện tại của bảng MaintenanceRecord không có cột AssetId,
+    // nên tránh map quan hệ Asset - MaintenanceRecord thông qua EF.
+    [NotMapped]
     public virtual ICollection<MaintenanceRecord> MaintenanceRecords { get; set; } = new List<MaintenanceRecord>();
 
     [ForeignKey("WarehouseId")]

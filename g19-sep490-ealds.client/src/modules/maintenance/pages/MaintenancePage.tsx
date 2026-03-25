@@ -258,8 +258,14 @@ export function MaintenancePage() {
       try {
         const p = await profileService.getProfile();
         setProfile(p);
-      } catch {
+      } catch (e: any) {
         setProfile(null);
+        const status = e?.response?.status;
+        if (status === 401) {
+          message.error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+        } else {
+          message.error('Không tải được thông tin người dùng. Vui lòng thử lại.');
+        }
       }
     })();
   }, []);
@@ -444,7 +450,11 @@ export function MaintenancePage() {
   };
 
   const submitStartMaintenance = async () => {
-    if (!startRow || !profile?.id) return;
+    if (!startRow) return;
+    if (!profile?.id) {
+      message.error('Không xác định được người thực hiện. Vui lòng đăng nhập lại.');
+      return;
+    }
     if (!maintenanceDate) {
       message.warning('Vui lòng chọn ngày bảo dưỡng.');
       return;
@@ -542,7 +552,11 @@ export function MaintenancePage() {
   };
 
   const submitCompleteMaintenance = async () => {
-    if (!completeRow || !profile?.id) return;
+    if (!completeRow) return;
+    if (!profile?.id) {
+      message.error('Không xác định được người thực hiện. Vui lòng đăng nhập lại.');
+      return;
+    }
     if (!completeCompletionDate) {
       message.warning('Vui lòng chọn ngày hoàn thành bảo dưỡng.');
       return;
@@ -594,7 +608,11 @@ export function MaintenancePage() {
   };
 
   const submitDirectorDecision = async () => {
-    if (!selected || !profile?.id) return;
+    if (!selected) return;
+    if (!profile?.id) {
+      message.error('Không xác định được người phê duyệt. Vui lòng đăng nhập lại.');
+      return;
+    }
     setSubmitting(true);
     try {
       const payload = { approvedBy: profile.id, comment: comment.trim() || null };
@@ -1377,7 +1395,7 @@ export function MaintenancePage() {
                 <button
                   type="button"
                   className="maintenance-form-modal__btn-confirm"
-                  disabled={startSubmitting || startLoading}
+                  disabled={startSubmitting || startLoading || !profile?.id}
                   onClick={submitStartMaintenance}
                 >
                   {startSubmitting ? 'Đang gửi...' : 'Xác nhận bảo dưỡng'}
@@ -1673,7 +1691,7 @@ export function MaintenancePage() {
                 <button
                   type="button"
                   className="maintenance-form-modal__btn-confirm"
-                  disabled={completeSubmitting || completeLoading}
+                  disabled={completeSubmitting || completeLoading || !profile?.id}
                   onClick={submitCompleteMaintenance}
                 >
                   {completeSubmitting ? 'Đang lưu...' : 'Lưu'}

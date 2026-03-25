@@ -3,7 +3,6 @@ using g19_sep490_ealds.Server.DTO.ResponseDTO.AssetMaintenance;
 using g19_sep490_ealds.Server.Mappers;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
-using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Services.Implementation;
@@ -26,7 +25,7 @@ public class MaintenanceScheduleService : IMaintenanceScheduleService
         var hasTemplate = create.TemplateId.HasValue && create.TemplateId.Value > 0;
         var hasContent = !string.IsNullOrWhiteSpace(create.Content);
         if (!hasTemplate && !hasContent)
-            throw new Exception("Vui lÚng nh?p n?i dung b?o d??ng ho?c ch?n m?u quy ??nh.");
+            throw new Exception("Vui lùng nh?p n?i dung b?o d??ng ho?c ch?n m?u quy ??nh.");
 
         if (hasTemplate)
         {
@@ -45,17 +44,13 @@ public class MaintenanceScheduleService : IMaintenanceScheduleService
     {
         var baseDate = schedule.NextDueDate ?? schedule.StartDate;
 
-        var value = schedule.IntervalValue ?? 0;
-        var unit = (MaintenanceRepeatIntervalUnit?)schedule.IntervalUnit;
+        if (schedule.IntervalMonths is int months && months > 0)
+            return baseDate.AddMonths(months);
 
-        return unit switch
-        {
-            MaintenanceRepeatIntervalUnit.Day => baseDate.AddDays(value),
-            MaintenanceRepeatIntervalUnit.Week => baseDate.AddDays(value * 7),
-            MaintenanceRepeatIntervalUnit.Month => baseDate.AddMonths(value),
-            MaintenanceRepeatIntervalUnit.Year => baseDate.AddYears(value),
-            _ => baseDate
-        };
+        if (schedule.IntervalHours is int hours && hours > 0)
+            return baseDate.AddHours(hours);
+
+        return baseDate;
     }
 
     public async Task<IEnumerable<MaintenanceScheduleResponseDTO>> GetScheduleByAssetAsync(int assetId)
@@ -65,7 +60,7 @@ public class MaintenanceScheduleService : IMaintenanceScheduleService
                         .ToListAsync();
 
         if (!schedules.Any())
-            throw new KeyNotFoundException($"T‡i s?n {assetId} chua cÛ l?ch b?o trÏ");
+            throw new KeyNotFoundException($"Tùi s?n {assetId} chua cù l?ch b?o trù");
 
         return _mapper.ListEntityToResponse(schedules);
     }

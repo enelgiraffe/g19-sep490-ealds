@@ -15,10 +15,6 @@ public partial class MaintenanceSchedule
 
     public int ScheduleType { get; set; }
 
-    public int? IntervalValue { get; set; }
-
-    public int? IntervalUnit { get; set; }
-
     public int? IntervalMonths { get; set; }
 
     public int? IntervalHours { get; set; }
@@ -42,16 +38,6 @@ public partial class MaintenanceSchedule
     public virtual MaintenanceTemplate? Template { get; set; }
 
     public virtual ICollection<MaintenaceTask> MaintenaceTasks { get; set; } = new List<MaintenaceTask>();
-
-    [NotMapped]
-    public MaintenanceRepeatIntervalUnit? IntervalUnitEnum
-    {
-        get => IntervalUnit.HasValue
-            ? (MaintenanceRepeatIntervalUnit)IntervalUnit.Value
-            : null;
-
-        set => IntervalUnit = value.HasValue ? (int)value.Value : null;
-    }
 
     [NotMapped]
     public ScheduleType ScheduleTypeEnum

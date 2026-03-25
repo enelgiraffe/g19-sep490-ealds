@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
@@ -11,6 +11,11 @@ public partial class MaintenanceRecord
     public int RecordId { get; set; }
 
     public int TaskId { get; set; }
+    
+    // DB hiện tại của bảng MaintenanceRecord không có cột AssetId.
+    // Hệ thống có thể suy ra Asset thông qua MaintenaceTask.AssetId.
+    // Đánh dấu NotMapped để EF không cố ghi cột không tồn tại.
+    [NotMapped]
     public int AssetId { get; set; }
 
     [Column(TypeName = "datetime")]
@@ -33,9 +38,8 @@ public partial class MaintenanceRecord
     [InverseProperty("MaintenanceRecords")]
     public virtual MaintenaceTask Task { get; set; } = null!;
 
-
-    [ForeignKey("AssetId")]
-    [InverseProperty("MaintenanceRecords")]
+    // Không mapped quan hệ Asset - tránh lỗi "Invalid column name 'AssetId'".
+    [NotMapped]
     public virtual Asset Asset { get; set; } = null!;
 
     [NotMapped]
