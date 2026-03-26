@@ -42,7 +42,6 @@ public enum InventorySessionStatus
     Completed = 2,
     Cancelled = 3,
     Confirmed = 4,
-    Due = 5,
     /// <summary>Legacy: awaiting book-side reconciliation (may exist on historical rows).</summary>
     PendingAccountant = 6
 }

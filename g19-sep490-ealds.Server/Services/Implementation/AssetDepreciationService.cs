@@ -8,9 +8,9 @@ namespace g19_sep490_ealds.Server.Services.Implementation;
 
 public class AssetDepreciationService : IAssetDepreciationService
 {
-    private readonly EaldsDbContext _context;
+    private readonly EALDSDbcontext _context;
 
-    public AssetDepreciationService(EaldsDbContext context)
+    public AssetDepreciationService(EALDSDbcontext context)
     {
         _context = context;
     }

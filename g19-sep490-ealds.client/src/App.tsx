@@ -74,7 +74,6 @@ function App() {
           <Route path="transfers" element={<TransfersPage />} />
           <Route path="repairs" element={<RepairsPage />} />
           <Route path="maintenance" element={<MaintenancePage />} />
-          <Route path="inventories" element={<InventoryPage />} />
           <Route path="inventory" element={<InventoryPage />} />
           <Route path="inventory/:sessionId" element={<PeriodicInventoryExecutionPage />} />
           <Route path="inventory-review/:sessionId" element={<InventoryReviewPage />} />

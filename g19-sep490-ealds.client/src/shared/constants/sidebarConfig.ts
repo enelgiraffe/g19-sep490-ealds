@@ -14,7 +14,7 @@ export const ROLE_MENU: Record<AppRole, SidebarItem[]> = {
     { key: 'repairs', path: '/repairs', label: 'Sửa chữa', icon: '/icons/sidebar-repairs.svg' },
     { key: 'maintenance', path: '/maintenance', label: 'Bảo trì', icon: '/icons/sidebar-maintenance.svg' },
     { key: 'liquidation', path: '/liquidation', label: 'Thanh lý', icon: '/icons/sidebar-liquidation.svg' },
-    { key: 'inventories', path: '/inventories', label: 'Kiểm kê', icon: '/icons/sidebar-inventories.svg' },
+    { key: 'inventory', path: '/inventory', label: 'Kiểm kê', icon: '/icons/sidebar-inventories.svg' },
   ],
   accountant: [
     // Kế toán dùng màn tài sản riêng
@@ -44,7 +44,7 @@ export const ROLE_MENU: Record<AppRole, SidebarItem[]> = {
 };
 
 export const ROLE_OPTIONS = [
-  { value: 'department_head' as const, label: 'Trưởng phòng ban' },
+  { value: 'department_head' as const, label: 'Trường phòng ban' },
   { value: 'accountant' as const, label: 'Kế toán' },
   { value: 'director' as const, label: 'Giám đốc' },
   { value: 'admin' as const, label: 'Admin' },
