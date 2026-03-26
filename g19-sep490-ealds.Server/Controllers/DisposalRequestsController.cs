@@ -68,7 +68,7 @@ public class DisposalRequestsController : ControllerBase
             AssetId = dto.AssetId.Value,
             DiposalMethod = dto.DiposalMethod,
             DiposalValue = dto.DiposalValue,
-            DiposalDate = dto.DiposalDate,
+            DiposalDate = DateTime.UtcNow,   // Ngày đề nghị do server gán, không nhận từ client
             Reason = dto.Reason,
             ExecutedBy = dto.CreatedBy
         };
