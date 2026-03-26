@@ -21,6 +21,10 @@ import { AccountantAssetListPage } from './modules/accountant/pages/AccountantAs
 import { RepairsPage } from './modules/repairs/pages/RepairsPage';
 import { MaintenancePage } from './modules/maintenance/pages/MaintenancePage';
 import { InventoryPage } from './modules/inventory/pages/InventoryPage';
+import { PeriodicInventoryExecutionPage } from './modules/inventory/pages/PeriodicInventoryExecutionPage';
+import { DirectorInventoryPage } from './modules/inventory/pages/DirectorInventoryPage';
+import { AccountantInventoryPage } from './modules/inventory/pages/AccountantInventoryPage';
+import { InventoryReviewPage } from './modules/inventory/pages/InventoryReviewPage';
 import { LiquidationPage } from './modules/liquidation/pages/LiquidationPage';
 import { RequestsPage } from './modules/requests/pages/RequestsPage';
 import { CategoriesPage } from './modules/admin/pages/CategoriesPage';
@@ -71,13 +75,17 @@ function App() {
           <Route path="repairs" element={<RepairsPage />} />
           <Route path="maintenance" element={<MaintenancePage />} />
           <Route path="inventories" element={<InventoryPage />} />
+          <Route path="inventory" element={<InventoryPage />} />
+          <Route path="inventory/:sessionId" element={<PeriodicInventoryExecutionPage />} />
+          <Route path="inventory-review/:sessionId" element={<InventoryReviewPage />} />
+          <Route path="accountant-inventory" element={<AccountantInventoryPage />} />
+          <Route path="reports" element={<DirectorInventoryPage />} />
           <Route path="liquidation" element={<LiquidationPage />} />
           <Route path="allocations" element={<ModulePlaceholder title="Cấp phát-Thu hồi" />} />
           <Route path="cost-recording" element={<CostRecordingPage />} />
           <Route path="requests" element={<RequestsPage />} />
           <Route path="dashboard" element={<DirectorDashboardPage />} />
           <Route path="approval-detail/:id" element={<ApprovalDetailPage />} />
-          <Route path="reports" element={<ModulePlaceholder title="Báo cáo" />} />
           {/* Admin */}
           <Route path="users" element={<UsersPage />} />
           <Route path="users/:id" element={<UserDetailPage />} />

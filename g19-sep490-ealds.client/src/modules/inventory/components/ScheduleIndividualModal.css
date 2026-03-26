@@ -1,0 +1,45 @@
+.schedule-individual-modal .ant-modal-content {
+  border-radius: 8px;
+  padding: 0;
+}
+
+.schedule-individual-modal .ant-modal-body {
+  padding: 0;
+}
+
+.schedule-individual-form {
+  padding: 20px 24px 0;
+}
+
+.schedule-individual-form .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.schedule-individual-form .ant-form-item-label > label {
+  font-size: 13px;
+  color: #333;
+  font-weight: 500;
+}
+
+.schedule-individual-form .ant-select,
+.schedule-individual-form .ant-picker {
+  width: 100%;
+}
+
+.schedule-individual-form__date-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.schedule-modal__subtitle {
+  font-size: 12px;
+  color: #888;
+  margin: 4px 0 0;
+}
+
+.schedule-modal__dept-hint {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #595959;
+}

@@ -1,46 +1,23 @@
-.inventory-page {
+.dir-inv-page {
   padding: 24px;
   min-height: 100%;
   background-color: #f5f5f5;
 }
 
 /* ── Header ── */
-.inventory-page__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.dir-inv-page__header {
   margin-bottom: 20px;
 }
 
-.inventory-page__title {
+.dir-inv-page__title {
   font-size: 22px;
   font-weight: 600;
   color: #1a1a1a;
   margin: 0;
 }
 
-.inventory-page__actions {
-  display: flex;
-  gap: 10px;
-}
-
-.inventory-btn--outline {
-  border: 1px solid #d9d9d9;
-  background: #fff;
-  color: #333;
-}
-
-.inventory-btn--outline:hover {
-  border-color: #1677ff;
-  color: #1677ff;
-}
-
-.inventory-btn--primary {
-  background-color: #1677ff;
-}
-
 /* ── Card ── */
-.inventory-card {
+.dir-inv-card {
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
@@ -48,7 +25,7 @@
 }
 
 /* ── Filters ── */
-.inventory-card__filters {
+.dir-inv-card__filters {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -57,35 +34,35 @@
   flex-wrap: wrap;
 }
 
-.inventory-search {
+.dir-inv-search {
   width: 280px;
   border-radius: 6px;
 }
 
-.inventory-search-icon {
+.dir-inv-search-icon {
   color: #999;
 }
 
-.inventory-filter-select {
+.dir-inv-filter-select {
   width: 160px;
 }
 
 /* ── Table ── */
-.inventory-table-wrapper {
+.dir-inv-table-wrapper {
   overflow-x: auto;
 }
 
-.inventory-table {
+.dir-inv-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
 }
 
-.inventory-table thead tr {
+.dir-inv-table thead tr {
   background-color: #595959;
 }
 
-.inventory-table thead th {
+.dir-inv-table thead th {
   padding: 10px 14px;
   text-align: left;
   font-size: 12px;
@@ -94,59 +71,65 @@
   white-space: nowrap;
 }
 
-.inventory-table__row {
+.dir-inv-table__row {
   border-bottom: 1px solid #f0f0f0;
   transition: background-color 0.15s;
 }
 
-.inventory-table__row:hover {
+.dir-inv-table__row:hover {
   background-color: #fafafa;
 }
 
-.inventory-table__row--clickable {
+.dir-inv-table__row--clickable {
   cursor: pointer;
 }
 
-.inventory-table__row td {
+.dir-inv-table__row td {
   padding: 12px 14px;
   color: #333;
   vertical-align: middle;
   white-space: nowrap;
 }
 
-.inventory-table__empty {
+.dir-inv-table__empty {
   text-align: center;
   padding: 40px !important;
   color: #999;
   font-size: 14px;
 }
 
-.inventory-table__loading {
+.dir-inv-table__loading {
   display: flex;
   justify-content: center;
   align-items: center;
   padding: 60px 0;
 }
 
+.dir-inv-code {
+  font-family: monospace;
+  font-size: 12px;
+  color: #1677ff;
+}
+
 /* ── Status tag ── */
-.inventory-status-tag {
+.dir-inv-status-tag {
   font-size: 12px;
   border-radius: 4px;
   padding: 2px 8px;
 }
 
 /* ── Progress ── */
-.inventory-table__progress-cell {
+.dir-inv-table__progress-cell {
   min-width: 120px;
 }
 
-.inventory-progress {
+.dir-inv-progress {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.inventory-progress__bar {
+.dir-inv-progress__bar {
   flex: 1;
   height: 6px;
   background-color: #e8e8e8;
@@ -155,14 +138,14 @@
   min-width: 60px;
 }
 
-.inventory-progress__fill {
+.dir-inv-progress__fill {
   height: 100%;
   background-color: #1677ff;
   border-radius: 3px;
   transition: width 0.3s ease;
 }
 
-.inventory-progress__label {
+.dir-inv-progress__label {
   font-size: 12px;
   color: #555;
   min-width: 32px;
@@ -170,53 +153,62 @@
 }
 
 /* ── Row actions ── */
-.inventory-table__actions-cell {
-  text-align: right;
-  padding-right: 16px !important;
+.dir-inv-table__actions-cell {
+  white-space: nowrap;
 }
 
-.inventory-row-actions {
+.dir-inv-row-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
+  gap: 6px;
 }
 
-.inventory-action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: 1px solid #e0e0e0;
-  border-radius: 50%;
-  background: #fff;
-  color: #555;
-  cursor: pointer;
+/* ── Modal ── */
+.dir-inv-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 4px;
+}
+
+.dir-inv-modal-session-info {
+  margin: 0;
+  font-size: 14px;
+  color: #444;
+}
+
+.dir-inv-modal-hint {
+  margin: 0;
   font-size: 13px;
-  transition: all 0.15s;
-  padding: 0;
+  line-height: 1.5;
+  color: #666;
 }
 
-.inventory-action-btn:hover {
-  border-color: #1677ff;
-  color: #1677ff;
-  background: #f0f7ff;
-}
-
-.inventory-action-btn--danger:hover {
-  border-color: #ff4d4f;
-  color: #ff4d4f;
-  background: #fff1f0;
-}
-
-.inventory-action-btn--execute {
-  border-color: #52c41a;
-  color: #52c41a;
-}
-
-.inventory-action-btn--execute:hover {
-  border-color: #389e0d;
-  color: #389e0d;
+.dir-inv-modal-corrections {
+  padding: 10px 12px;
   background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 6px;
+}
+
+.dir-inv-modal-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+}
+
+.dir-inv-modal-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 6px;
+}
+
+.dir-inv-modal-notes {
+  display: flex;
+  flex-direction: column;
 }

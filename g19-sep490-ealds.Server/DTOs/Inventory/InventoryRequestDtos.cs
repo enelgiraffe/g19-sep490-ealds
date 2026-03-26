@@ -2,13 +2,15 @@ namespace g19_sep490_ealds.Server.DTOs.Inventory;
 
 public class CreateInventorySessionDTO
 {
-    public string Purpose { get; set; } = null!;
+    public string? Purpose { get; set; }
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
     public int DepartmentId { get; set; }
-    public int AssetCategoryId { get; set; }
-    public int AssetTypeId { get; set; }
+    public int? AssetCategoryId { get; set; }
+    public int? AssetTypeId { get; set; }
     public int CreatedBy { get; set; }
+    public bool IsPeriodic { get; set; }
+    public int? PeriodDays { get; set; }
 }
 
 public class SubmitInventoryTaskDTO
@@ -22,7 +24,32 @@ public class SubmitInventoryTaskDTO
     public string? Note { get; set; }
 }
 
-/// <summary>Request payload for a director to confirm or reject a completed inventory session.</summary>
+public class StatusEntryPayloadDTO
+{
+    public string StatusKey { get; set; } = null!;
+    public int ActualQty { get; set; }
+}
+
+public class SaveAssetInventoryDTO
+{
+    public int AssetId { get; set; }
+    public List<StatusEntryPayloadDTO> StatusEntries { get; set; } = new();
+    public int? ActualLocationId { get; set; }
+    public int? ActualManagerId { get; set; }
+    public int CheckedBy { get; set; }
+    public string? ActualCondition { get; set; }
+}
+
+public class UpdateInventorySessionDTO
+{
+    public string? Purpose { get; set; }
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+    /// <summary>New recurrence interval in days. Only applied when the session is periodic.</summary>
+    public int? PeriodDays { get; set; }
+}
+
+/// <summary>Request payload for inventory session cancellation (optional review notes).</summary>
 public class ReviewInventorySessionDTO
 {
     public int ReviewedBy { get; set; }

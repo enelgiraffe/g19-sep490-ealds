@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -21,6 +21,8 @@ public partial class InventoryRecord
     public string ActualCondition { get; set; } = null!;
 
     public bool? IsFound { get; set; }
+
+    public int? ActualQuantity { get; set; }
 
     public int CheckedBy { get; set; }
 

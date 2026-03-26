@@ -1,4 +1,4 @@
-﻿using g19_sep490_ealds.Server.Models;
+using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
 using g19_sep490_ealds.Server.Utils;
 using Microsoft.EntityFrameworkCore;
@@ -8,9 +8,9 @@ namespace g19_sep490_ealds.Server.Services.Implementation;
 
 public class AssetDepreciationService : IAssetDepreciationService
 {
-    private readonly EALDSDbcontext _context;
+    private readonly EaldsDbContext _context;
 
-    public AssetDepreciationService(EALDSDbcontext context)
+    public AssetDepreciationService(EaldsDbContext context)
     {
         _context = context;
     }

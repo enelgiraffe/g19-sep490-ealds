@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -27,9 +27,9 @@ public partial class InventorySession
 
     public int DepartmentId { get; set; }
 
-    public int AssetCategoryId { get; set; }
+    public int? AssetCategoryId { get; set; }
 
-    public int AssetTypeId { get; set; }
+    public int? AssetTypeId { get; set; }
 
     public int Status { get; set; }
 
@@ -40,13 +40,17 @@ public partial class InventorySession
 
     public int CreatedBy { get; set; }
 
+    public bool IsPeriodic { get; set; }
+
+    public int? PeriodDays { get; set; }
+
     [ForeignKey("AssetCategoryId")]
     [InverseProperty("InventorySessions")]
-    public virtual AssetCategory AssetCategory { get; set; } = null!;
+    public virtual AssetCategory? AssetCategory { get; set; }
 
     [ForeignKey("AssetTypeId")]
     [InverseProperty("InventorySessions")]
-    public virtual AssetType AssetType { get; set; } = null!;
+    public virtual AssetType? AssetType { get; set; }
 
     [ForeignKey("CreatedBy")]
     [InverseProperty("InventorySessions")]
