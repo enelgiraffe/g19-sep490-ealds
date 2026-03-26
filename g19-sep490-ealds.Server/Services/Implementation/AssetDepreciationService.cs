@@ -8,9 +8,9 @@ namespace g19_sep490_ealds.Server.Services.Implementation;
 
 public class AssetDepreciationService : IAssetDepreciationService
 {
-    private readonly EALDSDbcontext _context;
+    private readonly EaldsDbContext _context;
 
-    public AssetDepreciationService(EALDSDbcontext context)
+    public AssetDepreciationService(EaldsDbContext context)
     {
         _context = context;
     }
@@ -20,9 +20,10 @@ public class AssetDepreciationService : IAssetDepreciationService
         var now = DateTime.UtcNow.AddHours(7);
         var period = new DateOnly(now.Year, now.Month, 1);
 
-        var assets = _context.Assets
-            .Where(a => a.DepreciationPolicyId != null && a.InUseDate != null)
-            .ToList();
+        var assets = await _context.Assets
+            .Where(a => a.InUseDate != null)
+            .Where(a => _context.DrepreciationRecords.Any(r => r.AssetId == a.AssetId))
+            .ToListAsync();
 
         foreach (var asset in assets)
         {
@@ -50,8 +51,14 @@ public class AssetDepreciationService : IAssetDepreciationService
 
         if (exists) return;
 
-        var policy = await _context.DepreciationPolicies
-            .FirstOrDefaultAsync(p => p.PolicyId == asset.DepreciationPolicyId);
+        var last = await _context.DrepreciationRecords
+            .Include(x => x.Policy)
+            .Where(x => x.AssetId == asset.AssetId)
+            .OrderByDescending(x => x.Period)
+            .ThenByDescending(x => x.CreateDate)
+            .FirstOrDefaultAsync();
+
+        var policy = last?.Policy;
 
         if (policy == null) return;
 
@@ -61,11 +68,6 @@ public class AssetDepreciationService : IAssetDepreciationService
             asset.OriginalPrice,
             policy.SalvageValue,
             policy.UsefullLifeMonths);
-
-        var last = await _context.DrepreciationRecords
-            .Where(x => x.AssetId == asset.AssetId)
-            .OrderByDescending(x => x.Period)
-            .FirstOrDefaultAsync();
 
         decimal accumulated = last?.AccumulatedDepreciation ?? 0;
 

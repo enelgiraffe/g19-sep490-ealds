@@ -25,7 +25,7 @@ public class MaintenanceScheduleService : IMaintenanceScheduleService
         var hasTemplate = create.TemplateId.HasValue && create.TemplateId.Value > 0;
         var hasContent = !string.IsNullOrWhiteSpace(create.Content);
         if (!hasTemplate && !hasContent)
-            throw new Exception("Vui lùng nh?p n?i dung b?o d??ng ho?c ch?n m?u quy ??nh.");
+            throw new Exception("Vui lÔøΩng nh?p n?i dung b?o d??ng ho?c ch?n m?u quy ??nh.");
 
         if (hasTemplate)
         {
@@ -60,7 +60,7 @@ public class MaintenanceScheduleService : IMaintenanceScheduleService
                         .ToListAsync();
 
         if (!schedules.Any())
-            throw new KeyNotFoundException($"Tùi s?n {assetId} chua cù l?ch b?o trù");
+            throw new KeyNotFoundException($"TÔøΩi s?n {assetId} chua cÔøΩ l?ch b?o trÔøΩ");
 
         return _mapper.ListEntityToResponse(schedules);
     }

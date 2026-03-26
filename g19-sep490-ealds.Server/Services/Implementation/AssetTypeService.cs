@@ -27,7 +27,7 @@ public class AssetTypeService : IAssetTypeService
     {
         if (await _context.AssetTypes.AnyAsync(x => x.Name == create.Name))
         {
-            throw new Exception("Tên dã du?c s? d?ng");
+            throw new Exception("Tï¿½n dï¿½ du?c s? d?ng");
         }
         AssetType entity = _mapper.CreateToEntity(create);
 
@@ -42,7 +42,7 @@ public class AssetTypeService : IAssetTypeService
         var type = await _context.AssetTypes.ToListAsync();
         if (type == null)
         {
-            throw new Exception("Không có b?n ghi nào");
+            throw new Exception("Khï¿½ng cï¿½ b?n ghi nï¿½o");
         }
         var response = _mapper.ListEntityToResponse(type);
         return response;
@@ -51,7 +51,7 @@ public class AssetTypeService : IAssetTypeService
     public async Task<bool> DeleteAssetTypeAsync(int id)
     {
         var type = await _context.AssetTypes.FindAsync(id)
-          ?? throw new KeyNotFoundException($"Không có Id {id} t?n t?i!");
+          ?? throw new KeyNotFoundException($"Khï¿½ng cï¿½ Id {id} t?n t?i!");
 
         _context.AssetTypes.Remove(type);
         await _context.SaveChangesAsync();
@@ -66,7 +66,7 @@ public class AssetTypeService : IAssetTypeService
     public async Task<AssetTypeResponseDTO> UpdateAssetTypeAsync(int id, AssetTypeUpdateDTO update)
     {
         var type = await _context.AssetTypes.FindAsync(id)
-          ?? throw new KeyNotFoundException($"Không có Id {id} t?n t?i!");
+          ?? throw new KeyNotFoundException($"Khï¿½ng cï¿½ Id {id} t?n t?i!");
 
         var result = _mapper.UpdateToEntity(update);
         type.CategoryId = result.CategoryId;

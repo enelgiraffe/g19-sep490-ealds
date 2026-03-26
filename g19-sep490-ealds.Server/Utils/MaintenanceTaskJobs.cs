@@ -49,7 +49,7 @@ public class MaintenanceTaskJobs : IJob
 
         foreach (var schedule in schedules)
         {
-            // tránh t?o task trùng
+            // trï¿½nh t?o task trï¿½ng
             var exist = await db.MaintenaceTasks.AnyAsync(x => x.ScheduleId == schedule.ScheduleId
                                                                && x.PlannedDate == schedule.NextDueDate.Value.Date
                                                                && x.Status != (int)MaintenanceTaskStatus.Completed);
