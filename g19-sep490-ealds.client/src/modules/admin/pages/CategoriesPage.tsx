@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Button, Form, Tabs, message } from 'antd';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Button, Form, Modal, Tabs, message } from 'antd';
 import { isAxiosError } from 'axios';
 import './CategoriesPage.css';
 import { assetCategoryService, type AssetCategoryItem } from '../services/assetCategoryService';
@@ -8,8 +8,11 @@ import { assetLocationService, type AssetLocationItem } from '../services/assetL
 import { supplierService, type SupplierItem } from '../services/supplierService';
 import { AssetTypesSection } from '../components/AssetTypesSection';
 import { AssetGroupsSection } from '../components/AssetGroupsSection';
-import { AssetLocationsSection } from '../components/AssetLocationsSection';
-import { CategoriesModals, type AssetManagementMethod } from '../components/CategoriesModals';
+import {
+  AssetLocationsSection,
+  type AssetLocationRow,
+} from '../components/AssetLocationsSection';
+import { CategoriesModals } from '../components/CategoriesModals';
 import {
   SuppliersSection,
   type SupplierDraft,
@@ -25,7 +28,7 @@ interface CategoryRow {
   code: string;
   name: string;
   group: string;
-  managementMethod: string;
+  categoryId: number;
   quantityTracking: number;
   displayStatus: CategoryStatus;
 }
@@ -34,16 +37,7 @@ interface AssetGroupRow {
   key: number;
   code: number;
   name: string;
-  parentCode: string | null;
-}
-
-interface AssetLocationRow {
-  key: number;
-  index: number;
-  name: string;
-  parentName: string | null;
-  note: string | null;
-  status: CategoryStatus;
+  assetTypeCount: number;
 }
 
 const STATUS_LABELS: Record<CategoryStatus, { label: string; className: string }> = {
@@ -62,7 +56,7 @@ const mapAssetTypeToCategoryRow = (item: AssetTypeListItem): CategoryRow => ({
   code: String(item.assetTypeId),
   name: item.name,
   group: item.categoryName,
-  managementMethod: 'Quản lý theo mã',
+  categoryId: item.categoryId,
   quantityTracking: item.assetCount,
   displayStatus: 'tracking',
 });
@@ -71,7 +65,7 @@ const mapCategoryToGroupRow = (item: AssetCategoryItem): AssetGroupRow => ({
   key: item.categoryId,
   code: item.categoryId,
   name: item.name,
-  parentCode: null,
+  assetTypeCount: item.assetTypeCount,
 });
 
 const mapLocationToRow = (item: AssetLocationItem, index: number): AssetLocationRow => ({
@@ -79,6 +73,11 @@ const mapLocationToRow = (item: AssetLocationItem, index: number): AssetLocation
   index: index + 1,
   name: item.departmentName,
   parentName: item.assetName,
+  assetCode: item.assetCode,
+  assetId: item.assetId,
+  departmentId: item.departmentId,
+  startDate: item.startDate,
+  endDate: item.endDate ?? null,
   note: item.note ?? null,
   status: item.isCurrent ? 'tracking' : 'stopped',
 });
@@ -102,7 +101,6 @@ export function CategoriesPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | CategoryStatus>('all');
   const [searchText, setSearchText] = useState('');
   const [assetTypeRows, setAssetTypeRows] = useState<CategoryRow[]>([]);
-  const [expandedGroupCodes, setExpandedGroupCodes] = useState<string[]>(['PTVT']);
   const [categoryRows, setCategoryRows] = useState<AssetGroupRow[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [isLoadingAssetTypes, setIsLoadingAssetTypes] = useState(false);
@@ -110,11 +108,28 @@ export function CategoriesPage() {
   const [supplierRows, setSupplierRows] = useState<SupplierRow[]>([]);
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
   const [supplierStatusFilter, setSupplierStatusFilter] = useState<'all' | SupplierStatus>('all');
-  const [isCreateAssetTypeOpen, setIsCreateAssetTypeOpen] = useState(false);
-  const [isCreateAssetGroupOpen, setIsCreateAssetGroupOpen] = useState(false);
+  const [isAssetTypeModalOpen, setIsAssetTypeModalOpen] = useState(false);
+  const [assetTypeModalMode, setAssetTypeModalMode] = useState<'create' | 'edit'>('create');
+  const [editingAssetTypeId, setEditingAssetTypeId] = useState<number | null>(null);
+  const [isSavingAssetType, setIsSavingAssetType] = useState(false);
+  const [isAssetTypeDeleteOpen, setIsAssetTypeDeleteOpen] = useState(false);
+  const [assetTypeDeleteTarget, setAssetTypeDeleteTarget] = useState<CategoryRow | null>(null);
+  const [isDeletingAssetType, setIsDeletingAssetType] = useState(false);
+  const [isAssetCategoryModalOpen, setIsAssetCategoryModalOpen] = useState(false);
+  const [assetCategoryModalMode, setAssetCategoryModalMode] = useState<'create' | 'edit'>('create');
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+  const [isSavingAssetCategory, setIsSavingAssetCategory] = useState(false);
+  const [isCategoryDeleteOpen, setIsCategoryDeleteOpen] = useState(false);
+  const [categoryDeleteTarget, setCategoryDeleteTarget] = useState<AssetGroupRow | null>(null);
+  const [isDeletingCategory, setIsDeletingCategory] = useState(false);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [locationModalMode, setLocationModalMode] = useState<'create' | 'edit'>('create');
-  const [editingLocation, setEditingLocation] = useState<AssetLocationRow | null>(null);
+  const [editingLocationId, setEditingLocationId] = useState<number | null>(null);
+  const [isSavingLocation, setIsSavingLocation] = useState(false);
+  const [isLoadingLocations, setIsLoadingLocations] = useState(false);
+  const [isLocationDeleteOpen, setIsLocationDeleteOpen] = useState(false);
+  const [locationDeleteTarget, setLocationDeleteTarget] = useState<AssetLocationRow | null>(null);
+  const [isDeletingLocation, setIsDeletingLocation] = useState(false);
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
   const [supplierModalMode, setSupplierModalMode] = useState<'create' | 'edit'>('create');
   const [editingSupplier, setEditingSupplier] = useState<SupplierRow | null>(null);
@@ -132,81 +147,91 @@ export function CategoriesPage() {
   const [isSupplierDeleteConfirmOpen, setIsSupplierDeleteConfirmOpen] = useState(false);
   const [supplierDeleteTarget, setSupplierDeleteTarget] = useState<SupplierRow | null>(null);
   const [isDeletingSupplier, setIsDeletingSupplier] = useState(false);
-  const [createForm] = Form.useForm<{
+  const [assetTypeForm] = Form.useForm<{
     name: string;
-    code: string;
-    groupCode: string;
-    note?: string;
-    managementMethod: AssetManagementMethod;
+    categoryId?: number;
   }>();
-  const [createGroupForm] = Form.useForm<{
-    name: string;
-    code: string;
-    parentCode?: string | null;
+  const [assetCategoryForm] = Form.useForm<{ name: string }>();
+  const [locationForm] = Form.useForm<{
+    assetId?: number;
+    departmentId?: number;
+    startDate: string;
+    endDate?: string;
+    isCurrent: boolean;
+    note?: string;
   }>();
 
-  useEffect(() => {
+  const loadAssetTypes = useCallback(async () => {
     if (activeCatalogTab !== 'asset-types' || activeSubTab !== 'type') {
       return;
     }
-
-    const fetchAssetTypes = async () => {
-      try {
-        setIsLoadingAssetTypes(true);
-        const data = await assetTypeService.getAll(searchText.trim() || undefined);
-        setAssetTypeRows(data.map(mapAssetTypeToCategoryRow));
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to load asset types', error);
-        message.error('Không tải được danh sách loại tài sản từ hệ thống.');
-      } finally {
-        setIsLoadingAssetTypes(false);
-      }
-    };
-
-    fetchAssetTypes();
+    try {
+      setIsLoadingAssetTypes(true);
+      const data = await assetTypeService.getAll(searchText.trim() || undefined);
+      setAssetTypeRows(data.map(mapAssetTypeToCategoryRow));
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to load asset types', error);
+      message.error('Không tải được danh sách loại tài sản từ hệ thống.');
+    } finally {
+      setIsLoadingAssetTypes(false);
+    }
   }, [activeCatalogTab, activeSubTab, searchText]);
 
   useEffect(() => {
+    void loadAssetTypes();
+  }, [loadAssetTypes]);
+
+  const refreshAssetTypesData = useCallback(async () => {
+    try {
+      const data = await assetTypeService.getAll(searchText.trim() || undefined);
+      setAssetTypeRows(data.map(mapAssetTypeToCategoryRow));
+    } catch {
+      /* bảng loại TS sẽ tải lại khi mở tab */
+    }
+  }, [searchText]);
+
+  const loadAssetCategories = useCallback(async () => {
     if (activeCatalogTab !== 'asset-types' || activeSubTab !== 'group') {
       return;
     }
-
-    const fetchCategories = async () => {
-      try {
-        setIsLoadingCategories(true);
-        const data = await assetCategoryService.getAll(searchText.trim() || undefined);
-        setCategoryRows(data.map(mapCategoryToGroupRow));
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to load asset categories', error);
-        message.error('Không tải được danh sách nhóm tài sản từ hệ thống.');
-      } finally {
-        setIsLoadingCategories(false);
-      }
-    };
-
-    fetchCategories();
+    try {
+      setIsLoadingCategories(true);
+      const data = await assetCategoryService.getAll(searchText.trim() || undefined);
+      setCategoryRows(data.map(mapCategoryToGroupRow));
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to load asset categories', error);
+      message.error('Không tải được danh sách nhóm tài sản từ hệ thống.');
+    } finally {
+      setIsLoadingCategories(false);
+    }
   }, [activeCatalogTab, activeSubTab, searchText]);
 
   useEffect(() => {
+    void loadAssetCategories();
+  }, [loadAssetCategories]);
+
+  const loadLocations = useCallback(async () => {
     if (activeCatalogTab !== 'asset-locations') {
       return;
     }
-
-    const fetchLocations = async () => {
-      try {
-        const data = await assetLocationService.getAll();
-        setLocationRows(data.map((item, index) => mapLocationToRow(item, index)));
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to load asset locations', error);
-        message.error('Không tải được danh sách vị trí tài sản từ hệ thống.');
-      }
-    };
-
-    fetchLocations();
+    try {
+      setIsLoadingLocations(true);
+      const data = await assetLocationService.getAll();
+      setLocationRows(data.map((item, index) => mapLocationToRow(item, index)));
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to load asset locations', error);
+      message.error('Không tải được danh sách vị trí tài sản từ hệ thống.');
+    } finally {
+      setIsLoadingLocations(false);
+    }
   }, [activeCatalogTab]);
+
+  useEffect(() => {
+    void loadLocations();
+  }, [loadLocations]);
 
   const loadSuppliers = async (keyword?: string) => {
     try {
@@ -243,14 +268,12 @@ export function CategoriesPage() {
     });
   }, [assetTypeRows, statusFilter, searchText]);
 
-  const visibleGroupRows = useMemo(() => {
+  const filteredCategoryRows = useMemo(() => {
     const kw = searchText.trim().toLowerCase();
-    const rows = categoryRows.filter((row) => {
+    return categoryRows.filter((row) => {
       if (!kw) return true;
       return row.name.toLowerCase().includes(kw) || String(row.code).toLowerCase().includes(kw);
     });
-
-    return { rows, childrenByParent: {} as Record<string, AssetGroupRow[]> };
   }, [categoryRows, searchText]);
 
   const filteredLocationRows = useMemo(() => {
@@ -260,6 +283,7 @@ export function CategoriesPage() {
       const matchSearch =
         !kw ||
         row.name.toLowerCase().includes(kw) ||
+        row.assetCode.toLowerCase().includes(kw) ||
         (row.parentName ?? '').toLowerCase().includes(kw) ||
         (row.note ?? '').toLowerCase().includes(kw);
       return matchStatus && matchSearch;
@@ -273,16 +297,128 @@ export function CategoriesPage() {
     });
   }, [supplierRows, supplierStatusFilter]);
 
+  const sliceDate = (v: string | null | undefined) => (v ? v.slice(0, 10) : '');
+
   const handleOpenCreateLocation = () => {
     setLocationModalMode('create');
-    setEditingLocation(null);
+    setEditingLocationId(null);
+    const today = new Date().toISOString().slice(0, 10);
+    locationForm.setFieldsValue({
+      assetId: undefined,
+      departmentId: undefined,
+      startDate: today,
+      endDate: '',
+      isCurrent: true,
+      note: '',
+    });
     setIsLocationModalOpen(true);
   };
 
   const handleOpenEditLocation = (row: AssetLocationRow) => {
     setLocationModalMode('edit');
-    setEditingLocation(row);
+    setEditingLocationId(row.key);
+    locationForm.setFieldsValue({
+      assetId: row.assetId,
+      departmentId: row.departmentId,
+      startDate: sliceDate(row.startDate),
+      endDate: row.endDate ? sliceDate(row.endDate) : '',
+      isCurrent: row.status === 'tracking',
+      note: row.note ?? '',
+    });
     setIsLocationModalOpen(true);
+  };
+
+  const handleSubmitLocation = async (values: {
+    assetId?: number;
+    departmentId?: number;
+    startDate: string;
+    endDate?: string;
+    isCurrent: boolean;
+    note?: string;
+  }) => {
+    const endRaw = values.endDate?.trim();
+    const noteTrim = values.note?.trim();
+    setIsSavingLocation(true);
+    try {
+      if (locationModalMode === 'create') {
+        if (values.assetId == null || values.departmentId == null) {
+          message.error('Vui lòng chọn tài sản và phòng ban.');
+          return;
+        }
+        await assetLocationService.create({
+          assetId: values.assetId,
+          departmentId: values.departmentId,
+          startDate: values.startDate,
+          endDate: endRaw && endRaw.length > 0 ? endRaw : null,
+          isCurrent: values.isCurrent,
+          note: noteTrim ? noteTrim : null,
+        });
+        message.success('Tạo vị trí tài sản thành công.');
+      } else if (editingLocationId != null) {
+        if (values.departmentId == null) {
+          message.error('Vui lòng chọn phòng ban.');
+          return;
+        }
+        await assetLocationService.update(editingLocationId, {
+          departmentId: values.departmentId,
+          startDate: values.startDate,
+          endDate: endRaw && endRaw.length > 0 ? endRaw : null,
+          isCurrent: values.isCurrent,
+          note: noteTrim ? noteTrim : null,
+        });
+        message.success('Cập nhật vị trí tài sản thành công.');
+      }
+      setIsLocationModalOpen(false);
+      setEditingLocationId(null);
+      await loadLocations();
+    } catch (error) {
+      if (isAxiosError(error)) {
+        const data = error.response?.data as { message?: string } | undefined;
+        if (data?.message) {
+          message.error(data.message);
+          return;
+        }
+      }
+      // eslint-disable-next-line no-console
+      console.error('Failed to save asset location', error);
+      message.error('Không thể lưu vị trí tài sản.');
+    } finally {
+      setIsSavingLocation(false);
+    }
+  };
+
+  const handleDeleteLocation = (row: AssetLocationRow) => {
+    setLocationDeleteTarget(row);
+    setIsLocationDeleteOpen(true);
+  };
+
+  const handleCloseLocationDeleteConfirm = () => {
+    setIsLocationDeleteOpen(false);
+    setLocationDeleteTarget(null);
+  };
+
+  const handleConfirmDeleteLocation = async () => {
+    if (!locationDeleteTarget) return;
+    setIsDeletingLocation(true);
+    try {
+      await assetLocationService.delete(locationDeleteTarget.key);
+      message.success('Đã xóa bản ghi vị trí.');
+      handleCloseLocationDeleteConfirm();
+      await loadLocations();
+    } catch (error) {
+      if (isAxiosError(error)) {
+        const data = error.response?.data as { message?: string } | undefined;
+        if (data?.message) {
+          message.error(data.message);
+          return;
+        }
+      }
+      // eslint-disable-next-line no-console
+      console.error('Failed to delete asset location', error);
+      message.error('Không thể xóa vị trí tài sản.');
+    } finally {
+      setIsDeletingLocation(false);
+    }
   };
 
   const handleOpenCreateSupplier = () => {
@@ -462,6 +598,176 @@ export function CategoriesPage() {
     setSupplierDeleteTarget(null);
   };
 
+  const handleOpenCreateAssetType = () => {
+    setAssetTypeModalMode('create');
+    setEditingAssetTypeId(null);
+    assetTypeForm.setFieldsValue({ name: '', categoryId: undefined });
+    setIsAssetTypeModalOpen(true);
+  };
+
+  const handleOpenEditAssetType = (row: CategoryRow) => {
+    setAssetTypeModalMode('edit');
+    setEditingAssetTypeId(row.key);
+    assetTypeForm.setFieldsValue({
+      name: row.name,
+      categoryId: row.categoryId,
+    });
+    setIsAssetTypeModalOpen(true);
+  };
+
+  const handleSubmitAssetType = async (values: { name: string; categoryId: number }) => {
+    setIsSavingAssetType(true);
+    try {
+      if (assetTypeModalMode === 'create') {
+        await assetTypeService.create({
+          name: values.name.trim(),
+          categoryId: values.categoryId,
+        });
+        message.success('Tạo loại tài sản thành công.');
+      } else if (editingAssetTypeId != null) {
+        await assetTypeService.update(editingAssetTypeId, {
+          name: values.name.trim(),
+          categoryId: values.categoryId,
+        });
+        message.success('Cập nhật loại tài sản thành công.');
+      }
+      setIsAssetTypeModalOpen(false);
+      setEditingAssetTypeId(null);
+      await loadAssetTypes();
+    } catch (error) {
+      if (isAxiosError(error)) {
+        const data = error.response?.data as { message?: string } | undefined;
+        if (data?.message) {
+          message.error(data.message);
+          return;
+        }
+      }
+      // eslint-disable-next-line no-console
+      console.error('Failed to save asset type', error);
+      message.error('Không thể lưu loại tài sản.');
+    } finally {
+      setIsSavingAssetType(false);
+    }
+  };
+
+  const handleDeleteAssetType = (row: CategoryRow) => {
+    setAssetTypeDeleteTarget(row);
+    setIsAssetTypeDeleteOpen(true);
+  };
+
+  const handleCloseAssetTypeDeleteConfirm = () => {
+    setIsAssetTypeDeleteOpen(false);
+    setAssetTypeDeleteTarget(null);
+  };
+
+  const handleConfirmDeleteAssetType = async () => {
+    if (!assetTypeDeleteTarget) return;
+    setIsDeletingAssetType(true);
+    try {
+      await assetTypeService.delete(assetTypeDeleteTarget.key);
+      message.success('Đã xóa loại tài sản.');
+      handleCloseAssetTypeDeleteConfirm();
+      await loadAssetTypes();
+    } catch (error) {
+      if (isAxiosError(error)) {
+        const data = error.response?.data as { message?: string } | undefined;
+        if (data?.message) {
+          message.error(data.message);
+          return;
+        }
+      }
+      // eslint-disable-next-line no-console
+      console.error('Failed to delete asset type', error);
+      message.error('Không thể xóa loại tài sản.');
+    } finally {
+      setIsDeletingAssetType(false);
+    }
+  };
+
+  const handleOpenCreateAssetCategory = () => {
+    setAssetCategoryModalMode('create');
+    setEditingCategoryId(null);
+    assetCategoryForm.setFieldsValue({ name: '' });
+    setIsAssetCategoryModalOpen(true);
+  };
+
+  const handleOpenEditAssetCategory = (row: AssetGroupRow) => {
+    setAssetCategoryModalMode('edit');
+    setEditingCategoryId(row.key);
+    assetCategoryForm.setFieldsValue({ name: row.name });
+    setIsAssetCategoryModalOpen(true);
+  };
+
+  const handleSubmitAssetCategory = async (values: { name: string }) => {
+    const name = values.name.trim();
+    if (!name) {
+      message.error('Vui lòng nhập tên nhóm tài sản.');
+      return;
+    }
+    setIsSavingAssetCategory(true);
+    try {
+      if (assetCategoryModalMode === 'create') {
+        await assetCategoryService.create({ name });
+        message.success('Tạo nhóm tài sản thành công.');
+      } else if (editingCategoryId != null) {
+        await assetCategoryService.update(editingCategoryId, { name });
+        message.success('Cập nhật nhóm tài sản thành công.');
+      }
+      setIsAssetCategoryModalOpen(false);
+      setEditingCategoryId(null);
+      await loadAssetCategories();
+      await refreshAssetTypesData();
+    } catch (error) {
+      if (isAxiosError(error)) {
+        const data = error.response?.data as { message?: string } | undefined;
+        if (data?.message) {
+          message.error(data.message);
+          return;
+        }
+      }
+      // eslint-disable-next-line no-console
+      console.error('Failed to save asset category', error);
+      message.error('Không thể lưu nhóm tài sản.');
+    } finally {
+      setIsSavingAssetCategory(false);
+    }
+  };
+
+  const handleDeleteAssetCategory = (row: AssetGroupRow) => {
+    setCategoryDeleteTarget(row);
+    setIsCategoryDeleteOpen(true);
+  };
+
+  const handleCloseCategoryDeleteConfirm = () => {
+    setIsCategoryDeleteOpen(false);
+    setCategoryDeleteTarget(null);
+  };
+
+  const handleConfirmDeleteAssetCategory = async () => {
+    if (!categoryDeleteTarget) return;
+    setIsDeletingCategory(true);
+    try {
+      await assetCategoryService.delete(categoryDeleteTarget.key);
+      message.success('Đã xóa nhóm tài sản.');
+      handleCloseCategoryDeleteConfirm();
+      await loadAssetCategories();
+      await refreshAssetTypesData();
+    } catch (error) {
+      if (isAxiosError(error)) {
+        const data = error.response?.data as { message?: string } | undefined;
+        if (data?.message) {
+          message.error(data.message);
+          return;
+        }
+      }
+      // eslint-disable-next-line no-console
+      console.error('Failed to delete asset category', error);
+      message.error('Không thể xóa nhóm tài sản.');
+    } finally {
+      setIsDeletingCategory(false);
+    }
+  };
+
   return (
     <div className="categories-page">
       <div className="categories-header">
@@ -472,16 +778,11 @@ export function CategoriesPage() {
           className="categories-btn-add"
           onClick={() => {
             if (activeCatalogTab === 'asset-types' && activeSubTab === 'type') {
-              setIsCreateAssetTypeOpen(true);
-              queueMicrotask(() => {
-                createForm.setFieldsValue({
-                  name: '',
-                  code: '',
-                  groupCode: 'MM',
-                  note: '',
-                  managementMethod: 'code',
-                });
-              });
+              handleOpenCreateAssetType();
+              return;
+            }
+            if (activeCatalogTab === 'asset-types' && activeSubTab === 'group') {
+              handleOpenCreateAssetCategory();
               return;
             }
             if (activeCatalogTab === 'asset-locations') {
@@ -560,6 +861,8 @@ export function CategoriesPage() {
             isLoadingAssetTypes={isLoadingAssetTypes}
             rows={filteredRows}
             statusLabels={STATUS_LABELS}
+            onEditAssetType={handleOpenEditAssetType}
+            onDeleteAssetType={handleDeleteAssetType}
           />
         )}
 
@@ -568,15 +871,9 @@ export function CategoriesPage() {
             searchText={searchText}
             onSearchTextChange={setSearchText}
             isLoadingCategories={isLoadingCategories}
-            rows={visibleGroupRows.rows}
-            expandedGroupCodes={expandedGroupCodes}
-            onToggleGroup={(code) => {
-              setExpandedGroupCodes((current) =>
-                current.includes(code)
-                  ? current.filter((c) => c !== code)
-                  : [...current, code],
-              );
-            }}
+            rows={filteredCategoryRows}
+            onEditAssetCategory={handleOpenEditAssetCategory}
+            onDeleteAssetCategory={handleDeleteAssetCategory}
           />
         )}
 
@@ -586,9 +883,11 @@ export function CategoriesPage() {
             onSearchTextChange={setSearchText}
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
+            isLoadingLocations={isLoadingLocations}
             rows={filteredLocationRows}
             statusLabels={STATUS_LABELS}
             onOpenEditLocation={handleOpenEditLocation}
+            onDeleteLocation={handleDeleteLocation}
           />
         )}
 
@@ -650,17 +949,78 @@ export function CategoriesPage() {
         </div>
       </div>
 
+      <Modal
+        title="Xóa loại tài sản"
+        open={isAssetTypeDeleteOpen}
+        onOk={handleConfirmDeleteAssetType}
+        onCancel={handleCloseAssetTypeDeleteConfirm}
+        confirmLoading={isDeletingAssetType}
+        okText="Xóa"
+        okButtonProps={{ danger: true }}
+        cancelText="Hủy"
+      >
+        <p>
+          Bạn có chắc muốn xóa loại tài sản{' '}
+          <strong>{assetTypeDeleteTarget?.name}</strong>?
+        </p>
+      </Modal>
+
+      <Modal
+        title="Xóa nhóm tài sản"
+        open={isCategoryDeleteOpen}
+        onOk={handleConfirmDeleteAssetCategory}
+        onCancel={handleCloseCategoryDeleteConfirm}
+        confirmLoading={isDeletingCategory}
+        okText="Xóa"
+        okButtonProps={{ danger: true }}
+        cancelText="Hủy"
+      >
+        <p>
+          Bạn có chắc muốn xóa nhóm tài sản <strong>{categoryDeleteTarget?.name}</strong>? Chỉ xóa được
+          khi nhóm không còn loại tài sản nào.
+        </p>
+      </Modal>
+
+      <Modal
+        title="Xóa vị trí tài sản"
+        open={isLocationDeleteOpen}
+        onOk={handleConfirmDeleteLocation}
+        onCancel={handleCloseLocationDeleteConfirm}
+        confirmLoading={isDeletingLocation}
+        okText="Xóa"
+        okButtonProps={{ danger: true }}
+        cancelText="Hủy"
+      >
+        <p>
+          Xóa bản ghi vị trí <strong>#{locationDeleteTarget?.key}</strong> — tài sản{' '}
+          <strong>{locationDeleteTarget?.parentName}</strong> / phòng ban{' '}
+          <strong>{locationDeleteTarget?.name}</strong>? Chỉ xóa được khi không còn tham chiếu kiểm
+          kê hoặc điều chuyển.
+        </p>
+      </Modal>
+
       <CategoriesModals
-        isCreateAssetTypeOpen={isCreateAssetTypeOpen}
-        setIsCreateAssetTypeOpen={setIsCreateAssetTypeOpen}
-        createForm={createForm}
+        isAssetTypeModalOpen={isAssetTypeModalOpen}
+        setIsAssetTypeModalOpen={setIsAssetTypeModalOpen}
+        assetTypeModalMode={assetTypeModalMode}
+        editingAssetTypeId={editingAssetTypeId}
+        assetTypeForm={assetTypeForm}
+        onSubmitAssetType={handleSubmitAssetType}
+        isSavingAssetType={isSavingAssetType}
+        isAssetCategoryModalOpen={isAssetCategoryModalOpen}
+        setIsAssetCategoryModalOpen={setIsAssetCategoryModalOpen}
+        assetCategoryModalMode={assetCategoryModalMode}
+        editingCategoryId={editingCategoryId}
+        assetCategoryForm={assetCategoryForm}
+        onSubmitAssetCategory={handleSubmitAssetCategory}
+        isSavingAssetCategory={isSavingAssetCategory}
         isLocationModalOpen={isLocationModalOpen}
         setIsLocationModalOpen={setIsLocationModalOpen}
         locationModalMode={locationModalMode}
-        editingLocation={editingLocation}
-        isCreateAssetGroupOpen={isCreateAssetGroupOpen}
-        setIsCreateAssetGroupOpen={setIsCreateAssetGroupOpen}
-        createGroupForm={createGroupForm}
+        editingLocationId={editingLocationId}
+        locationForm={locationForm}
+        onSubmitLocation={handleSubmitLocation}
+        isSavingLocation={isSavingLocation}
       />
     </div>
   );

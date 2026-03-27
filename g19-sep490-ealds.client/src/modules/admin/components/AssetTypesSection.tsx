@@ -10,7 +10,7 @@ export interface CategoryRow {
   code: string;
   name: string;
   group: string;
-  managementMethod: string;
+  categoryId: number;
   quantityTracking: number;
   displayStatus: CategoryStatus;
 }
@@ -24,6 +24,8 @@ interface AssetTypesSectionProps {
   isLoadingAssetTypes: boolean;
   rows: CategoryRow[];
   statusLabels: Record<CategoryStatus, { label: string; className: string }>;
+  onEditAssetType: (row: CategoryRow) => void;
+  onDeleteAssetType: (row: CategoryRow) => void;
 }
 
 export function AssetTypesSection({
@@ -35,6 +37,8 @@ export function AssetTypesSection({
   isLoadingAssetTypes,
   rows,
   statusLabels,
+  onEditAssetType,
+  onDeleteAssetType,
 }: AssetTypesSectionProps) {
   return (
     <>
@@ -75,22 +79,21 @@ export function AssetTypesSection({
               <th>MÃ LOẠI TÀI SẢN</th>
               <th>TÊN LOẠI TÀI SẢN</th>
               <th>NHÓM TÀI SẢN</th>
-              <th>CÁCH QUẢN LÝ</th>
               <th>SỐ LƯỢNG</th>
-              <th>SỐ LƯỢNG</th>
+              <th>TRẠNG THÁI</th>
               <th className="asset-table__cell asset-table__cell--actions" />
             </tr>
           </thead>
           <tbody>
             {isLoadingAssetTypes ? (
               <tr>
-                <td colSpan={8} className="categories-table-empty">
+                <td colSpan={7} className="categories-table-empty">
                   Đang tải dữ liệu...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="categories-table-empty">
+                <td colSpan={7} className="categories-table-empty">
                   Không có dữ liệu.
                 </td>
               </tr>
@@ -103,7 +106,6 @@ export function AssetTypesSection({
                   <td>{row.code}</td>
                   <td>{row.name}</td>
                   <td>{row.group}</td>
-                  <td>{row.managementMethod}</td>
                   <td className="asset-align-right">{row.quantityTracking}</td>
                   <td>
                     <span className={statusLabels[row.displayStatus].className}>
@@ -111,8 +113,22 @@ export function AssetTypesSection({
                     </span>
                   </td>
                   <td className="asset-table__cell asset-table__cell--actions">
-                    <button type="button" className="categories-action-btn">✎</button>
-                    <button type="button" className="categories-action-btn categories-action-btn--danger">🗑</button>
+                    <button
+                      type="button"
+                      className="categories-action-btn"
+                      onClick={() => onEditAssetType(row)}
+                      aria-label="Chỉnh sửa"
+                    >
+                      ✎
+                    </button>
+                    <button
+                      type="button"
+                      className="categories-action-btn categories-action-btn--danger"
+                      onClick={() => onDeleteAssetType(row)}
+                      aria-label="Xóa"
+                    >
+                      🗑
+                    </button>
                   </td>
                 </tr>
               ))

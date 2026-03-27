@@ -4,11 +4,22 @@ import type { CategoryStatus } from './AssetTypesSection';
 
 const { Option } = Select;
 
+function formatDateDisplay(value: string | null): string {
+  if (!value) return '—';
+  const d = value.slice(0, 10);
+  return d || '—';
+}
+
 export interface AssetLocationRow {
   key: number;
   index: number;
   name: string;
   parentName: string | null;
+  assetCode: string;
+  assetId: number;
+  departmentId: number;
+  startDate: string;
+  endDate: string | null;
   note: string | null;
   status: CategoryStatus;
 }
@@ -18,9 +29,11 @@ interface AssetLocationsSectionProps {
   onSearchTextChange: (value: string) => void;
   statusFilter: 'all' | CategoryStatus;
   onStatusFilterChange: (value: 'all' | CategoryStatus) => void;
+  isLoadingLocations: boolean;
   rows: AssetLocationRow[];
   statusLabels: Record<CategoryStatus, { label: string; className: string }>;
   onOpenEditLocation: (row: AssetLocationRow) => void;
+  onDeleteLocation: (row: AssetLocationRow) => void;
 }
 
 export function AssetLocationsSection({
@@ -28,9 +41,11 @@ export function AssetLocationsSection({
   onSearchTextChange,
   statusFilter,
   onStatusFilterChange,
+  isLoadingLocations,
   rows,
   statusLabels,
   onOpenEditLocation,
+  onDeleteLocation,
 }: AssetLocationsSectionProps) {
   return (
     <>
@@ -51,7 +66,7 @@ export function AssetLocationsSection({
         >
           <Option value="all">Tất cả</Option>
           <Option value="tracking">Đang theo dõi</Option>
-          <Option value="stopped">Không theo dõi</Option>
+          <Option value="stopped">Ngừng theo dõi</Option>
         </Select>
       </div>
 
@@ -60,17 +75,25 @@ export function AssetLocationsSection({
           <thead>
             <tr>
               <th>STT</th>
-              <th>TÊN VỊ TRÍ</th>
-              <th>THUỘC</th>
+              <th>TÀI SẢN</th>
+              <th>PHÒNG BAN / VỊ TRÍ</th>
+              <th>NGÀY BẮT ĐẦU</th>
+              <th>NGÀY KẾT THÚC</th>
               <th>GHI CHÚ</th>
               <th>TRẠNG THÁI</th>
               <th className="asset-table__cell asset-table__cell--actions" />
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
+            {isLoadingLocations ? (
               <tr>
-                <td colSpan={6} className="categories-table-empty">
+                <td colSpan={8} className="categories-table-empty">
+                  Đang tải dữ liệu...
+                </td>
+              </tr>
+            ) : rows.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="categories-table-empty">
                   Không có dữ liệu.
                 </td>
               </tr>
@@ -78,8 +101,15 @@ export function AssetLocationsSection({
               rows.map((row) => (
                 <tr key={row.key} className="asset-row">
                   <td className="asset-align-right">{row.index}</td>
+                  <td>
+                    <span className="categories-location-asset">
+                      <span className="categories-location-asset__code">{row.assetCode}</span>{' '}
+                      {row.parentName ?? '—'}
+                    </span>
+                  </td>
                   <td>{row.name}</td>
-                  <td>{row.parentName ?? '—'}</td>
+                  <td>{formatDateDisplay(row.startDate)}</td>
+                  <td>{formatDateDisplay(row.endDate)}</td>
                   <td>{row.note ?? '—'}</td>
                   <td>
                     <span className={statusLabels[row.status].className}>
@@ -91,10 +121,18 @@ export function AssetLocationsSection({
                       type="button"
                       className="categories-action-btn"
                       onClick={() => onOpenEditLocation(row)}
+                      aria-label="Chỉnh sửa"
                     >
                       ✎
                     </button>
-                    <button type="button" className="categories-action-btn categories-action-btn--danger">🗑</button>
+                    <button
+                      type="button"
+                      className="categories-action-btn categories-action-btn--danger"
+                      onClick={() => onDeleteLocation(row)}
+                      aria-label="Xóa"
+                    >
+                      🗑
+                    </button>
                   </td>
                 </tr>
               ))
@@ -105,4 +143,3 @@ export function AssetLocationsSection({
     </>
   );
 }
-

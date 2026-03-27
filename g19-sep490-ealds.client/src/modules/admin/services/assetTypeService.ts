@@ -26,15 +26,45 @@ export interface AssetTypeListItem {
   assetCount: number;
 }
 
+export interface CreateAssetTypePayload {
+  categoryId: number;
+  name: string;
+}
+
+export interface UpdateAssetTypePayload {
+  categoryId: number;
+  name: string;
+}
+
 export const assetTypeService = {
   async getAll(keyword?: string, categoryId?: number): Promise<AssetTypeListItem[]> {
-    const response = await assetTypeApi.get<AssetTypeListItem[]>('/api/assettypes', {
+    const response = await assetTypeApi.get<AssetTypeListItem[]>('/api/AssetTypes', {
       params: {
         keyword: keyword || undefined,
         categoryId: categoryId ?? undefined,
       },
     });
     return response.data;
+  },
+
+  async create(payload: CreateAssetTypePayload): Promise<AssetTypeListItem> {
+    const response = await assetTypeApi.post<AssetTypeListItem>('/api/AssetTypes', {
+      categoryId: payload.categoryId,
+      name: payload.name,
+    });
+    return response.data;
+  },
+
+  async update(assetTypeId: number, payload: UpdateAssetTypePayload): Promise<AssetTypeListItem> {
+    const response = await assetTypeApi.put<AssetTypeListItem>(`/api/AssetTypes/${assetTypeId}`, {
+      categoryId: payload.categoryId,
+      name: payload.name,
+    });
+    return response.data;
+  },
+
+  async delete(assetTypeId: number): Promise<void> {
+    await assetTypeApi.delete(`/api/AssetTypes/${assetTypeId}`);
   },
 };
 

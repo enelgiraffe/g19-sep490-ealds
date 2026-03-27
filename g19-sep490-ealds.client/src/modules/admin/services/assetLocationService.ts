@@ -37,12 +37,71 @@ export interface GetAssetLocationsParams {
   isCurrent?: boolean;
 }
 
+export interface DepartmentLocationOption {
+  locationId: number;
+  displayName: string;
+}
+
+export interface CreateAssetLocationPayload {
+  assetId: number;
+  departmentId: number;
+  startDate: string;
+  endDate?: string | null;
+  isCurrent: boolean;
+  note?: string | null;
+}
+
+export interface UpdateAssetLocationPayload {
+  departmentId: number;
+  startDate: string;
+  endDate?: string | null;
+  isCurrent: boolean;
+  note?: string | null;
+}
+
 export const assetLocationService = {
   async getAll(params?: GetAssetLocationsParams): Promise<AssetLocationItem[]> {
-    const response = await assetLocationApi.get<AssetLocationItem[]>('/api/assetlocations', {
+    const response = await assetLocationApi.get<AssetLocationItem[]>('/api/AssetLocations', {
       params,
     });
     return response.data;
+  },
+
+  async getDepartments(): Promise<DepartmentLocationOption[]> {
+    const response = await assetLocationApi.get<DepartmentLocationOption[]>(
+      '/api/AssetLocations/departments',
+    );
+    return response.data;
+  },
+
+  async create(payload: CreateAssetLocationPayload): Promise<AssetLocationItem> {
+    const response = await assetLocationApi.post<AssetLocationItem>('/api/AssetLocations', {
+      assetId: payload.assetId,
+      departmentId: payload.departmentId,
+      startDate: payload.startDate,
+      endDate: payload.endDate ?? undefined,
+      isCurrent: payload.isCurrent,
+      note: payload.note ?? undefined,
+    });
+    return response.data;
+  },
+
+  async update(locationId: number, payload: UpdateAssetLocationPayload): Promise<AssetLocationItem> {
+    const response = await assetLocationApi.put<AssetLocationItem>(
+      `/api/AssetLocations/${locationId}`,
+      {
+        departmentId: payload.departmentId,
+        startDate: payload.startDate,
+        endDate: payload.endDate ?? undefined,
+        isCurrent: payload.isCurrent,
+        note: payload.note ?? undefined,
+      },
+    );
+    return response.data;
+  },
+
+  async delete(locationId: number): Promise<void> {
+    await assetLocationApi.delete(`/api/AssetLocations/${locationId}`);
   },
 };
 
