@@ -1,8 +1,10 @@
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -36,6 +38,8 @@ public class AssetsController : ControllerBase
             .Include(a => a.Warehouse)
             .Include(a => a.AssetLocations)
                 .ThenInclude(al => al.Department)
+            .Include(a => a.AssetUsages)
+                .ThenInclude(u => u.Employee)
             .AsNoTracking()
             .AsQueryable();
 
@@ -135,6 +139,8 @@ public class AssetsController : ControllerBase
             .Include(a => a.Warehouse)
             .Include(a => a.AssetLocations)
                 .ThenInclude(al => al.Department)
+            .Include(a => a.AssetUsages)
+                .ThenInclude(u => u.Employee)
             .AsNoTracking()
             .FirstOrDefaultAsync(a => a.AssetId == id);
 
@@ -185,11 +191,114 @@ public class AssetsController : ControllerBase
     }
 
     /// <summary>
+    /// GET /api/assets/department/{departmentId} — Assets currently located in that department.
+    /// </summary>
+    [HttpGet("department/{departmentId:int}")]
+    [Authorize]
+    public async Task<ActionResult<IEnumerable<AssetResponseDTO>>> GetAssetsByDepartment(
+        int departmentId,
+        [FromQuery] string? keyword,
+        [FromQuery] AssetStatus? status)
+    {
+        if (!await _context.Departments.AnyAsync(d => d.DepartmentId == departmentId))
+            return NotFound(new { message = $"Department {departmentId} not found." });
+
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!int.TryParse(userIdClaim, out var userId) || userId <= 0)
+            return Unauthorized(new { message = "Invalid user identity." });
+
+        if (!CanViewDepartmentAssetsForAnyDepartment())
+        {
+            var employee = await _context.Employees.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.UserId == userId);
+            if (employee == null)
+                return NotFound(new { message = "No employee profile linked to this user." });
+            if (employee.DepartmentId != departmentId)
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    new { message = "You can only view assets for your own department." });
+        }
+
+        var deptId = departmentId;
+
+        var query = _context.Assets
+            .Include(a => a.AssetType)
+            .Include(a => a.Warehouse)
+            .Include(a => a.AssetLocations)
+                .ThenInclude(al => al.Department)
+            .Include(a => a.AssetUsages)
+                .ThenInclude(u => u.Employee)
+            .AsNoTracking()
+            .Where(a =>
+                a.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == deptId) &&
+                a.Status != (int)AssetStatus.Disposed &&
+                a.Status != (int)AssetStatus.Lost &&
+                a.Status != (int)AssetStatus.Liquidated);
+
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var kw = keyword.Trim().ToLower();
+            query = query.Where(a =>
+                a.Code.ToLower().Contains(kw) ||
+                a.Name.ToLower().Contains(kw));
+        }
+
+        if (status.HasValue)
+        {
+            if (status.Value == AssetStatus.Damaged)
+            {
+                query = query.Where(a =>
+                    a.Status == (int)AssetStatus.Damaged ||
+                    _context.AssetRequests.Any(r =>
+                        r.AssetId == a.AssetId &&
+                        r.Title != null &&
+                        r.Title.StartsWith("Damage report") &&
+                        r.Status == 0));
+            }
+            else
+            {
+                query = query.Where(a => a.Status == (int)status.Value);
+            }
+        }
+
+        var assets = await query.ToListAsync();
+
+        var assetIds = assets.Select(a => a.AssetId).ToList();
+        var damagedIds = await _context.AssetRequests
+            .AsNoTracking()
+            .Where(r =>
+                r.AssetId.HasValue &&
+                assetIds.Contains(r.AssetId.Value) &&
+                r.Title != null &&
+                r.Title.StartsWith("Damage report") &&
+                r.Status == 0)
+            .Select(r => r.AssetId!.Value)
+            .Distinct()
+            .ToListAsync();
+
+        var damagedSet = damagedIds.ToHashSet();
+
+        return Ok(assets.Select(a =>
+            damagedSet.Contains(a.AssetId)
+                ? ToResponseDTO(a, AssetStatus.Damaged)
+                : ToResponseDTO(a)));
+    }
+
+    /// <summary>
     /// POST /api/assets - Create asset with General info and Depreciation settings
     /// </summary>
     [HttpPost]
     public async Task<ActionResult<AssetResponseDTO>> Create([FromBody] CreateAssetDTO dto)
     {
+        if (CreateHasAssignment(dto))
+        {
+            var denied = RequireAccountantForAssignment();
+            if (denied != null)
+                return denied;
+            var assignmentValidation = await ValidateCreateAssignmentDtoAsync(dto);
+            if (assignmentValidation != null)
+                return assignmentValidation;
+        }
+
         if (await _context.Assets.AnyAsync(a => a.Code == dto.Code))
             return BadRequest(new { message = "Asset code already exists." });
 
@@ -235,10 +344,22 @@ public class AssetsController : ControllerBase
             }
         }
 
+        var assignmentError = await ApplyCreateAssignmentAsync(asset.AssetId, dto);
+        if (assignmentError != null)
+            return assignmentError;
+        if (CreateHasAssignment(dto))
+            await _context.SaveChangesAsync();
+
         await _context.Entry(asset)
             .Reference(a => a.AssetType).LoadAsync();
         await _context.Entry(asset)
             .Reference(a => a.Warehouse).LoadAsync();
+        await _context.Entry(asset)
+            .Collection(a => a.AssetLocations).Query()
+            .Include(al => al.Department).LoadAsync();
+        await _context.Entry(asset)
+            .Collection(a => a.AssetUsages).Query()
+            .Include(u => u.Employee).LoadAsync();
 
         // Load depreciation info for response
         var latestDep = await _context.DrepreciationRecords
@@ -262,6 +383,13 @@ public class AssetsController : ControllerBase
     [HttpPut("{id:int}")]
     public async Task<ActionResult<AssetResponseDTO>> Update(int id, [FromBody] UpdateAssetDTO dto)
     {
+        if (UpdateHasAssignment(dto))
+        {
+            var denied = RequireAccountantForAssignment();
+            if (denied != null)
+                return denied;
+        }
+
         var asset = await _context.Assets.FindAsync(id);
         if (asset == null)
             return NotFound();
@@ -319,12 +447,22 @@ public class AssetsController : ControllerBase
             }
         }
 
+        var assignmentError = await ApplyUpdateAssignmentAsync(id, dto);
+        if (assignmentError != null)
+            return assignmentError;
+
         await _context.SaveChangesAsync();
 
         await _context.Entry(asset)
             .Reference(a => a.AssetType).LoadAsync();
         await _context.Entry(asset)
             .Reference(a => a.Warehouse).LoadAsync();
+        await _context.Entry(asset)
+            .Collection(a => a.AssetLocations).Query()
+            .Include(al => al.Department).LoadAsync();
+        await _context.Entry(asset)
+            .Collection(a => a.AssetUsages).Query()
+            .Include(u => u.Employee).LoadAsync();
 
         // Reload depreciation info for response
         var latestDep = await _context.DrepreciationRecords
@@ -340,6 +478,62 @@ public class AssetsController : ControllerBase
         var schedules = new List<MaintenanceSchedule>();
 
         return Ok(ToResponseDTO(asset, latestDep, schedules));
+    }
+
+    /// <summary>
+    /// PUT /api/assets/{id}/status — Accountants set operational status (see <see cref="AssetStatus"/>).
+    /// </summary>
+    [HttpPut("{id:int}/status")]
+    [Authorize(Roles = "ACCOUNTANT")]
+    public async Task<ActionResult<AssetResponseDTO>> ChangeStatus(int id, [FromBody] ChangeAssetStatusDTO dto)
+    {
+        if (!Enum.IsDefined(typeof(AssetStatus), dto.Status))
+            return BadRequest(new { message = "Invalid asset status value." });
+
+        var asset = await _context.Assets.FindAsync(id);
+        if (asset == null)
+            return NotFound();
+
+        asset.Status = (int)dto.Status;
+        await _context.SaveChangesAsync();
+
+        await _context.Entry(asset)
+            .Reference(a => a.AssetType).LoadAsync();
+        await _context.Entry(asset)
+            .Reference(a => a.Warehouse).LoadAsync();
+        await _context.Entry(asset)
+            .Collection(a => a.AssetLocations).Query()
+            .Include(al => al.Department).LoadAsync();
+        await _context.Entry(asset)
+            .Collection(a => a.AssetUsages).Query()
+            .Include(u => u.Employee).LoadAsync();
+
+        var latestDep = await _context.DrepreciationRecords
+            .Include(r => r.Policy)
+            .AsNoTracking()
+            .Where(r => r.AssetId == id)
+            .OrderByDescending(r => r.Period)
+            .ThenByDescending(r => r.CreateDate)
+            .FirstOrDefaultAsync();
+
+        var schedules = new List<MaintenanceSchedule>();
+
+        var hasDamageReport = await _context.AssetRequests
+            .AsNoTracking()
+            .AnyAsync(r =>
+                r.AssetId == id &&
+                r.Title != null &&
+                r.Title.StartsWith("Damage report") &&
+                r.Status == 0);
+
+        var response = ToResponseDTO(asset, latestDep, schedules);
+        if (hasDamageReport)
+        {
+            response.Status = AssetStatus.Damaged;
+            response.StatusName = AssetStatus.Damaged.ToString();
+        }
+
+        return Ok(response);
     }
 
     /// <summary>
@@ -375,6 +569,214 @@ public class AssetsController : ControllerBase
         return Ok(ToResponseDTO(asset));
     }
 
+    private bool CanViewDepartmentAssetsForAnyDepartment() =>
+        User.IsInRole("ACCOUNTANT") || User.IsInRole("DIRECTOR");
+
+    private static bool CreateHasAssignment(CreateAssetDTO dto) =>
+        dto.AssignedDepartmentId.HasValue || dto.ResponsibleEmployeeId.HasValue;
+
+    private static bool UpdateHasAssignment(UpdateAssetDTO dto) =>
+        dto.AssignedDepartmentId.HasValue ||
+        dto.ResponsibleEmployeeId.HasValue ||
+        dto.ClearDepartmentAssignment ||
+        dto.ClearResponsibleEmployee;
+
+    private ActionResult<AssetResponseDTO>? RequireAccountantForAssignment()
+    {
+        if (User.Identity?.IsAuthenticated != true)
+            return Unauthorized(new { message = "Authentication is required to assign or reassign assets." });
+        if (!User.IsInRole("ACCOUNTANT"))
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { message = "Only accountants may assign or reassign assets." });
+        return null;
+    }
+
+    private async Task<ActionResult<AssetResponseDTO>?> ValidateCreateAssignmentDtoAsync(CreateAssetDTO dto)
+    {
+        Employee? emp = null;
+        if (dto.ResponsibleEmployeeId.HasValue)
+        {
+            emp = await _context.Employees.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.EmployeeId == dto.ResponsibleEmployeeId.Value);
+            if (emp == null)
+                return BadRequest(new { message = $"Employee {dto.ResponsibleEmployeeId.Value} not found." });
+        }
+
+        int? deptId = dto.AssignedDepartmentId;
+        if (deptId.HasValue)
+        {
+            if (!await _context.Departments.AnyAsync(d => d.DepartmentId == deptId.Value))
+                return BadRequest(new { message = $"Department {deptId.Value} does not exist." });
+        }
+
+        if (emp != null)
+        {
+            if (deptId.HasValue && deptId.Value != emp.DepartmentId)
+                return BadRequest(new { message = "Assigned department must match the responsible employee's department." });
+        }
+
+        return null;
+    }
+
+    private async Task<ActionResult<AssetResponseDTO>?> ApplyCreateAssignmentAsync(int assetId, CreateAssetDTO dto)
+    {
+        if (!dto.AssignedDepartmentId.HasValue && !dto.ResponsibleEmployeeId.HasValue)
+            return null;
+
+        var effective = dto.AssignmentEffectiveDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+
+        Employee? emp = null;
+        if (dto.ResponsibleEmployeeId.HasValue)
+            emp = await _context.Employees.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.EmployeeId == dto.ResponsibleEmployeeId.Value);
+
+        int? deptId = dto.AssignedDepartmentId;
+        if (emp != null)
+        {
+            if (!deptId.HasValue)
+                deptId = emp.DepartmentId;
+        }
+
+        if (deptId.HasValue)
+        {
+            await CloseCurrentLocationAsync(assetId, excludeLocationId: null, newStartDate: effective);
+            _context.AssetLocations.Add(new AssetLocation
+            {
+                AssetId = assetId,
+                DepartmentId = deptId.Value,
+                StartDate = effective,
+                EndDate = null,
+                IsCurrent = true
+            });
+        }
+
+        if (dto.ResponsibleEmployeeId.HasValue)
+        {
+            await CloseCurrentUsageAsync(assetId, newStartDate: effective);
+            _context.AssetUsages.Add(new AssetUsage
+            {
+                AssetId = assetId,
+                EmployeeId = dto.ResponsibleEmployeeId.Value,
+                StartDate = effective,
+                EndDate = null,
+                IsCurrent = true
+            });
+        }
+
+        return null;
+    }
+
+    private async Task<ActionResult<AssetResponseDTO>?> ApplyUpdateAssignmentAsync(int assetId, UpdateAssetDTO dto)
+    {
+        if (!dto.AssignedDepartmentId.HasValue &&
+            !dto.ResponsibleEmployeeId.HasValue &&
+            !dto.ClearDepartmentAssignment &&
+            !dto.ClearResponsibleEmployee)
+            return null;
+
+        if (dto.ClearDepartmentAssignment && dto.AssignedDepartmentId.HasValue)
+            return BadRequest(new { message = "Cannot clear department and assign a department in the same request." });
+
+        if (dto.ClearResponsibleEmployee && dto.ResponsibleEmployeeId.HasValue)
+            return BadRequest(new { message = "Cannot clear responsible employee and assign one in the same request." });
+
+        if (dto.ClearDepartmentAssignment && dto.ResponsibleEmployeeId.HasValue)
+            return BadRequest(new { message = "Cannot clear department while assigning a responsible employee." });
+
+        var effective = dto.AssignmentEffectiveDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+
+        Employee? emp = null;
+        if (dto.ResponsibleEmployeeId.HasValue)
+        {
+            emp = await _context.Employees.FirstOrDefaultAsync(e => e.EmployeeId == dto.ResponsibleEmployeeId.Value);
+            if (emp == null)
+                return BadRequest(new { message = $"Employee {dto.ResponsibleEmployeeId.Value} not found." });
+        }
+
+        // Department side
+        if (dto.ClearDepartmentAssignment)
+        {
+            await CloseCurrentLocationAsync(assetId, excludeLocationId: null, newStartDate: effective);
+        }
+        else if (dto.AssignedDepartmentId.HasValue)
+        {
+            if (!await _context.Departments.AnyAsync(d => d.DepartmentId == dto.AssignedDepartmentId.Value))
+                return BadRequest(new { message = $"Department {dto.AssignedDepartmentId.Value} does not exist." });
+
+            if (emp != null && dto.AssignedDepartmentId.Value != emp.DepartmentId)
+                return BadRequest(new { message = "Assigned department must match the responsible employee's department." });
+
+            await CloseCurrentLocationAsync(assetId, excludeLocationId: null, newStartDate: effective);
+            _context.AssetLocations.Add(new AssetLocation
+            {
+                AssetId = assetId,
+                DepartmentId = dto.AssignedDepartmentId.Value,
+                StartDate = effective,
+                EndDate = null,
+                IsCurrent = true
+            });
+        }
+        else if (dto.ResponsibleEmployeeId.HasValue && emp != null)
+        {
+            await CloseCurrentLocationAsync(assetId, excludeLocationId: null, newStartDate: effective);
+            _context.AssetLocations.Add(new AssetLocation
+            {
+                AssetId = assetId,
+                DepartmentId = emp.DepartmentId,
+                StartDate = effective,
+                EndDate = null,
+                IsCurrent = true
+            });
+        }
+
+        // Usage side
+        if (dto.ClearResponsibleEmployee)
+        {
+            await CloseCurrentUsageAsync(assetId, newStartDate: effective);
+        }
+        else if (dto.ResponsibleEmployeeId.HasValue)
+        {
+            await CloseCurrentUsageAsync(assetId, newStartDate: effective);
+            _context.AssetUsages.Add(new AssetUsage
+            {
+                AssetId = assetId,
+                EmployeeId = dto.ResponsibleEmployeeId.Value,
+                StartDate = effective,
+                EndDate = null,
+                IsCurrent = true
+            });
+        }
+
+        return null;
+    }
+
+    private async Task CloseCurrentLocationAsync(int assetId, int? excludeLocationId, DateOnly newStartDate)
+    {
+        var current = await _context.AssetLocations
+            .Where(l => l.AssetId == assetId && l.IsCurrent &&
+                        (excludeLocationId == null || l.LocationId != excludeLocationId))
+            .FirstOrDefaultAsync();
+
+        if (current != null)
+        {
+            current.IsCurrent = false;
+            current.EndDate = newStartDate.AddDays(-1);
+        }
+    }
+
+    private async Task CloseCurrentUsageAsync(int assetId, DateOnly newStartDate)
+    {
+        var current = await _context.AssetUsages
+            .Where(u => u.AssetId == assetId && u.IsCurrent)
+            .FirstOrDefaultAsync();
+
+        if (current != null)
+        {
+            current.IsCurrent = false;
+            current.EndDate = newStartDate.AddDays(-1);
+        }
+    }
+
     private static AssetResponseDTO ToResponseDTO(Asset a, AssetStatus? forcedStatus = null)
     {
         var effectiveStatus = forcedStatus ?? (AssetStatus)a.Status;
@@ -408,6 +810,18 @@ public class AssetsController : ControllerBase
             CurrentDepartmentName = a.AssetLocations
                 .Where(al => al.IsCurrent)
                 .Select(al => al.Department != null ? al.Department.Name : null)
+                .FirstOrDefault(),
+            CurrentResponsibleEmployeeId = a.AssetUsages
+                .Where(u => u.IsCurrent)
+                .Select(u => (int?)u.EmployeeId)
+                .FirstOrDefault(),
+            CurrentResponsibleEmployeeName = a.AssetUsages
+                .Where(u => u.IsCurrent)
+                .Select(u => u.Employee != null ? u.Employee.Name : null)
+                .FirstOrDefault(),
+            CurrentResponsibleUserId = a.AssetUsages
+                .Where(u => u.IsCurrent)
+                .Select(u => u.Employee != null ? (int?)u.Employee.UserId : null)
                 .FirstOrDefault()
         };
     }

@@ -23,6 +23,15 @@ public class CreateAssetDTO
 
     // Depreciation settings (optional - links asset to a depreciation policy)
     public int? DepreciationPolicyId { get; set; }
+
+    /// <summary>Optional assignment (requires ACCOUNTANT). Department and/or responsible employee.</summary>
+    public int? AssignedDepartmentId { get; set; }
+
+    /// <summary>Optional custodian; must belong to <see cref="AssignedDepartmentId"/> when both are set.</summary>
+    public int? ResponsibleEmployeeId { get; set; }
+
+    /// <summary>Start date for location/usage rows; defaults to UTC today.</summary>
+    public DateOnly? AssignmentEffectiveDate { get; set; }
 }
 
 /// <summary>
@@ -45,6 +54,32 @@ public class UpdateAssetDTO
 
     // Depreciation policy (can be linked/unlinked on update)
     public int? DepreciationPolicyId { get; set; }
+
+    /// <summary>Set or change current department (requires ACCOUNTANT). Closes the previous current location.</summary>
+    public int? AssignedDepartmentId { get; set; }
+
+    /// <summary>Set or change responsible employee (requires ACCOUNTANT). Updates location to this employee's department when used alone.</summary>
+    public int? ResponsibleEmployeeId { get; set; }
+
+    /// <summary>Effective date for assignment changes; defaults to UTC today.</summary>
+    public DateOnly? AssignmentEffectiveDate { get; set; }
+
+    /// <summary>Close the current department assignment without adding a new one.</summary>
+    public bool ClearDepartmentAssignment { get; set; }
+
+    /// <summary>Close the current responsible-employee assignment without adding a new one.</summary>
+    public bool ClearResponsibleEmployee { get; set; }
+}
+
+/// <summary>
+/// DTO for accountant-only status change (<c>PUT /api/assets/{id}/status</c>).
+/// </summary>
+public class ChangeAssetStatusDTO
+{
+    public AssetStatus Status { get; set; }
+
+    /// <summary>Optional note for audit / client display (not persisted unless you extend the model).</summary>
+    public string? Note { get; set; }
 }
 
 /// <summary>
@@ -108,6 +143,13 @@ public class AssetResponseDTO
     public int? CurrentLocationId { get; set; }
     public int? CurrentDepartmentId { get; set; }
     public string? CurrentDepartmentName { get; set; }
+
+    /// <summary>Current custodian (AssetUsage IsCurrent), if any.</summary>
+    public int? CurrentResponsibleEmployeeId { get; set; }
+
+    public string? CurrentResponsibleEmployeeName { get; set; }
+
+    public int? CurrentResponsibleUserId { get; set; }
 
     // Depreciation (optional; populated in GET by id)
     public int? DepreciationPolicyId { get; set; }
