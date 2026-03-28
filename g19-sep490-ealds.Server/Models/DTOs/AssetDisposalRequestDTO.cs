@@ -20,7 +20,7 @@ public class AssetDisposalRequestDTO
 
     public decimal DiposalValue { get; set; }
 
-    public DateTime DiposalDate { get; set; }
+    // DiposalDate không nhận từ client – server tự gán khi tạo đề nghị
 
     public string? Reason { get; set; }
 }

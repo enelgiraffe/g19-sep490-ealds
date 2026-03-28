@@ -19,4 +19,7 @@ public class RepairRequestDTO
     public string? Title { get; set; }
 
     public string? Description { get; set; }
+
+    // Ngày hỏng – phải <= ngày hiện tại nếu được cung cấp
+    public DateTime? DamageDate { get; set; }
 }

@@ -35,6 +35,9 @@ public class RepairRequestsController : ControllerBase
         if (string.IsNullOrWhiteSpace(dto.Reason))
             return BadRequest("Reason is required.");
 
+        if (dto.DamageDate.HasValue && dto.DamageDate.Value.Date > DateTime.UtcNow.Date)
+            return BadRequest("Ngày hỏng không được lớn hơn ngày hiện tại.");
+
         var title = dto.Title ?? $"Repair request for asset {dto.AssetId}";
 
         var assetRequest = new AssetRequest
