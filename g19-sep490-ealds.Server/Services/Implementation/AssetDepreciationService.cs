@@ -1,8 +1,8 @@
 ﻿using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
 using g19_sep490_ealds.Server.Utils;
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using Microsoft.EntityFrameworkCore;
-using System.Threading.Tasks;
 
 namespace g19_sep490_ealds.Server.Services.Implementation;
 
@@ -20,9 +20,12 @@ public class AssetDepreciationService : IAssetDepreciationService
         var now = DateTime.UtcNow.AddHours(7);
         var period = new DateOnly(now.Year, now.Month, 1);
 
-        var assets = _context.Assets
-            .Where(a => a.DepreciationPolicyId != null && a.InUseDate != null)
-            .ToList();
+        var assets = await _context.Assets
+                .Include(a => a.DrepreciationRecords)
+                .Include(a => a.DepreciationPolicy)
+                .Include(a => a.AssetCapitalizations) // 🔥 thêm dòng này
+                .Where(a => a.DepreciationPolicyId != null && a.InUseDate != null)
+                .ToListAsync();
 
         foreach (var asset in assets)
         {
@@ -34,6 +37,10 @@ public class AssetDepreciationService : IAssetDepreciationService
 
     private async Task ProcessAsset(Asset asset, DateOnly period)
     {
+        // chưa capitalize 
+        if (asset.AssetCapitalizations == null || !asset.AssetCapitalizations.Any())
+            return;
+
         var now = DateTime.UtcNow.AddHours(7);
 
         // chưa có ngày sử dụng
@@ -49,6 +56,9 @@ public class AssetDepreciationService : IAssetDepreciationService
             .AnyAsync(x => x.AssetId == asset.AssetId && x.Period == period);
 
         if (exists) return;
+
+        if (asset.Status == (int)AssetStatus.Disposed)
+            return;
 
         var policy = await _context.DepreciationPolicies
             .FirstOrDefaultAsync(p => p.PolicyId == asset.DepreciationPolicyId);
