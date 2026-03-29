@@ -1,16 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Models;
 
-public partial class EaldsDbContext : 
-    DbContext
+public partial class EaldsDbContext : DbContext
 {
-    public EaldsDbContext()
-    {
-    }
-
     public EaldsDbContext(DbContextOptions<EaldsDbContext> options)
         : base(options)
     {
@@ -26,6 +21,8 @@ public partial class EaldsDbContext :
 
     public virtual DbSet<AssetCategory> AssetCategories { get; set; }
 
+    public virtual DbSet<AssetInstance> AssetInstances { get; set; }
+
     public virtual DbSet<AssetLifeCycle> AssetLifeCycles { get; set; }
 
     public virtual DbSet<AssetLocation> AssetLocations { get; set; }
@@ -33,6 +30,8 @@ public partial class EaldsDbContext :
     public virtual DbSet<AssetRequest> AssetRequests { get; set; }
 
     public virtual DbSet<AssetRequestRecord> AssetRequestRecords { get; set; }
+
+    public virtual DbSet<AssetRevaluation> AssetRevaluations { get; set; }
 
     public virtual DbSet<AssetType> AssetTypes { get; set; }
 
@@ -42,13 +41,15 @@ public partial class EaldsDbContext :
 
     public virtual DbSet<DepreciationPolicy> DepreciationPolicies { get; set; }
 
-    public virtual DbSet<DiposalRecord> DiposalRecords { get; set; }
+    public virtual DbSet<DepreciationRecord> DepreciationRecords { get; set; }
+
+    public virtual DbSet<DisposalRecord> DisposalRecords { get; set; }
 
     public virtual DbSet<Document> Documents { get; set; }
 
-    public virtual DbSet<DrepreciationRecord> DrepreciationRecords { get; set; }
-
     public virtual DbSet<Employee> Employees { get; set; }
+
+    public virtual DbSet<Guarantee> Guarantees { get; set; }
 
     public virtual DbSet<InventoryDiscrepancy> InventoryDiscrepancies { get; set; }
 
@@ -58,11 +59,11 @@ public partial class EaldsDbContext :
 
     public virtual DbSet<InventoryTask> InventoryTasks { get; set; }
 
-    public virtual DbSet<MaintenaceTask> MaintenaceTasks { get; set; }
-
     public virtual DbSet<MaintenanceRecord> MaintenanceRecords { get; set; }
 
     public virtual DbSet<MaintenanceSchedule> MaintenanceSchedules { get; set; }
+
+    public virtual DbSet<MaintenanceTask> MaintenanceTasks { get; set; }
 
     public virtual DbSet<MaintenanceTemplate> MaintenanceTemplates { get; set; }
 
@@ -86,24 +87,19 @@ public partial class EaldsDbContext :
 
     public virtual DbSet<UserRole> UserRoles { get; set; }
 
+    public virtual DbSet<Warehouse> Warehouses { get; set; }
+
     public virtual DbSet<WarehouseAsset> WarehouseAssets { get; set; }
 
     public virtual DbSet<Workflow> Workflows { get; set; }
 
     public virtual DbSet<WorkflowStep> WorkflowSteps { get; set; }
 
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-    {
-        if (!optionsBuilder.IsConfigured)
-        {
-            optionsBuilder.UseSqlServer("Name=ConnectionStrings:DefaultConnection");
-        }
-    }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<AcceptanceRecord>(entity =>
         {
-            entity.HasKey(e => e.AcceptanceId).HasName("PK__Acceptan__747806F6B4C75151");
+            entity.HasKey(e => e.AcceptanceId).HasName("PK__Acceptan__747806F62C2558E5");
 
             entity.ToTable("AcceptanceRecord");
 
@@ -111,20 +107,15 @@ public partial class EaldsDbContext :
             entity.Property(e => e.TrialEndDate).HasColumnType("datetime");
             entity.Property(e => e.TrialStartDate).HasColumnType("datetime");
 
-            entity.HasOne(d => d.AcceptedByNavigation).WithMany(p => p.AcceptanceRecords)
-                .HasForeignKey(d => d.AcceptedBy)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Acceptanc__Accep__07C12930");
-
             entity.HasOne(d => d.Procurement).WithMany(p => p.AcceptanceRecords)
                 .HasForeignKey(d => d.ProcurementId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Acceptanc__Accep__06CD04F7");
+                .HasConstraintName("FK__Acceptanc__Procu__4E53A1AA");
         });
 
         modelBuilder.Entity<Approval>(entity =>
         {
-            entity.HasKey(e => e.ApprovalId).HasName("PK__Approval__328477F426B63B6B");
+            entity.HasKey(e => e.ApprovalId).HasName("PK__Approval__328477F444E54CDB");
 
             entity.ToTable("Approval");
 
@@ -133,36 +124,34 @@ public partial class EaldsDbContext :
             entity.HasOne(d => d.ApprovedRole).WithMany(p => p.Approvals)
                 .HasForeignKey(d => d.ApprovedRoleId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Approval__Approv__68487DD7");
+                .HasConstraintName("FK__Approval__Approv__46B27FE2");
 
             entity.HasOne(d => d.ApprovedUser).WithMany(p => p.Approvals)
                 .HasForeignKey(d => d.ApprovedUserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Approval__Approv__6754599E");
+                .HasConstraintName("FK__Approval__Approv__45BE5BA9");
 
             entity.HasOne(d => d.AssetRequest).WithMany(p => p.Approvals)
                 .HasForeignKey(d => d.AssetRequestId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Approval__AssetR__66603565");
+                .HasConstraintName("FK__Approval__AssetR__44CA3770");
 
             entity.HasOne(d => d.Step).WithMany(p => p.Approvals)
                 .HasForeignKey(d => d.StepId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Approval__StepId__693CA210");
+                .HasConstraintName("FK__Approval__StepId__43D61337");
         });
 
         modelBuilder.Entity<Asset>(entity =>
         {
-            entity.HasKey(e => e.AssetId).HasName("PK__Asset__43492352E67F3D08");
+            entity.HasKey(e => e.AssetId).HasName("PK__Asset__434923524F15EE1A");
 
             entity.ToTable("Asset");
 
-            entity.HasIndex(e => e.Code, "UQ__Asset__A25C5AA73764417A").IsUnique();
+            entity.HasIndex(e => e.Code, "UQ__Asset__A25C5AA7870F74A4").IsUnique();
 
             entity.Property(e => e.Code).HasMaxLength(100);
-            entity.Property(e => e.CurrentValue).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.Name).HasMaxLength(255);
-            entity.Property(e => e.OriginalPrice).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.Unit).HasMaxLength(50);
 
             entity.HasOne(d => d.AssetType).WithMany(p => p.Assets)
@@ -173,26 +162,78 @@ public partial class EaldsDbContext :
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.Assets)
                 .HasForeignKey(d => d.CreatedBy)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Asset__CreatedBy__5DCAEF64");
+                .HasConstraintName("FK__Asset__CreatedBy__5CD6CB2B");
+        });
 
-            entity.HasOne(d => d.Warehouse).WithMany(p => p.Assets)
-                .HasForeignKey(d => d.WarehouseId)
+        modelBuilder.Entity<AssetCapitalization>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__AssetCap__3214EC073EF1F07D");
+
+            entity.ToTable("AssetCapitalization");
+
+            entity.Property(e => e.CapitalizedDate).HasColumnType("datetime");
+            entity.Property(e => e.CreateDate)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.Note).HasMaxLength(500);
+
+            entity.HasOne(d => d.AssetInstance).WithMany(p => p.AssetCapitalizations)
+                .HasForeignKey(d => d.AssetInstanceId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Asset__Warehouse__5CD6CB2B");
+                .HasConstraintName("FK__AssetCapi__Asset__22751F6C");
+
+            entity.HasOne(d => d.CapitalizedByNavigation).WithMany(p => p.AssetCapitalizations)
+                .HasForeignKey(d => d.CapitalizedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__AssetCapi__Capit__236943A5");
         });
 
         modelBuilder.Entity<AssetCategory>(entity =>
         {
-            entity.HasKey(e => e.CategoryId).HasName("PK__AssetCat__19093A0BBD9AABBB");
+            entity.HasKey(e => e.CategoryId).HasName("PK__AssetCat__19093A0BC0D69447");
 
             entity.ToTable("AssetCategory");
 
             entity.Property(e => e.Name).HasMaxLength(255);
         });
 
+        modelBuilder.Entity<AssetInstance>(entity =>
+        {
+            entity.HasKey(e => e.AssetInstanceId).HasName("PK__AssetIns__77D4DF30B2B01E14");
+
+            entity.ToTable("AssetInstance");
+
+            entity.HasIndex(e => e.InstanceCode, "UQ__AssetIns__5850F4DD9DE29C5B").IsUnique();
+
+            entity.Property(e => e.Condition).HasMaxLength(255);
+            entity.Property(e => e.ContractNo).HasMaxLength(100);
+            entity.Property(e => e.CurrentValue).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.InstanceCode).HasMaxLength(100);
+            entity.Property(e => e.OriginalPrice).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.SerialNumber).HasMaxLength(100);
+
+            entity.HasOne(d => d.Asset).WithMany(p => p.AssetInstances)
+                .HasForeignKey(d => d.AssetId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__AssetInst__Asset__60A75C0F");
+
+            entity.HasOne(d => d.DepreciationPolicy).WithMany(p => p.AssetInstances)
+                .HasForeignKey(d => d.DepreciationPolicyId)
+                .HasConstraintName("FK__AssetInst__Depre__628FA481");
+
+            entity.HasOne(d => d.Supplier).WithMany(p => p.AssetInstances)
+                .HasForeignKey(d => d.SupplierId)
+                .HasConstraintName("FK__AssetInst__Suppl__6383C8BA");
+
+            entity.HasOne(d => d.Warehouse).WithMany(p => p.AssetInstances)
+                .HasForeignKey(d => d.WarehouseId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__AssetInst__Wareh__619B8048");
+        });
+
         modelBuilder.Entity<AssetLifeCycle>(entity =>
         {
-            entity.HasKey(e => e.AuditId).HasName("PK__AssetLif__A17F2398D8AAD078");
+            entity.HasKey(e => e.AuditId).HasName("PK__AssetLif__A17F2398E8C47F27");
 
             entity.ToTable("AssetLifeCycle");
 
@@ -203,41 +244,41 @@ public partial class EaldsDbContext :
             entity.HasOne(d => d.ActorRole).WithMany(p => p.AssetLifeCycles)
                 .HasForeignKey(d => d.ActorRoleId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__AssetLife__Actor__76969D2E");
+                .HasConstraintName("FK__AssetLife__Actor__40F9A68C");
 
             entity.HasOne(d => d.ActorUser).WithMany(p => p.AssetLifeCycles)
                 .HasForeignKey(d => d.ActorUserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__AssetLife__Actor__75A278F5");
+                .HasConstraintName("FK__AssetLife__Actor__40058253");
 
-            entity.HasOne(d => d.Asset).WithMany(p => p.AssetLifeCycles)
-                .HasForeignKey(d => d.AssetId)
+            entity.HasOne(d => d.AssetInstance).WithMany(p => p.AssetLifeCycles)
+                .HasForeignKey(d => d.AssetInstanceId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__AssetLife__Occur__74AE54BC");
+                .HasConstraintName("FK__AssetLife__Asset__3E1D39E1");
         });
 
         modelBuilder.Entity<AssetLocation>(entity =>
         {
-            entity.HasKey(e => e.LocationId).HasName("PK__AssetLoc__E7FEA497FCEA8382");
+            entity.HasKey(e => e.LocationId).HasName("PK__AssetLoc__E7FEA497F14528B5");
 
             entity.ToTable("AssetLocation");
 
             entity.Property(e => e.Note).HasMaxLength(255);
 
-            entity.HasOne(d => d.Asset).WithMany(p => p.AssetLocations)
-                .HasForeignKey(d => d.AssetId)
+            entity.HasOne(d => d.AssetInstance).WithMany(p => p.AssetLocations)
+                .HasForeignKey(d => d.AssetInstanceId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__AssetLoca__Asset__6FE99F9F");
+                .HasConstraintName("FK__AssetLoca__Asset__2A164134");
 
             entity.HasOne(d => d.Department).WithMany(p => p.AssetLocations)
                 .HasForeignKey(d => d.DepartmentId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__AssetLoca__Depar__70DDC3D8");
+                .HasConstraintName("FK__AssetLoca__Depar__2B0A656D");
         });
 
         modelBuilder.Entity<AssetRequest>(entity =>
         {
-            entity.HasKey(e => e.AssetRequestId).HasName("PK__AssetReq__0CA9D3840B64CC53");
+            entity.HasKey(e => e.AssetRequestId).HasName("PK__AssetReq__0CA9D384149A863E");
 
             entity.ToTable("AssetRequest");
 
@@ -249,22 +290,32 @@ public partial class EaldsDbContext :
 
             entity.HasOne(d => d.Asset).WithMany(p => p.AssetRequests)
                 .HasForeignKey(d => d.AssetId)
-                .HasConstraintName("FK__AssetRequ__Asset__6383C8BA");
+                .HasConstraintName("FK__AssetRequ__Asset__72C60C4A");
+
+            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.AssetRequestCreatedByNavigations)
+                .HasForeignKey(d => d.CreatedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__AssetRequ__Creat__75A278F5");
 
             entity.HasOne(d => d.RequestType).WithMany(p => p.AssetRequests)
                 .HasForeignKey(d => d.RequestTypeId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__AssetRequ__Reque__628FA481");
+                .HasConstraintName("FK__AssetRequ__Reque__73BA3083");
 
-            entity.HasOne(d => d.User).WithMany(p => p.AssetRequests)
+            entity.HasOne(d => d.Step).WithMany(p => p.AssetRequests)
+                .HasForeignKey(d => d.StepId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__AssetRequ__StepI__76969D2E");
+
+            entity.HasOne(d => d.User).WithMany(p => p.AssetRequestUsers)
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__AssetRequ__UserI__619B8048");
+                .HasConstraintName("FK__AssetRequ__UserI__71D1E811");
         });
 
         modelBuilder.Entity<AssetRequestRecord>(entity =>
         {
-            entity.HasKey(e => e.RecordId).HasName("PK__AssetReq__FBDF78E9FDA92C09");
+            entity.HasKey(e => e.RecordId).HasName("PK__AssetReq__FBDF78E98E724F48");
 
             entity.ToTable("AssetRequestRecord");
 
@@ -273,22 +324,39 @@ public partial class EaldsDbContext :
             entity.HasOne(d => d.ActionByUser).WithMany(p => p.AssetRequestRecords)
                 .HasForeignKey(d => d.ActionByUserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__AssetRequ__Actio__1AD3FDA4");
+                .HasConstraintName("FK__AssetRequ__Actio__7A672E12");
 
             entity.HasOne(d => d.ActionRole).WithMany(p => p.AssetRequestRecords)
                 .HasForeignKey(d => d.ActionRoleId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__AssetRequ__Actio__1BC821DD");
+                .HasConstraintName("FK__AssetRequ__Actio__7B5B524B");
 
             entity.HasOne(d => d.AssetRequest).WithMany(p => p.AssetRequestRecords)
                 .HasForeignKey(d => d.AssetRequestId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__AssetRequ__Asset__19DFD96B");
+                .HasConstraintName("FK__AssetRequ__Asset__797309D9");
+        });
+
+        modelBuilder.Entity<AssetRevaluation>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__AssetRev__3214EC07A8625110");
+
+            entity.ToTable("AssetRevaluation");
+
+            entity.Property(e => e.EffectiveDate).HasColumnType("datetime");
+            entity.Property(e => e.NewValue).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.OldValue).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.Reason).HasMaxLength(500);
+
+            entity.HasOne(d => d.AssetInstance).WithMany(p => p.AssetRevaluations)
+                .HasForeignKey(d => d.AssetInstanceId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__AssetReva__Asset__2739D489");
         });
 
         modelBuilder.Entity<AssetType>(entity =>
         {
-            entity.HasKey(e => e.AssetTypeId).HasName("PK__AssetTyp__FD33C2C25C7997D4");
+            entity.HasKey(e => e.AssetTypeId).HasName("PK__AssetTyp__FD33C2C2272E2154");
 
             entity.ToTable("AssetType");
 
@@ -297,31 +365,31 @@ public partial class EaldsDbContext :
             entity.HasOne(d => d.Category).WithMany(p => p.AssetTypes)
                 .HasForeignKey(d => d.CategoryId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__AssetType__Categ__5629CD9C");
+                .HasConstraintName("FK__AssetType__Categ__5535A963");
         });
 
         modelBuilder.Entity<AssetUsage>(entity =>
         {
-            entity.HasKey(e => e.UsageId).HasName("PK__AssetUsa__29B197202990F957");
+            entity.HasKey(e => e.UsageId).HasName("PK__AssetUsa__29B19720AFF0A6B2");
 
             entity.ToTable("AssetUsage");
 
             entity.Property(e => e.Note).HasMaxLength(255);
 
-            entity.HasOne(d => d.Asset).WithMany(p => p.AssetUsages)
-                .HasForeignKey(d => d.AssetId)
+            entity.HasOne(d => d.AssetInstance).WithMany(p => p.AssetUsages)
+                .HasForeignKey(d => d.AssetInstanceId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__AssetUsag__Asset__6C190EBB");
+                .HasConstraintName("FK__AssetUsag__Asset__2DE6D218");
 
             entity.HasOne(d => d.Employee).WithMany(p => p.AssetUsages)
                 .HasForeignKey(d => d.EmployeeId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__AssetUsag__Emplo__6D0D32F4");
+                .HasConstraintName("FK__AssetUsag__Emplo__2EDAF651");
         });
 
         modelBuilder.Entity<Department>(entity =>
         {
-            entity.HasKey(e => e.DepartmentId).HasName("PK__Departme__B2079BED77FCD9A8");
+            entity.HasKey(e => e.DepartmentId).HasName("PK__Departme__B2079BED26A9D39F");
 
             entity.ToTable("Department");
 
@@ -332,15 +400,19 @@ public partial class EaldsDbContext :
             entity.Property(e => e.Name).HasMaxLength(255);
             entity.Property(e => e.UpdateDate).HasColumnType("datetime");
 
-            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.Departments)
+            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.DepartmentCreatedByNavigations)
                 .HasForeignKey(d => d.CreatedBy)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Departmen__Updat__4222D4EF");
+                .HasConstraintName("FK__Departmen__Creat__440B1D61");
+
+            entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.DepartmentUpdatedByNavigations)
+                .HasForeignKey(d => d.UpdatedBy)
+                .HasConstraintName("FK__Departmen__Updat__44FF419A");
         });
 
         modelBuilder.Entity<DepreciationPolicy>(entity =>
         {
-            entity.HasKey(e => e.PolicyId).HasName("PK__Deprecia__2E1339A4DBD75EB5");
+            entity.HasKey(e => e.PolicyId).HasName("PK__Deprecia__2E1339A4232D15BE");
 
             entity.ToTable("DepreciationPolicy");
 
@@ -351,75 +423,87 @@ public partial class EaldsDbContext :
             entity.Property(e => e.SalvageValue).HasColumnType("decimal(18, 2)");
         });
 
-        modelBuilder.Entity<DiposalRecord>(entity =>
+        modelBuilder.Entity<DepreciationRecord>(entity =>
         {
-            entity.HasKey(e => e.DiposalId).HasName("PK__DiposalR__EF94B94CAAD0B945");
+            entity.HasKey(e => e.RecordId).HasName("PK__Deprecia__FBDF78E9E2167956");
 
-            entity.ToTable("DiposalRecord");
-
-            entity.Property(e => e.DiposalDate).HasColumnType("datetime");
-            entity.Property(e => e.DiposalValue).HasColumnType("decimal(18, 2)");
-
-            entity.HasOne(d => d.Asset).WithMany(p => p.DiposalRecords)
-                .HasForeignKey(d => d.AssetId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__DiposalRe__Asset__123EB7A3");
-
-            entity.HasOne(d => d.AssetRequest).WithMany(p => p.DiposalRecords)
-                .HasForeignKey(d => d.AssetRequestId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__DiposalRe__Asset__1332DBDC");
-
-            entity.HasOne(d => d.ExecutedByNavigation).WithMany(p => p.DiposalRecords)
-                .HasForeignKey(d => d.ExecutedBy)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__DiposalRe__Execu__14270015");
-        });
-
-        modelBuilder.Entity<Document>(entity =>
-        {
-            entity.HasKey(e => e.DocumentId).HasName("PK__Document__1ABEEF0FA851738F");
-
-            entity.ToTable("Document");
-
-            entity.Property(e => e.FileUrl).HasMaxLength(500);
-            entity.Property(e => e.UploadedDate)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
-
-            entity.HasOne(d => d.Procurement).WithMany(p => p.Documents)
-                .HasForeignKey(d => d.ProcurementId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Document__Procur__03F0984C");
-        });
-
-        modelBuilder.Entity<DrepreciationRecord>(entity =>
-        {
-            entity.HasKey(e => e.RecordId).HasName("PK__Drepreci__FBDF78E9C90EFE9C");
-
-            entity.ToTable("DrepreciationRecord");
+            entity.ToTable("DepreciationRecord");
 
             entity.Property(e => e.AccumulatedDepreciation).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.CreateDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
             entity.Property(e => e.DepreciationAmount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.OriginalValue).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.RemainingValue).HasColumnType("decimal(18, 2)");
 
-            entity.HasOne(d => d.Asset).WithMany(p => p.DrepreciationRecords)
-                .HasForeignKey(d => d.AssetId)
+            entity.HasOne(d => d.AssetInstance).WithMany(p => p.DepreciationRecords)
+                .HasForeignKey(d => d.AssetInstanceId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Dreprecia__Asset__0E6E26BF");
+                .HasConstraintName("FK__Depreciat__Asset__1CBC4616");
 
-            entity.HasOne(d => d.Policy).WithMany(p => p.DrepreciationRecords)
+            entity.HasOne(d => d.Policy).WithMany(p => p.DepreciationRecords)
                 .HasForeignKey(d => d.PolicyId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Dreprecia__Polic__0F624AF8");
+                .HasConstraintName("FK__Depreciat__Polic__1DB06A4F");
+        });
+
+        modelBuilder.Entity<DisposalRecord>(entity =>
+        {
+            entity.HasKey(e => e.DiposalId).HasName("PK__Disposal__EF94B94C724A5094");
+
+            entity.ToTable("DisposalRecord");
+
+            entity.Property(e => e.DiposalDate).HasColumnType("datetime");
+            entity.Property(e => e.DiposalValue).HasColumnType("decimal(18, 2)");
+
+            entity.HasOne(d => d.AssetInstance).WithMany(p => p.DisposalRecords)
+                .HasForeignKey(d => d.AssetInstanceId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__DisposalR__Asset__395884C4");
+
+            entity.HasOne(d => d.AssetRequest).WithMany(p => p.DisposalRecords)
+                .HasForeignKey(d => d.AssetRequestId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__DisposalR__Asset__3A4CA8FD");
+
+            entity.HasOne(d => d.ExecutedByNavigation).WithMany(p => p.DisposalRecords)
+                .HasForeignKey(d => d.ExecutedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__DisposalR__Execu__3B40CD36");
+        });
+
+        modelBuilder.Entity<Document>(entity =>
+        {
+            entity.HasKey(e => e.DocumentId).HasName("PK__Document__1ABEEF0F5ED0199F");
+
+            entity.ToTable("Document");
+
+            entity.Property(e => e.FileUrl).HasMaxLength(500);
+            entity.Property(e => e.UploadedDate).HasColumnType("datetime");
+
+            entity.HasOne(d => d.Asset).WithMany(p => p.Documents)
+                .HasForeignKey(d => d.AssetId)
+                .HasConstraintName("FK__Document__AssetI__681373AD");
+
+            entity.HasOne(d => d.AssetInstance).WithMany(p => p.Documents)
+                .HasForeignKey(d => d.AssetInstanceId)
+                .HasConstraintName("FK__Document__AssetI__690797E6");
+
+            entity.HasOne(d => d.Procurement).WithMany(p => p.Documents)
+                .HasForeignKey(d => d.ProcurementId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__Document__Procur__671F4F74");
+
+            entity.HasOne(d => d.UploadedByNavigation).WithMany(p => p.Documents)
+                .HasForeignKey(d => d.UploadedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__Document__Upload__69FBBC1F");
         });
 
         modelBuilder.Entity<Employee>(entity =>
         {
-            entity.HasKey(e => e.EmployeeId).HasName("PK__Employee__7AD04F119EA8424A");
+            entity.HasKey(e => e.EmployeeId).HasName("PK__Employee__7AD04F11C9C10578");
 
             entity.ToTable("Employee");
 
@@ -436,22 +520,39 @@ public partial class EaldsDbContext :
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.EmployeeCreatedByNavigations)
                 .HasForeignKey(d => d.CreatedBy)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Employee__Create__47DBAE45");
+                .HasConstraintName("FK__Employee__Create__4AB81AF0");
 
             entity.HasOne(d => d.Department).WithMany(p => p.Employees)
                 .HasForeignKey(d => d.DepartmentId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Employee__Depart__46E78A0C");
+                .HasConstraintName("FK__Employee__Depart__48CFD27E");
+
+            entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.EmployeeUpdatedByNavigations)
+                .HasForeignKey(d => d.UpdatedBy)
+                .HasConstraintName("FK__Employee__Update__4BAC3F29");
 
             entity.HasOne(d => d.User).WithMany(p => p.EmployeeUsers)
                 .HasForeignKey(d => d.UserId)
+                .HasConstraintName("FK__Employee__UserId__47DBAE45");
+        });
+
+        modelBuilder.Entity<Guarantee>(entity =>
+        {
+            entity.HasKey(e => e.GuaranteeId).HasName("PK__Guarante__7EC2C760D57AA5BF");
+
+            entity.ToTable("Guarantee");
+
+            entity.Property(e => e.WarrantyPeriodUnit).HasMaxLength(20);
+
+            entity.HasOne(d => d.AssetInstance).WithMany(p => p.Guarantees)
+                .HasForeignKey(d => d.AssetInstanceId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Employee__UserId__45F365D3");
+                .HasConstraintName("FK__Guarantee__Asset__66603565");
         });
 
         modelBuilder.Entity<InventoryDiscrepancy>(entity =>
         {
-            entity.HasKey(e => e.DiscrepancyId).HasName("PK__Inventor__7462A89253901749");
+            entity.HasKey(e => e.DiscrepancyId).HasName("PK__Inventor__7462A8927CE32C55");
 
             entity.ToTable("InventoryDiscrepancy");
 
@@ -461,30 +562,30 @@ public partial class EaldsDbContext :
             entity.HasOne(d => d.ActualLocation).WithMany(p => p.InventoryDiscrepancyActualLocations)
                 .HasForeignKey(d => d.ActualLocationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Inventory__Actua__55F4C372");
+                .HasConstraintName("FK__Inventory__Actua__5CA1C101");
 
             entity.HasOne(d => d.ActualUser).WithMany(p => p.InventoryDiscrepancyActualUsers)
                 .HasForeignKey(d => d.ActualUserId)
-                .HasConstraintName("FK__Inventory__Actua__57DD0BE4");
+                .HasConstraintName("FK__Inventory__Actua__5D95E53A");
 
             entity.HasOne(d => d.BookLocation).WithMany(p => p.InventoryDiscrepancyBookLocations)
                 .HasForeignKey(d => d.BookLocationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Inventory__BookL__55009F39");
+                .HasConstraintName("FK__Inventory__BookL__5AB9788F");
 
             entity.HasOne(d => d.BookUser).WithMany(p => p.InventoryDiscrepancyBookUsers)
                 .HasForeignKey(d => d.BookUserId)
-                .HasConstraintName("FK__Inventory__BookU__56E8E7AB");
+                .HasConstraintName("FK__Inventory__BookU__5BAD9CC8");
 
             entity.HasOne(d => d.Task).WithMany(p => p.InventoryDiscrepancies)
                 .HasForeignKey(d => d.TaskId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Inventory__TaskI__540C7B00");
+                .HasConstraintName("FK__Inventory__TaskI__59C55456");
         });
 
         modelBuilder.Entity<InventoryRecord>(entity =>
         {
-            entity.HasKey(e => e.RecordId).HasName("PK__Inventor__FBDF78E9EA25DCF8");
+            entity.HasKey(e => e.RecordId).HasName("PK__Inventor__FBDF78E9849746D0");
 
             entity.ToTable("InventoryRecord");
 
@@ -494,142 +595,104 @@ public partial class EaldsDbContext :
             entity.HasOne(d => d.ActualLocation).WithMany(p => p.InventoryRecords)
                 .HasForeignKey(d => d.ActualLocationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Inventory__Actua__4F47C5E3");
+                .HasConstraintName("FK__Inventory__Actua__55009F39");
 
             entity.HasOne(d => d.ActualUser).WithMany(p => p.InventoryRecordActualUsers)
                 .HasForeignKey(d => d.ActualUserId)
-                .HasConstraintName("FK__Inventory__Actua__503BEA1C");
+                .HasConstraintName("FK__Inventory__Actua__55F4C372");
 
             entity.HasOne(d => d.CheckedByNavigation).WithMany(p => p.InventoryRecordCheckedByNavigations)
                 .HasForeignKey(d => d.CheckedBy)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Inventory__Check__51300E55");
+                .HasConstraintName("FK__Inventory__Check__56E8E7AB");
 
             entity.HasOne(d => d.Task).WithMany(p => p.InventoryRecords)
                 .HasForeignKey(d => d.TaskId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Inventory__DateC__4E53A1AA");
+                .HasConstraintName("FK__Inventory__TaskI__540C7B00");
         });
 
         modelBuilder.Entity<InventorySession>(entity =>
         {
-            entity.HasKey(e => e.SessionId).HasName("PK__Inventor__C9F49290BE3C907A");
+            entity.HasKey(e => e.SessionId).HasName("PK__Inventor__C9F492905C02132E");
 
             entity.ToTable("InventorySession");
 
-            entity.HasIndex(e => e.Code, "UQ__Inventor__A25C5AA78FAD898D").IsUnique();
-
             entity.Property(e => e.Code).HasMaxLength(50);
-            entity.Property(e => e.CreateDate).HasColumnType("datetime");
+            entity.Property(e => e.CreateDate)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
             entity.Property(e => e.EndDate).HasColumnType("datetime");
             entity.Property(e => e.Purpose).HasMaxLength(200);
             entity.Property(e => e.StartDate).HasColumnType("datetime");
 
             entity.HasOne(d => d.AssetCategory).WithMany(p => p.InventorySessions)
                 .HasForeignKey(d => d.AssetCategoryId)
-                .IsRequired(false)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Inventory__Asset__43D61337");
+                .HasConstraintName("FK__Inventory__Asset__6166761E");
 
             entity.HasOne(d => d.AssetType).WithMany(p => p.InventorySessions)
                 .HasForeignKey(d => d.AssetTypeId)
-                .IsRequired(false)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Inventory__Asset__44CA3770");
-
-            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.InventorySessions)
-                .HasForeignKey(d => d.CreatedBy)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Inventory__Creat__45BE5BA9");
+                .HasConstraintName("FK__Inventory__Asset__625A9A57");
 
             entity.HasOne(d => d.Department).WithMany(p => p.InventorySessions)
                 .HasForeignKey(d => d.DepartmentId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Inventory__Creat__42E1EEFE");
+                .HasConstraintName("FK__Inventory__Depar__607251E5");
         });
 
         modelBuilder.Entity<InventoryTask>(entity =>
         {
-            entity.HasKey(e => e.TaskId).HasName("PK__Inventor__7C6949B117E656E9");
+            entity.HasKey(e => e.TaskId).HasName("PK__Inventor__7C6949B18D0D9264");
 
             entity.ToTable("InventoryTask");
 
             entity.Property(e => e.CheckDate).HasColumnType("datetime");
 
-            entity.HasOne(d => d.Asset).WithMany(p => p.InventoryTasks)
-                .HasForeignKey(d => d.AssetId)
+            entity.HasOne(d => d.AssetInstance).WithMany(p => p.InventoryTasks)
+                .HasForeignKey(d => d.AssetInstanceId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Inventory__Asset__498EEC8D");
-
-            entity.HasOne(d => d.AssignedUser).WithMany(p => p.InventoryTasks)
-                .HasForeignKey(d => d.AssignedUserId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Inventory__Assig__4B7734FF");
-
-            entity.HasOne(d => d.Department).WithMany(p => p.InventoryTasks)
-                .HasForeignKey(d => d.DepartmentId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Inventory__Depar__4A8310C6");
+                .HasConstraintName("FK__Inventory__Asset__51300E55");
 
             entity.HasOne(d => d.Session).WithMany(p => p.InventoryTasks)
                 .HasForeignKey(d => d.SessionId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__Inventory__Sessi__489AC854");
-        });
 
-        modelBuilder.Entity<MaintenaceTask>(entity =>
-        {
-            entity.HasKey(e => e.TaskId).HasName("PK__Maintena__7C6949B1AA925102");
-
-            entity.ToTable("MaintenaceTask");
-
-            entity.Property(e => e.CreatDate)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
-            entity.Property(e => e.PlannedDate).HasColumnType("datetime");
-
-            entity.HasOne(d => d.Asset).WithMany(p => p.MaintenaceTasks)
-                .HasForeignKey(d => d.AssetId)
+            entity.HasOne(d => d.AssignedUser).WithMany()
+                .HasForeignKey(d => d.AssignedUserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Maintenac__Creat__282DF8C2");
+                .HasConstraintName("FK__Inventory__Assig__4B7734FF");
 
-            entity.HasOne(d => d.AssetRequest).WithMany(p => p.MaintenaceTasks)
-                .HasForeignKey(d => d.AssetRequestId)
-                .HasConstraintName("FK__Maintenac__Asset__2A164134");
-
-            entity.HasOne(d => d.AssignToNavigation).WithMany(p => p.MaintenaceTaskAssignToNavigations)
-                .HasForeignKey(d => d.AssignTo)
+            entity.HasOne(d => d.Department).WithMany()
+                .HasForeignKey(d => d.DepartmentId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Maintenac__Assig__2B0A656D");
-
-            entity.HasOne(d => d.CreateByNavigation).WithMany(p => p.MaintenaceTaskCreateByNavigations)
-                .HasForeignKey(d => d.CreateBy)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Maintenac__Creat__2BFE89A6");
-
-            entity.HasOne(d => d.Schedule).WithMany(p => p.MaintenaceTasks)
-                .HasForeignKey(d => d.ScheduleId)
-                .HasConstraintName("FK__Maintenac__Sched__29221CFB");
+                .HasConstraintName("FK__Inventory__Depar__4A8310C6");
         });
 
         modelBuilder.Entity<MaintenanceRecord>(entity =>
         {
-            entity.HasKey(e => e.RecordId).HasName("PK__Maintena__FBDF78E957EB0F1D");
+            entity.HasKey(e => e.RecordId).HasName("PK__Maintena__FBDF78E9761393DB");
 
             entity.ToTable("MaintenanceRecord");
 
             entity.Property(e => e.ExecutionDate).HasColumnType("datetime");
+            entity.Property(e => e.PerformedBy).HasMaxLength(255);
             entity.Property(e => e.TotalCost).HasColumnType("decimal(18, 2)");
+
+            entity.HasOne(d => d.AssetInstance).WithMany(p => p.MaintenanceRecords)
+                .HasForeignKey(d => d.AssetInstanceId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__Maintenan__Asset__123EB7A3");
 
             entity.HasOne(d => d.Task).WithMany(p => p.MaintenanceRecords)
                 .HasForeignKey(d => d.TaskId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Maintenan__Techn__2EDAF651");
+                .HasConstraintName("FK__Maintenan__TaskI__114A936A");
         });
 
         modelBuilder.Entity<MaintenanceSchedule>(entity =>
         {
-            entity.HasKey(e => e.ScheduleId).HasName("PK__Maintena__9C8A5B496EFEDE90");
+            entity.HasKey(e => e.ScheduleId).HasName("PK__Maintena__9C8A5B4973846E72");
 
             entity.ToTable("MaintenanceSchedule");
 
@@ -637,28 +700,67 @@ public partial class EaldsDbContext :
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
             entity.Property(e => e.EndDate).HasColumnType("datetime");
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.NextDueDate).HasColumnType("datetime");
             entity.Property(e => e.StartDate).HasColumnType("datetime");
 
             entity.HasOne(d => d.Asset).WithMany(p => p.MaintenanceSchedules)
                 .HasForeignKey(d => d.AssetId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Maintenan__Asset__236943A5");
+                .HasConstraintName("FK__Maintenan__Asset__01142BA1");
 
-            entity.HasOne(d => d.CreateByNavigation).WithMany(p => p.MaintenanceSchedules)
-                .HasForeignKey(d => d.CreateBy)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Maintenan__Creat__245D67DE");
+            entity.HasOne(d => d.AssetInstance).WithMany(p => p.MaintenanceSchedules)
+                .HasForeignKey(d => d.AssetInstanceId)
+                .HasConstraintName("FK__Maintenan__Asset__02084FDA");
 
             entity.HasOne(d => d.Template).WithMany(p => p.MaintenanceSchedules)
                 .HasForeignKey(d => d.TemplateId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Maintenan__Templ__22751F6C");
+                .HasConstraintName("FK__Maintenan__Templ__02FC7413");
+        });
+
+        modelBuilder.Entity<MaintenanceTask>(entity =>
+        {
+            entity.HasKey(e => e.TaskId).HasName("PK__Maintena__7C6949B13D47FD9E");
+
+            entity.ToTable("MaintenanceTask");
+
+            entity.Property(e => e.CreateDate)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.ExpectedCompletionDate).HasColumnType("datetime");
+            entity.Property(e => e.PlannedDate).HasColumnType("datetime");
+
+            entity.HasOne(d => d.AssetInstance).WithMany(p => p.MaintenanceTasks)
+                .HasForeignKey(d => d.AssetInstanceId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__Maintenan__Asset__0A9D95DB");
+
+            entity.HasOne(d => d.AssetRequest).WithMany(p => p.MaintenanceTasks)
+                .HasForeignKey(d => d.AssetRequestId)
+                .HasConstraintName("FK__Maintenan__Asset__09A971A2");
+
+            entity.HasOne(d => d.AssignToNavigation).WithMany(p => p.MaintenanceTaskAssignToNavigations)
+                .HasForeignKey(d => d.AssignTo)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__Maintenan__Assig__0B91BA14");
+
+            entity.HasOne(d => d.CreateByNavigation).WithMany(p => p.MaintenanceTaskCreateByNavigations)
+                .HasForeignKey(d => d.CreateBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK__Maintenan__Creat__0E6E26BF");
+
+            entity.HasOne(d => d.PerformerUser).WithMany(p => p.MaintenanceTaskPerformerUsers)
+                .HasForeignKey(d => d.PerformerUserId)
+                .HasConstraintName("FK__Maintenan__Perfo__0C85DE4D");
+
+            entity.HasOne(d => d.Schedule).WithMany(p => p.MaintenanceTasks)
+                .HasForeignKey(d => d.ScheduleId)
+                .HasConstraintName("FK__Maintenan__Sched__08B54D69");
         });
 
         modelBuilder.Entity<MaintenanceTemplate>(entity =>
         {
-            entity.HasKey(e => e.TemplateId).HasName("PK__Maintena__F87ADD279992E41B");
+            entity.HasKey(e => e.TemplateId).HasName("PK__Maintena__F87ADD2767695634");
 
             entity.ToTable("MaintenanceTemplate");
 
@@ -668,12 +770,12 @@ public partial class EaldsDbContext :
             entity.HasOne(d => d.AssetType).WithMany(p => p.MaintenanceTemplates)
                 .HasForeignKey(d => d.AssetTypeId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Maintenan__IsAct__1EA48E88");
+                .HasConstraintName("FK__Maintenan__Asset__7E37BEF6");
         });
 
         modelBuilder.Entity<Notification>(entity =>
         {
-            entity.HasKey(e => e.NotificationId).HasName("PK__Notifica__20CF2E12625C8C38");
+            entity.HasKey(e => e.NotificationId).HasName("PK__Notifica__20CF2E120220E04F");
 
             entity.ToTable("Notification");
 
@@ -682,119 +784,129 @@ public partial class EaldsDbContext :
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
             entity.Property(e => e.Title).HasMaxLength(255);
+
+            entity.HasOne(d => d.Ref).WithMany(p => p.NotificationRefs)
+                .HasForeignKey(d => d.RefId)
+                .HasConstraintName("FK__Notificat__RefId__6CD828CA");
+
+            entity.HasOne(d => d.User).WithMany(p => p.NotificationUsers)
+                .HasForeignKey(d => d.UserId)
+                .HasConstraintName("FK__Notificat__UserI__6DCC4D03");
         });
 
         modelBuilder.Entity<Procurement>(entity =>
         {
-            entity.HasKey(e => e.ProcurementId).HasName("PK__Procurem__95B451EC99F6191D");
+            entity.HasKey(e => e.ProcurementId).HasName("PK__Procurem__95B451EC0358F47C");
 
             entity.ToTable("Procurement");
 
             entity.Property(e => e.AdvanceAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.ContractNo).HasMaxLength(100);
-            entity.Property(e => e.CreateDate)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
+            entity.Property(e => e.CreateDate).HasColumnType("datetime");
             entity.Property(e => e.RemainingAmount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.Title).HasMaxLength(255);
             entity.Property(e => e.TotalAmount).HasColumnType("decimal(18, 2)");
 
             entity.HasOne(d => d.AssetRequest).WithMany(p => p.Procurements)
                 .HasForeignKey(d => d.AssetRequestId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Procureme__Asset__7F2BE32F");
+                .HasConstraintName("FK__Procureme__Asset__498EEC8D");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.Procurements)
                 .HasForeignKey(d => d.CreatedBy)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Procureme__Creat__00200768");
+                .HasConstraintName("FK__Procureme__Creat__4B7734FF");
 
             entity.HasOne(d => d.Supplier).WithMany(p => p.Procurements)
                 .HasForeignKey(d => d.SupplierId)
-                .HasConstraintName("FK__Procureme__Suppl__7E37BEF6");
+                .HasConstraintName("FK__Procureme__Suppl__4A8310C6");
         });
 
         modelBuilder.Entity<RepairRecord>(entity =>
         {
-            entity.HasKey(e => e.RecordId).HasName("PK__RepairRe__FBDF78E9DBAA0F0C");
+            entity.HasKey(e => e.RepairId).HasName("PK__RepairRe__07D0BC2DF4109EAC");
 
             entity.ToTable("RepairRecord");
 
             entity.Property(e => e.ActualCost).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.DamageDate).HasColumnType("datetime");
             entity.Property(e => e.RepairDate).HasColumnType("datetime");
 
             entity.HasOne(d => d.Supplier).WithMany(p => p.RepairRecords)
                 .HasForeignKey(d => d.SupplierId)
-                .HasConstraintName("FK__RepairRec__Suppl__3F115E1A");
+                .HasConstraintName("FK__RepairRec__Suppl__19DFD96B");
 
             entity.HasOne(d => d.Task).WithMany(p => p.RepairRecords)
                 .HasForeignKey(d => d.TaskId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__RepairRec__TaskI__3E1D39E1");
+                .HasConstraintName("FK__RepairRec__TaskI__18EBB532");
         });
 
         modelBuilder.Entity<RepairTask>(entity =>
         {
-            entity.HasKey(e => e.TaskId).HasName("PK__RepairTa__7C6949B11CA3EB4B");
+            entity.HasKey(e => e.TaskId).HasName("PK__RepairTa__7C6949B198BA3996");
 
             entity.ToTable("RepairTask");
 
             entity.Property(e => e.EstimatedCost).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ExpectedCompletionDate).HasColumnType("datetime");
+            entity.Property(e => e.RepairDate).HasColumnType("datetime");
 
-            entity.HasOne(d => d.Asset).WithMany(p => p.RepairTasks)
-                .HasForeignKey(d => d.AssetId)
+            entity.HasOne(d => d.AssetInstance).WithMany(p => p.RepairTasks)
+                .HasForeignKey(d => d.AssetInstanceId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__RepairTas__Asset__3A4CA8FD");
+                .HasConstraintName("FK__RepairTas__Asset__160F4887");
 
             entity.HasOne(d => d.AssetRequest).WithMany(p => p.RepairTasks)
                 .HasForeignKey(d => d.AssetRequestId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__RepairTas__Asset__3B40CD36");
+                .HasConstraintName("FK__RepairTas__Asset__151B244E");
         });
 
         modelBuilder.Entity<RequestType>(entity =>
         {
-            entity.HasKey(e => e.RequestTypeId).HasName("PK__RequestT__4D328B839803B9F3");
+            entity.HasKey(e => e.RequestTypeId).HasName("PK__RequestT__4D328B83A2AB96A0");
 
             entity.ToTable("RequestType");
 
             entity.HasOne(d => d.Workflow).WithMany(p => p.RequestTypes)
                 .HasForeignKey(d => d.WorkflowId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__RequestTy__Workf__5165187F");
+                .HasConstraintName("FK__RequestTy__Workf__6B24EA82");
         });
 
         modelBuilder.Entity<Role>(entity =>
         {
-            entity.HasKey(e => e.RoleId).HasName("PK__Role__8AFACE1ABA6BB0F6");
+            entity.HasKey(e => e.RoleId).HasName("PK__Role__8AFACE1A563411F2");
 
             entity.ToTable("Role");
 
             entity.Property(e => e.Code).HasMaxLength(50);
-            entity.Property(e => e.CreateDate)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
+            entity.Property(e => e.CreateDate).HasColumnType("datetime");
             entity.Property(e => e.Name).HasMaxLength(100);
             entity.Property(e => e.UpdateDate).HasColumnType("datetime");
 
-            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.Roles)
+            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.RoleCreatedByNavigations)
                 .HasForeignKey(d => d.CreatedBy)
-                .HasConstraintName("FK__Role__UpdatedBy__3B75D760");
+                .HasConstraintName("FK__Role__CreatedBy__398D8EEE");
+
+            entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.RoleUpdatedByNavigations)
+                .HasForeignKey(d => d.UpdatedBy)
+                .HasConstraintName("FK__Role__UpdatedBy__3A81B327");
         });
 
         modelBuilder.Entity<Supplier>(entity =>
         {
-            entity.HasKey(e => e.SupplierId).HasName("PK__Supplier__4BE666B4C484C0AA");
+            entity.HasKey(e => e.SupplierId).HasName("PK__Supplier__4BE666B4EB2A600C");
 
             entity.ToTable("Supplier");
 
-            entity.HasIndex(e => e.Code, "UQ__Supplier__A25C5AA73A268A53").IsUnique();
-
-            entity.Property(e => e.Address).HasMaxLength(255);
             entity.Property(e => e.Code).HasMaxLength(50);
+            entity.Property(e => e.ContactName).HasMaxLength(255);
             entity.Property(e => e.CreateDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
-            entity.Property(e => e.Email).HasMaxLength(255);
+            entity.Property(e => e.Email).HasMaxLength(100);
             entity.Property(e => e.Name).HasMaxLength(255);
             entity.Property(e => e.Phone).HasMaxLength(50);
             entity.Property(e => e.TaxCode).HasMaxLength(50);
@@ -802,53 +914,46 @@ public partial class EaldsDbContext :
 
         modelBuilder.Entity<TransferRecord>(entity =>
         {
-            entity.HasKey(e => e.RecordId).HasName("PK__Transfer__FBDF78E93D1B7772");
+            entity.HasKey(e => e.TransferId).HasName("PK__Transfer__9549009117796871");
 
             entity.ToTable("TransferRecord");
 
             entity.Property(e => e.TransferDate).HasColumnType("datetime");
 
-            entity.HasOne(d => d.Asset).WithMany(p => p.TransferRecords)
-                .HasForeignKey(d => d.AssetId)
+            entity.HasOne(d => d.AssetInstance).WithMany(p => p.TransferRecords)
+                .HasForeignKey(d => d.AssetInstanceId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__TransferR__Asset__31B762FC");
 
-            entity.HasOne(d => d.AssetRequest).WithMany(p => p.TransferRecords)
-                .HasForeignKey(d => d.AssetRequestId)
+            entity.HasOne(d => d.ExecutedByNavigation).WithMany(p => p.TransferRecordExecutedByNavigations)
+                .HasForeignKey(d => d.ExecutedBy)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__TransferR__Asset__32AB8735");
-
-            entity.HasOne(d => d.ExecuteByNavigation).WithMany(p => p.TransferRecordExecuteByNavigations)
-                .HasForeignKey(d => d.ExecuteBy)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__TransferR__Execu__37703C52");
+                .HasConstraintName("FK__TransferR__Execu__367C1819");
 
             entity.HasOne(d => d.FromLocation).WithMany(p => p.TransferRecordFromLocations)
                 .HasForeignKey(d => d.FromLocationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__TransferR__FromL__339FAB6E");
+                .HasConstraintName("FK__TransferR__FromL__32AB8735");
 
             entity.HasOne(d => d.FromUser).WithMany(p => p.TransferRecordFromUsers)
                 .HasForeignKey(d => d.FromUserId)
-                .HasConstraintName("FK__TransferR__FromU__3587F3E0");
+                .HasConstraintName("FK__TransferR__FromU__3493CFA7");
 
             entity.HasOne(d => d.ToLocation).WithMany(p => p.TransferRecordToLocations)
                 .HasForeignKey(d => d.ToLocationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__TransferR__ToLoc__3493CFA7");
+                .HasConstraintName("FK__TransferR__ToLoc__339FAB6E");
 
             entity.HasOne(d => d.ToUser).WithMany(p => p.TransferRecordToUsers)
                 .HasForeignKey(d => d.ToUserId)
-                .HasConstraintName("FK__TransferR__ToUse__367C1819");
+                .HasConstraintName("FK__TransferR__ToUse__3587F3E0");
         });
 
         modelBuilder.Entity<User>(entity =>
         {
-            entity.HasKey(e => e.UserId).HasName("PK__User__1788CC4CD9659AAB");
+            entity.HasKey(e => e.UserId).HasName("PK__User__1788CC4C972967A3");
 
             entity.ToTable("User");
-
-            entity.HasIndex(e => e.Email, "UQ__User__A9D10534A0864F67").IsUnique();
 
             entity.Property(e => e.Email).HasMaxLength(255);
             entity.Property(e => e.Password).HasMaxLength(255);
@@ -860,24 +965,34 @@ public partial class EaldsDbContext :
 
         modelBuilder.Entity<UserRole>(entity =>
         {
-            entity
-                .HasNoKey()
-                .ToTable("UserRole");
+            entity.HasKey(e => new { e.UserId, e.RoleId }).HasName("PK__UserRole__AF2760AD8BB657A6");
 
-            entity.HasOne(d => d.Role).WithMany()
+            entity.ToTable("UserRole");
+
+            entity.HasOne(d => d.Role).WithMany(p => p.UserRoles)
                 .HasForeignKey(d => d.RoleId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__UserRole__RoleId__3E52440B");
 
-            entity.HasOne(d => d.User).WithMany()
+            entity.HasOne(d => d.User).WithMany(p => p.UserRoles)
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__UserRole__UserId__3D5E1FD2");
         });
 
+        modelBuilder.Entity<Warehouse>(entity =>
+        {
+            entity.HasKey(e => e.WarehouseId).HasName("PK__Warehous__2608AFF9DCDCCD11");
+
+            entity.ToTable("Warehouse");
+
+            entity.Property(e => e.Location).HasMaxLength(500);
+            entity.Property(e => e.Name).HasMaxLength(255);
+        });
+
         modelBuilder.Entity<WarehouseAsset>(entity =>
         {
-            entity.HasKey(e => e.WarehouseId).HasName("PK__Warehous__2608AFF9C170F644");
+            entity.HasKey(e => e.WarehouseId).HasName("PK__Warehous__2608AFF9DBC6D596");
 
             entity.ToTable("WarehouseAsset");
 
@@ -887,31 +1002,29 @@ public partial class EaldsDbContext :
 
         modelBuilder.Entity<Workflow>(entity =>
         {
-            entity.HasKey(e => e.WorkflowId).HasName("PK__Workflow__5704A66A5F7ECD21");
+            entity.HasKey(e => e.WorkflowId).HasName("PK__Workflow__5704A66A04CD835A");
 
             entity.ToTable("Workflow");
 
-            entity.Property(e => e.CreateDate)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
+            entity.Property(e => e.CreateDate).HasColumnType("datetime");
             entity.Property(e => e.Name).HasMaxLength(255);
         });
 
         modelBuilder.Entity<WorkflowStep>(entity =>
         {
-            entity.HasKey(e => e.StepId).HasName("PK__Workflow__24343357E49AFA53");
+            entity.HasKey(e => e.StepId).HasName("PK__Workflow__243433572DEEF651");
 
             entity.ToTable("WorkflowStep");
 
             entity.HasOne(d => d.Role).WithMany(p => p.WorkflowSteps)
                 .HasForeignKey(d => d.RoleId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__WorkflowS__RoleI__4E88ABD4");
+                .HasConstraintName("FK__WorkflowS__RoleI__6EF57B66");
 
             entity.HasOne(d => d.Workflow).WithMany(p => p.WorkflowSteps)
                 .HasForeignKey(d => d.WorkflowId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__WorkflowS__Workf__4D94879B");
+                .HasConstraintName("FK__WorkflowS__Workf__6E01572D");
         });
 
         OnModelCreatingPartial(modelBuilder);

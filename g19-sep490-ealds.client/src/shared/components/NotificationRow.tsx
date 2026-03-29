@@ -1,4 +1,4 @@
-import { NOTIFICATION_TYPE_CONFIG } from '../data/notificationsMockData';
+import { getNotificationTypeConfig } from '../services/notificationService';
 import type { NotificationItem } from '../types/notification.types';
 import './NotificationRow.css';
 
@@ -12,7 +12,7 @@ interface NotificationRowProps {
 }
 
 export function NotificationRow({ item, onClick, className = '', showChevron = false }: NotificationRowProps) {
-  const config = NOTIFICATION_TYPE_CONFIG[item.type];
+  const config = getNotificationTypeConfig(item.type);
   return (
     <button
       type="button"

@@ -59,8 +59,12 @@ export interface SessionDetail {
 }
 
 export interface SessionAssetCheckItem {
+  /** Catalog (master) asset id */
   assetId: number;
+  /** Physical row being counted */
+  assetInstanceId: number;
   assetCode: string;
+  instanceCode: string;
   assetName: string;
   departmentName: string;
   bookQty: number;
@@ -78,7 +82,9 @@ export interface AssetStatusEntry {
 
 export interface AssetInventoryDetail {
   assetId: number;
+  assetInstanceId: number;
   assetCode: string;
+  instanceCode: string;
   assetName: string;
   categoryName: string;
   typeName: string;
@@ -94,7 +100,7 @@ export interface AssetInventoryDetail {
 }
 
 export interface SaveAssetInventoryPayload {
-  assetId: number;
+  assetInstanceId: number;
   statusEntries: { statusKey: string; actualQty: number }[];
   actualLocationId: number | null;
   actualManagerId: number | null;
@@ -120,7 +126,9 @@ export interface InventoryDiscrepancyDetail {
   discrepancyId: number;
   taskId: number;
   assetId: number;
+  assetInstanceId: number;
   assetCode: string;
+  instanceCode: string;
   assetName: string;
   discrepancyType: number;
   discrepancyTypeName: string;
@@ -275,10 +283,10 @@ export const inventoryService = {
 
   async getAssetInventoryDetail(
     sessionId: number,
-    assetId: number,
+    assetInstanceId: number,
   ): Promise<AssetInventoryDetail> {
     const res = await inventoryApi.get<AssetInventoryDetail>(
-      `/api/inventory/sessions/${sessionId}/assets/${assetId}`,
+      `/api/inventory/sessions/${sessionId}/instances/${assetInstanceId}`,
     );
     return res.data;
   },
@@ -288,8 +296,21 @@ export const inventoryService = {
     payload: SaveAssetInventoryPayload,
   ): Promise<unknown> {
     const res = await inventoryApi.put(
-      `/api/inventory/sessions/${sessionId}/assets/${payload.assetId}`,
+      `/api/inventory/sessions/${sessionId}/instances/${payload.assetInstanceId}`,
       payload,
+    );
+    return res.data;
+  },
+
+  /** Same rows as getSessionAssets, filtered to one catalog (master) asset. */
+  async getSessionAssetsForCatalogAsset(
+    sessionId: number,
+    catalogAssetId: number,
+    params?: { keyword?: string; checkStatus?: number },
+  ): Promise<SessionAssetCheckItem[]> {
+    const res = await inventoryApi.get<SessionAssetCheckItem[]>(
+      `/api/inventory/sessions/${sessionId}/assets/${catalogAssetId}/items`,
+      { params },
     );
     return res.data;
   },

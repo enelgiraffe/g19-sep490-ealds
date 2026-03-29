@@ -55,7 +55,8 @@ export function InventoryReviewPage() {
   }, [load]);
 
   const columns: ColumnsType<InventoryDiscrepancyDetail> = [
-    { title: 'Mã TS', dataIndex: 'assetCode', key: 'assetCode', width: 110 },
+    { title: 'Mã DM', dataIndex: 'assetCode', key: 'assetCode', width: 100 },
+    { title: 'Mã TH', dataIndex: 'instanceCode', key: 'instanceCode', width: 110 },
     { title: 'Tên tài sản', dataIndex: 'assetName', key: 'assetName', ellipsis: true },
     {
       title: 'Sổ sách',

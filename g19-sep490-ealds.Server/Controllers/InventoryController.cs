@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.DTOs.Inventory;
+using g19_sep490_ealds.Server.Services.Interface;
 using g19_sep490_ealds.Server.Utils;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using Microsoft.AspNetCore.Authorization;
@@ -16,11 +17,16 @@ public class InventoryController : ControllerBase
 {
     private readonly EaldsDbContext _context;
     private readonly ILogger<InventoryController> _logger;
+    private readonly IInventoryNotificationService _inventoryNotifications;
 
-    public InventoryController(EaldsDbContext context, ILogger<InventoryController> logger)
+    public InventoryController(
+        EaldsDbContext context,
+        ILogger<InventoryController> logger,
+        IInventoryNotificationService inventoryNotifications)
     {
         _context = context;
         _logger = logger;
+        _inventoryNotifications = inventoryNotifications;
     }
 
     /// <summary>
@@ -117,9 +123,12 @@ public class InventoryController : ControllerBase
             .Include(s => s.AssetCategory)
             .Include(s => s.AssetType)
             .Include(s => s.InventoryTasks)
-                .ThenInclude(t => t.Asset)
-                    .ThenInclude(a => a.AssetLocations)
+                .ThenInclude(t => t.AssetInstance)
+                    .ThenInclude(ai => ai.AssetLocations)
                         .ThenInclude(al => al.Department)
+            .Include(s => s.InventoryTasks)
+                .ThenInclude(t => t.AssetInstance)
+                    .ThenInclude(ai => ai.Asset)
             .Include(s => s.InventoryTasks)
                 .ThenInclude(t => t.InventoryRecords)
                     .ThenInclude(r => r.ActualLocation)
@@ -138,14 +147,14 @@ public class InventoryController : ControllerBase
         if (session == null)
             return NotFound();
 
-        // Load book user names (employee name via AssetUsage)
-        var assetIds = session.InventoryTasks.Select(t => t.AssetId).ToList();
+        // Load book user names (employee name via AssetUsage on instance)
+        var instanceIds = session.InventoryTasks.Select(t => t.AssetInstanceId).ToList();
         var bookUserMap = await _context.AssetUsages
-            .Where(u => assetIds.Contains(u.AssetId) && u.IsCurrent)
+            .Where(u => instanceIds.Contains(u.AssetInstanceId) && u.IsCurrent)
             .Include(u => u.Employee)
             .AsNoTracking()
             .ToDictionaryAsync(
-                u => u.AssetId,
+                u => u.AssetInstanceId,
                 u => new { UserId = u.Employee.UserId, UserName = u.Employee.Name });
 
         // Load actual user names for inventory records
@@ -166,10 +175,13 @@ public class InventoryController : ControllerBase
                 .SelectMany(t => t.InventoryDiscrepancies)
                 .SelectMany(d => new[] { d.BookUserId, d.ActualUserId }));
 
+        const int bookQtyPerInstance = 1;
         var taskDTOs = session.InventoryTasks.Select(t =>
         {
-            var bookLocation = t.Asset.AssetLocations.FirstOrDefault(al => al.IsCurrent);
-            bookUserMap.TryGetValue(t.AssetId, out var bookUser);
+            var inst = t.AssetInstance;
+            var asset = inst.Asset;
+            var bookLocation = inst.AssetLocations.FirstOrDefault(al => al.IsCurrent);
+            bookUserMap.TryGetValue(t.AssetInstanceId, out var bookUser);
 
             var record = t.InventoryRecords.FirstOrDefault();
             InventoryRecordDTO? recordDTO = null;
@@ -195,7 +207,7 @@ public class InventoryController : ControllerBase
                 DiscrepancyType = d.DiscrepancyType,
                 DiscrepancyTypeName = BuildDiscrepancyTypeName(d.DiscrepancyType),
                 BookValue = d.BookValue,
-                BookQuantity = t.Asset.Quantity,
+                BookQuantity = bookQtyPerInstance,
                 ActualQuantity = record?.ActualQuantity,
                 TaskNote = t.Note,
                 BookDepartmentName = d.BookLocation?.Department?.Name,
@@ -212,15 +224,17 @@ public class InventoryController : ControllerBase
             return new InventoryTaskDTO
             {
                 TaskId = t.TaskId,
-                AssetId = t.AssetId,
-                AssetCode = t.Asset.Code,
-                AssetName = t.Asset.Name,
-                BookCondition = ((AssetStatus)t.Asset.Status).ToString(),
+                AssetId = asset.AssetId,
+                AssetInstanceId = inst.AssetInstanceId,
+                AssetCode = asset.Code,
+                InstanceCode = inst.InstanceCode,
+                AssetName = asset.Name,
+                BookCondition = ((AssetStatus)inst.Status).ToString(),
                 BookDepartmentId = bookLocation?.DepartmentId,
                 BookDepartmentName = bookLocation?.Department?.Name,
                 BookUserId = bookUser?.UserId,
                 BookUserName = bookUser?.UserName,
-                BookValue = t.Asset.CurrentValue,
+                BookValue = inst.CurrentValue,
                 Status = t.Status,
                 StatusName = t.Status == (int)InventoryTaskStatus.Checked ? "Đã kiểm kê" : "Chưa kiểm kê",
                 CheckDate = t.CheckDate,
@@ -265,7 +279,7 @@ public class InventoryController : ControllerBase
     }
 
     /// <summary>
-    /// GET /api/inventory/sessions/{sessionId}/assets - List asset check items for a session
+    /// GET /api/inventory/sessions/{sessionId}/assets — List every <b>asset instance</b> check row for the session (one row per physical item).
     /// </summary>
     [HttpGet("sessions/{sessionId:int}/assets")]
     public async Task<ActionResult<IEnumerable<SessionAssetCheckItemDTO>>> GetSessionAssets(
@@ -273,47 +287,87 @@ public class InventoryController : ControllerBase
         [FromQuery] string? keyword,
         [FromQuery] int? checkStatus)
     {
+        return await GetSessionAssetCheckItemsAsync(sessionId, catalogAssetId: null, keyword, checkStatus);
+    }
+
+    /// <summary>
+    /// GET /api/inventory/sessions/{sessionId}/assets/{assetId}/items — Same as /assets, but only instances belonging to catalog asset <paramref name="assetId"/>.
+    /// </summary>
+    [HttpGet("sessions/{sessionId:int}/assets/{assetId:int}/items")]
+    public async Task<ActionResult<IEnumerable<SessionAssetCheckItemDTO>>> GetSessionAssetsForCatalogAsset(
+        int sessionId,
+        int assetId,
+        [FromQuery] string? keyword,
+        [FromQuery] int? checkStatus)
+    {
+        return await GetSessionAssetCheckItemsAsync(sessionId, catalogAssetId: assetId, keyword, checkStatus);
+    }
+
+    private async Task<ActionResult<IEnumerable<SessionAssetCheckItemDTO>>> GetSessionAssetCheckItemsAsync(
+        int sessionId,
+        int? catalogAssetId,
+        string? keyword,
+        int? checkStatus)
+    {
         var gate = await EnsureInventorySessionDepartmentAccessAsync(sessionId);
         if (gate != null) return gate;
 
         var sessionExists = await _context.InventorySessions.AnyAsync(s => s.SessionId == sessionId);
         if (!sessionExists) return NotFound();
 
-        var tasks = await _context.InventoryTasks
+        var query = _context.InventoryTasks
             .Where(t => t.SessionId == sessionId)
-            .Include(t => t.Asset)
-                .ThenInclude(a => a.AssetLocations)
+            .Include(t => t.AssetInstance)
+                .ThenInclude(ai => ai.Asset)
+            .Include(t => t.AssetInstance)
+                .ThenInclude(ai => ai.AssetLocations)
                     .ThenInclude(al => al.Department)
             .Include(t => t.InventoryRecords)
             .Include(t => t.Department)
             .AsNoTracking()
-            .ToListAsync();
+            .AsQueryable();
+
+        if (catalogAssetId.HasValue)
+            query = query.Where(t => t.AssetInstance.AssetId == catalogAssetId.Value);
+
+        var tasks = await query.ToListAsync();
 
         if (!string.IsNullOrWhiteSpace(keyword))
         {
             var kw = keyword.Trim().ToLower();
             tasks = tasks
-                .Where(t => t.Asset.Code.ToLower().Contains(kw) || t.Asset.Name.ToLower().Contains(kw))
+                .Where(t =>
+                {
+                    var a = t.AssetInstance.Asset;
+                    return a.Code.ToLower().Contains(kw) ||
+                           a.Name.ToLower().Contains(kw) ||
+                           t.AssetInstance.InstanceCode.ToLower().Contains(kw);
+                })
                 .ToList();
         }
 
+        const int bookQtyPerInstance = 1;
         var result = tasks.Select(t =>
         {
+            var inst = t.AssetInstance;
+            var asset = inst.Asset;
             var record = t.InventoryRecords.FirstOrDefault();
             int? actualQty = record == null
                 ? null
-                : record.ActualQuantity ?? (record.IsFound == true ? t.Asset.Quantity : 0);
-            int? difference = actualQty.HasValue ? actualQty.Value - t.Asset.Quantity : null;
+                : record.ActualQuantity ?? (record.IsFound == true ? bookQtyPerInstance : 0);
+            int? difference = actualQty.HasValue ? actualQty.Value - bookQtyPerInstance : null;
             int cs = t.Status == (int)InventoryTaskStatus.Checked ? 2 : 0;
-            var currentLoc = t.Asset.AssetLocations.FirstOrDefault(al => al.IsCurrent);
+            var currentLoc = inst.AssetLocations.FirstOrDefault(al => al.IsCurrent);
 
             return new SessionAssetCheckItemDTO
             {
-                AssetId = t.AssetId,
-                AssetCode = t.Asset.Code,
-                AssetName = t.Asset.Name,
+                AssetId = asset.AssetId,
+                AssetInstanceId = inst.AssetInstanceId,
+                AssetCode = asset.Code,
+                InstanceCode = inst.InstanceCode,
+                AssetName = asset.Name,
                 DepartmentName = currentLoc?.Department?.Name ?? t.Department?.Name ?? string.Empty,
-                BookQty = t.Asset.Quantity,
+                BookQty = bookQtyPerInstance,
                 ActualQty = actualQty,
                 Difference = difference,
                 CheckStatus = cs
@@ -327,22 +381,24 @@ public class InventoryController : ControllerBase
     }
 
     /// <summary>
-    /// GET /api/inventory/sessions/{sessionId}/assets/{assetId} - Get detailed inventory form for one asset
+    /// GET /api/inventory/sessions/{sessionId}/instances/{assetInstanceId} — Inventory form for one <b>instance</b> (task).
     /// </summary>
-    [HttpGet("sessions/{sessionId:int}/assets/{assetId:int}")]
+    [HttpGet("sessions/{sessionId:int}/instances/{assetInstanceId:int}")]
+    [HttpGet("sessions/{sessionId:int}/assets/{assetInstanceId:int}")]
     public async Task<ActionResult<AssetInventoryDetailDTO>> GetAssetInventoryDetail(
-        int sessionId, int assetId)
+        int sessionId, int assetInstanceId)
     {
         var gate = await EnsureInventorySessionDepartmentAccessAsync(sessionId);
         if (gate != null) return gate;
 
         var task = await _context.InventoryTasks
-            .Where(t => t.SessionId == sessionId && t.AssetId == assetId)
-            .Include(t => t.Asset)
-                .ThenInclude(a => a.AssetType)
-                    .ThenInclude(at => at.Category)
-            .Include(t => t.Asset)
-                .ThenInclude(a => a.AssetLocations)
+            .Where(t => t.SessionId == sessionId && t.AssetInstanceId == assetInstanceId)
+            .Include(t => t.AssetInstance)
+                .ThenInclude(ai => ai.Asset)
+                    .ThenInclude(a => a.AssetType)
+                        .ThenInclude(at => at.Category)
+            .Include(t => t.AssetInstance)
+                .ThenInclude(ai => ai.AssetLocations)
                     .ThenInclude(al => al.Department)
             .Include(t => t.InventoryRecords)
                 .ThenInclude(r => r.ActualLocation)
@@ -352,17 +408,19 @@ public class InventoryController : ControllerBase
 
         if (task == null) return NotFound();
 
-        var asset = task.Asset;
-        var currentLoc = asset.AssetLocations.FirstOrDefault(al => al.IsCurrent);
+        var inst = task.AssetInstance;
+        var asset = inst.Asset;
+        var currentLoc = inst.AssetLocations.FirstOrDefault(al => al.IsCurrent);
 
         var bookUsage = await _context.AssetUsages
-            .Where(u => u.AssetId == assetId && u.IsCurrent)
+            .Where(u => u.AssetInstanceId == assetInstanceId && u.IsCurrent)
             .Include(u => u.Employee)
             .AsNoTracking()
             .FirstOrDefaultAsync();
 
         var record = task.InventoryRecords.FirstOrDefault();
-        int? actualQty = record == null ? null : (record.ActualQuantity ?? (record.IsFound == true ? asset.Quantity : 0));
+        const int bookQtyPerInstance = 1;
+        int? actualQty = record == null ? null : (record.ActualQuantity ?? (record.IsFound == true ? bookQtyPerInstance : 0));
         int? actualLocationId = record?.ActualLocation?.DepartmentId;
 
         var departments = await _context.Departments
@@ -371,14 +429,17 @@ public class InventoryController : ControllerBase
             .ToListAsync();
 
         var managers = await _context.Employees
+            .Where(e => e.UserId != null)
             .AsNoTracking()
-            .Select(e => new DropdownItemDTO { Id = e.UserId, Name = e.Name })
+            .Select(e => new DropdownItemDTO { Id = e.UserId!.Value, Name = e.Name })
             .ToListAsync();
 
         var dto = new AssetInventoryDetailDTO
         {
             AssetId = asset.AssetId,
+            AssetInstanceId = inst.AssetInstanceId,
             AssetCode = asset.Code,
+            InstanceCode = inst.InstanceCode,
             AssetName = asset.Name,
             CategoryName = asset.AssetType?.Category?.Name ?? string.Empty,
             TypeName = asset.AssetType?.Name ?? string.Empty,
@@ -387,8 +448,8 @@ public class InventoryController : ControllerBase
                 new AssetStatusEntryDTO
                 {
                     StatusKey = "in_use",
-                    StatusLabel = GetAssetStatusLabel(asset.Status),
-                    BookQty = asset.Quantity,
+                    StatusLabel = GetAssetStatusLabel(inst.Status),
+                    BookQty = bookQtyPerInstance,
                     ActualQty = actualQty
                 }
             },
@@ -406,14 +467,18 @@ public class InventoryController : ControllerBase
     }
 
     /// <summary>
-    /// PUT /api/inventory/sessions/{sessionId}/assets/{assetId} - Save inventory result for an asset
+    /// PUT /api/inventory/sessions/{sessionId}/instances/{assetInstanceId} — Save result for one <b>instance</b> task.
     /// </summary>
-    [HttpPut("sessions/{sessionId:int}/assets/{assetId:int}")]
+    [HttpPut("sessions/{sessionId:int}/instances/{assetInstanceId:int}")]
+    [HttpPut("sessions/{sessionId:int}/assets/{assetInstanceId:int}")]
     public async Task<ActionResult> SaveAssetInventory(
-        int sessionId, int assetId, [FromBody] SaveAssetInventoryDTO dto)
+        int sessionId, int assetInstanceId, [FromBody] SaveAssetInventoryDTO dto)
     {
         var gate = await EnsureInventorySessionDepartmentAccessAsync(sessionId);
         if (gate != null) return gate;
+
+        if (dto.AssetInstanceId > 0 && dto.AssetInstanceId != assetInstanceId)
+            return BadRequest(new { message = "AssetInstanceId trong body không khớp với đường dẫn." });
 
         var session = await _context.InventorySessions.FindAsync(sessionId);
         if (session == null) return NotFound(new { message = "Phiên kiểm kê không tồn tại." });
@@ -422,17 +487,21 @@ public class InventoryController : ControllerBase
             return BadRequest(new { message = "Chỉ có thể lưu kết quả khi phiên đang thực hiện." });
 
         var task = await _context.InventoryTasks
-            .Where(t => t.SessionId == sessionId && t.AssetId == assetId)
-            .Include(t => t.Asset)
-                .ThenInclude(a => a.AssetLocations)
+            .Where(t => t.SessionId == sessionId && t.AssetInstanceId == assetInstanceId)
+            .Include(t => t.AssetInstance)
+                .ThenInclude(ai => ai.AssetLocations)
+            .Include(t => t.AssetInstance)
+                .ThenInclude(ai => ai.Asset)
             .Include(t => t.InventoryRecords)
             .Include(t => t.InventoryDiscrepancies)
             .FirstOrDefaultAsync();
 
         if (task == null) return NotFound(new { message = "Nhiệm vụ kiểm kê không tồn tại." });
 
-        var asset = task.Asset;
-        var bookLocation = asset.AssetLocations.FirstOrDefault(al => al.IsCurrent);
+        var inst = task.AssetInstance;
+        var asset = inst.Asset;
+        var bookLocation = inst.AssetLocations.FirstOrDefault(al => al.IsCurrent);
+        const int bookQtyPerInstance = 1;
 
         // Compute total actual qty from status entries
         var totalActualQty = dto.StatusEntries.Sum(e => e.ActualQty);
@@ -442,20 +511,21 @@ public class InventoryController : ControllerBase
         AssetLocation? actualLocation = null;
         if (dto.ActualLocationId.HasValue)
         {
-            actualLocation = asset.AssetLocations
+            actualLocation = inst.AssetLocations
                 .FirstOrDefault(al => al.DepartmentId == dto.ActualLocationId.Value);
 
             if (actualLocation == null)
             {
                 actualLocation = await _context.AssetLocations
-                    .FirstOrDefaultAsync(al => al.AssetId == assetId && al.DepartmentId == dto.ActualLocationId.Value);
+                    .FirstOrDefaultAsync(al =>
+                        al.AssetInstanceId == assetInstanceId && al.DepartmentId == dto.ActualLocationId.Value);
             }
 
             if (actualLocation == null)
             {
                 actualLocation = new AssetLocation
                 {
-                    AssetId = assetId,
+                    AssetInstanceId = assetInstanceId,
                     DepartmentId = dto.ActualLocationId.Value,
                     StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
                     IsCurrent = false,
@@ -477,7 +547,7 @@ public class InventoryController : ControllerBase
         var record = task.InventoryRecords.FirstOrDefault();
         var resolvedCondition = !string.IsNullOrWhiteSpace(dto.ActualCondition)
             ? dto.ActualCondition
-            : ((AssetStatus)asset.Status).ToString();
+            : ((AssetStatus)inst.Status).ToString();
 
         if (record == null)
         {
@@ -508,7 +578,7 @@ public class InventoryController : ControllerBase
 
         // Detect discrepancies
         var bookUsage = await _context.AssetUsages
-            .Where(u => u.AssetId == assetId && u.IsCurrent)
+            .Where(u => u.AssetInstanceId == assetInstanceId && u.IsCurrent)
             .Include(u => u.Employee)
             .FirstOrDefaultAsync();
         var bookManagerId = bookUsage?.Employee?.UserId;
@@ -520,7 +590,7 @@ public class InventoryController : ControllerBase
         }
         else
         {
-            if (totalActualQty != asset.Quantity)
+            if (totalActualQty != bookQtyPerInstance)
                 discrepancyFlags |= (int)DiscrepancyType.QuantityMismatch;
 
             if (bookLocation != null && dto.ActualLocationId.HasValue &&
@@ -541,11 +611,11 @@ public class InventoryController : ControllerBase
             {
                 TaskId = task.TaskId,
                 DiscrepancyType = discrepancyFlags,
-                BookValue = asset.CurrentValue,
+                BookValue = inst.CurrentValue,
                 BookLocationId = bookLocation?.LocationId ?? actualLocation.LocationId,
                 BookUserId = bookManagerId,
-                BookCondition = ((AssetStatus)asset.Status).ToString(),
-                ActualValue = asset.CurrentValue,
+                BookCondition = ((AssetStatus)inst.Status).ToString(),
+                ActualValue = inst.CurrentValue,
                 ActualLocationId = actualLocation.LocationId,
                 ActualUserId = dto.ActualManagerId,
                 ActualCondition = resolvedCondition
@@ -589,17 +659,17 @@ public class InventoryController : ControllerBase
         if (department == null)
             return BadRequest(new { message = "Phòng ban không tồn tại." });
 
-        // Collect all active assets in the department, regardless of category/type.
-        var assets = await _context.Assets
-            .Where(a =>
-                a.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == dto.DepartmentId) &&
-                a.Status != (int)AssetStatus.Disposed &&
-                a.Status != (int)AssetStatus.Lost &&
-                a.Status != (int)AssetStatus.Liquidated)
+        // One inventory task per physical asset instance in the department.
+        var instances = await _context.AssetInstances
+            .Where(ai =>
+                ai.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == dto.DepartmentId) &&
+                ai.Status != (int)AssetStatus.Disposed &&
+                ai.Status != (int)AssetStatus.Lost &&
+                ai.Status != (int)AssetStatus.Liquidated)
             .AsNoTracking()
             .ToListAsync();
 
-        if (!assets.Any())
+        if (!instances.Any())
             return BadRequest(new { message = "Không có tài sản hợp lệ nào trong phòng ban này." });
 
         await using var transaction = await _context.Database.BeginTransactionAsync();
@@ -623,11 +693,11 @@ public class InventoryController : ControllerBase
                 PeriodDays = dto.IsPeriodic ? dto.PeriodDays : null
             };
 
-            foreach (var asset in assets)
+            foreach (var inst in instances)
             {
                 session.InventoryTasks.Add(new InventoryTask
                 {
-                    AssetId = asset.AssetId,
+                    AssetInstanceId = inst.AssetInstanceId,
                     AssignedUserId = dto.CreatedBy,
                     DepartmentId = dto.DepartmentId,
                     Status = (int)InventoryTaskStatus.Pending,
@@ -637,18 +707,7 @@ public class InventoryController : ControllerBase
 
             _context.InventorySessions.Add(session);
             await _context.SaveChangesAsync();
-
-            // Notification.Content column is VARCHAR(100) — keep the string concise
-            _context.Notifications.Add(new Notification
-            {
-                Title = $"Lịch kiểm kê: {session.Code}",
-                Content = $"Kiểm kê {session.Code} bắt đầu {session.StartDate:dd/MM/yyyy}.",
-                RefId = session.SessionId,
-                SentDate = session.StartDate,
-                IsSend = false
-            });
-
-            await _context.SaveChangesAsync();
+            // Thông báo "đến lịch" cho trưởng phòng do Quartz (InventoryScheduledCheckNotificationJob) khi tới khung ngày.
             await transaction.CommitAsync();
 
             return Ok(new { message = "Đã lên lịch kiểm kê thành công.", sessionIds = new[] { session.SessionId }, count = 1 });
@@ -679,8 +738,10 @@ public class InventoryController : ControllerBase
             return BadRequest(new { message = "Chỉ có thể ghi nhận kết quả khi phiên kiểm kê đang thực hiện." });
 
         var task = await _context.InventoryTasks
-            .Include(t => t.Asset)
-                .ThenInclude(a => a.AssetLocations)
+            .Include(t => t.AssetInstance)
+                .ThenInclude(ai => ai.AssetLocations)
+            .Include(t => t.AssetInstance)
+                .ThenInclude(ai => ai.Asset)
             .Include(t => t.InventoryRecords)
             .FirstOrDefaultAsync(t => t.TaskId == taskId && t.SessionId == id);
 
@@ -690,8 +751,8 @@ public class InventoryController : ControllerBase
         if (task.Status == (int)InventoryTaskStatus.Checked)
             return BadRequest(new { message = "Nhiệm vụ này đã được kiểm kê rồi." });
 
-        var asset = task.Asset;
-        var bookLocation = asset.AssetLocations.FirstOrDefault(al => al.IsCurrent);
+        var inst = task.AssetInstance;
+        var bookLocation = inst.AssetLocations.FirstOrDefault(al => al.IsCurrent);
         if (bookLocation == null)
             return BadRequest(new { message = "Tài sản không có thông tin vị trí trong hệ thống." });
 
@@ -707,7 +768,7 @@ public class InventoryController : ControllerBase
             // Found at a different location → find or create a non-current AssetLocation entry
             actualLocation = await _context.AssetLocations
                 .FirstOrDefaultAsync(al =>
-                    al.AssetId == task.AssetId &&
+                    al.AssetInstanceId == task.AssetInstanceId &&
                     al.DepartmentId == dto.ActualDepartmentId &&
                     !al.IsCurrent)
                 ?? new AssetLocation();
@@ -716,7 +777,7 @@ public class InventoryController : ControllerBase
             {
                 actualLocation = new AssetLocation
                 {
-                    AssetId = task.AssetId,
+                    AssetInstanceId = task.AssetInstanceId,
                     DepartmentId = dto.ActualDepartmentId,
                     StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
                     IsCurrent = false,
@@ -743,12 +804,12 @@ public class InventoryController : ControllerBase
 
         // Detect discrepancies: compare book vs actual
         var bookUsage = await _context.AssetUsages
-            .Where(u => u.AssetId == task.AssetId && u.IsCurrent)
+            .Where(u => u.AssetInstanceId == task.AssetInstanceId && u.IsCurrent)
             .Include(u => u.Employee)
             .FirstOrDefaultAsync();
         var bookUserId = bookUsage?.Employee?.UserId;
-        var bookCondition = ((AssetStatus)asset.Status).ToString();
-        var bookValue = asset.CurrentValue;
+        var bookCondition = ((AssetStatus)inst.Status).ToString();
+        var bookValue = inst.CurrentValue;
 
         int discrepancyFlags = 0;
 
@@ -848,6 +909,10 @@ public class InventoryController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        await SafeInventoryNotifyAsync(
+            () => _inventoryNotifications.NotifyDirectorsSessionAwaitingConfirmationAsync(session),
+            "complete → directors");
+
         return Ok(new
         {
             message = "Phiên kiểm kê đã được hoàn thành.",
@@ -885,7 +950,7 @@ public class InventoryController : ControllerBase
 
         var discrepancies = await _context.InventoryDiscrepancies
             .Where(d => d.Task.SessionId == id)
-            .Include(d => d.Task).ThenInclude(t => t.Asset)
+            .Include(d => d.Task).ThenInclude(t => t.AssetInstance).ThenInclude(ai => ai.Asset)
             .Include(d => d.Task).ThenInclude(t => t.InventoryRecords)
             .Include(d => d.BookLocation).ThenInclude(bl => bl.Department)
             .Include(d => d.ActualLocation).ThenInclude(al => al.Department)
@@ -897,22 +962,27 @@ public class InventoryController : ControllerBase
         var userNameMap = await GetUserDisplayNamesAsync(
             discrepancies.SelectMany(d => new[] { d.BookUserId, d.ActualUserId }));
 
+        const int bookQtyPerInstance = 1;
         var detailList = discrepancies.Select(d =>
         {
             var record = d.Task.InventoryRecords
                 .OrderByDescending(r => r.RecordId)
                 .FirstOrDefault();
+            var inst = d.Task.AssetInstance;
+            var asset = inst.Asset;
             return new InventoryDiscrepancyDetailDTO
             {
                 DiscrepancyId = d.DiscrepancyId,
                 TaskId = d.Task.TaskId,
-                AssetId = d.Task.AssetId,
-                AssetCode = d.Task.Asset.Code,
-                AssetName = d.Task.Asset.Name,
+                AssetId = asset.AssetId,
+                AssetInstanceId = inst.AssetInstanceId,
+                AssetCode = asset.Code,
+                InstanceCode = inst.InstanceCode,
+                AssetName = asset.Name,
                 DiscrepancyType = d.DiscrepancyType,
                 DiscrepancyTypeName = BuildDiscrepancyTypeName(d.DiscrepancyType),
                 BookValue = d.BookValue,
-                BookQuantity = d.Task.Asset.Quantity,
+                BookQuantity = bookQtyPerInstance,
                 ActualQuantity = record?.ActualQuantity,
                 TaskNote = d.Task.Note,
                 BookDepartmentName = d.BookLocation?.Department?.Name,
@@ -969,7 +1039,8 @@ public class InventoryController : ControllerBase
 
         var session = await _context.InventorySessions
             .Include(s => s.InventoryTasks)
-                .ThenInclude(t => t.Asset)
+                .ThenInclude(t => t.AssetInstance)
+                    .ThenInclude(ai => ai.Asset)
             .Include(s => s.InventoryTasks)
                 .ThenInclude(t => t.InventoryRecords)
             .FirstOrDefaultAsync(s => s.SessionId == id);
@@ -980,18 +1051,19 @@ public class InventoryController : ControllerBase
         if (session.Status != (int)InventorySessionStatus.Completed)
             return BadRequest(new { message = "Chỉ có thể xác nhận khi phiên đang ở trạng thái Chờ xác nhận." });
 
-        var assetIds = session.InventoryTasks.Select(t => t.AssetId).Distinct().ToList();
+        const int bookQtyPerInstance = 1;
+        var instanceIds = session.InventoryTasks.Select(t => t.AssetInstanceId).Distinct().ToList();
         var bookUsages = await _context.AssetUsages
-            .Where(u => assetIds.Contains(u.AssetId) && u.IsCurrent)
+            .Where(u => instanceIds.Contains(u.AssetInstanceId) && u.IsCurrent)
             .Include(u => u.Employee)
             .AsNoTracking()
-            .ToDictionaryAsync(u => u.AssetId, u => u.Employee?.UserId);
+            .ToDictionaryAsync(u => u.AssetInstanceId, u => u.Employee?.UserId);
 
         var hasMismatch = false;
         foreach (var task in session.InventoryTasks)
         {
-            var asset = task.Asset;
-            bookUsages.TryGetValue(task.AssetId, out var bookUserId);
+            var inst = task.AssetInstance;
+            bookUsages.TryGetValue(task.AssetInstanceId, out var bookUserId);
 
             var record = task.InventoryRecords.FirstOrDefault();
             if (record == null)
@@ -1006,8 +1078,8 @@ public class InventoryController : ControllerBase
                 break;
             }
 
-            var actualQty = record.ActualQuantity ?? (record.IsFound == true ? asset.Quantity : 0);
-            if (actualQty != asset.Quantity)
+            var actualQty = record.ActualQuantity ?? (record.IsFound == true ? bookQtyPerInstance : 0);
+            if (actualQty != bookQtyPerInstance)
             {
                 hasMismatch = true;
                 break;
@@ -1026,6 +1098,10 @@ public class InventoryController : ControllerBase
             : (int)InventorySessionStatus.Confirmed;
 
         await _context.SaveChangesAsync();
+
+        await SafeInventoryNotifyAsync(
+            () => _inventoryNotifications.NotifyAfterDirectorApprovalAsync(session, hasMismatch),
+            "director-approve → heads/accountants");
 
         var displayStatus = GetDisplayStatus(session, DateTime.UtcNow);
 
@@ -1074,6 +1150,10 @@ public class InventoryController : ControllerBase
         session.ProgressPercent = 0;
 
         await _context.SaveChangesAsync();
+
+        await SafeInventoryNotifyAsync(
+            () => _inventoryNotifications.NotifyDepartmentHeadsRecheckRequestedAsync(session),
+            "reject-recheck → heads");
 
         return Ok(new { message = "Đã gửi yêu cầu kiểm kê lại. Phiên chuyển sang Đang thực hiện.", sessionId = id });
     }
@@ -1155,18 +1235,9 @@ public class InventoryController : ControllerBase
 
         session.Status = (int)InventorySessionStatus.InProgress;
 
-        // Mark the scheduled notification as sent
-        var scheduledNotification = await _context.Notifications
-            .FirstOrDefaultAsync(n => n.RefId == id && !n.IsSend);
-        if (scheduledNotification != null)
-        {
-            scheduledNotification.IsSend = true;
-            scheduledNotification.SentDate = DateTime.UtcNow;
-        }
-
         await _context.SaveChangesAsync();
 
-        return Ok(new { message = "Phiên kiểm kê đã được kích hoạt. Thông báo kiểm kê đã được gửi." });
+        return Ok(new { message = "Phiên kiểm kê đã được kích hoạt (Đang thực hiện)." });
     }
 
     /// <summary>
@@ -1248,7 +1319,7 @@ public class InventoryController : ControllerBase
 
         var discrepancies = await _context.InventoryDiscrepancies
             .Where(d => d.Task.SessionId == id)
-            .Include(d => d.Task).ThenInclude(t => t.Asset)
+            .Include(d => d.Task).ThenInclude(t => t.AssetInstance).ThenInclude(ai => ai.Asset)
             .Include(d => d.Task).ThenInclude(t => t.InventoryRecords)
             .Include(d => d.BookLocation).ThenInclude(bl => bl.Department)
             .Include(d => d.ActualLocation).ThenInclude(al => al.Department)
@@ -1260,6 +1331,7 @@ public class InventoryController : ControllerBase
         var userNameMap = await GetUserDisplayNamesAsync(
             discrepancies.SelectMany(d => new[] { d.BookUserId, d.ActualUserId }));
 
+        const int bookQtyPerInstance = 1;
         var result = discrepancies.Select(d =>
         {
             var record = d.Task.InventoryRecords
@@ -1271,7 +1343,7 @@ public class InventoryController : ControllerBase
                 DiscrepancyType = d.DiscrepancyType,
                 DiscrepancyTypeName = BuildDiscrepancyTypeName(d.DiscrepancyType),
                 BookValue = d.BookValue,
-                BookQuantity = d.Task.Asset.Quantity,
+                BookQuantity = bookQtyPerInstance,
                 ActualQuantity = record?.ActualQuantity,
                 TaskNote = d.Task.Note,
                 BookDepartmentName = d.BookLocation?.Department?.Name,
@@ -1347,7 +1419,8 @@ public class InventoryController : ControllerBase
             q = q.Where(e => e.DepartmentId == access.DepartmentId.Value);
 
         var items = await q
-            .Select(e => new DropdownItemDTO { Id = e.UserId, Name = e.Name })
+            .Where(e => e.UserId != null)
+            .Select(e => new DropdownItemDTO { Id = e.UserId!.Value, Name = e.Name })
             .ToListAsync();
         return Ok(items);
     }
@@ -1436,6 +1509,18 @@ public class InventoryController : ControllerBase
     private static string? TruncateNotificationContent(string content) =>
         content.Length > 100 ? content[..97] + "..." : content;
 
+    private async Task SafeInventoryNotifyAsync(Func<Task> notify, string step)
+    {
+        try
+        {
+            await notify();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Inventory notification failed ({Step}). Session update already committed.", step);
+        }
+    }
+
     private async Task<string> GenerateSessionCode()
     {
         var today = DateTime.UtcNow.ToString("yyyyMMdd");
@@ -1451,8 +1536,10 @@ public class InventoryController : ControllerBase
             .Include(s => s.Department)
             .Include(s => s.AssetCategory)
             .Include(s => s.AssetType)
-            .Include(s => s.InventoryTasks).ThenInclude(t => t.Asset)
-                .ThenInclude(a => a.AssetLocations).ThenInclude(al => al.Department)
+            .Include(s => s.InventoryTasks).ThenInclude(t => t.AssetInstance)
+                .ThenInclude(ai => ai.AssetLocations).ThenInclude(al => al.Department)
+            .Include(s => s.InventoryTasks).ThenInclude(t => t.AssetInstance)
+                .ThenInclude(ai => ai.Asset)
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.SessionId == sessionId);
 
@@ -1479,21 +1566,28 @@ public class InventoryController : ControllerBase
             CreateDate = session.CreateDate,
             IsPeriodic = session.IsPeriodic,
             PeriodDays = session.PeriodDays,
-            Tasks = session.InventoryTasks.Select(t => new InventoryTaskDTO
+            Tasks = session.InventoryTasks.Select(t =>
             {
-                TaskId = t.TaskId,
-                AssetId = t.AssetId,
-                AssetCode = t.Asset?.Code ?? string.Empty,
-                AssetName = t.Asset?.Name ?? string.Empty,
-                BookCondition = t.Asset != null ? ((AssetStatus)t.Asset.Status).ToString() : string.Empty,
-                BookDepartmentId = t.Asset?.AssetLocations.FirstOrDefault(al => al.IsCurrent)?.DepartmentId,
-                BookDepartmentName = t.Asset?.AssetLocations.FirstOrDefault(al => al.IsCurrent)?.Department?.Name,
-                BookValue = t.Asset?.CurrentValue ?? 0,
-                Status = t.Status,
-                StatusName = "Chưa kiểm kê",
-                CheckDate = t.CheckDate,
-                Note = t.Note,
-                Discrepancies = new List<InventoryDiscrepancyDTO>()
+                var inst = t.AssetInstance;
+                var asset = inst.Asset;
+                return new InventoryTaskDTO
+                {
+                    TaskId = t.TaskId,
+                    AssetId = asset.AssetId,
+                    AssetInstanceId = inst.AssetInstanceId,
+                    AssetCode = asset.Code,
+                    InstanceCode = inst.InstanceCode,
+                    AssetName = asset.Name,
+                    BookCondition = ((AssetStatus)inst.Status).ToString(),
+                    BookDepartmentId = inst.AssetLocations.FirstOrDefault(al => al.IsCurrent)?.DepartmentId,
+                    BookDepartmentName = inst.AssetLocations.FirstOrDefault(al => al.IsCurrent)?.Department?.Name,
+                    BookValue = inst.CurrentValue,
+                    Status = t.Status,
+                    StatusName = "Chưa kiểm kê",
+                    CheckDate = t.CheckDate,
+                    Note = t.Note,
+                    Discrepancies = new List<InventoryDiscrepancyDTO>()
+                };
             }).ToList()
         };
 
@@ -1558,9 +1652,9 @@ public class InventoryController : ControllerBase
             return new Dictionary<int, string>();
 
         var map = await _context.Employees
-            .Where(e => ids.Contains(e.UserId))
+            .Where(e => e.UserId != null && ids.Contains(e.UserId.Value))
             .AsNoTracking()
-            .ToDictionaryAsync(e => e.UserId, e => e.Name);
+            .ToDictionaryAsync(e => e.UserId!.Value, e => e.Name);
 
         var missing = ids.Where(id => !map.ContainsKey(id)).ToList();
         if (missing.Count > 0)

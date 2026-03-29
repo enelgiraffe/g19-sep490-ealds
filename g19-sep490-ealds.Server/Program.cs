@@ -99,6 +99,7 @@ builder.Services.AddScoped<IMaintenanceScheduleMapper, MaintenanceScheduleMapper
 builder.Services.AddScoped<IMaintenanceRecordService, MaintenanceRecordService>();
 builder.Services.AddScoped<IMaintenanceRecordMapper, MaintenanceRecordMapper>();
 builder.Services.AddScoped<IMaintenanceTaskService, MaintenanceTaskService>();
+builder.Services.AddScoped<IInventoryNotificationService, InventoryNotificationService>();
 
 // Asset capitalization
 builder.Services.AddScoped<IAssetCapitalizationMapper, AssetCapitalizationMapper>();
@@ -113,14 +114,19 @@ builder.Services.AddMediatR(typeof(Program));
 //Quarzt chạy job
 builder.Services.AddQuartz(q =>
 {
-    var jobKey = new JobKey("MaintenanceTaskJob");
-
-    q.AddJob<MaintenanceTaskJobs>(opts => opts.WithIdentity(jobKey));
-
+    var maintenanceJobKey = new JobKey("MaintenanceTaskJob");
+    q.AddJob<MaintenanceTaskJobs>(opts => opts.WithIdentity(maintenanceJobKey));
     q.AddTrigger(opts => opts
-        .ForJob(jobKey)
+        .ForJob(maintenanceJobKey)
         .WithIdentity("MaintenanceTaskJob-trigger")
         .WithCronSchedule("0 * * * * ?")); //test 1 phút
+
+    var inventoryNotifyJobKey = new JobKey("InventoryScheduledCheckNotificationJob");
+    q.AddJob<InventoryScheduledCheckNotificationJob>(opts => opts.WithIdentity(inventoryNotifyJobKey));
+    q.AddTrigger(opts => opts
+        .ForJob(inventoryNotifyJobKey)
+        .WithIdentity("InventoryScheduledCheckNotificationJob-trigger")
+        .WithCronSchedule("0 0 * * * ?")); // mỗi giờ — gửi TB khi đến khung lịch kiểm kê
 });
 //dky host service cho Quarzt
 builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);

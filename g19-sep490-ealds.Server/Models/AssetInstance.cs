@@ -1,0 +1,75 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace g19_sep490_ealds.Server.Models;
+
+public partial class AssetInstance
+{
+    public int AssetInstanceId { get; set; }
+
+    public int AssetId { get; set; }
+
+    public int WarehouseId { get; set; }
+
+    public int? DepreciationPolicyId { get; set; }
+
+    public string InstanceCode { get; set; } = null!;
+
+    public string? SerialNumber { get; set; }
+
+    public int Status { get; set; }
+
+    public DateOnly? InUseDate { get; set; }
+
+    public DateOnly PurchaseDate { get; set; }
+
+    public decimal OriginalPrice { get; set; }
+
+    public decimal CurrentValue { get; set; }
+
+    public int? SupplierId { get; set; }
+
+    public string? ContractNo { get; set; }
+
+    public string? Condition { get; set; }
+
+    public string? Note { get; set; }
+
+    public virtual Asset Asset { get; set; } = null!;
+
+    public virtual ICollection<AssetCapitalization> AssetCapitalizations { get; set; } = new List<AssetCapitalization>();
+
+    public virtual ICollection<AssetLifeCycle> AssetLifeCycles { get; set; } = new List<AssetLifeCycle>();
+
+    public virtual ICollection<AssetLocation> AssetLocations { get; set; } = new List<AssetLocation>();
+
+    public virtual ICollection<AssetRevaluation> AssetRevaluations { get; set; } = new List<AssetRevaluation>();
+
+    public virtual ICollection<AssetUsage> AssetUsages { get; set; } = new List<AssetUsage>();
+
+    public virtual DepreciationPolicy? DepreciationPolicy { get; set; }
+
+    public virtual ICollection<DepreciationRecord> DepreciationRecords { get; set; } = new List<DepreciationRecord>();
+
+    public virtual ICollection<DisposalRecord> DisposalRecords { get; set; } = new List<DisposalRecord>();
+
+    public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
+
+    public virtual ICollection<Guarantee> Guarantees { get; set; } = new List<Guarantee>();
+
+    public virtual ICollection<InventoryTask> InventoryTasks { get; set; } = new List<InventoryTask>();
+
+    public virtual ICollection<MaintenanceRecord> MaintenanceRecords { get; set; } = new List<MaintenanceRecord>();
+
+    public virtual ICollection<MaintenanceSchedule> MaintenanceSchedules { get; set; } = new List<MaintenanceSchedule>();
+
+    public virtual ICollection<MaintenanceTask> MaintenanceTasks { get; set; } = new List<MaintenanceTask>();
+
+    public virtual ICollection<RepairTask> RepairTasks { get; set; } = new List<RepairTask>();
+
+    public virtual Supplier? Supplier { get; set; }
+
+    public virtual ICollection<TransferRecord> TransferRecords { get; set; } = new List<TransferRecord>();
+
+    public virtual Warehouse Warehouse { get; set; } = null!;
+}

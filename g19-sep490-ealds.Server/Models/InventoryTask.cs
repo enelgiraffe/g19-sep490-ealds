@@ -1,18 +1,13 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Models;
 
-[Table("InventoryTask")]
 public partial class InventoryTask
 {
-    [Key]
     public int TaskId { get; set; }
 
-    public int AssetId { get; set; }
+    public int AssetInstanceId { get; set; }
 
     public int SessionId { get; set; }
 
@@ -22,30 +17,19 @@ public partial class InventoryTask
 
     public int Status { get; set; }
 
-    [Column(TypeName = "datetime")]
     public DateTime CheckDate { get; set; }
 
     public string? Note { get; set; }
 
-    [ForeignKey("AssetId")]
-    [InverseProperty("InventoryTasks")]
-    public virtual Asset Asset { get; set; } = null!;
+    public virtual AssetInstance AssetInstance { get; set; } = null!;
 
-    [ForeignKey("AssignedUserId")]
-    [InverseProperty("InventoryTasks")]
-    public virtual User AssignedUser { get; set; } = null!;
-
-    [ForeignKey("DepartmentId")]
-    [InverseProperty("InventoryTasks")]
     public virtual Department Department { get; set; } = null!;
 
-    [InverseProperty("Task")]
+    public virtual InventorySession Session { get; set; } = null!;
+
+    public virtual User AssignedUser { get; set; } = null!;
+
     public virtual ICollection<InventoryDiscrepancy> InventoryDiscrepancies { get; set; } = new List<InventoryDiscrepancy>();
 
-    [InverseProperty("Task")]
     public virtual ICollection<InventoryRecord> InventoryRecords { get; set; } = new List<InventoryRecord>();
-
-    [ForeignKey("SessionId")]
-    [InverseProperty("InventoryTasks")]
-    public virtual InventorySession Session { get; set; } = null!;
 }

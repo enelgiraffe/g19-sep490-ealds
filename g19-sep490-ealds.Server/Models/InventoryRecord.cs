@@ -1,15 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Models;
 
-[Table("InventoryRecord")]
 public partial class InventoryRecord
 {
-    [Key]
     public int RecordId { get; set; }
 
     public int TaskId { get; set; }
@@ -22,29 +17,19 @@ public partial class InventoryRecord
 
     public bool? IsFound { get; set; }
 
-    public int? ActualQuantity { get; set; }
-
     public int CheckedBy { get; set; }
 
-    [Column(TypeName = "datetime")]
     public DateTime CheckedDate { get; set; }
 
-    [Column(TypeName = "datetime")]
     public DateTime DateCheckCompleted { get; set; }
 
-    [ForeignKey("ActualLocationId")]
-    [InverseProperty("InventoryRecords")]
+    public int? ActualQuantity { get; set; }
+
     public virtual AssetLocation ActualLocation { get; set; } = null!;
 
-    [ForeignKey("ActualUserId")]
-    [InverseProperty("InventoryRecordActualUsers")]
     public virtual User? ActualUser { get; set; }
 
-    [ForeignKey("CheckedBy")]
-    [InverseProperty("InventoryRecordCheckedByNavigations")]
     public virtual User CheckedByNavigation { get; set; } = null!;
 
-    [ForeignKey("TaskId")]
-    [InverseProperty("InventoryRecords")]
     public virtual InventoryTask Task { get; set; } = null!;
 }

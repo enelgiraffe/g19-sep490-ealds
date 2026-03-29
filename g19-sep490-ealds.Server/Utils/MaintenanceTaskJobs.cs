@@ -50,14 +50,14 @@ public class MaintenanceTaskJobs : IJob
         foreach (var schedule in schedules)
         {
             // tr�nh t?o task tr�ng
-            var exist = await db.MaintenaceTasks.AnyAsync(x => x.ScheduleId == schedule.ScheduleId
+            var exist = await db.MaintenanceTasks.AnyAsync(x => x.ScheduleId == schedule.ScheduleId
                                                                && x.PlannedDate == schedule.NextDueDate.Value.Date
                                                                && x.Status != (int)MaintenanceTaskStatus.Completed);
 
             if (exist)
                 continue;
 
-            var task = new MaintenaceTask
+            var task = new MaintenanceTask
             {
                 ScheduleId = schedule.ScheduleId,
                 AssetId = schedule.AssetId,
@@ -68,7 +68,7 @@ public class MaintenanceTaskJobs : IJob
                 CreateBy = schedule.CreateBy
             };
 
-            db.MaintenaceTasks.Add(task);
+            db.MaintenanceTasks.Add(task);
 
             schedule.NextDueDate = _service.CalculateNextDueDate(schedule);
         }

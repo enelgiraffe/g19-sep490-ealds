@@ -1,22 +1,46 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Dropdown } from 'antd';
+import { Card, Dropdown, Spin, message } from 'antd';
 import type { MenuProps } from 'antd';
 import { NotificationRow } from '../../../shared/components/NotificationRow';
+import { NOTIFICATION_CATEGORY_TABS } from '../../../shared/data/notificationsMockData';
 import {
-  MOCK_NOTIFICATIONS,
-  NOTIFICATION_CATEGORY_TABS,
-} from '../../../shared/data/notificationsMockData';
+  markAllNotificationsRead,
+  markNotificationRead,
+  notificationService,
+} from '../../../shared/services/notificationService';
 import type { NotificationItem, NotificationType } from '../../../shared/types/notification.types';
 import './NotificationsPage.css';
 
 export function NotificationsPage() {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState<NotificationItem[]>(() =>
-    MOCK_NOTIFICATIONS.map((n) => ({ ...n }))
-  );
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState<'all' | NotificationType>('all');
   const [readFilter, setReadFilter] = useState<'all' | 'unread'>('all');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const list = await notificationService.list();
+      setNotifications(list);
+    } catch {
+      message.error('Không tải được thông báo. Vui lòng đăng nhập lại hoặc thử sau.');
+      setNotifications([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    const onChanged = () => void load();
+    window.addEventListener('ealds-notifications-changed', onChanged);
+    return () => window.removeEventListener('ealds-notifications-changed', onChanged);
+  }, [load]);
 
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.read).length,
@@ -33,12 +57,16 @@ export function NotificationsPage() {
     });
   }, [notifications, categoryFilter, readFilter]);
 
-  const handleClick = (link: string) => {
-    navigate(link);
+  const handleClick = (item: NotificationItem) => {
+    markNotificationRead(Number(item.id));
+    void load();
+    navigate(item.link);
   };
 
   const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    const ids = notifications.map((n) => Number(n.id)).filter((x) => !Number.isNaN(x));
+    markAllNotificationsRead(ids);
+    void load();
   };
 
   const markReadItems: MenuProps['items'] = [
@@ -51,7 +79,9 @@ export function NotificationsPage() {
         <div className="notifications-page__title-row">
           <h1 className="notifications-page__title">Thông báo</h1>
           <div className="notifications-page__badge-wrap">
-            <span className="notifications-page__mini-icon" aria-hidden>🔔</span>
+            <span className="notifications-page__mini-icon" aria-hidden>
+              🔔
+            </span>
             {unreadCount > 0 && (
               <span className="notifications-page__unread-badge">
                 {unreadCount > 99 ? '99+' : unreadCount}
@@ -106,20 +136,22 @@ export function NotificationsPage() {
       </header>
 
       <Card className="notifications-page__card">
-        <div className="notifications-page__list">
-          {filteredList.length === 0 ? (
-            <div className="notifications-page__empty">Không có thông báo</div>
-          ) : (
-            filteredList.map((item) => (
-              <NotificationRow
-                key={item.id}
-                item={item}
-                onClick={() => handleClick(item.link)}
-                showChevron
-              />
-            ))
-          )}
-        </div>
+        <Spin spinning={loading}>
+          <div className="notifications-page__list">
+            {!loading && filteredList.length === 0 ? (
+              <div className="notifications-page__empty">Không có thông báo</div>
+            ) : (
+              filteredList.map((item) => (
+                <NotificationRow
+                  key={item.id}
+                  item={item}
+                  onClick={() => handleClick(item)}
+                  showChevron
+                />
+              ))
+            )}
+          </div>
+        </Spin>
       </Card>
     </div>
   );

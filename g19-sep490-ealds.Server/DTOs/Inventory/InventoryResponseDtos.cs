@@ -32,8 +32,18 @@ public class InventorySessionDetailDTO : InventorySessionListItemDTO
 
 public class SessionAssetCheckItemDTO
 {
+    /// <summary>Catalog asset (master).</summary>
     public int AssetId { get; set; }
+
+    /// <summary>Physical instance being checked in this session.</summary>
+    public int AssetInstanceId { get; set; }
+
+    /// <summary>Catalog asset code.</summary>
     public string AssetCode { get; set; } = null!;
+
+    /// <summary>Unique code for this instance (tag/serial).</summary>
+    public string InstanceCode { get; set; } = null!;
+
     public string AssetName { get; set; } = null!;
     public string DepartmentName { get; set; } = null!;
     public int BookQty { get; set; }
@@ -53,7 +63,14 @@ public class AssetStatusEntryDTO
 public class AssetInventoryDetailDTO
 {
     public int AssetId { get; set; }
+
+    public int AssetInstanceId { get; set; }
+
+    /// <summary>Catalog code.</summary>
     public string AssetCode { get; set; } = null!;
+
+    public string InstanceCode { get; set; } = null!;
+
     public string AssetName { get; set; } = null!;
     public string CategoryName { get; set; } = null!;
     public string TypeName { get; set; } = null!;
@@ -71,8 +88,18 @@ public class AssetInventoryDetailDTO
 public class InventoryTaskDTO
 {
     public int TaskId { get; set; }
+
+    /// <summary>Catalog asset id.</summary>
     public int AssetId { get; set; }
+
+    /// <summary>Physical instance id for this task.</summary>
+    public int AssetInstanceId { get; set; }
+
+    /// <summary>Catalog code.</summary>
     public string AssetCode { get; set; } = null!;
+
+    public string InstanceCode { get; set; } = null!;
+
     public string AssetName { get; set; } = null!;
     public string BookCondition { get; set; } = null!;
     public int? BookDepartmentId { get; set; }
@@ -159,7 +186,14 @@ public class InventoryReviewSummaryDTO
 public class InventoryDiscrepancyDetailDTO : InventoryDiscrepancyDTO
 {
     public int TaskId { get; set; }
+
     public int AssetId { get; set; }
+
+    public int AssetInstanceId { get; set; }
+
     public string AssetCode { get; set; } = null!;
+
+    public string InstanceCode { get; set; } = null!;
+
     public string AssetName { get; set; } = null!;
 }

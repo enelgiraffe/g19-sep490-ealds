@@ -38,7 +38,7 @@ export function PeriodicInventoryExecutionPage() {
 
   const [sessionDetail, setSessionDetail] = useState<SessionDetail | null>(null);
   const [assets, setAssets] = useState<SessionAssetCheckItem[]>([]);
-  const [selectedAssetId, setSelectedAssetId] = useState<number | null>(null);
+  const [selectedAssetInstanceId, setSelectedAssetInstanceId] = useState<number | null>(null);
   const [assetDetail, setAssetDetail] = useState<AssetInventoryDetail | null>(null);
 
   const [actualQties, setActualQties] = useState<Record<string, number | null>>({});
@@ -90,12 +90,12 @@ export function PeriodicInventoryExecutionPage() {
   useEffect(() => { fetchSession(); }, [fetchSession]);
   useEffect(() => { fetchAssets(); }, [fetchAssets]);
 
-  const handleSelectAsset = useCallback(async (assetId: number) => {
-    setSelectedAssetId(assetId);
+  const handleSelectAsset = useCallback(async (assetInstanceId: number) => {
+    setSelectedAssetInstanceId(assetInstanceId);
     setAssetDetail(null);
     setLoadingDetail(true);
     try {
-      const detail = await inventoryService.getAssetInventoryDetail(sessionIdNum, assetId);
+      const detail = await inventoryService.getAssetInventoryDetail(sessionIdNum, assetInstanceId);
       setAssetDetail(detail);
       const qties: Record<string, number | null> = {};
       detail.statusEntries.forEach((e) => { qties[e.statusKey] = e.actualQty; });
@@ -125,7 +125,7 @@ export function PeriodicInventoryExecutionPage() {
     setSaving(true);
     try {
       await inventoryService.saveAssetInventory(sessionIdNum, {
-        assetId: assetDetail.assetId,
+        assetInstanceId: assetDetail.assetInstanceId,
         statusEntries: assetDetail.statusEntries.map((e) => ({
           statusKey: e.statusKey,
           actualQty: actualQties[e.statusKey] ?? 0,
@@ -246,22 +246,28 @@ export function PeriodicInventoryExecutionPage() {
           <div className="exec-asset-meta">
             <div className="exec-asset-meta__row">
               <div className="exec-asset-meta__item">
-                <span className="exec-asset-meta__label">Mã tài sản:</span>
+                <span className="exec-asset-meta__label">Mã danh mục:</span>
                 <span className="exec-asset-meta__value">{assetDetail.assetCode}</span>
               </div>
               <div className="exec-asset-meta__item">
+                <span className="exec-asset-meta__label">Mã thể hiện:</span>
+                <span className="exec-asset-meta__value">{assetDetail.instanceCode}</span>
+              </div>
+            </div>
+            <div className="exec-asset-meta__row">
+              <div className="exec-asset-meta__item">
                 <span className="exec-asset-meta__label">Nhóm tài sản:</span>
                 <span className="exec-asset-meta__value">{assetDetail.categoryName}</span>
+              </div>
+              <div className="exec-asset-meta__item">
+                <span className="exec-asset-meta__label">Loại tài sản:</span>
+                <span className="exec-asset-meta__value">{assetDetail.typeName}</span>
               </div>
             </div>
             <div className="exec-asset-meta__row">
               <div className="exec-asset-meta__item">
                 <span className="exec-asset-meta__label">Tên tài sản:</span>
                 <span className="exec-asset-meta__value">{assetDetail.assetName}</span>
-              </div>
-              <div className="exec-asset-meta__item">
-                <span className="exec-asset-meta__label">Loại tài sản:</span>
-                <span className="exec-asset-meta__value">{assetDetail.typeName}</span>
               </div>
             </div>
           </div>
@@ -501,7 +507,8 @@ export function PeriodicInventoryExecutionPage() {
               <table className="exec-asset-table">
                 <thead>
                   <tr>
-                    <th>Mã tài sản</th>
+                    <th>Mã danh mục</th>
+                    <th>Mã thể hiện</th>
                     <th>Tên tài sản</th>
                     <th>Phòng ban</th>
                     <th>Số sách</th>
@@ -512,18 +519,19 @@ export function PeriodicInventoryExecutionPage() {
                 <tbody>
                   {assets.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="exec-asset-table__empty">
+                      <td colSpan={7} className="exec-asset-table__empty">
                         Không có tài sản
                       </td>
                     </tr>
                   ) : (
                     assets.map((asset) => (
                       <tr
-                        key={asset.assetId}
-                        className={`exec-asset-row${selectedAssetId === asset.assetId ? ' exec-asset-row--selected' : ''}`}
-                        onClick={() => handleSelectAsset(asset.assetId)}
+                        key={asset.assetInstanceId}
+                        className={`exec-asset-row${selectedAssetInstanceId === asset.assetInstanceId ? ' exec-asset-row--selected' : ''}`}
+                        onClick={() => handleSelectAsset(asset.assetInstanceId)}
                       >
                         <td>{asset.assetCode}</td>
+                        <td>{asset.instanceCode}</td>
                         <td>{asset.assetName}</td>
                         <td>{asset.departmentName}</td>
                         <td>{asset.bookQty}</td>

@@ -32,7 +32,8 @@ public class StatusEntryPayloadDTO
 
 public class SaveAssetInventoryDTO
 {
-    public int AssetId { get; set; }
+    /// <summary>Optional echo; must match the route <c>assetInstanceId</c> when set.</summary>
+    public int AssetInstanceId { get; set; }
     public List<StatusEntryPayloadDTO> StatusEntries { get; set; } = new();
     public int? ActualLocationId { get; set; }
     public int? ActualManagerId { get; set; }

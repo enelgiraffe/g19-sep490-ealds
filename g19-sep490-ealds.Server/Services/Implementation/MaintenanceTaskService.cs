@@ -23,7 +23,7 @@ public class MaintenanceTaskService : IMaintenanceTaskService
 
     public async Task StartTaskAsync(int taskId, int userId, int roleId)
     {
-        var task = await _context.MaintenaceTasks
+        var task = await _context.MaintenanceTasks
         .Include(x => x.Asset)
         .FirstOrDefaultAsync(x => x.TaskId == taskId)
         ?? throw new Exception("Task not found");
@@ -59,7 +59,7 @@ public class MaintenanceTaskService : IMaintenanceTaskService
 
     public async Task CompleteTaskAsync(int taskId, int userId, int roleId, CompleteTaskDTO dto)
     {
-        var task = await _context.MaintenaceTasks
+        var task = await _context.MaintenanceTasks
         .Include(x => x.Asset)
         .FirstOrDefaultAsync(x => x.TaskId == taskId)
         ?? throw new Exception("Task not found");
