@@ -4,8 +4,8 @@ namespace g19_sep490_ealds.Server.DTOs.AssetLocation;
 
 public class CreateAssetLocationDto
 {
-    [Required(ErrorMessage = "AssetId is required.")]
-    public int AssetId { get; set; }
+    [Required(ErrorMessage = "AssetInstanceId is required.")]
+    public int AssetInstanceId { get; set; }
 
     [Required(ErrorMessage = "DepartmentId is required.")]
     public int DepartmentId { get; set; }

@@ -16,7 +16,9 @@ export interface AssetLocationRow {
   name: string;
   parentName: string | null;
   assetCode: string;
+  instanceCode: string;
   assetId: number;
+  assetInstanceId: number;
   departmentId: number;
   startDate: string;
   endDate: string | null;
@@ -103,7 +105,9 @@ export function AssetLocationsSection({
                   <td className="asset-align-right">{row.index}</td>
                   <td>
                     <span className="categories-location-asset">
-                      <span className="categories-location-asset__code">{row.assetCode}</span>{' '}
+                      <span className="categories-location-asset__code">
+                        {row.assetCode} · {row.instanceCode}
+                      </span>{' '}
                       {row.parentName ?? '—'}
                     </span>
                   </td>

@@ -37,10 +37,11 @@ public class AssetLocationsController : ControllerBase
 
     /// <summary>
     /// GET /api/AssetLocations - List all asset location records.
-    /// Optional filters: assetId, departmentId, isCurrent.
+    /// Optional filters: assetInstanceId (physical row), assetId (catalog), departmentId, isCurrent.
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<IEnumerable<AssetLocationResponseDto>>> GetAll(
+        [FromQuery] int? assetInstanceId,
         [FromQuery] int? assetId,
         [FromQuery] int? departmentId,
         [FromQuery] bool? isCurrent)
@@ -49,8 +50,11 @@ public class AssetLocationsController : ControllerBase
             .AsNoTracking()
             .AsQueryable();
 
+        if (assetInstanceId.HasValue)
+            query = query.Where(l => l.AssetInstanceId == assetInstanceId.Value);
+
         if (assetId.HasValue)
-            query = query.Where(l => l.AssetId == assetId.Value);
+            query = query.Where(l => l.AssetInstance.AssetId == assetId.Value);
 
         if (departmentId.HasValue)
             query = query.Where(l => l.DepartmentId == departmentId.Value);
@@ -64,9 +68,11 @@ public class AssetLocationsController : ControllerBase
             .Select(l => new AssetLocationResponseDto
             {
                 LocationId = l.LocationId,
-                AssetId = l.AssetId,
-                AssetName = l.Asset.Name,
-                AssetCode = l.Asset.Code,
+                AssetInstanceId = l.AssetInstanceId,
+                AssetId = l.AssetInstance.AssetId,
+                InstanceCode = l.AssetInstance.InstanceCode,
+                AssetName = l.AssetInstance.Asset.Name,
+                AssetCode = l.AssetInstance.Asset.Code,
                 DepartmentId = l.DepartmentId,
                 DepartmentName = l.Department.Name,
                 StartDate = l.StartDate,
@@ -91,9 +97,11 @@ public class AssetLocationsController : ControllerBase
             .Select(l => new AssetLocationResponseDto
             {
                 LocationId = l.LocationId,
-                AssetId = l.AssetId,
-                AssetName = l.Asset.Name,
-                AssetCode = l.Asset.Code,
+                AssetInstanceId = l.AssetInstanceId,
+                AssetId = l.AssetInstance.AssetId,
+                InstanceCode = l.AssetInstance.InstanceCode,
+                AssetName = l.AssetInstance.Asset.Name,
+                AssetCode = l.AssetInstance.Asset.Code,
                 DepartmentId = l.DepartmentId,
                 DepartmentName = l.Department.Name,
                 StartDate = l.StartDate,
@@ -110,16 +118,16 @@ public class AssetLocationsController : ControllerBase
     }
 
     /// <summary>
-    /// POST /api/AssetLocations - Create a new asset location record.
-    /// If IsCurrent is true, the previous current record for the same asset is
+    /// POST /api/AssetLocations - Create a new asset location record for an <see cref="AssetInstance"/>.
+    /// If IsCurrent is true, the previous current record for the same instance is
     /// automatically closed (IsCurrent=false, EndDate set to StartDate - 1 day).
     /// </summary>
     [HttpPost]
     public async Task<ActionResult<AssetLocationResponseDto>> Create([FromBody] CreateAssetLocationDto dto)
     {
-        var assetExists = await _db.Assets.AnyAsync(a => a.AssetId == dto.AssetId);
-        if (!assetExists)
-            return NotFound(new { message = $"Asset with id {dto.AssetId} not found." });
+        var instanceExists = await _db.AssetInstances.AnyAsync(i => i.AssetInstanceId == dto.AssetInstanceId);
+        if (!instanceExists)
+            return NotFound(new { message = $"Asset instance with id {dto.AssetInstanceId} not found." });
 
         var departmentExists = await _db.Departments.AnyAsync(d => d.DepartmentId == dto.DepartmentId);
         if (!departmentExists)
@@ -129,11 +137,11 @@ public class AssetLocationsController : ControllerBase
             return BadRequest(new { message = "EndDate must be after StartDate." });
 
         if (dto.IsCurrent)
-            await CloseCurrentLocationAsync(dto.AssetId, excludeLocationId: null, newStartDate: dto.StartDate);
+            await CloseCurrentLocationAsync(dto.AssetInstanceId, excludeLocationId: null, newStartDate: dto.StartDate);
 
         var location = new AssetLocation
         {
-            AssetId = dto.AssetId,
+            AssetInstanceId = dto.AssetInstanceId,
             DepartmentId = dto.DepartmentId,
             StartDate = dto.StartDate,
             EndDate = dto.EndDate,
@@ -151,7 +159,7 @@ public class AssetLocationsController : ControllerBase
     /// <summary>
     /// PUT /api/AssetLocations/{id} - Update an existing asset location record.
     /// If IsCurrent is being set to true, the previous current record for the same
-    /// asset is automatically closed.
+    /// instance is automatically closed.
     /// </summary>
     [HttpPut("{id:int}")]
     public async Task<ActionResult<AssetLocationResponseDto>> Update(int id, [FromBody] UpdateAssetLocationDto dto)
@@ -168,7 +176,7 @@ public class AssetLocationsController : ControllerBase
             return BadRequest(new { message = "EndDate must be after StartDate." });
 
         if (dto.IsCurrent && !location.IsCurrent)
-            await CloseCurrentLocationAsync(location.AssetId, excludeLocationId: id, newStartDate: dto.StartDate);
+            await CloseCurrentLocationAsync(location.AssetInstanceId, excludeLocationId: id, newStartDate: dto.StartDate);
 
         location.DepartmentId = dto.DepartmentId;
         location.StartDate = dto.StartDate;
@@ -220,16 +228,10 @@ public class AssetLocationsController : ControllerBase
         return NoContent();
     }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Finds the current active location for an asset and closes it by setting
-    /// IsCurrent=false and EndDate = newStartDate - 1 day.
-    /// </summary>
-    private async Task CloseCurrentLocationAsync(int assetId, int? excludeLocationId, DateOnly newStartDate)
+    private async Task CloseCurrentLocationAsync(int assetInstanceId, int? excludeLocationId, DateOnly newStartDate)
     {
         var current = await _db.AssetLocations
-            .Where(l => l.AssetId == assetId && l.IsCurrent &&
+            .Where(l => l.AssetInstanceId == assetInstanceId && l.IsCurrent &&
                         (excludeLocationId == null || l.LocationId != excludeLocationId))
             .FirstOrDefaultAsync();
 
@@ -240,9 +242,6 @@ public class AssetLocationsController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Builds a full response DTO by fetching the location with its navigation properties.
-    /// </summary>
     private async Task<AssetLocationResponseDto> BuildResponseDtoAsync(int locationId)
     {
         return await _db.AssetLocations
@@ -251,9 +250,11 @@ public class AssetLocationsController : ControllerBase
             .Select(l => new AssetLocationResponseDto
             {
                 LocationId = l.LocationId,
-                AssetId = l.AssetId,
-                AssetName = l.Asset.Name,
-                AssetCode = l.Asset.Code,
+                AssetInstanceId = l.AssetInstanceId,
+                AssetId = l.AssetInstance.AssetId,
+                InstanceCode = l.AssetInstance.InstanceCode,
+                AssetName = l.AssetInstance.Asset.Name,
+                AssetCode = l.AssetInstance.Asset.Code,
                 DepartmentId = l.DepartmentId,
                 DepartmentName = l.Department.Name,
                 StartDate = l.StartDate,

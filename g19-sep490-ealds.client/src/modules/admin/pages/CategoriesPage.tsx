@@ -74,7 +74,9 @@ const mapLocationToRow = (item: AssetLocationItem, index: number): AssetLocation
   name: item.departmentName,
   parentName: item.assetName,
   assetCode: item.assetCode,
+  instanceCode: item.instanceCode,
   assetId: item.assetId,
+  assetInstanceId: item.assetInstanceId,
   departmentId: item.departmentId,
   startDate: item.startDate,
   endDate: item.endDate ?? null,
@@ -153,7 +155,7 @@ export function CategoriesPage() {
   }>();
   const [assetCategoryForm] = Form.useForm<{ name: string }>();
   const [locationForm] = Form.useForm<{
-    assetId?: number;
+    assetInstanceId?: number;
     departmentId?: number;
     startDate: string;
     endDate?: string;
@@ -284,6 +286,7 @@ export function CategoriesPage() {
         !kw ||
         row.name.toLowerCase().includes(kw) ||
         row.assetCode.toLowerCase().includes(kw) ||
+        row.instanceCode.toLowerCase().includes(kw) ||
         (row.parentName ?? '').toLowerCase().includes(kw) ||
         (row.note ?? '').toLowerCase().includes(kw);
       return matchStatus && matchSearch;
@@ -304,7 +307,7 @@ export function CategoriesPage() {
     setEditingLocationId(null);
     const today = new Date().toISOString().slice(0, 10);
     locationForm.setFieldsValue({
-      assetId: undefined,
+      assetInstanceId: undefined,
       departmentId: undefined,
       startDate: today,
       endDate: '',
@@ -318,7 +321,7 @@ export function CategoriesPage() {
     setLocationModalMode('edit');
     setEditingLocationId(row.key);
     locationForm.setFieldsValue({
-      assetId: row.assetId,
+      assetInstanceId: row.assetInstanceId,
       departmentId: row.departmentId,
       startDate: sliceDate(row.startDate),
       endDate: row.endDate ? sliceDate(row.endDate) : '',
@@ -329,7 +332,7 @@ export function CategoriesPage() {
   };
 
   const handleSubmitLocation = async (values: {
-    assetId?: number;
+    assetInstanceId?: number;
     departmentId?: number;
     startDate: string;
     endDate?: string;
@@ -341,12 +344,12 @@ export function CategoriesPage() {
     setIsSavingLocation(true);
     try {
       if (locationModalMode === 'create') {
-        if (values.assetId == null || values.departmentId == null) {
-          message.error('Vui lòng chọn tài sản và phòng ban.');
+        if (values.assetInstanceId == null || values.departmentId == null) {
+          message.error('Vui lòng chọn bản ghi tài sản và phòng ban.');
           return;
         }
         await assetLocationService.create({
-          assetId: values.assetId,
+          assetInstanceId: values.assetInstanceId,
           departmentId: values.departmentId,
           startDate: values.startDate,
           endDate: endRaw && endRaw.length > 0 ? endRaw : null,

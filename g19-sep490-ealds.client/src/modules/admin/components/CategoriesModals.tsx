@@ -1,6 +1,9 @@
 import { Form, Input, Select, Switch, message } from 'antd';
 import { useEffect, useState } from 'react';
-import { adminAssetsService, type AdminAssetPickerItem } from '../services/adminAssetsService';
+import {
+  assetInstanceService,
+  type AssetInstanceResponse,
+} from '../../assets/services/assetService';
 import { assetCategoryService, type AssetCategoryItem } from '../services/assetCategoryService';
 import {
   assetLocationService,
@@ -31,7 +34,7 @@ interface CategoriesModalsProps {
   editingLocationId: number | null;
   locationForm: ReturnType<
     typeof Form.useForm<{
-      assetId?: number;
+      assetInstanceId?: number;
       departmentId?: number;
       startDate: string;
       endDate?: string;
@@ -40,7 +43,7 @@ interface CategoriesModalsProps {
     }>
   >[0];
   onSubmitLocation: (values: {
-    assetId?: number;
+    assetInstanceId?: number;
     departmentId?: number;
     startDate: string;
     endDate?: string;
@@ -76,7 +79,7 @@ export function CategoriesModals({
   const [assetCategories, setAssetCategories] = useState<AssetCategoryItem[]>([]);
   const [isLoadingAssetCategories, setIsLoadingAssetCategories] = useState(false);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentLocationOption[]>([]);
-  const [assetOptions, setAssetOptions] = useState<AdminAssetPickerItem[]>([]);
+  const [assetInstanceOptions, setAssetInstanceOptions] = useState<AssetInstanceResponse[]>([]);
   const [isLoadingLocationPickers, setIsLoadingLocationPickers] = useState(false);
 
   useEffect(() => {
@@ -129,18 +132,18 @@ export function CategoriesModals({
     const loadPickers = async () => {
       try {
         setIsLoadingLocationPickers(true);
-        const [depts, assets] = await Promise.all([
+        const [depts, instances] = await Promise.all([
           assetLocationService.getDepartments(),
-          adminAssetsService.listForPicker(),
+          assetInstanceService.getAll(),
         ]);
         if (cancelled) return;
         setDepartmentOptions(depts);
-        setAssetOptions(assets);
+        setAssetInstanceOptions(instances);
       } catch {
         if (!cancelled) {
           message.error('Không tải được danh sách tài sản / phòng ban.');
           setDepartmentOptions([]);
-          setAssetOptions([]);
+          setAssetInstanceOptions([]);
         }
       } finally {
         if (!cancelled) {
@@ -383,7 +386,7 @@ export function CategoriesModals({
                 className="categories-modals__content categories-modals-form"
                 onFinish={async (values) => {
                   await onSubmitLocation({
-                    assetId: values.assetId as number | undefined,
+                    assetInstanceId: values.assetInstanceId as number | undefined,
                     departmentId: values.departmentId as number | undefined,
                     startDate: values.startDate as string,
                     endDate: (values.endDate as string | undefined)?.trim() || undefined,
@@ -412,14 +415,14 @@ export function CategoriesModals({
 
                   <div className="categories-modals-form__item">
                     <Form.Item
-                      label="Tài sản"
-                      name="assetId"
-                      rules={[{ required: true, message: 'Vui lòng chọn tài sản.' }]}
+                      label="Thiết bị (bản ghi tài sản)"
+                      name="assetInstanceId"
+                      rules={[{ required: true, message: 'Vui lòng chọn bản ghi tài sản.' }]}
                       required
                       className="categories-modals-form__field"
                     >
                       <Select
-                        placeholder="Chọn tài sản"
+                        placeholder="Chọn bản ghi tài sản"
                         showSearch
                         optionFilterProp="children"
                         loading={isLoadingLocationPickers}
@@ -431,9 +434,9 @@ export function CategoriesModals({
                         className="categories-modals__select"
                         popupMatchSelectWidth={false}
                       >
-                        {assetOptions.map((a) => (
-                          <Option key={a.assetId} value={a.assetId}>
-                            {a.code} — {a.name}
+                        {assetInstanceOptions.map((a) => (
+                          <Option key={a.assetInstanceId} value={a.assetInstanceId}>
+                            {(a.assetCode ?? '').trim()} · {a.instanceCode} — {a.assetName ?? ''}
                           </Option>
                         ))}
                       </Select>

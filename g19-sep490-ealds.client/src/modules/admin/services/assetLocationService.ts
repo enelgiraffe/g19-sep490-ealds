@@ -20,7 +20,9 @@ assetLocationApi.interceptors.request.use((config) => {
 
 export interface AssetLocationItem {
   locationId: number;
+  assetInstanceId: number;
   assetId: number;
+  instanceCode: string;
   assetName: string;
   assetCode: string;
   departmentId: number;
@@ -32,6 +34,7 @@ export interface AssetLocationItem {
 }
 
 export interface GetAssetLocationsParams {
+  assetInstanceId?: number;
   assetId?: number;
   departmentId?: number;
   isCurrent?: boolean;
@@ -43,7 +46,7 @@ export interface DepartmentLocationOption {
 }
 
 export interface CreateAssetLocationPayload {
-  assetId: number;
+  assetInstanceId: number;
   departmentId: number;
   startDate: string;
   endDate?: string | null;
@@ -76,7 +79,7 @@ export const assetLocationService = {
 
   async create(payload: CreateAssetLocationPayload): Promise<AssetLocationItem> {
     const response = await assetLocationApi.post<AssetLocationItem>('/api/AssetLocations', {
-      assetId: payload.assetId,
+      assetInstanceId: payload.assetInstanceId,
       departmentId: payload.departmentId,
       startDate: payload.startDate,
       endDate: payload.endDate ?? undefined,
@@ -104,4 +107,3 @@ export const assetLocationService = {
     await assetLocationApi.delete(`/api/AssetLocations/${locationId}`);
   },
 };
-
