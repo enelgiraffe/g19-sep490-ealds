@@ -6,7 +6,7 @@ public class ScheduleDeleteDTO
 {
     public int ScheduleId { get; set; }
 
-    public int AssetId { get; set; }
+    public int AssetInstanceId { get; set; }
 
     public int TemplateId { get; set; }
 

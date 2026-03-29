@@ -21,6 +21,9 @@ public partial class Procurement
 
     public DateOnly ContractDate { get; set; }
 
+    [StringLength(255)]
+    public string Title { get; set; } = null!;
+
     [Column(TypeName = "decimal(18, 2)")]
     public decimal TotalAmount { get; set; }
 

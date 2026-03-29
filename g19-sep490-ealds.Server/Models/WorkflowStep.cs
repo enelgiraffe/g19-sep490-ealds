@@ -23,6 +23,9 @@ public partial class WorkflowStep
     [InverseProperty("Step")]
     public virtual ICollection<Approval> Approvals { get; set; } = new List<Approval>();
 
+    [InverseProperty("Step")]
+    public virtual ICollection<AssetRequest> AssetRequests { get; set; } = new List<AssetRequest>();
+
     [ForeignKey("RoleId")]
     [InverseProperty("WorkflowSteps")]
     public virtual Role Role { get; set; } = null!;

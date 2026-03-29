@@ -13,7 +13,7 @@ public class MaintenanceRecordResponseDTO
     public string WorkPerformed { get; set; } = null!;
     public string ConditionBefore { get; set; } = null!;
     public string ConditionAfter { get; set; } = null!;
-    public string? TechnicalNote { get; set; }
+    //public string? TechnicalNote { get; set; }
 
     public MaintenanceRecordStatus Status { get; set; }
 }

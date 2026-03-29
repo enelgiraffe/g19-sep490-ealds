@@ -104,7 +104,7 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
         var template = await _context.MaintenanceTemplates.ToListAsync();
         if (template == null)
             throw new Exception("Không có bản ghi nào");
-        
+
         return _mapper.ListEntityToResponse(template);
     }
 
@@ -152,4 +152,4 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
 
         return _mapper.EntityToResponse(template);
     }
-}
+}   

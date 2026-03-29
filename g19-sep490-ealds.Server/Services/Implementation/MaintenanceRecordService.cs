@@ -11,16 +11,17 @@ public class MaintenanceRecordService : IMaintenanceRecordService
     private readonly EALDSDbcontext _context;
     private readonly IMaintenanceRecordMapper _mapper;
 
-    public MaintenanceRecordService(EALDSDbcontext context, IMaintenanceRecordMapper mapper)
+    public MaintenanceRecordService(
+        IMaintenanceRecordMapper mapper, EALDSDbcontext context)
     {
-        _context = context;
         _mapper = mapper;
+        _context = context;
     }
 
     public async Task<IEnumerable<MaintenanceRecordResponseDTO>> GetRecordsByAssetAsync(int assetId)
     {
         var records = await _context.MaintenanceRecords
-        .Where(x => x.AssetId == assetId)
+        .Where(x => x.AssetInstanceId == assetId)
         .OrderByDescending(x => x.ExecutionDate)
         .ToListAsync();
 
@@ -28,5 +29,6 @@ public class MaintenanceRecordService : IMaintenanceRecordService
             throw new KeyNotFoundException("Tài sản chưa có lịch sử bảo trì");
 
         return _mapper.ListEntityToResponse(records);
+
     }
 }

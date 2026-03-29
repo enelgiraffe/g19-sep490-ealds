@@ -5,10 +5,10 @@ namespace g19_sep490_ealds.Server.Mappers.Implementation;
 
 public class AssetCapitalizationMapper : IAssetCapitalizationMapper
 {
-    public AssetCapitalization ToEntity(int assetId, string? note, int UserId)
+    public AssetCapitalization ToEntity(int assetInstanceId, string? note, int UserId)
     {
         AssetCapitalization assetCap = new AssetCapitalization();
-        assetCap.AssetId = assetId;
+        assetCap.AssetInstanceId = assetInstanceId;
         assetCap.CapitalizedDate = DateTime.UtcNow.AddHours(7);
         assetCap.CapitalizedBy = UserId;
         assetCap.Note = note;
@@ -19,7 +19,7 @@ public class AssetCapitalizationMapper : IAssetCapitalizationMapper
     public AssetCapitalizationResponseDTO ToResponse(AssetCapitalization entity)
     {
         AssetCapitalizationResponseDTO response = new AssetCapitalizationResponseDTO();
-        response.AssetId = entity.AssetId;
+        response.AssetInstanceId = entity.AssetInstanceId;
         response.CapitalizedDate = DateTime.UtcNow.AddHours(7);
         response.CapitalizedBy = entity.CapitalizedBy;
         response.Note = entity.Note;

@@ -15,10 +15,10 @@ public class MaintenanceRecordController : ControllerBase
         _service = service;
     }
 
-    [HttpGet("asset/{assetId}")]
-    public async Task<IActionResult> GetByAsset(int assetId)
+    [HttpGet("assetInstance/{assetInstanceId}")]
+    public async Task<IActionResult> GetByAsset(int assetInstance)
     {
-        var result = await _service.GetRecordsByAssetAsync(assetId);
+        var result = await _service.GetRecordsByAssetAsync(assetInstance);
         return Ok(result);
     }
 }

@@ -1,7 +1,6 @@
 ﻿using g19_sep490_ealds.Server.DTO.RequestDTO;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.ServiceInterface;
-using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using Microsoft.AspNetCore.Mvc;
 using System.Net;
 
@@ -19,7 +18,7 @@ public class AssetCapitalizationController : ControllerBase
     }
 
     [HttpPut("change-status")]
-    [ProducesResponseType(typeof(IEnumerable<Asset>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(IEnumerable<AssetInstance>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(string), (int)HttpStatusCode.BadRequest)]
     //[Authorize(Roles = "Admin, Employee")]
     public async Task<IActionResult> Capitalize([FromBody] AssetCapitalizationRequestDTO request)

@@ -12,16 +12,20 @@ public partial class Notification
     [Key]
     public int NotificationId { get; set; }
 
+    public int? RefId { get; set; }
+
     [StringLength(255)]
     public string Title { get; set; } = null!;
 
     [StringLength(100)]
     public string? Content { get; set; }
 
-    public int? RefId { get; set; }
+    public bool IsSend { get; set; }
 
     [Column(TypeName = "datetime")]
     public DateTime SentDate { get; set; }
 
-    public bool IsSend { get; set; }
+    [ForeignKey("RefId")]
+    [InverseProperty("Notifications")]
+    public virtual User? Ref { get; set; }
 }

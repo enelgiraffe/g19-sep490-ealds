@@ -1,6 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using g19_sep490_ealds.Server.Utils.EnumsStatus;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
 namespace g19_sep490_ealds.Server.Models;
 
@@ -11,7 +11,8 @@ public partial class MaintenanceRecord
     public int RecordId { get; set; }
 
     public int TaskId { get; set; }
-    public int AssetId { get; set; }
+
+    public int AssetInstanceId { get; set; }
 
     [Column(TypeName = "datetime")]
     public DateTime ExecutionDate { get; set; }
@@ -27,16 +28,16 @@ public partial class MaintenanceRecord
 
     public string ConditionAfter { get; set; } = null!;
 
-    public string? TechnicalNote { get; set; }
+    [StringLength(255)]
+    public string? PerformedBy { get; set; }
+
+    [ForeignKey("AssetInstanceId")]
+    [InverseProperty("MaintenanceRecords")]
+    public virtual AssetInstance AssetInstance { get; set; } = null!;
 
     [ForeignKey("TaskId")]
     [InverseProperty("MaintenanceRecords")]
-    public virtual MaintenaceTask Task { get; set; } = null!;
-
-
-    [ForeignKey("AssetId")]
-    [InverseProperty("MaintenanceRecords")]
-    public virtual Asset Asset { get; set; } = null!;
+    public virtual MaintenanceTask Task { get; set; } = null!;
 
     [NotMapped]
     public MaintenanceRecordStatus StatusEnum

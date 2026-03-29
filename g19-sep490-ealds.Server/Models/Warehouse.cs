@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Models;
 
-[Table("WarehouseAsset")]
-public partial class WarehouseAsset
+[Table("Warehouse")]
+public partial class Warehouse
 {
     [Key]
     public int WarehouseId { get; set; }
@@ -15,6 +15,9 @@ public partial class WarehouseAsset
     [StringLength(255)]
     public string Name { get; set; } = null!;
 
-    [StringLength(255)]
-    public string? Description { get; set; }
+    [StringLength(500)]
+    public string? Location { get; set; }
+
+    [InverseProperty("Warehouse")]
+    public virtual ICollection<AssetInstance> AssetInstances { get; set; } = new List<AssetInstance>();
 }

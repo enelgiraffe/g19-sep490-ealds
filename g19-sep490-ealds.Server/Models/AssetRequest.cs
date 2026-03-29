@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Models;
 
@@ -14,9 +11,9 @@ public partial class AssetRequest
 
     public int UserId { get; set; }
 
-    public int RequestTypeId { get; set; }
-
     public int? AssetId { get; set; }
+
+    public int RequestTypeId { get; set; }
 
     [StringLength(255)]
     public string Title { get; set; } = null!;
@@ -27,10 +24,10 @@ public partial class AssetRequest
 
     public int Status { get; set; }
 
-    public int CreatedBy { get; set; }
-
     [Column(TypeName = "datetime")]
     public DateTime CreateDate { get; set; }
+
+    public int CreatedBy { get; set; }
 
     [Column(TypeName = "datetime")]
     public DateTime? ApproveDate { get; set; }
@@ -47,11 +44,15 @@ public partial class AssetRequest
     [InverseProperty("AssetRequest")]
     public virtual ICollection<AssetRequestRecord> AssetRequestRecords { get; set; } = new List<AssetRequestRecord>();
 
-    [InverseProperty("AssetRequest")]
-    public virtual ICollection<DiposalRecord> DiposalRecords { get; set; } = new List<DiposalRecord>();
+    [ForeignKey("CreatedBy")]
+    [InverseProperty("AssetRequestCreatedByNavigations")]
+    public virtual User CreatedByNavigation { get; set; } = null!;
 
     [InverseProperty("AssetRequest")]
-    public virtual ICollection<MaintenaceTask> MaintenaceTasks { get; set; } = new List<MaintenaceTask>();
+    public virtual ICollection<DisposalRecord> DisposalRecords { get; set; } = new List<DisposalRecord>();
+
+    [InverseProperty("AssetRequest")]
+    public virtual ICollection<MaintenanceTask> MaintenanceTasks { get; set; } = new List<MaintenanceTask>();
 
     [InverseProperty("AssetRequest")]
     public virtual ICollection<Procurement> Procurements { get; set; } = new List<Procurement>();
@@ -63,10 +64,11 @@ public partial class AssetRequest
     [InverseProperty("AssetRequests")]
     public virtual RequestType RequestType { get; set; } = null!;
 
-    [InverseProperty("AssetRequest")]
-    public virtual ICollection<TransferRecord> TransferRecords { get; set; } = new List<TransferRecord>();
+    [ForeignKey("StepId")]
+    [InverseProperty("AssetRequests")]
+    public virtual WorkflowStep Step { get; set; } = null!;
 
     [ForeignKey("UserId")]
-    [InverseProperty("AssetRequests")]
+    [InverseProperty("AssetRequestUsers")]
     public virtual User User { get; set; } = null!;
 }

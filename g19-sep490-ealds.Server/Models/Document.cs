@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Models;
 
@@ -14,17 +11,33 @@ public partial class Document
 
     public int ProcurementId { get; set; }
 
-    public int DocumentType { get; set; }
-
     [StringLength(500)]
     public string FileUrl { get; set; } = null!;
+
+    public int DocumentType { get; set; }
+
+    public int? AssetId { get; set; }
+
+    public int? AssetInstanceId { get; set; }
 
     public int UploadedBy { get; set; }
 
     [Column(TypeName = "datetime")]
     public DateTime UploadedDate { get; set; }
 
+    [ForeignKey("AssetId")]
+    [InverseProperty("Documents")]
+    public virtual Asset? Asset { get; set; }
+
+    [ForeignKey("AssetInstanceId")]
+    [InverseProperty("Documents")]
+    public virtual AssetInstance? AssetInstance { get; set; }
+
     [ForeignKey("ProcurementId")]
     [InverseProperty("Documents")]
     public virtual Procurement Procurement { get; set; } = null!;
+
+    [ForeignKey("UploadedBy")]
+    [InverseProperty("Documents")]
+    public virtual User UploadedByNavigation { get; set; } = null!;
 }

@@ -1,13 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Models;
 
 [Table("InventorySession")]
-[Index("Code", Name = "UQ__Inventor__A25C5AA7BFABD97D", IsUnique = true)]
 public partial class InventorySession
 {
     [Key]
@@ -40,6 +36,10 @@ public partial class InventorySession
 
     public int CreatedBy { get; set; }
 
+    public bool IsPeriodic { get; set; }
+
+    public int? PeriodDays { get; set; }
+
     [ForeignKey("AssetCategoryId")]
     [InverseProperty("InventorySessions")]
     public virtual AssetCategory AssetCategory { get; set; } = null!;
@@ -48,14 +48,7 @@ public partial class InventorySession
     [InverseProperty("InventorySessions")]
     public virtual AssetType AssetType { get; set; } = null!;
 
-    [ForeignKey("CreatedBy")]
-    [InverseProperty("InventorySessions")]
-    public virtual User CreatedByNavigation { get; set; } = null!;
-
     [ForeignKey("DepartmentId")]
     [InverseProperty("InventorySessions")]
     public virtual Department Department { get; set; } = null!;
-
-    [InverseProperty("Session")]
-    public virtual ICollection<InventoryTask> InventoryTasks { get; set; } = new List<InventoryTask>();
 }

@@ -16,7 +16,7 @@ public class MaintenanceRecordMapper : IMaintenanceRecordMapper
             WorkPerformed = entity.WorkPerformed,
             ConditionBefore = entity.ConditionBefore,
             ConditionAfter = entity.ConditionAfter,
-            TechnicalNote = entity.TechnicalNote,
+            //TechnicalNote = entity.TechnicalNote,
             Status = entity.StatusEnum
         };
     }

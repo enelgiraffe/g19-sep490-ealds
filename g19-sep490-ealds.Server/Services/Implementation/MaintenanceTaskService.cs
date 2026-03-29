@@ -15,7 +15,7 @@ public class MaintenanceTaskService : IMaintenanceTaskService
     private readonly EALDSDbcontext _context;
     private readonly IMediator _mediator;
 
-    public MaintenanceTaskService(EALDSDbcontext context, IMediator mediator)
+    public MaintenanceTaskService(IMediator mediator, EALDSDbcontext context)
     {
         _context = context;
         _mediator = mediator;
@@ -23,15 +23,15 @@ public class MaintenanceTaskService : IMaintenanceTaskService
 
     public async Task StartTaskAsync(int taskId, int userId, int roleId)
     {
-        var task = await _context.MaintenaceTasks
-        .Include(x => x.Asset)
+        var task = await _context.MaintenanceTasks
+        .Include(x => x.AssetInstance)
         .FirstOrDefaultAsync(x => x.TaskId == taskId)
         ?? throw new Exception("Task not found");
 
         if (task.StatusEnum != MaintenanceTaskStatus.Pending)
             throw new Exception("Task must be Pending");
 
-        if (task.Asset == null)
+        if (task.AssetInstance == null)
             throw new Exception("Asset not found");
 
         if (task.AssignTo != userId)
@@ -40,7 +40,7 @@ public class MaintenanceTaskService : IMaintenanceTaskService
         task.StatusEnum = MaintenanceTaskStatus.InProgress;
 
         // update asset
-        var asset = task.Asset;
+        var asset = task.AssetInstance;
         var oldStatus = asset.Status;
 
         asset.Status = (int)AssetStatus.UnderMaintenance;
@@ -59,8 +59,8 @@ public class MaintenanceTaskService : IMaintenanceTaskService
 
     public async Task CompleteTaskAsync(int taskId, int userId, int roleId, CompleteTaskDTO dto)
     {
-        var task = await _context.MaintenaceTasks
-        .Include(x => x.Asset)
+        var task = await _context.MaintenanceTasks
+        .Include(x => x.AssetInstance)
         .FirstOrDefaultAsync(x => x.TaskId == taskId)
         ?? throw new Exception("Task not found");
 
@@ -73,7 +73,7 @@ public class MaintenanceTaskService : IMaintenanceTaskService
         // update task
         task.StatusEnum = MaintenanceTaskStatus.Completed;
 
-        var asset = task.Asset;
+        var asset = task.AssetInstance;
         var oldStatus = asset.Status;
 
         asset.Status = (int)AssetStatus.Active;
@@ -84,7 +84,7 @@ public class MaintenanceTaskService : IMaintenanceTaskService
         await _mediator.Publish(
             new MaintenanceTaskCompletedEvent(
                 task.TaskId,
-                task.AssetId,
+                task.AssetInstanceId,
                 userId,
                 dto
             )

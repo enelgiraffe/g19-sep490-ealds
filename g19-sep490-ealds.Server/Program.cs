@@ -1,6 +1,6 @@
 ﻿using g19_sep490_ealds.Server.Mappers;
 using g19_sep490_ealds.Server.Mappers.Implementation;
-using g19_sep490_ealds.Server.Models;
+//using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Implementation;
 using g19_sep490_ealds.Server.Services.Interface;
 using g19_sep490_ealds.Server.Services.ServiceImplementation;
@@ -16,8 +16,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
-builder.Services.AddDbContext<EALDSDbcontext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("MyCnn")));
+//builder.Services.AddDbContext<EALDSDbcontext>(options =>
+//    options.UseSqlServer(builder.Configuration.GetConnectionString("MyCnn")));
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

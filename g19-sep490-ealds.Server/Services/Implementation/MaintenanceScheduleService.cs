@@ -13,7 +13,9 @@ public class MaintenanceScheduleService : IMaintenanceScheduleService
     private readonly IMaintenanceScheduleMapper _mapper;
     private readonly EALDSDbcontext _context;
 
-    public MaintenanceScheduleService(IMaintenanceScheduleMapper mapper, EALDSDbcontext context)
+    public MaintenanceScheduleService(IMaintenanceScheduleMapper mapper,
+        EALDSDbcontext context
+        )
     {
         _mapper = mapper;
         _context = context;
@@ -21,7 +23,7 @@ public class MaintenanceScheduleService : IMaintenanceScheduleService
 
     public async Task<MaintenanceScheduleResponseDTO> CreateScheduleAsync(ScheduleCreateDTO create)
     {
-        var asset = await _context.Assets.FindAsync(create.AssetId)
+        var asset = await _context.AssetInstances.FindAsync(create.AssetInstanceId)
         ?? throw new Exception("Asset not found");
 
         var template = await _context.MaintenanceTemplates.FindAsync(create.TemplateId)
@@ -54,7 +56,7 @@ public class MaintenanceScheduleService : IMaintenanceScheduleService
     public async Task<IEnumerable<MaintenanceScheduleResponseDTO>> GetScheduleByAssetAsync(int assetId)
     {
         var schedules = await _context.MaintenanceSchedules
-                        .Where(x => x.AssetId == assetId && x.IsActive == true)
+                        .Where(x => x.AssetInstanceId == assetId && x.IsActive == true)
                         .ToListAsync();
 
         if (!schedules.Any())

@@ -10,7 +10,7 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
     public MaintenanceSchedule CreateToEntity(ScheduleCreateDTO create)
     {
         MaintenanceSchedule schedule = new MaintenanceSchedule();
-        schedule.AssetId = create.AssetId;
+        schedule.AssetInstanceId = create.AssetInstanceId;
         schedule.TemplateId = create.TemplateId;
         schedule.ScheduleTypeEnum = create.ScheduleType;
         schedule.IntervalValue = create.IntervalValue;
@@ -27,7 +27,7 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
     {
         MaintenanceSchedule schedule = new MaintenanceSchedule();
         schedule.ScheduleId = delete.ScheduleId;
-        schedule.AssetId = delete.AssetId;
+        schedule.AssetInstanceId = delete.AssetInstanceId;
         schedule.TemplateId = delete.TemplateId;
         schedule.ScheduleTypeEnum = delete.ScheduleType;
         schedule.IntervalValue = delete.IntervalValue;
@@ -44,7 +44,7 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
     {
         MaintenanceScheduleResponseDTO response = new MaintenanceScheduleResponseDTO();
         response.ScheduleId = entity.ScheduleId;
-        response.AssetId = entity.AssetId;
+        response.AssetInstanceId = entity.AssetInstanceId;
         response.TemplateId = entity.TemplateId;
         response.ScheduleType = entity.ScheduleTypeEnum;
         response.IntervalValue = entity.IntervalValue;
@@ -66,7 +66,7 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
     public MaintenanceSchedule UpdateToEntity(ScheduleUpdateDTO update)
     {
         MaintenanceSchedule schedule = new MaintenanceSchedule();
-        schedule.AssetId = update.AssetId;
+        schedule.AssetInstanceId = update.AssetInstanceId;
         schedule.TemplateId = update.TemplateId;
         schedule.ScheduleTypeEnum = update.ScheduleType;
         schedule.IntervalValue = update.IntervalValue;

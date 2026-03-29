@@ -1,20 +1,17 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Models;
 
-[Table("DiposalRecord")]
-public partial class DiposalRecord
+[Table("DisposalRecord")]
+public partial class DisposalRecord
 {
     [Key]
     public int DiposalId { get; set; }
 
-    public int AssetRequestId { get; set; }
+    public int AssetInstanceId { get; set; }
 
-    public int AssetId { get; set; }
+    public int AssetRequestId { get; set; }
 
     public int DiposalMethod { get; set; }
 
@@ -28,15 +25,15 @@ public partial class DiposalRecord
 
     public int ExecutedBy { get; set; }
 
-    [ForeignKey("AssetId")]
-    [InverseProperty("DiposalRecords")]
-    public virtual Asset Asset { get; set; } = null!;
+    [ForeignKey("AssetInstanceId")]
+    [InverseProperty("DisposalRecords")]
+    public virtual AssetInstance AssetInstance { get; set; } = null!;
 
     [ForeignKey("AssetRequestId")]
-    [InverseProperty("DiposalRecords")]
+    [InverseProperty("DisposalRecords")]
     public virtual AssetRequest AssetRequest { get; set; } = null!;
 
     [ForeignKey("ExecutedBy")]
-    [InverseProperty("DiposalRecords")]
+    [InverseProperty("DisposalRecords")]
     public virtual User ExecutedByNavigation { get; set; } = null!;
 }

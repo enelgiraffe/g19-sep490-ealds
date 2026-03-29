@@ -14,7 +14,7 @@ public partial class RepairTask
 
     public int AssetRequestId { get; set; }
 
-    public int AssetId { get; set; }
+    public int AssetInstanceId { get; set; }
 
     [Column(TypeName = "decimal(18, 2)")]
     public decimal EstimatedCost { get; set; }
@@ -23,9 +23,17 @@ public partial class RepairTask
 
     public int Status { get; set; }
 
-    [ForeignKey("AssetId")]
+    [Column(TypeName = "datetime")]
+    public DateTime? RepairDate { get; set; }
+
+    [Column(TypeName = "datetime")]
+    public DateTime? ExpectedCompletionDate { get; set; }
+
+    public string? RepairProgressStatus { get; set; }
+
+    [ForeignKey("AssetInstanceId")]
     [InverseProperty("RepairTasks")]
-    public virtual Asset Asset { get; set; } = null!;
+    public virtual AssetInstance AssetInstance { get; set; } = null!;
 
     [ForeignKey("AssetRequestId")]
     [InverseProperty("RepairTasks")]

@@ -2,7 +2,7 @@
 
 public class AssetCapitalizationResponseDTO
 {
-    public int AssetId { get; set; }
+    public int AssetInstanceId { get; set; }
 
     public DateTime CapitalizedDate { get; set; }
 

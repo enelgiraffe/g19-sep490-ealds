@@ -6,5 +6,5 @@ public class CompleteTaskDTO
     public string ConditionBefore { get; set; } = null!;
     public string ConditionAfter { get; set; } = null!;
     public decimal TotalCost { get; set; }
-    public string? TechnicalNote { get; set; }
+    //public string? TechnicalNote { get; set; }
 }

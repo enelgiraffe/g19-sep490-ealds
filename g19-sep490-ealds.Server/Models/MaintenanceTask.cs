@@ -4,8 +4,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace g19_sep490_ealds.Server.Models;
 
-[Table("MaintenaceTask")]
-public partial class MaintenaceTask
+[Table("MaintenanceTask")]
+public partial class MaintenanceTask
 {
     [Key]
     public int TaskId { get; set; }
@@ -14,7 +14,9 @@ public partial class MaintenaceTask
 
     public int? AssetRequestId { get; set; }
 
-    public int AssetId { get; set; }
+    public int AssetInstanceId { get; set; }
+
+    public int? AssetId { get; set; }
 
     [Column(TypeName = "datetime")]
     public DateTime PlannedDate { get; set; }
@@ -30,29 +32,46 @@ public partial class MaintenaceTask
 
     public int CreateBy { get; set; }
 
-    [ForeignKey("AssetId")]
-    [InverseProperty("MaintenaceTasks")]
-    public virtual Asset Asset { get; set; } = null!;
+    public int? PerformerUserId { get; set; }
+
+    public string? MaintenanceProvider { get; set; }
+
+    [Column(TypeName = "decimal(18, 2)")]
+    public decimal? EstimatedCost { get; set; }
+
+    [Column(TypeName = "datetime")]
+    public DateTime? ExpectedCompletionDate { get; set; }
+
+    public string? MaintenanceContent { get; set; }
+
+    public string? LocationType { get; set; }
+
+    [ForeignKey("AssetInstanceId")]
+    [InverseProperty("MaintenanceTasks")]
+    public virtual AssetInstance AssetInstance { get; set; } = null!;
 
     [ForeignKey("AssetRequestId")]
-    [InverseProperty("MaintenaceTasks")]
+    [InverseProperty("MaintenanceTasks")]
     public virtual AssetRequest? AssetRequest { get; set; }
 
     [ForeignKey("AssignTo")]
-    [InverseProperty("MaintenaceTaskAssignToNavigations")]
+    [InverseProperty("MaintenanceTaskAssignToNavigations")]
     public virtual User AssignToNavigation { get; set; } = null!;
 
     [ForeignKey("CreateBy")]
-    [InverseProperty("MaintenaceTaskCreateByNavigations")]
+    [InverseProperty("MaintenanceTaskCreateByNavigations")]
     public virtual User CreateByNavigation { get; set; } = null!;
 
     [InverseProperty("Task")]
     public virtual ICollection<MaintenanceRecord> MaintenanceRecords { get; set; } = new List<MaintenanceRecord>();
 
-    [ForeignKey("ScheduleId")]
-    [InverseProperty("MaintenaceTasks")]
-    public virtual MaintenanceSchedule? Schedule { get; set; }
+    [ForeignKey("PerformerUserId")]
+    [InverseProperty("MaintenanceTaskPerformerUsers")]
+    public virtual User? PerformerUser { get; set; }
 
+    [ForeignKey("ScheduleId")]
+    [InverseProperty("MaintenanceTasks")]
+    public virtual MaintenanceSchedule? Schedule { get; set; }
     [NotMapped]
     public MaintenanceTaskStatus StatusEnum
     {

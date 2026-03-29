@@ -10,7 +10,7 @@ namespace g19_sep490_ealds.Server.Models;
 public partial class RepairRecord
 {
     [Key]
-    public int RecordId { get; set; }
+    public int RepairId { get; set; }
 
     public int TaskId { get; set; }
 
@@ -23,6 +23,11 @@ public partial class RepairRecord
     public string Result { get; set; } = null!;
 
     public int? SupplierId { get; set; }
+
+    [Column(TypeName = "datetime")]
+    public DateTime? DamageDate { get; set; }
+
+    public string? DamageCondition { get; set; }
 
     [ForeignKey("SupplierId")]
     [InverseProperty("RepairRecords")]

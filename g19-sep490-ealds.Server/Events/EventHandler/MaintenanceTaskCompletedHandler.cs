@@ -6,7 +6,7 @@ using MediatR;
 namespace g19_sep490_ealds.Server.Events.EventHandler;
 
 public class MaintenanceTaskCompletedHandler : INotificationHandler<MaintenanceTaskCompletedEvent>
-{  
+{
     private readonly EALDSDbcontext _context;
 
     public MaintenanceTaskCompletedHandler(EALDSDbcontext context)
@@ -21,7 +21,7 @@ public class MaintenanceTaskCompletedHandler : INotificationHandler<MaintenanceT
         var record = new MaintenanceRecord
         {
             TaskId = notification.TaskId,
-            AssetId = notification.AssetId,
+            AssetInstanceId = notification.AssetInstanceId,
             ExecutionDate = DateTime.UtcNow,
             TotalCost = data.TotalCost,
             StatusEnum = MaintenanceRecordStatus.Completed,
@@ -29,7 +29,7 @@ public class MaintenanceTaskCompletedHandler : INotificationHandler<MaintenanceT
             WorkPerformed = data.WorkPerformed,
             ConditionBefore = data.ConditionBefore,
             ConditionAfter = data.ConditionAfter,
-            TechnicalNote = data.TechnicalNote
+            //TechnicalNote = data.TechnicalNote
         };
 
         _context.MaintenanceRecords.Add(record);

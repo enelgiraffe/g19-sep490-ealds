@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Models;
 
@@ -29,6 +26,8 @@ public partial class InventoryRecord
 
     [Column(TypeName = "datetime")]
     public DateTime DateCheckCompleted { get; set; }
+
+    public int? ActualQuantity { get; set; }
 
     [ForeignKey("ActualLocationId")]
     [InverseProperty("InventoryRecords")]

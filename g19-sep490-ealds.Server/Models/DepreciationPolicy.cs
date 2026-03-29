@@ -24,9 +24,9 @@ public partial class DepreciationPolicy
 
     public bool IsActive { get; set; }
 
-    [InverseProperty("Policy")]
-    public virtual ICollection<DrepreciationRecord> DrepreciationRecords { get; set; } = new List<DrepreciationRecord>();
-
     [InverseProperty("DepreciationPolicy")]
-    public virtual ICollection<Asset> Assets { get; set; } = new List<Asset>();
+    public virtual ICollection<AssetInstance> AssetInstances { get; set; } = new List<AssetInstance>();
+
+    [InverseProperty("Policy")]
+    public virtual ICollection<DepreciationRecord> DepreciationRecords { get; set; } = new List<DepreciationRecord>();
 }

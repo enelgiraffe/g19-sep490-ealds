@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Models;
 
@@ -12,7 +9,7 @@ public partial class Employee
     [Key]
     public int EmployeeId { get; set; }
 
-    public int UserId { get; set; }
+    public int? UserId { get; set; }
 
     public int DepartmentId { get; set; }
 
@@ -58,7 +55,11 @@ public partial class Employee
     [InverseProperty("Employees")]
     public virtual Department Department { get; set; } = null!;
 
+    [ForeignKey("UpdatedBy")]
+    [InverseProperty("EmployeeUpdatedByNavigations")]
+    public virtual User? UpdatedByNavigation { get; set; }
+
     [ForeignKey("UserId")]
     [InverseProperty("EmployeeUsers")]
-    public virtual User User { get; set; } = null!;
+    public virtual User? User { get; set; }
 }

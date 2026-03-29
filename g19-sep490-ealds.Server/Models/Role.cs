@@ -38,9 +38,17 @@ public partial class Role
     public virtual ICollection<AssetRequestRecord> AssetRequestRecords { get; set; } = new List<AssetRequestRecord>();
 
     [ForeignKey("CreatedBy")]
-    [InverseProperty("Roles")]
+    [InverseProperty("RoleCreatedByNavigations")]
     public virtual User? CreatedByNavigation { get; set; }
+
+    [ForeignKey("UpdatedBy")]
+    [InverseProperty("RoleUpdatedByNavigations")]
+    public virtual User? UpdatedByNavigation { get; set; }
 
     [InverseProperty("Role")]
     public virtual ICollection<WorkflowStep> WorkflowSteps { get; set; } = new List<WorkflowStep>();
+
+    [ForeignKey("RoleId")]
+    [InverseProperty("Roles")]
+    public virtual ICollection<User> Users { get; set; } = new List<User>();
 }

@@ -30,13 +30,13 @@ public class AssetCapitalizationService : IAssetCapitalizationService
 
     public async Task<AssetCapitalizationResponseDTO> CapitalizeAssetAsync(AssetCapitalizationRequestDTO request, int userId)
     {
-        var asset = await _context.Assets.FindAsync(request.AssetId);
+        var asset = await _context.AssetInstances.FindAsync(request.AssetInstanceId);
 
         if (asset == null)
-            throw new Exception("Asset not found");
+            throw new Exception("AssetInstance not found");
 
         if (asset.StatusEnum == AssetStatus.Capitalized)
-            throw new Exception("Asset is already Capitalized");
+            throw new Exception("AssetInstance is already Capitalized");
 
         using var transaction = await _context.Database.BeginTransactionAsync();
         try
@@ -44,12 +44,12 @@ public class AssetCapitalizationService : IAssetCapitalizationService
             var oldStatus = (int)asset.StatusEnum;
             var role = 1;
             //tam check, sau tao validate sau
-            if(asset.OriginalPrice <= 30000000)
+            if (asset.OriginalPrice <= 30000000)
             {
                 _logger.LogWarning("Tai san khong du dieu kien la TSCD");
             }
 
-            var entity = _mapper.ToEntity(request.AssetId, request.Note, userId);
+            var entity = _mapper.ToEntity(request.AssetInstanceId, request.Note, userId);
             _context.AssetCapitalizations.Add(entity);
 
             asset.StatusEnum = AssetStatus.Capitalized;
@@ -58,7 +58,7 @@ public class AssetCapitalizationService : IAssetCapitalizationService
 
             await _mediator.Publish(
                 new AssetStatusChangedEvent(
-                    asset.AssetId,
+                    asset.AssetInstanceId,
                     oldStatus,
                     (int)asset.StatusEnum,
                     userId,
@@ -79,10 +79,10 @@ public class AssetCapitalizationService : IAssetCapitalizationService
 
     public async Task<AssetCapitalizationResponseDTO> ChangeStatusAssetAsync(AssetCapitalizationRequestDTO request, int userName)
     {
-        var asset = await _context.Assets.FindAsync(request.AssetId);
+        var asset = await _context.AssetInstances.FindAsync(request.AssetInstanceId);
 
         if (asset == null)
-            throw new Exception("Asset not found");
+            throw new Exception("AssetInstance not found");
 
         if (asset.StatusEnum == AssetStatus.Capitalized)
             throw new Exception("Asset is already Capitalized");
@@ -93,7 +93,7 @@ public class AssetCapitalizationService : IAssetCapitalizationService
             var oldStatus = (int)asset.StatusEnum;
             var role = 1;
 
-            var entity = _mapper.ToEntity(request.AssetId, request.Note, userName);
+            var entity = _mapper.ToEntity(request.AssetInstanceId, request.Note, userName);
             _context.AssetCapitalizations.Add(entity);
 
             asset.StatusEnum = AssetStatus.Purchased;
@@ -102,7 +102,7 @@ public class AssetCapitalizationService : IAssetCapitalizationService
 
             await _mediator.Publish(
                 new AssetStatusChangedEvent(
-                    asset.AssetId,
+                    asset.AssetInstanceId,
                     oldStatus,
                     (int)asset.StatusEnum,
                     userName,

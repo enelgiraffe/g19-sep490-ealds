@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Models;
 
@@ -34,7 +31,7 @@ public partial class Department
     public virtual ICollection<AssetLocation> AssetLocations { get; set; } = new List<AssetLocation>();
 
     [ForeignKey("CreatedBy")]
-    [InverseProperty("Departments")]
+    [InverseProperty("DepartmentCreatedByNavigations")]
     public virtual User CreatedByNavigation { get; set; } = null!;
 
     [InverseProperty("Department")]
@@ -43,6 +40,7 @@ public partial class Department
     [InverseProperty("Department")]
     public virtual ICollection<InventorySession> InventorySessions { get; set; } = new List<InventorySession>();
 
-    [InverseProperty("Department")]
-    public virtual ICollection<InventoryTask> InventoryTasks { get; set; } = new List<InventoryTask>();
+    [ForeignKey("UpdatedBy")]
+    [InverseProperty("DepartmentUpdatedByNavigations")]
+    public virtual User? UpdatedByNavigation { get; set; }
 }
