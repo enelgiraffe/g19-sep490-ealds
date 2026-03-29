@@ -119,22 +119,32 @@ export function AssetCreatePage() {
     setSubmitError(null);
     setIsSubmitting(true);
 
+    const code = general.code.trim();
+    const val = Number(general.value || 0);
     const payload: CreateAssetPayload = {
-      code: general.code.trim(),
+      code,
       name: general.name.trim(),
       assetTypeId: Number(general.assetTypeId),
-      purchaseDate: general.purchaseDate,
-      originalPrice: Number(general.value || 0),
-      currentValue: Number(general.value || 0),
-      warrantyEndDate: warranty.expiryDate || null,
-      inUseDate: general.purchaseDate || null,
       unit: general.unit || 'Cái',
       quantity: Number(general.quantity || 1),
-      warehouseId: Number(general.warehouseId),
       createdBy: 0,
-      depreciationPolicyId: depreciation.depreciationPolicyId
-        ? Number(depreciation.depreciationPolicyId)
-        : null,
+      inUseDate: general.purchaseDate || null,
+      specification: general.specification?.trim() || null,
+      note: general.note?.trim() || null,
+      initialInstance: {
+        instanceCode: (general.serialNumber?.trim() || `${code}-1`).slice(0, 100),
+        serialNumber: general.serialNumber?.trim() || null,
+        warehouseId: Number(general.warehouseId),
+        purchaseDate: general.purchaseDate,
+        originalPrice: val,
+        currentValue: val,
+        inUseDate: general.purchaseDate || null,
+        depreciationPolicyId: depreciation.depreciationPolicyId
+          ? Number(depreciation.depreciationPolicyId)
+          : null,
+        contractNo: general.contractNumber?.trim() || null,
+        condition: general.specification?.trim() || null,
+      },
     };
 
     try {

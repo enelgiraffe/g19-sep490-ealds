@@ -16,7 +16,7 @@ import {
 import './RepairsPage.css';
 import { damageReportService } from '../../assets/services/damageReportService';
 import { assetRequestService } from '../../assets/services/assetRequestService';
-import { assetService, formatVnd, type AssetResponse } from '../../assets/services/assetService';
+import { assetService, formatVnd, type AssetDetailResponse } from '../../assets/services/assetService';
 import {
   repairRequestService,
   type RepairStartPayload,
@@ -107,14 +107,14 @@ export function RepairsPage() {
 
   const [repairStartOpen, setRepairStartOpen] = useState(false);
   const [repairStartRow, setRepairStartRow] = useState<RepairRow | null>(null);
-  const [repairAsset, setRepairAsset] = useState<AssetResponse | null>(null);
+  const [repairAsset, setRepairAsset] = useState<AssetDetailResponse | null>(null);
   const [repairStartLoading, setRepairStartLoading] = useState(false);
   const [repairStartSubmitting, setRepairStartSubmitting] = useState(false);
 
   const [repairCompleteOpen, setRepairCompleteOpen] = useState(false);
   const [repairCompleteRow, setRepairCompleteRow] = useState<RepairRow | null>(null);
   const [repairCompleteTaskId, setRepairCompleteTaskId] = useState<number | null>(null);
-  const [repairCompleteAsset, setRepairCompleteAsset] = useState<AssetResponse | null>(null);
+  const [repairCompleteAsset, setRepairCompleteAsset] = useState<AssetDetailResponse | null>(null);
   const [repairCompleteLoading, setRepairCompleteLoading] = useState(false);
   const [repairCompleteSubmitting, setRepairCompleteSubmitting] = useState(false);
   const [repairCompleteReportNumber, setRepairCompleteReportNumber] = useState('');

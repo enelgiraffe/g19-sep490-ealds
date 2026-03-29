@@ -8,7 +8,14 @@ import {
   SettingOutlined,
   EyeOutlined,
 } from '@ant-design/icons';
-import { assetService, formatVnd, getStatusLabel, type AssetResponse, type AssetTypeItem } from '../../assets/services/assetService';
+import {
+  assetInstanceService,
+  assetService,
+  formatVnd,
+  getStatusLabel,
+  type AssetInstanceResponse,
+  type AssetTypeItem,
+} from '../../assets/services/assetService';
 import './LiquidationPage.css';
 
 const { Option } = Select;
@@ -17,6 +24,7 @@ type LiquidationStatusFilter = 'all' | 'disposed' | 'liquidated';
 
 interface LiquidationRow {
   id: number;
+  catalogAssetId: number;
   assetCode: string;
   assetName: string;
   assetType: string;
@@ -27,14 +35,15 @@ interface LiquidationRow {
   statusName: string;
 }
 
-function toRow(a: AssetResponse): LiquidationRow {
+function toRow(a: AssetInstanceResponse): LiquidationRow {
   return {
-    id: a.assetId,
-    assetCode: a.code,
-    assetName: a.name,
-    assetType: a.assetTypeName ?? '—',
-    assetTypeId: a.assetTypeId ?? null,
-    quantity: a.quantity ?? 1,
+    id: a.assetInstanceId,
+    catalogAssetId: a.assetId,
+    assetCode: a.assetCode ?? a.instanceCode,
+    assetName: a.assetName ?? a.instanceCode,
+    assetType: '—',
+    assetTypeId: null,
+    quantity: 1,
     originalPrice: formatVnd(a.originalPrice ?? 0),
     depreciationValue: formatVnd(a.currentValue ?? 0),
     statusName: a.statusName ?? '',
@@ -45,7 +54,7 @@ export function LiquidationPage() {
   const [search, setSearch] = useState('');
   const [assetTypeFilter, setAssetTypeFilter] = useState<'all' | number>('all');
   const [statusFilter, setStatusFilter] = useState<LiquidationStatusFilter>('all');
-  const [assets, setAssets] = useState<AssetResponse[] | null>(null);
+  const [assets, setAssets] = useState<AssetInstanceResponse[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [assetTypes, setAssetTypes] = useState<AssetTypeItem[]>([]);
@@ -70,13 +79,13 @@ export function LiquidationPage() {
       try {
         // Backend enum: Disposed=4, Liquidated=6 (cả hai đều là "Đã thanh lý" ở UI)
         const [disposed, liquidated] = await Promise.all([
-          assetService.getAll({ status: 4 }),
-          assetService.getAll({ status: 6 }),
+          assetInstanceService.getAll({ status: 4 }),
+          assetInstanceService.getAll({ status: 6 }),
         ]);
 
         const merged = [...disposed, ...liquidated];
-        const map = new Map<number, AssetResponse>();
-        for (const a of merged) map.set(a.assetId, a);
+        const map = new Map<number, AssetInstanceResponse>();
+        for (const a of merged) map.set(a.assetInstanceId, a);
         setAssets(Array.from(map.values()));
       } catch {
         setError('Không tải được danh sách tài sản đã thanh lý. Kiểm tra kết nối backend.');
@@ -234,7 +243,7 @@ export function LiquidationPage() {
                       <Button
                         type="text"
                         icon={<EyeOutlined />}
-                        onClick={() => navigate(`/assets/${row.id}`)}
+                        onClick={() => navigate(`/assets/${row.catalogAssetId}`)}
                       />
                     </td>
                   </tr>

@@ -16,6 +16,18 @@ inventoryApi.interceptors.request.use((config) => {
   return config;
 });
 
+inventoryApi.interceptors.response.use((response) => {
+  const url = response.config.url ?? '';
+  if (
+    url.includes('/complete') ||
+    url.includes('/director-approve') ||
+    url.includes('/reject')
+  ) {
+    window.dispatchEvent(new Event('ealds-notifications-changed'));
+  }
+  return response;
+});
+
 export interface DropdownItem {
   id: number;
   name: string;
@@ -350,17 +362,21 @@ export const inventoryService = {
   },
 
   async getAssets(params?: { keyword?: string }): Promise<AssetDropdownItem[]> {
-    const res = await inventoryApi.get<{
-      assetId: number;
-      code: string;
-      name: string;
-      assetTypeId: number;
-      currentDepartmentId?: number | null;
-    }[]>('/api/assets', { params });
+    const res = await inventoryApi.get<
+      {
+        assetInstanceId: number;
+        assetId: number;
+        assetTypeId: number;
+        instanceCode: string;
+        assetCode?: string | null;
+        assetName?: string | null;
+        currentDepartmentId?: number | null;
+      }[]
+    >('/api/asset-instances', { params });
     return res.data.map((a) => ({
       assetId: a.assetId,
-      code: a.code,
-      name: a.name,
+      code: a.instanceCode,
+      name: a.assetName ?? a.assetCode ?? a.instanceCode,
       assetTypeId: a.assetTypeId,
       currentDepartmentId: a.currentDepartmentId ?? null,
     }));

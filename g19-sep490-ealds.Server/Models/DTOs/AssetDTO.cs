@@ -3,91 +3,127 @@ using g19_sep490_ealds.Server.Utils.EnumsStatus;
 namespace g19_sep490_ealds.Server.Models.DTOs;
 
 /// <summary>
-/// DTO for creating an asset with General info and Depreciation settings.
+/// DTO for creating an <see cref="Asset"/> (catalog / product definition).
+/// Financial and warehouse fields belong on <see cref="CreateAssetInstanceDTO"/> (or <see cref="CreateAssetDTO.InitialInstance"/>).
 /// </summary>
 public class CreateAssetDTO
 {
-    // General info
     public string Code { get; set; } = null!;
     public string Name { get; set; } = null!;
     public int AssetTypeId { get; set; }
-    public DateOnly PurchaseDate { get; set; }
-    public decimal OriginalPrice { get; set; }
-    public decimal CurrentValue { get; set; }
-    public DateOnly? WarrantyEndDate { get; set; }
-    public DateOnly? InUseDate { get; set; }
     public string Unit { get; set; } = null!;
-    public int Quantity { get; set; }
-    public int WarehouseId { get; set; }
+    public int? Quantity { get; set; }
     public int CreatedBy { get; set; }
+    public DateOnly? InUseDate { get; set; }
+    public string? Specification { get; set; }
+    public string? Note { get; set; }
 
-    // Depreciation settings (optional - links asset to a depreciation policy)
-    public int? DepreciationPolicyId { get; set; }
-
-    /// <summary>Optional assignment (requires ACCOUNTANT). Department and/or responsible employee.</summary>
-    public int? AssignedDepartmentId { get; set; }
-
-    /// <summary>Optional custodian; must belong to <see cref="AssignedDepartmentId"/> when both are set.</summary>
-    public int? ResponsibleEmployeeId { get; set; }
-
-    /// <summary>Start date for location/usage rows; defaults to UTC today.</summary>
-    public DateOnly? AssignmentEffectiveDate { get; set; }
+    /// <summary>Optional first physical row: same transaction as the asset when provided.</summary>
+    public CreateAssetInstanceDTO? InitialInstance { get; set; }
 }
 
 /// <summary>
-/// DTO for updating asset data and status.
+/// DTO for updating catalog fields on an <see cref="Asset"/>.
 /// </summary>
 public class UpdateAssetDTO
 {
     public string? Code { get; set; }
     public string? Name { get; set; }
     public int? AssetTypeId { get; set; }
-    public DateOnly? PurchaseDate { get; set; }
-    public decimal? OriginalPrice { get; set; }
-    public decimal? CurrentValue { get; set; }
     public AssetStatus? Status { get; set; }
-    public DateOnly? WarrantyEndDate { get; set; }
-    public DateOnly? InUseDate { get; set; }
     public string? Unit { get; set; }
     public int? Quantity { get; set; }
-    public int? WarehouseId { get; set; }
-
-    // Depreciation policy (can be linked/unlinked on update)
-    public int? DepreciationPolicyId { get; set; }
-
-    /// <summary>Set or change current department (requires ACCOUNTANT). Closes the previous current location.</summary>
-    public int? AssignedDepartmentId { get; set; }
-
-    /// <summary>Set or change responsible employee (requires ACCOUNTANT). Updates location to this employee's department when used alone.</summary>
-    public int? ResponsibleEmployeeId { get; set; }
-
-    /// <summary>Effective date for assignment changes; defaults to UTC today.</summary>
-    public DateOnly? AssignmentEffectiveDate { get; set; }
-
-    /// <summary>Close the current department assignment without adding a new one.</summary>
-    public bool ClearDepartmentAssignment { get; set; }
-
-    /// <summary>Close the current responsible-employee assignment without adding a new one.</summary>
-    public bool ClearResponsibleEmployee { get; set; }
-}
-
-/// <summary>
-/// DTO for accountant-only status change (<c>PUT /api/assets/{id}/status</c>).
-/// </summary>
-public class ChangeAssetStatusDTO
-{
-    public AssetStatus Status { get; set; }
-
-    /// <summary>Optional note for audit / client display (not persisted unless you extend the model).</summary>
+    public DateOnly? InUseDate { get; set; }
+    public string? Specification { get; set; }
     public string? Note { get; set; }
 }
 
 /// <summary>
-/// DTO for delete: sets asset status to Disposed, Lost, or Liquidated.
+/// DTO for accountant-only status change on an <see cref="Asset"/> (<c>PUT /api/assets/{id}/status</c>).
+/// </summary>
+public class ChangeAssetStatusDTO
+{
+    public AssetStatus Status { get; set; }
+    public string? Note { get; set; }
+}
+
+/// <summary>
+/// DTO for delete on an <see cref="Asset"/> (sets catalog status to Disposed, Lost, or Liquidated).
 /// </summary>
 public class DeleteAssetDTO
 {
-    public AssetStatus Status { get; set; } // Disposed, Lost, or Liquidated
+    public AssetStatus Status { get; set; }
+    public string? Reason { get; set; }
+}
+
+/// <summary>
+/// Creates or describes a physical <see cref="AssetInstance"/>.
+/// </summary>
+public class CreateAssetInstanceDTO
+{
+    /// <summary>Required when POSTing to <c>/api/asset-instances</c>; omitted when nested under <see cref="CreateAssetDTO.InitialInstance"/>.</summary>
+    public int? AssetId { get; set; }
+
+    public string InstanceCode { get; set; } = null!;
+    public string? SerialNumber { get; set; }
+    public int WarehouseId { get; set; }
+    public DateOnly PurchaseDate { get; set; }
+    public decimal OriginalPrice { get; set; }
+    public decimal CurrentValue { get; set; }
+    public DateOnly? InUseDate { get; set; }
+    public int? DepreciationPolicyId { get; set; }
+    public int? SupplierId { get; set; }
+    public string? ContractNo { get; set; }
+    public string? Condition { get; set; }
+    public string? Note { get; set; }
+
+    /// <summary>Optional assignment (requires ACCOUNTANT).</summary>
+    public int? AssignedDepartmentId { get; set; }
+    public int? ResponsibleEmployeeId { get; set; }
+    public DateOnly? AssignmentEffectiveDate { get; set; }
+}
+
+/// <summary>
+/// DTO for updating an <see cref="AssetInstance"/>.
+/// </summary>
+public class UpdateAssetInstanceDTO
+{
+    public string? InstanceCode { get; set; }
+    public string? SerialNumber { get; set; }
+    public int? WarehouseId { get; set; }
+    public DateOnly? PurchaseDate { get; set; }
+    public decimal? OriginalPrice { get; set; }
+    public decimal? CurrentValue { get; set; }
+    public AssetStatus? Status { get; set; }
+    public DateOnly? InUseDate { get; set; }
+    public int? DepreciationPolicyId { get; set; }
+    public int? SupplierId { get; set; }
+    public string? ContractNo { get; set; }
+    public string? Condition { get; set; }
+    public string? Note { get; set; }
+
+    public int? AssignedDepartmentId { get; set; }
+    public int? ResponsibleEmployeeId { get; set; }
+    public DateOnly? AssignmentEffectiveDate { get; set; }
+    public bool ClearDepartmentAssignment { get; set; }
+    public bool ClearResponsibleEmployee { get; set; }
+}
+
+/// <summary>
+/// Accountant status change for an instance (<c>PUT /api/asset-instances/{id}/status</c>).
+/// </summary>
+public class ChangeAssetInstanceStatusDTO
+{
+    public AssetStatus Status { get; set; }
+    public string? Note { get; set; }
+}
+
+/// <summary>
+/// Soft delete / retirement for an instance (<c>DELETE /api/asset-instances/{id}</c>).
+/// </summary>
+public class DeleteAssetInstanceDTO
+{
+    public AssetStatus Status { get; set; }
     public string? Reason { get; set; }
 }
 
@@ -100,6 +136,8 @@ public class MaintenanceScheduleDTO
     public int ScheduleType { get; set; }
     public int? IntervalMonths { get; set; }
     public int? IntervalHours { get; set; }
+    public int? IntervalValue { get; set; }
+    public int? IntervalUnit { get; set; }
     public DateTime StartDate { get; set; }
     public DateTime? NextDueDate { get; set; }
     public DateTime? EndDate { get; set; }
@@ -115,7 +153,7 @@ public class AssetDocumentDTO
 }
 
 /// <summary>
-/// Response DTO for asset read operations.
+/// Response for catalog <see cref="Asset"/> list/detail (no per-instance financials).
 /// </summary>
 public class AssetResponseDTO
 {
@@ -124,34 +162,58 @@ public class AssetResponseDTO
     public string Name { get; set; } = null!;
     public int AssetTypeId { get; set; }
     public string? AssetTypeName { get; set; }
+    public AssetStatus Status { get; set; }
+    public string StatusName { get; set; } = null!;
+    public string Unit { get; set; } = null!;
+    public int? Quantity { get; set; }
+    public int CreatedBy { get; set; }
+    public DateOnly? InUseDate { get; set; }
+    public string? Specification { get; set; }
+    public string? Note { get; set; }
+}
+
+/// <summary>
+/// GET /api/assets/{id} — catalog plus schedules, documents, and instance summaries.
+/// </summary>
+public class AssetDetailResponseDTO : AssetResponseDTO
+{
+    public List<MaintenanceScheduleDTO>? MaintenanceSchedules { get; set; }
+    public List<AssetDocumentDTO>? Documents { get; set; }
+    public List<AssetInstanceResponseDTO>? Instances { get; set; }
+}
+
+/// <summary>
+/// Response for a physical <see cref="AssetInstance"/>.
+/// </summary>
+public class AssetInstanceResponseDTO
+{
+    public int AssetInstanceId { get; set; }
+    public int AssetId { get; set; }
+    public int AssetTypeId { get; set; }
+    public string? AssetCode { get; set; }
+    public string? AssetName { get; set; }
+    public string InstanceCode { get; set; } = null!;
+    public string? SerialNumber { get; set; }
+    public int WarehouseId { get; set; }
+    public string? WarehouseName { get; set; }
     public DateOnly PurchaseDate { get; set; }
     public decimal OriginalPrice { get; set; }
     public decimal CurrentValue { get; set; }
     public AssetStatus Status { get; set; }
     public string StatusName { get; set; } = null!;
-    public DateOnly? WarrantyEndDate { get; set; }
     public DateOnly? InUseDate { get; set; }
-    public string Unit { get; set; } = null!;
-    public int Quantity { get; set; }
-    public int WarehouseId { get; set; }
-    public string? WarehouseName { get; set; }
-    public int CreatedBy { get; set; }
+    public int? SupplierId { get; set; }
+    public string? ContractNo { get; set; }
+    public string? Condition { get; set; }
+    public string? Note { get; set; }
 
-    /// <summary>
-    /// Phòng ban hiện tại đang sử dụng tài sản (nếu có bản ghi AssetLocation IsCurrent).
-    /// </summary>
     public int? CurrentLocationId { get; set; }
     public int? CurrentDepartmentId { get; set; }
     public string? CurrentDepartmentName { get; set; }
-
-    /// <summary>Current custodian (AssetUsage IsCurrent), if any.</summary>
     public int? CurrentResponsibleEmployeeId { get; set; }
-
     public string? CurrentResponsibleEmployeeName { get; set; }
-
     public int? CurrentResponsibleUserId { get; set; }
 
-    // Depreciation (optional; populated in GET by id)
     public int? DepreciationPolicyId { get; set; }
     public string? DepreciationPolicyName { get; set; }
     public int? DepreciationUsefulLifeMonths { get; set; }
@@ -160,10 +222,4 @@ public class AssetResponseDTO
     public decimal? DepreciationAmount { get; set; }
     public decimal? AccumulatedDepreciation { get; set; }
     public decimal? RemainingValue { get; set; }
-
-    // Maintenance (optional; populated in GET by id)
-    public List<MaintenanceScheduleDTO>? MaintenanceSchedules { get; set; }
-
-    // Documents (optional; populated in GET by id)
-    public List<AssetDocumentDTO>? Documents { get; set; }
 }

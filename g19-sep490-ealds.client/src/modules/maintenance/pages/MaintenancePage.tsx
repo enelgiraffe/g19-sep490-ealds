@@ -26,7 +26,7 @@ import {
   type MaintenanceStartPayload,
 } from '../../assets/services/maintenanceRequestService';
 import { assetRequestService } from '../../assets/services/assetRequestService';
-import { assetService, formatVnd, type AssetResponse } from '../../assets/services/assetService';
+import { assetService, formatVnd, type AssetDetailResponse } from '../../assets/services/assetService';
 import { directorRequestService } from '../../requests/services/directorRequestService';
 import { profileService, type UserProfile } from '../../profile/services/profileService';
 import { maintenanceTemplateService, type MaintenanceTemplateItem } from '../services/maintenanceTemplateService';
@@ -177,7 +177,7 @@ export function MaintenancePage() {
   /** Modal bắt đầu bảo dưỡng (sau phê duyệt) */
   const [startOpen, setStartOpen] = useState(false);
   const [startRow, setStartRow] = useState<MaintenanceRow | null>(null);
-  const [startAsset, setStartAsset] = useState<AssetResponse | null>(null);
+  const [startAsset, setStartAsset] = useState<AssetDetailResponse | null>(null);
   const [startLoading, setStartLoading] = useState(false);
   const [startSubmitting, setStartSubmitting] = useState(false);
   const [reportNumber, setReportNumber] = useState('');
@@ -195,7 +195,7 @@ export function MaintenancePage() {
   /** Modal hoàn thành bảo dưỡng (task đang thực hiện) */
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeRow, setCompleteRow] = useState<MaintenanceRow | null>(null);
-  const [completeAsset, setCompleteAsset] = useState<AssetResponse | null>(null);
+  const [completeAsset, setCompleteAsset] = useState<AssetDetailResponse | null>(null);
   const [completeLoading, setCompleteLoading] = useState(false);
   const [completeSubmitting, setCompleteSubmitting] = useState(false);
   const [completeReportNumber, setCompleteReportNumber] = useState('');
@@ -424,7 +424,8 @@ export function MaintenancePage() {
       if (aid) {
         const asset = await assetService.getById(aid);
         setStartAsset(asset);
-        setLocationText(asset.currentDepartmentName ?? '');
+        const primary = asset.instances?.[0];
+        setLocationText(primary?.currentDepartmentName ?? '');
       } else {
         setStartAsset(null);
         setLocationText(row.assetState || '');
@@ -463,7 +464,7 @@ export function MaintenancePage() {
     try {
       const loc =
         locationType === 'at-unit'
-          ? startAsset?.currentDepartmentName ?? locationText
+          ? startAsset?.instances?.[0]?.currentDepartmentName ?? locationText
           : locationText;
 
       const expectedCompletionDateIso = expectedCompletionDate
@@ -1149,7 +1150,9 @@ export function MaintenancePage() {
                   <div className="maintenance-form-modal__info-item">
                     <label>Giá trị tài sản</label>
                     <div className="maintenance-form-modal__info-value">
-                      {startAsset ? formatVnd(startAsset.originalPrice) : '—'}
+                      {startAsset?.instances?.[0]
+                        ? formatVnd(startAsset.instances[0].originalPrice)
+                        : '—'}
                     </div>
                   </div>
                 </div>
@@ -1163,10 +1166,10 @@ export function MaintenancePage() {
                   <div className="maintenance-form-modal__info-item">
                     <label>Giá trị còn lại</label>
                     <div className="maintenance-form-modal__info-value">
-                      {startAsset?.remainingValue != null
-                        ? formatVnd(startAsset.remainingValue)
-                        : startAsset
-                          ? formatVnd(startAsset.currentValue)
+                      {startAsset?.instances?.[0]?.remainingValue != null
+                        ? formatVnd(startAsset.instances[0].remainingValue!)
+                        : startAsset?.instances?.[0]
+                          ? formatVnd(startAsset.instances[0].currentValue)
                           : '—'}
                     </div>
                   </div>
@@ -1181,8 +1184,8 @@ export function MaintenancePage() {
                   <div className="maintenance-form-modal__info-item">
                     <label>Vị trí tài sản</label>
                     <div className="maintenance-form-modal__info-value">
-                      {startAsset?.warehouseName ||
-                        startAsset?.currentDepartmentName ||
+                      {startAsset?.instances?.[0]?.warehouseName ||
+                        startAsset?.instances?.[0]?.currentDepartmentName ||
                         startRow.assetState ||
                         '—'}
                     </div>
@@ -1201,20 +1204,28 @@ export function MaintenancePage() {
                   </div>
                   <div className="maintenance-form-modal__info-item">
                     <label>Tình trạng</label>
-                    <div className="maintenance-form-modal__info-value">{startAsset?.statusName ?? '—'}</div>
+                    <div className="maintenance-form-modal__info-value">
+                      {startAsset?.instances?.[0]?.statusName ?? startAsset?.statusName ?? '—'}
+                    </div>
                   </div>
                 </div>
                 <div className="maintenance-form-modal__info-row">
                   <div className="maintenance-form-modal__info-item">
                     <label>Ngày mua</label>
                     <div className="maintenance-form-modal__info-value">
-                      {startAsset?.purchaseDate ? formatDate(startAsset.purchaseDate) : '—'}
+                      {startAsset?.instances?.[0]?.purchaseDate
+                        ? formatDate(startAsset.instances[0].purchaseDate)
+                        : '—'}
                     </div>
                   </div>
                   <div className="maintenance-form-modal__info-item">
                     <label>Ngày đưa vào SD</label>
                     <div className="maintenance-form-modal__info-value">
-                      {startAsset?.inUseDate ? formatDate(startAsset.inUseDate) : '—'}
+                      {startAsset?.instances?.[0]?.inUseDate
+                        ? formatDate(startAsset.instances[0].inUseDate)
+                        : startAsset?.inUseDate
+                          ? formatDate(startAsset.inUseDate)
+                          : '—'}
                     </div>
                   </div>
                 </div>
@@ -1222,13 +1233,13 @@ export function MaintenancePage() {
                   <div className="maintenance-form-modal__info-item">
                     <label>Hạn bảo hành</label>
                     <div className="maintenance-form-modal__info-value">
-                      {startAsset?.warrantyEndDate ? formatDate(startAsset.warrantyEndDate) : '—'}
+                      {'—'}
                     </div>
                   </div>
                   <div className="maintenance-form-modal__info-item">
                     <label>Phòng ban SD</label>
                     <div className="maintenance-form-modal__info-value">
-                      {startAsset?.currentDepartmentName ?? '—'}
+                      {startAsset?.instances?.[0]?.currentDepartmentName ?? '—'}
                     </div>
                   </div>
                 </div>
@@ -1458,7 +1469,9 @@ export function MaintenancePage() {
                   <div className="maintenance-form-modal__info-item">
                     <label>Giá trị tài sản</label>
                     <div className="maintenance-form-modal__info-value">
-                      {completeAsset ? formatVnd(completeAsset.originalPrice) : '—'}
+                      {completeAsset?.instances?.[0]
+                        ? formatVnd(completeAsset.instances[0].originalPrice)
+                        : '—'}
                     </div>
                   </div>
                 </div>
@@ -1472,10 +1485,10 @@ export function MaintenancePage() {
                   <div className="maintenance-form-modal__info-item">
                     <label>Giá trị còn lại</label>
                     <div className="maintenance-form-modal__info-value">
-                      {completeAsset?.remainingValue != null
-                        ? formatVnd(completeAsset.remainingValue)
-                        : completeAsset
-                          ? formatVnd(completeAsset.currentValue)
+                      {completeAsset?.instances?.[0]?.remainingValue != null
+                        ? formatVnd(completeAsset.instances[0].remainingValue!)
+                        : completeAsset?.instances?.[0]
+                          ? formatVnd(completeAsset.instances[0].currentValue)
                           : '—'}
                     </div>
                   </div>
@@ -1490,8 +1503,8 @@ export function MaintenancePage() {
                   <div className="maintenance-form-modal__info-item">
                     <label>Vị trí tài sản</label>
                     <div className="maintenance-form-modal__info-value">
-                      {completeAsset?.warehouseName ||
-                        completeAsset?.currentDepartmentName ||
+                      {completeAsset?.instances?.[0]?.warehouseName ||
+                        completeAsset?.instances?.[0]?.currentDepartmentName ||
                         completeRow.assetState ||
                         '—'}
                     </div>
@@ -1514,7 +1527,9 @@ export function MaintenancePage() {
                   <div className="maintenance-form-modal__info-item">
                     <label>Tình trạng</label>
                     <div className="maintenance-form-modal__info-value">
-                      {completeAsset?.statusName ?? '—'}
+                      {completeAsset?.instances?.[0]?.statusName ??
+                        completeAsset?.statusName ??
+                        '—'}
                     </div>
                   </div>
                 </div>
@@ -1522,9 +1537,7 @@ export function MaintenancePage() {
                   <div className="maintenance-form-modal__info-item">
                     <label>Hạn bảo hành</label>
                     <div className="maintenance-form-modal__info-value">
-                      {completeAsset?.warrantyEndDate
-                        ? formatDate(completeAsset.warrantyEndDate)
-                        : '—'}
+                      {'—'}
                     </div>
                   </div>
                   <div className="maintenance-form-modal__info-item">
@@ -1538,7 +1551,7 @@ export function MaintenancePage() {
                   <div className="maintenance-form-modal__info-item">
                     <label>Phòng ban SD</label>
                     <div className="maintenance-form-modal__info-value">
-                      {completeAsset?.currentDepartmentName ?? '—'}
+                      {completeAsset?.instances?.[0]?.currentDepartmentName ?? '—'}
                     </div>
                   </div>
                 </div>

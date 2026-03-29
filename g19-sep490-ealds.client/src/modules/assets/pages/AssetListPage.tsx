@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { message, Popover, Slider, Button } from 'antd';
 import {
+  assetInstanceService,
   assetService,
   formatVnd,
   getStatusLabel,
-  type AssetResponse,
-  type GetAssetsParams,
+  type AssetInstanceResponse,
+  type GetAssetInstancesParams,
   type AssetTypeItem,
 } from '../services/assetService';
 import { transferRequestService } from '../services/transferRequestService';
@@ -21,7 +22,10 @@ import { profileService, type UserProfile } from '../../profile/services/profile
 import './AssetListPage.css';
 
 interface AssetItem {
+  /** Physical row id (AssetInstance) */
   id: number;
+  /** Catalog Asset id for navigation and requests that still use AssetId */
+  catalogAssetId: number;
   code: string;
   name: string;
   type: string;
@@ -71,36 +75,37 @@ function formatDate(iso?: string | null): string {
   }
 }
 
-function mapResponseToItem(a: AssetResponse): AssetItem {
+function mapInstanceToItem(a: AssetInstanceResponse): AssetItem {
   const statusName = a.statusName ?? 'Available';
   const activeStatuses = ['Available', 'InUse', 'InMaintenance', 'Reserved'];
   const statusColor: 'green' | 'gray' =
     activeStatuses.includes(statusName) ? 'green' : 'gray';
   return {
-    id: a.assetId,
-    code: a.code,
-    name: a.name,
-    type: a.assetTypeName ?? '—',
-    quantity: a.quantity,
+    id: a.assetInstanceId,
+    catalogAssetId: a.assetId,
+    code: a.instanceCode,
+    name: a.assetName ?? a.assetCode ?? a.instanceCode,
+    type: '—',
+    quantity: 1,
     price: formatVnd(a.currentValue),
     status: getStatusLabel(statusName),
     statusColor,
-    depreciation: formatVnd(a.currentValue),
+    depreciation: formatVnd(a.remainingValue ?? a.currentValue),
   };
 }
 
-function assetResponseToAssetInfo(a: AssetResponse): AssetInfo {
+function instanceToAssetInfo(a: AssetInstanceResponse): AssetInfo {
   return {
     assetId: a.assetId,
-    code: a.code,
-    name: a.name,
-    type: a.assetTypeName ?? '—',
-    specification: '—',
+    code: a.assetCode ?? a.instanceCode,
+    name: a.assetName ?? a.instanceCode,
+    type: '—',
+    specification: a.condition ?? '—',
     purchaseDate: formatDate(a.purchaseDate),
-    warrantyExpiry: formatDate(a.warrantyEndDate),
+    warrantyExpiry: '—',
     currentValue: formatVnd(a.currentValue),
-    remainingValue: formatVnd(a.currentValue),
-    location: a.warehouseName ?? '—',
+    remainingValue: formatVnd(a.remainingValue ?? a.currentValue),
+    location: a.warehouseName ?? a.currentDepartmentName ?? '—',
     status: getStatusLabel(a.statusName),
     admissionDate: formatDate(a.inUseDate),
     department: a.currentDepartmentName ?? '—',
@@ -121,7 +126,7 @@ function buildPriceFilterLabel(
 }
 
 export function AssetListPage() {
-  const [apiAssets, setApiAssets] = useState<AssetResponse[] | null>(null);
+  const [apiAssets, setApiAssets] = useState<AssetInstanceResponse[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
@@ -145,7 +150,7 @@ export function AssetListPage() {
   const [assetTypes, setAssetTypes] = useState<AssetTypeItem[]>([]);
   const navigate = useNavigate();
 
-  const assets: AssetItem[] = apiAssets?.map(mapResponseToItem) ?? [];
+  const assets: AssetItem[] = apiAssets?.map(mapInstanceToItem) ?? [];
 
   const PRICE_SLIDER_MIN = 0;
   const PRICE_SLIDER_MAX = 1_000_000_000;
@@ -188,14 +193,14 @@ export function AssetListPage() {
     setLoading(true);
     setError(null);
     try {
-      const params: GetAssetsParams = {
+      const params: GetAssetInstancesParams = {
         keyword: keyword || undefined,
         status: statusFilter,
         assetTypeId: assetTypeFilter,
         minPrice: minPrice ? Number(minPrice) : undefined,
         maxPrice: maxPrice ? Number(maxPrice) : undefined,
       };
-      const data = await assetService.getAll(params);
+      const data = await assetInstanceService.getAll(params);
       setApiAssets(data);
     } catch {
       setError('Không tải được danh sách tài sản. Kiểm tra kết nối backend.');
@@ -261,21 +266,21 @@ export function AssetListPage() {
 
   const handleMenuAction = (actionKey: string, asset: AssetItem) => {
     setOpenMenuId(null);
-    const raw = apiAssets?.find((a) => a.assetId === asset.id);
+    const raw = apiAssets?.find((a) => a.assetInstanceId === asset.id);
     if (actionKey === 'move' && raw) {
-      setSelectedAssetInfo(assetResponseToAssetInfo(raw));
-      setTransferAssetId(asset.id);
+      setSelectedAssetInfo(instanceToAssetInfo(raw));
+      setTransferAssetId(raw.assetId);
       setIsTransferModalOpen(true);
     } else if (actionKey === 'mark-broken' && raw) {
-      setSelectedAssetInfo(assetResponseToAssetInfo(raw));
-      setMarkDamagedAssetId(asset.id);
+      setSelectedAssetInfo(instanceToAssetInfo(raw));
+      setMarkDamagedAssetId(raw.assetId);
       setIsMarkDamagedModalOpen(true);
     } else if (actionKey === 'liquidate' && raw) {
-      setSelectedAssetInfo(assetResponseToAssetInfo(raw));
+      setSelectedAssetInfo(instanceToAssetInfo(raw));
       setIsLiquidationModalOpen(true);
     } else if (actionKey === 'maintenance' && raw) {
-      setSelectedAssetInfo(assetResponseToAssetInfo(raw));
-      setMaintenanceAssetId(asset.id);
+      setSelectedAssetInfo(instanceToAssetInfo(raw));
+      setMaintenanceAssetId(raw.assetId);
       setIsMaintenanceModalOpen(true);
     } else {
       console.log('Action', actionKey, 'for asset', asset);
@@ -694,7 +699,7 @@ export function AssetListPage() {
                     <button
                       type="button"
                       className="asset-code asset-code--link"
-                      onClick={() => navigate(`/assets/${asset.id}`)}
+                      onClick={() => navigate(`/assets/${asset.catalogAssetId}`)}
                     >
                       {asset.code}
                     </button>

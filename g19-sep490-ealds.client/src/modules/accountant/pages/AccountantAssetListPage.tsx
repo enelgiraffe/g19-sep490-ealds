@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Modal, message } from 'antd';
 import { DownloadOutlined, PlusOutlined } from '@ant-design/icons';
 import {
-  assetService,
+  assetInstanceService,
   formatVnd,
   getStatusLabel,
-  type AssetResponse,
-  type GetAssetsParams,
+  type AssetInstanceResponse,
+  type GetAssetInstancesParams,
 } from '../../assets/services/assetService';
 import '../../assets/pages/AssetListPage.css';
 import './AccountantAssetListPage.css';
@@ -15,6 +15,8 @@ import './AccountantAssetListPage.css';
 interface AccountantAssetRow {
   key: string;
   id: number;
+  /** Catalog Asset id for /assets/:id */
+  catalogAssetId: number;
   code: string;
   name: string;
   type: string;
@@ -26,17 +28,18 @@ interface AccountantAssetRow {
   depreciation: string;
 }
 
-function mapAssetToRow(a: AssetResponse): AccountantAssetRow {
+function mapAssetToRow(a: AssetInstanceResponse): AccountantAssetRow {
   const isInUse = a.status === 1; // InUse
   const depValue = Math.max(0, a.originalPrice - a.currentValue);
   return {
-    key: String(a.assetId),
-    id: a.assetId,
-    code: a.code,
-    name: a.name,
-    type: a.assetTypeName ?? '—',
+    key: String(a.assetInstanceId),
+    id: a.assetInstanceId,
+    catalogAssetId: a.assetId,
+    code: a.instanceCode,
+    name: a.assetName ?? a.assetCode ?? a.instanceCode,
+    type: '—',
     location: a.warehouseName ?? '—',
-    quantity: a.quantity,
+    quantity: 1,
     price: formatVnd(a.currentValue),
     status: isInUse ? 'in-use' : 'pending-use',
     statusLabel: getStatusLabel(a.statusName),
@@ -62,12 +65,12 @@ export function AccountantAssetListPage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const params: GetAssetsParams = {
+    const params: GetAssetInstancesParams = {
       keyword: keyword || undefined,
       status: statusFilter,
       assetTypeId: assetTypeFilter,
     };
-    assetService
+    assetInstanceService
       .getAll(params)
       .then((list) => {
         if (!cancelled) setData(list.map(mapAssetToRow));
@@ -95,7 +98,7 @@ export function AccountantAssetListPage() {
       cancelText: 'Hủy',
       async onOk() {
         try {
-          await assetService.softDelete(asset.id, { status: 4, reason: null });
+          await assetInstanceService.softDelete(asset.id, { status: 4, reason: null });
           message.success('Đã gửi yêu cầu xóa (Disposed) lên hệ thống.');
           setRefreshKey((k) => k + 1);
         } catch {
@@ -221,7 +224,7 @@ export function AccountantAssetListPage() {
                       <button
                         type="button"
                         className="asset-code asset-code--link"
-                        onClick={() => navigate(`/assets/${row.id}`)}
+                        onClick={() => navigate(`/assets/${row.catalogAssetId}`)}
                       >
                         {row.code}
                       </button>

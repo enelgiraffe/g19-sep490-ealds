@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
-import type { AssetResponse } from '../../assets/services/assetService';
+import type { AssetDetailResponse } from '../../assets/services/assetService';
 import './RepairCompleteModal.css';
 
 interface RepairCompleteRow {
@@ -28,7 +28,7 @@ interface RepairCompleteModalProps {
   loading: boolean;
   submitting: boolean;
   row: RepairCompleteRow | null;
-  asset: AssetResponse | null;
+  asset: AssetDetailResponse | null;
   defaultReportNumber?: string;
   onClose: () => void;
   onSubmit: (values: RepairCompleteFormValues) => void;
@@ -89,8 +89,9 @@ function RepairCompleteModalInner({
     setEditingAttachKey(null);
   }, [open, row, defaultReportNumber]);
 
-  const assetInfo = useMemo(
-    () => ({
+  const assetInfo = useMemo(() => {
+    const primary = asset?.instances?.[0];
+    return {
       code: asset?.code ?? row?.assetCode ?? '-',
       name: asset?.name ?? row?.assetName ?? '-',
       type: asset?.assetTypeName ?? '-',
@@ -99,20 +100,20 @@ function RepairCompleteModalInner({
             .filter(Boolean)
             .join(' · ')
         : '-',
-      warrantyExpiry: toDisplayDate(asset?.warrantyEndDate),
-      currentValue: formatVndValue(asset?.originalPrice),
+      warrantyExpiry: '-',
+      currentValue: formatVndValue(primary?.originalPrice),
       remainingValue:
-        asset?.remainingValue != null
-          ? formatVndValue(asset.remainingValue)
-          : asset
-            ? formatVndValue(asset.currentValue)
+        primary?.remainingValue != null
+          ? formatVndValue(primary.remainingValue)
+          : primary
+            ? formatVndValue(primary.currentValue)
             : '-',
-      location: asset?.warehouseName || asset?.currentDepartmentName || row?.location || '-',
-      status: asset?.statusName ?? '-',
-      department: asset?.currentDepartmentName ?? row?.department ?? '-',
-    }),
-    [asset, row]
-  );
+      location:
+        primary?.warehouseName || primary?.currentDepartmentName || row?.location || '-',
+      status: primary?.statusName ?? asset?.statusName ?? '-',
+      department: primary?.currentDepartmentName ?? row?.department ?? '-',
+    };
+  }, [asset, row]);
 
   if (!open) return null;
 

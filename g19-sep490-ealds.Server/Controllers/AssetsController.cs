@@ -20,30 +20,20 @@ public class AssetsController : ControllerBase
     }
 
     /// <summary>
-    /// GET /api/assets - Get all assets with optional search and filter
+    /// GET /api/assets — Catalog assets (keyword, type, catalog status).
+    /// Filters for warehouse, price, purchase date, and per-instance location belong on <c>GET /api/asset-instances</c>.
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<IEnumerable<AssetResponseDTO>>> GetAll(
         [FromQuery] string? keyword,
         [FromQuery] AssetStatus? status,
-        [FromQuery] int? assetTypeId,
-        [FromQuery] int? warehouseId,
-        [FromQuery] decimal? minPrice,
-        [FromQuery] decimal? maxPrice,
-        [FromQuery] DateOnly? fromDate,
-        [FromQuery] DateOnly? toDate)
+        [FromQuery] int? assetTypeId)
     {
         var query = _context.Assets
             .Include(a => a.AssetType)
-            .Include(a => a.Warehouse)
-            .Include(a => a.AssetLocations)
-                .ThenInclude(al => al.Department)
-            .Include(a => a.AssetUsages)
-                .ThenInclude(u => u.Employee)
             .AsNoTracking()
             .AsQueryable();
 
-        // Keyword search: search in code and name
         if (!string.IsNullOrWhiteSpace(keyword))
         {
             var kw = keyword.Trim().ToLower();
@@ -52,7 +42,6 @@ public class AssetsController : ControllerBase
                 a.Name.ToLower().Contains(kw));
         }
 
-        // Filter by status
         if (status.HasValue)
         {
             if (status.Value == AssetStatus.Damaged)
@@ -71,42 +60,11 @@ public class AssetsController : ControllerBase
             }
         }
 
-        // Filter by asset type
         if (assetTypeId.HasValue)
-        {
             query = query.Where(a => a.AssetTypeId == assetTypeId.Value);
-        }
-
-        // Filter by warehouse
-        if (warehouseId.HasValue)
-        {
-            query = query.Where(a => a.WarehouseId == warehouseId.Value);
-        }
-
-        // Filter by price range
-        if (minPrice.HasValue)
-        {
-            query = query.Where(a => a.CurrentValue >= minPrice.Value);
-        }
-        if (maxPrice.HasValue)
-        {
-            query = query.Where(a => a.CurrentValue <= maxPrice.Value);
-        }
-
-        // Filter by purchase date range
-        if (fromDate.HasValue)
-        {
-            query = query.Where(a => a.PurchaseDate >= fromDate.Value);
-        }
-        if (toDate.HasValue)
-        {
-            query = query.Where(a => a.PurchaseDate <= toDate.Value);
-        }
 
         var assets = await query.ToListAsync();
 
-        // Sync legacy data: assets that already have a damage-report request should be treated as Damaged
-        // even if Asset.Status wasn't updated at the time the request was created.
         var assetIds = assets.Select(a => a.AssetId).ToList();
         var damagedIds = await _context.AssetRequests
             .AsNoTracking()
@@ -124,28 +82,35 @@ public class AssetsController : ControllerBase
 
         return Ok(assets.Select(a =>
             damagedSet.Contains(a.AssetId)
-                ? ToResponseDTO(a, AssetStatus.Damaged)
-                : ToResponseDTO(a)));
+                ? ToAssetResponseDTO(a, AssetStatus.Damaged)
+                : ToAssetResponseDTO(a)));
     }
 
     /// <summary>
-    /// GET /api/assets/{id} - Get asset by id
+    /// GET /api/assets/{id} — Catalog detail, maintenance schedules, documents, and all instances.
     /// </summary>
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<AssetResponseDTO>> GetById(int id)
+    public async Task<ActionResult<AssetDetailResponseDTO>> GetById(int id)
+    {
+        var dto = await BuildAssetDetailAsync(id);
+        if (dto == null)
+            return NotFound();
+        return Ok(dto);
+    }
+
+    private async Task<AssetDetailResponseDTO?> BuildAssetDetailAsync(int id)
     {
         var asset = await _context.Assets
             .Include(a => a.AssetType)
-            .Include(a => a.Warehouse)
-            .Include(a => a.AssetLocations)
-                .ThenInclude(al => al.Department)
-            .Include(a => a.AssetUsages)
-                .ThenInclude(u => u.Employee)
+            .Include(a => a.MaintenanceSchedules).ThenInclude(s => s.Template)
+            .Include(a => a.AssetInstances).ThenInclude(i => i.Warehouse)
+            .Include(a => a.AssetInstances).ThenInclude(i => i.AssetLocations).ThenInclude(al => al.Department)
+            .Include(a => a.AssetInstances).ThenInclude(i => i.AssetUsages).ThenInclude(u => u.Employee)
             .AsNoTracking()
             .FirstOrDefaultAsync(a => a.AssetId == id);
 
         if (asset == null)
-            return NotFound();
+            return null;
 
         var hasDamageReport = await _context.AssetRequests
             .AsNoTracking()
@@ -155,21 +120,12 @@ public class AssetsController : ControllerBase
                 r.Title.StartsWith("Damage report") &&
                 r.Status == 0);
 
-        var latestDep = await _context.DrepreciationRecords
-            .Include(r => r.Policy)
-            .AsNoTracking()
-            .Where(r => r.AssetId == id)
-            .OrderByDescending(r => r.Period)
-            .ThenByDescending(r => r.CreateDate)
-            .FirstOrDefaultAsync();
-
-        // Avoid querying MaintenanceSchedule here because some environments
-        // don't have IntervalUnit/IntervalValue columns yet.
-        var schedules = new List<MaintenanceSchedule>();
+        var instanceIds = asset.AssetInstances.Select(i => i.AssetInstanceId).ToList();
+        var latestDepsByInstance = await LoadLatestDepreciationByInstanceAsync(instanceIds);
 
         var documents = await _context.Documents
             .AsNoTracking()
-            .Where(d => d.Procurement.AssetRequest.AssetId == id)
+            .Where(d => d.AssetId == id)
             .OrderByDescending(d => d.UploadedDate)
             .Select(d => new AssetDocumentDTO
             {
@@ -180,22 +136,53 @@ public class AssetsController : ControllerBase
             })
             .ToListAsync();
 
-        var dto = ToResponseDTO(asset, latestDep, schedules);
-        dto.Documents = documents;
+        var schedules = asset.MaintenanceSchedules
+            .Select(ToMaintenanceScheduleDto)
+            .ToList();
+
+        var baseDto = ToAssetResponseDTO(asset,
+            hasDamageReport ? AssetStatus.Damaged : null);
+
+        var dto = new AssetDetailResponseDTO
+        {
+            AssetId = baseDto.AssetId,
+            Code = baseDto.Code,
+            Name = baseDto.Name,
+            AssetTypeId = baseDto.AssetTypeId,
+            AssetTypeName = baseDto.AssetTypeName,
+            Status = baseDto.Status,
+            StatusName = baseDto.StatusName,
+            Unit = baseDto.Unit,
+            Quantity = baseDto.Quantity,
+            CreatedBy = baseDto.CreatedBy,
+            InUseDate = baseDto.InUseDate,
+            Specification = baseDto.Specification,
+            Note = baseDto.Note,
+            Documents = documents,
+            MaintenanceSchedules = schedules,
+            Instances = asset.AssetInstances
+                .OrderBy(i => i.InstanceCode)
+                .Select(i => ToAssetInstanceResponseDTO(
+                    i,
+                    latestDepsByInstance.GetValueOrDefault(i.AssetInstanceId)))
+                .ToList()
+        };
+
         if (hasDamageReport)
         {
             dto.Status = AssetStatus.Damaged;
             dto.StatusName = AssetStatus.Damaged.ToString();
         }
-        return Ok(dto);
+
+        return dto;
     }
 
     /// <summary>
-    /// GET /api/assets/department/{departmentId} — Assets currently located in that department.
+    /// GET /api/assets/department/{departmentId} — Instances currently located in that department.
     /// </summary>
     [HttpGet("department/{departmentId:int}")]
     [Authorize]
-    public async Task<ActionResult<IEnumerable<AssetResponseDTO>>> GetAssetsByDepartment(
+    public async Task<ActionResult<IEnumerable<AssetInstanceResponseDTO>>> GetAssetsByDepartment(
         int departmentId,
         [FromQuery] string? keyword,
         [FromQuery] AssetStatus? status)
@@ -220,50 +207,48 @@ public class AssetsController : ControllerBase
 
         var deptId = departmentId;
 
-        var query = _context.Assets
-            .Include(a => a.AssetType)
-            .Include(a => a.Warehouse)
-            .Include(a => a.AssetLocations)
-                .ThenInclude(al => al.Department)
-            .Include(a => a.AssetUsages)
-                .ThenInclude(u => u.Employee)
+        var query = _context.AssetInstances
+            .Include(i => i.Asset).ThenInclude(a => a!.AssetType)
+            .Include(i => i.Warehouse)
+            .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
+            .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
             .AsNoTracking()
-            .Where(a =>
-                a.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == deptId) &&
-                a.Status != (int)AssetStatus.Disposed &&
-                a.Status != (int)AssetStatus.Lost &&
-                a.Status != (int)AssetStatus.Liquidated);
+            .Where(i =>
+                i.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == deptId) &&
+                i.Status != (int)AssetStatus.Disposed &&
+                i.Status != (int)AssetStatus.Lost &&
+                i.Status != (int)AssetStatus.Liquidated);
 
         if (!string.IsNullOrWhiteSpace(keyword))
         {
             var kw = keyword.Trim().ToLower();
-            query = query.Where(a =>
-                a.Code.ToLower().Contains(kw) ||
-                a.Name.ToLower().Contains(kw));
+            query = query.Where(i =>
+                i.InstanceCode.ToLower().Contains(kw) ||
+                (i.Asset != null && i.Asset.Code.ToLower().Contains(kw)) ||
+                (i.Asset != null && i.Asset.Name.ToLower().Contains(kw)));
         }
 
         if (status.HasValue)
         {
             if (status.Value == AssetStatus.Damaged)
             {
-                query = query.Where(a =>
-                    a.Status == (int)AssetStatus.Damaged ||
-                    _context.AssetRequests.Any(r =>
-                        r.AssetId == a.AssetId &&
+                query = query.Where(i =>
+                    i.Status == (int)AssetStatus.Damaged ||
+                    (i.Asset != null && _context.AssetRequests.Any(r =>
+                        r.AssetId == i.Asset.AssetId &&
                         r.Title != null &&
                         r.Title.StartsWith("Damage report") &&
-                        r.Status == 0));
+                        r.Status == 0)));
             }
             else
             {
-                query = query.Where(a => a.Status == (int)status.Value);
+                query = query.Where(i => i.Status == (int)status.Value);
             }
         }
 
-        var assets = await query.ToListAsync();
-
-        var assetIds = assets.Select(a => a.AssetId).ToList();
-        var damagedIds = await _context.AssetRequests
+        var instances = await query.ToListAsync();
+        var assetIds = instances.Select(i => i.AssetId).Distinct().ToList();
+        var damagedAssetIds = await _context.AssetRequests
             .AsNoTracking()
             .Where(r =>
                 r.AssetId.HasValue &&
@@ -274,29 +259,39 @@ public class AssetsController : ControllerBase
             .Select(r => r.AssetId!.Value)
             .Distinct()
             .ToListAsync();
+        var damagedSet = damagedAssetIds.ToHashSet();
 
-        var damagedSet = damagedIds.ToHashSet();
+        var instanceIds = instances.Select(i => i.AssetInstanceId).ToList();
+        var latestDeps = await LoadLatestDepreciationByInstanceAsync(instanceIds);
 
-        return Ok(assets.Select(a =>
-            damagedSet.Contains(a.AssetId)
-                ? ToResponseDTO(a, AssetStatus.Damaged)
-                : ToResponseDTO(a)));
+        var result = instances.Select(i =>
+        {
+            var forced = i.Asset != null && damagedSet.Contains(i.Asset.AssetId)
+                ? AssetStatus.Damaged
+                : (AssetStatus?)null;
+            return ToAssetInstanceResponseDTO(i, latestDeps.GetValueOrDefault(i.AssetInstanceId), forced);
+        }).ToList();
+
+        return Ok(result);
     }
 
     /// <summary>
-    /// POST /api/assets - Create asset with General info and Depreciation settings
+    /// POST /api/assets — Create catalog asset; optional <see cref="CreateAssetDTO.InitialInstance"/> creates the first row in <c>AssetInstance</c>.
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult<AssetResponseDTO>> Create([FromBody] CreateAssetDTO dto)
+    public async Task<ActionResult<AssetDetailResponseDTO>> Create([FromBody] CreateAssetDTO dto)
     {
-        if (CreateHasAssignment(dto))
+        if (dto.InitialInstance != null)
         {
-            var denied = RequireAccountantForAssignment();
-            if (denied != null)
-                return denied;
-            var assignmentValidation = await ValidateCreateAssignmentDtoAsync(dto);
-            if (assignmentValidation != null)
-                return assignmentValidation;
+            if (InstanceCreateHasAssignment(dto.InitialInstance))
+            {
+                var denied = RequireAccountantForAssignment();
+                if (denied != null)
+                    return denied;
+                var assignmentValidation = await ValidateCreateInstanceAssignmentAsync(dto.InitialInstance);
+                if (assignmentValidation != null)
+                    return assignmentValidation;
+            }
         }
 
         if (await _context.Assets.AnyAsync(a => a.Code == dto.Code))
@@ -307,89 +302,88 @@ public class AssetsController : ControllerBase
             Code = dto.Code,
             Name = dto.Name,
             AssetTypeId = dto.AssetTypeId,
-            PurchaseDate = dto.PurchaseDate,
-            OriginalPrice = dto.OriginalPrice,
-            CurrentValue = dto.CurrentValue,
             Status = (int)AssetStatus.Available,
-            WarrantyEndDate = dto.WarrantyEndDate,
-            InUseDate = dto.InUseDate,
             Unit = dto.Unit,
             Quantity = dto.Quantity,
-            WarehouseId = dto.WarehouseId,
-            CreatedBy = dto.CreatedBy
+            CreatedBy = dto.CreatedBy,
+            InUseDate = dto.InUseDate,
+            Specification = dto.Specification,
+            Note = dto.Note
         };
 
         _context.Assets.Add(asset);
         await _context.SaveChangesAsync();
 
-        // Depreciation settings: link asset to policy via initial DrepreciationRecord
-        if (dto.DepreciationPolicyId.HasValue)
+        if (dto.InitialInstance != null)
         {
-            var policy = await _context.DepreciationPolicies.FindAsync(dto.DepreciationPolicyId.Value);
-            if (policy != null)
+            var init = dto.InitialInstance;
+            if (await _context.AssetInstances.AnyAsync(i => i.InstanceCode == init.InstanceCode))
             {
-                var firstPeriod = new DateOnly(dto.PurchaseDate.Year, dto.PurchaseDate.Month, 1);
-                var depRecord = new DrepreciationRecord
-                {
-                    AssetId = asset.AssetId,
-                    PolicyId = policy.PolicyId,
-                    Period = firstPeriod,
-                    DepreciationAmount = 0,
-                    AccumulatedDepreciation = 0,
-                    RemainingValue = dto.CurrentValue,
-                    CreateDate = DateTime.UtcNow
-                };
-                _context.DrepreciationRecords.Add(depRecord);
-                await _context.SaveChangesAsync();
+                return BadRequest(new { message = "Instance code already exists." });
             }
-        }
 
-        var assignmentError = await ApplyCreateAssignmentAsync(asset.AssetId, dto);
-        if (assignmentError != null)
-            return assignmentError;
-        if (CreateHasAssignment(dto))
+            if (!await _context.Warehouses.AnyAsync(w => w.WarehouseId == init.WarehouseId))
+                return BadRequest(new { message = $"WarehouseId {init.WarehouseId} does not exist." });
+
+            var instance = new AssetInstance
+            {
+                AssetId = asset.AssetId,
+                WarehouseId = init.WarehouseId,
+                DepreciationPolicyId = init.DepreciationPolicyId,
+                InstanceCode = init.InstanceCode,
+                SerialNumber = init.SerialNumber,
+                Status = (int)AssetStatus.Available,
+                InUseDate = init.InUseDate,
+                PurchaseDate = init.PurchaseDate,
+                OriginalPrice = init.OriginalPrice,
+                CurrentValue = init.CurrentValue,
+                SupplierId = init.SupplierId,
+                ContractNo = init.ContractNo,
+                Condition = init.Condition,
+                Note = init.Note
+            };
+            _context.AssetInstances.Add(instance);
             await _context.SaveChangesAsync();
 
-        await _context.Entry(asset)
-            .Reference(a => a.AssetType).LoadAsync();
-        await _context.Entry(asset)
-            .Reference(a => a.Warehouse).LoadAsync();
-        await _context.Entry(asset)
-            .Collection(a => a.AssetLocations).Query()
-            .Include(al => al.Department).LoadAsync();
-        await _context.Entry(asset)
-            .Collection(a => a.AssetUsages).Query()
-            .Include(u => u.Employee).LoadAsync();
+            if (init.DepreciationPolicyId.HasValue)
+            {
+                var policy = await _context.DepreciationPolicies.FindAsync(init.DepreciationPolicyId.Value);
+                if (policy != null)
+                {
+                    var firstPeriod = new DateOnly(init.PurchaseDate.Year, init.PurchaseDate.Month, 1);
+                    _context.DepreciationRecords.Add(new DepreciationRecord
+                    {
+                        AssetInstanceId = instance.AssetInstanceId,
+                        PolicyId = policy.PolicyId,
+                        Period = firstPeriod,
+                        DepreciationAmount = 0,
+                        AccumulatedDepreciation = 0,
+                        OriginalValue = init.CurrentValue,
+                        RemainingValue = init.CurrentValue,
+                        CreateDate = DateTime.UtcNow,
+                        IsPosted = false
+                    });
+                    await _context.SaveChangesAsync();
+                }
+            }
 
-        // Load depreciation info for response
-        var latestDep = await _context.DrepreciationRecords
-            .Include(r => r.Policy)
-            .AsNoTracking()
-            .Where(r => r.AssetId == asset.AssetId)
-            .OrderByDescending(r => r.Period)
-            .ThenByDescending(r => r.CreateDate)
-            .FirstOrDefaultAsync();
+            await ApplyCreateInstanceAssignmentAsync(instance.AssetInstanceId, init);
+            if (InstanceCreateHasAssignment(init))
+                await _context.SaveChangesAsync();
+        }
 
-        // Avoid querying MaintenanceSchedule here because some environments
-        // don't have IntervalUnit/IntervalValue columns yet.
-        var schedules = new List<MaintenanceSchedule>();
-
-        return CreatedAtAction(nameof(GetById), new { id = asset.AssetId }, ToResponseDTO(asset, latestDep, schedules));
+        var created = await BuildAssetDetailAsync(asset.AssetId);
+        if (created == null)
+            return NotFound();
+        return CreatedAtAction(nameof(GetById), new { id = asset.AssetId }, created);
     }
 
     /// <summary>
-    /// PUT /api/assets/{id} - Update asset data and status
+    /// PUT /api/assets/{id} — Update catalog fields only.
     /// </summary>
     [HttpPut("{id:int}")]
-    public async Task<ActionResult<AssetResponseDTO>> Update(int id, [FromBody] UpdateAssetDTO dto)
+    public async Task<ActionResult<AssetDetailResponseDTO>> Update(int id, [FromBody] UpdateAssetDTO dto)
     {
-        if (UpdateHasAssignment(dto))
-        {
-            var denied = RequireAccountantForAssignment();
-            if (denied != null)
-                return denied;
-        }
-
         var asset = await _context.Assets.FindAsync(id);
         if (asset == null)
             return NotFound();
@@ -402,90 +396,26 @@ public class AssetsController : ControllerBase
                 return BadRequest(new { message = $"AssetTypeId {dto.AssetTypeId.Value} does not exist." });
             asset.AssetTypeId = dto.AssetTypeId.Value;
         }
-        if (dto.PurchaseDate.HasValue) asset.PurchaseDate = dto.PurchaseDate.Value;
-        if (dto.OriginalPrice.HasValue) asset.OriginalPrice = dto.OriginalPrice.Value;
-        if (dto.CurrentValue.HasValue) asset.CurrentValue = dto.CurrentValue.Value;
         if (dto.Status.HasValue) asset.Status = (int)dto.Status.Value;
-        if (dto.WarrantyEndDate.HasValue) asset.WarrantyEndDate = dto.WarrantyEndDate;
-        if (dto.InUseDate.HasValue) asset.InUseDate = dto.InUseDate;
         if (dto.Unit != null) asset.Unit = dto.Unit;
         if (dto.Quantity.HasValue) asset.Quantity = dto.Quantity.Value;
-        if (dto.WarehouseId.HasValue)
-        {
-            if (!await _context.WarehouseAssets.AnyAsync(w => w.WarehouseId == dto.WarehouseId.Value))
-                return BadRequest(new { message = $"WarehouseId {dto.WarehouseId.Value} does not exist." });
-            asset.WarehouseId = dto.WarehouseId.Value;
-        }
-
-        // Handle depreciation policy update
-        if (dto.DepreciationPolicyId.HasValue)
-        {
-            var existingDep = await _context.DrepreciationRecords
-                .FirstOrDefaultAsync(r => r.AssetId == id);
-            if (existingDep == null)
-            {
-                var policy = await _context.DepreciationPolicies.FindAsync(dto.DepreciationPolicyId.Value);
-                if (policy != null)
-                {
-                    var firstPeriod = new DateOnly(asset.PurchaseDate.Year, asset.PurchaseDate.Month, 1);
-                    var depRecord = new DrepreciationRecord
-                    {
-                        AssetId = asset.AssetId,
-                        PolicyId = policy.PolicyId,
-                        Period = firstPeriod,
-                        DepreciationAmount = 0,
-                        AccumulatedDepreciation = 0,
-                        RemainingValue = asset.CurrentValue,
-                        CreateDate = DateTime.UtcNow
-                    };
-                    _context.DrepreciationRecords.Add(depRecord);
-                }
-            }
-            else
-            {
-                existingDep.PolicyId = dto.DepreciationPolicyId.Value;
-            }
-        }
-
-        var assignmentError = await ApplyUpdateAssignmentAsync(id, dto);
-        if (assignmentError != null)
-            return assignmentError;
+        if (dto.InUseDate.HasValue) asset.InUseDate = dto.InUseDate;
+        if (dto.Specification != null) asset.Specification = dto.Specification;
+        if (dto.Note != null) asset.Note = dto.Note;
 
         await _context.SaveChangesAsync();
-
-        await _context.Entry(asset)
-            .Reference(a => a.AssetType).LoadAsync();
-        await _context.Entry(asset)
-            .Reference(a => a.Warehouse).LoadAsync();
-        await _context.Entry(asset)
-            .Collection(a => a.AssetLocations).Query()
-            .Include(al => al.Department).LoadAsync();
-        await _context.Entry(asset)
-            .Collection(a => a.AssetUsages).Query()
-            .Include(u => u.Employee).LoadAsync();
-
-        // Reload depreciation info for response
-        var latestDep = await _context.DrepreciationRecords
-            .Include(r => r.Policy)
-            .AsNoTracking()
-            .Where(r => r.AssetId == id)
-            .OrderByDescending(r => r.Period)
-            .ThenByDescending(r => r.CreateDate)
-            .FirstOrDefaultAsync();
-
-        // Avoid querying MaintenanceSchedule here because some environments
-        // don't have IntervalUnit/IntervalValue columns yet.
-        var schedules = new List<MaintenanceSchedule>();
-
-        return Ok(ToResponseDTO(asset, latestDep, schedules));
+        var updated = await BuildAssetDetailAsync(id);
+        if (updated == null)
+            return NotFound();
+        return Ok(updated);
     }
 
     /// <summary>
-    /// PUT /api/assets/{id}/status — Accountants set operational status (see <see cref="AssetStatus"/>).
+    /// PUT /api/assets/{id}/status — Accountants set catalog-level status.
     /// </summary>
     [HttpPut("{id:int}/status")]
     [Authorize(Roles = "ACCOUNTANT")]
-    public async Task<ActionResult<AssetResponseDTO>> ChangeStatus(int id, [FromBody] ChangeAssetStatusDTO dto)
+    public async Task<ActionResult<AssetDetailResponseDTO>> ChangeStatus(int id, [FromBody] ChangeAssetStatusDTO dto)
     {
         if (!Enum.IsDefined(typeof(AssetStatus), dto.Status))
             return BadRequest(new { message = "Invalid asset status value." });
@@ -497,47 +427,14 @@ public class AssetsController : ControllerBase
         asset.Status = (int)dto.Status;
         await _context.SaveChangesAsync();
 
-        await _context.Entry(asset)
-            .Reference(a => a.AssetType).LoadAsync();
-        await _context.Entry(asset)
-            .Reference(a => a.Warehouse).LoadAsync();
-        await _context.Entry(asset)
-            .Collection(a => a.AssetLocations).Query()
-            .Include(al => al.Department).LoadAsync();
-        await _context.Entry(asset)
-            .Collection(a => a.AssetUsages).Query()
-            .Include(u => u.Employee).LoadAsync();
-
-        var latestDep = await _context.DrepreciationRecords
-            .Include(r => r.Policy)
-            .AsNoTracking()
-            .Where(r => r.AssetId == id)
-            .OrderByDescending(r => r.Period)
-            .ThenByDescending(r => r.CreateDate)
-            .FirstOrDefaultAsync();
-
-        var schedules = new List<MaintenanceSchedule>();
-
-        var hasDamageReport = await _context.AssetRequests
-            .AsNoTracking()
-            .AnyAsync(r =>
-                r.AssetId == id &&
-                r.Title != null &&
-                r.Title.StartsWith("Damage report") &&
-                r.Status == 0);
-
-        var response = ToResponseDTO(asset, latestDep, schedules);
-        if (hasDamageReport)
-        {
-            response.Status = AssetStatus.Damaged;
-            response.StatusName = AssetStatus.Damaged.ToString();
-        }
-
-        return Ok(response);
+        var detail = await BuildAssetDetailAsync(id);
+        if (detail == null)
+            return NotFound();
+        return Ok(detail);
     }
 
     /// <summary>
-    /// DELETE /api/assets/{id} - Set asset status to Disposed, Lost, or Liquidated (soft delete)
+    /// DELETE /api/assets/{id} — Set catalog status to Disposed, Lost, or Liquidated.
     /// </summary>
     [HttpDelete("{id:int}")]
     public async Task<ActionResult<AssetResponseDTO>> Delete(
@@ -561,27 +458,36 @@ public class AssetsController : ControllerBase
         asset.Status = (int)effectiveStatus.Value;
         await _context.SaveChangesAsync();
 
-        await _context.Entry(asset)
-            .Reference(a => a.AssetType).LoadAsync();
-        await _context.Entry(asset)
-            .Reference(a => a.Warehouse).LoadAsync();
+        await _context.Entry(asset).Reference(a => a.AssetType).LoadAsync();
+        return Ok(ToAssetResponseDTO(asset));
+    }
 
-        return Ok(ToResponseDTO(asset));
+    private async Task<Dictionary<int, DepreciationRecord>> LoadLatestDepreciationByInstanceAsync(
+        List<int> instanceIds)
+    {
+        if (instanceIds.Count == 0)
+            return new Dictionary<int, DepreciationRecord>();
+
+        var rows = await _context.DepreciationRecords
+            .Include(r => r.Policy)
+            .AsNoTracking()
+            .Where(r => instanceIds.Contains(r.AssetInstanceId))
+            .ToListAsync();
+
+        return rows
+            .GroupBy(r => r.AssetInstanceId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(r => r.Period).ThenByDescending(r => r.CreateDate).First());
     }
 
     private bool CanViewDepartmentAssetsForAnyDepartment() =>
         User.IsInRole("ACCOUNTANT") || User.IsInRole("DIRECTOR");
 
-    private static bool CreateHasAssignment(CreateAssetDTO dto) =>
+    private static bool InstanceCreateHasAssignment(CreateAssetInstanceDTO dto) =>
         dto.AssignedDepartmentId.HasValue || dto.ResponsibleEmployeeId.HasValue;
 
-    private static bool UpdateHasAssignment(UpdateAssetDTO dto) =>
-        dto.AssignedDepartmentId.HasValue ||
-        dto.ResponsibleEmployeeId.HasValue ||
-        dto.ClearDepartmentAssignment ||
-        dto.ClearResponsibleEmployee;
-
-    private ActionResult<AssetResponseDTO>? RequireAccountantForAssignment()
+    private ActionResult<AssetDetailResponseDTO>? RequireAccountantForAssignment()
     {
         if (User.Identity?.IsAuthenticated != true)
             return Unauthorized(new { message = "Authentication is required to assign or reassign assets." });
@@ -591,7 +497,8 @@ public class AssetsController : ControllerBase
         return null;
     }
 
-    private async Task<ActionResult<AssetResponseDTO>?> ValidateCreateAssignmentDtoAsync(CreateAssetDTO dto)
+    private async Task<ActionResult<AssetDetailResponseDTO>?> ValidateCreateInstanceAssignmentAsync(
+        CreateAssetInstanceDTO dto)
     {
         Employee? emp = null;
         if (dto.ResponsibleEmployeeId.HasValue)
@@ -609,19 +516,18 @@ public class AssetsController : ControllerBase
                 return BadRequest(new { message = $"Department {deptId.Value} does not exist." });
         }
 
-        if (emp != null)
-        {
-            if (deptId.HasValue && deptId.Value != emp.DepartmentId)
-                return BadRequest(new { message = "Assigned department must match the responsible employee's department." });
-        }
+        if (emp != null && deptId.HasValue && deptId.Value != emp.DepartmentId)
+            return BadRequest(new { message = "Assigned department must match the responsible employee's department." });
 
         return null;
     }
 
-    private async Task<ActionResult<AssetResponseDTO>?> ApplyCreateAssignmentAsync(int assetId, CreateAssetDTO dto)
+    private async Task ApplyCreateInstanceAssignmentAsync(
+        int assetInstanceId,
+        CreateAssetInstanceDTO dto)
     {
         if (!dto.AssignedDepartmentId.HasValue && !dto.ResponsibleEmployeeId.HasValue)
-            return null;
+            return;
 
         var effective = dto.AssignmentEffectiveDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -631,18 +537,15 @@ public class AssetsController : ControllerBase
                 .FirstOrDefaultAsync(e => e.EmployeeId == dto.ResponsibleEmployeeId.Value);
 
         int? deptId = dto.AssignedDepartmentId;
-        if (emp != null)
-        {
-            if (!deptId.HasValue)
-                deptId = emp.DepartmentId;
-        }
+        if (emp != null && !deptId.HasValue)
+            deptId = emp.DepartmentId;
 
         if (deptId.HasValue)
         {
-            await CloseCurrentLocationAsync(assetId, excludeLocationId: null, newStartDate: effective);
+            await CloseCurrentLocationForInstanceAsync(assetInstanceId, null, effective);
             _context.AssetLocations.Add(new AssetLocation
             {
-                AssetId = assetId,
+                AssetInstanceId = assetInstanceId,
                 DepartmentId = deptId.Value,
                 StartDate = effective,
                 EndDate = null,
@@ -652,108 +555,25 @@ public class AssetsController : ControllerBase
 
         if (dto.ResponsibleEmployeeId.HasValue)
         {
-            await CloseCurrentUsageAsync(assetId, newStartDate: effective);
+            await CloseCurrentUsageForInstanceAsync(assetInstanceId, effective);
             _context.AssetUsages.Add(new AssetUsage
             {
-                AssetId = assetId,
+                AssetInstanceId = assetInstanceId,
                 EmployeeId = dto.ResponsibleEmployeeId.Value,
                 StartDate = effective,
                 EndDate = null,
                 IsCurrent = true
             });
         }
-
-        return null;
     }
 
-    private async Task<ActionResult<AssetResponseDTO>?> ApplyUpdateAssignmentAsync(int assetId, UpdateAssetDTO dto)
-    {
-        if (!dto.AssignedDepartmentId.HasValue &&
-            !dto.ResponsibleEmployeeId.HasValue &&
-            !dto.ClearDepartmentAssignment &&
-            !dto.ClearResponsibleEmployee)
-            return null;
-
-        if (dto.ClearDepartmentAssignment && dto.AssignedDepartmentId.HasValue)
-            return BadRequest(new { message = "Cannot clear department and assign a department in the same request." });
-
-        if (dto.ClearResponsibleEmployee && dto.ResponsibleEmployeeId.HasValue)
-            return BadRequest(new { message = "Cannot clear responsible employee and assign one in the same request." });
-
-        if (dto.ClearDepartmentAssignment && dto.ResponsibleEmployeeId.HasValue)
-            return BadRequest(new { message = "Cannot clear department while assigning a responsible employee." });
-
-        var effective = dto.AssignmentEffectiveDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
-
-        Employee? emp = null;
-        if (dto.ResponsibleEmployeeId.HasValue)
-        {
-            emp = await _context.Employees.FirstOrDefaultAsync(e => e.EmployeeId == dto.ResponsibleEmployeeId.Value);
-            if (emp == null)
-                return BadRequest(new { message = $"Employee {dto.ResponsibleEmployeeId.Value} not found." });
-        }
-
-        // Department side
-        if (dto.ClearDepartmentAssignment)
-        {
-            await CloseCurrentLocationAsync(assetId, excludeLocationId: null, newStartDate: effective);
-        }
-        else if (dto.AssignedDepartmentId.HasValue)
-        {
-            if (!await _context.Departments.AnyAsync(d => d.DepartmentId == dto.AssignedDepartmentId.Value))
-                return BadRequest(new { message = $"Department {dto.AssignedDepartmentId.Value} does not exist." });
-
-            if (emp != null && dto.AssignedDepartmentId.Value != emp.DepartmentId)
-                return BadRequest(new { message = "Assigned department must match the responsible employee's department." });
-
-            await CloseCurrentLocationAsync(assetId, excludeLocationId: null, newStartDate: effective);
-            _context.AssetLocations.Add(new AssetLocation
-            {
-                AssetId = assetId,
-                DepartmentId = dto.AssignedDepartmentId.Value,
-                StartDate = effective,
-                EndDate = null,
-                IsCurrent = true
-            });
-        }
-        else if (dto.ResponsibleEmployeeId.HasValue && emp != null)
-        {
-            await CloseCurrentLocationAsync(assetId, excludeLocationId: null, newStartDate: effective);
-            _context.AssetLocations.Add(new AssetLocation
-            {
-                AssetId = assetId,
-                DepartmentId = emp.DepartmentId,
-                StartDate = effective,
-                EndDate = null,
-                IsCurrent = true
-            });
-        }
-
-        // Usage side
-        if (dto.ClearResponsibleEmployee)
-        {
-            await CloseCurrentUsageAsync(assetId, newStartDate: effective);
-        }
-        else if (dto.ResponsibleEmployeeId.HasValue)
-        {
-            await CloseCurrentUsageAsync(assetId, newStartDate: effective);
-            _context.AssetUsages.Add(new AssetUsage
-            {
-                AssetId = assetId,
-                EmployeeId = dto.ResponsibleEmployeeId.Value,
-                StartDate = effective,
-                EndDate = null,
-                IsCurrent = true
-            });
-        }
-
-        return null;
-    }
-
-    private async Task CloseCurrentLocationAsync(int assetId, int? excludeLocationId, DateOnly newStartDate)
+    private async Task CloseCurrentLocationForInstanceAsync(
+        int assetInstanceId,
+        int? excludeLocationId,
+        DateOnly newStartDate)
     {
         var current = await _context.AssetLocations
-            .Where(l => l.AssetId == assetId && l.IsCurrent &&
+            .Where(l => l.AssetInstanceId == assetInstanceId && l.IsCurrent &&
                         (excludeLocationId == null || l.LocationId != excludeLocationId))
             .FirstOrDefaultAsync();
 
@@ -764,10 +584,10 @@ public class AssetsController : ControllerBase
         }
     }
 
-    private async Task CloseCurrentUsageAsync(int assetId, DateOnly newStartDate)
+    private async Task CloseCurrentUsageForInstanceAsync(int assetInstanceId, DateOnly newStartDate)
     {
         var current = await _context.AssetUsages
-            .Where(u => u.AssetId == assetId && u.IsCurrent)
+            .Where(u => u.AssetInstanceId == assetInstanceId && u.IsCurrent)
             .FirstOrDefaultAsync();
 
         if (current != null)
@@ -777,7 +597,7 @@ public class AssetsController : ControllerBase
         }
     }
 
-    private static AssetResponseDTO ToResponseDTO(Asset a, AssetStatus? forcedStatus = null)
+    private static AssetResponseDTO ToAssetResponseDTO(Asset a, AssetStatus? forcedStatus = null)
     {
         var effectiveStatus = forcedStatus ?? (AssetStatus)a.Status;
         return new AssetResponseDTO
@@ -787,51 +607,70 @@ public class AssetsController : ControllerBase
             Name = a.Name,
             AssetTypeId = a.AssetTypeId,
             AssetTypeName = a.AssetType?.Name,
-            PurchaseDate = a.PurchaseDate,
-            OriginalPrice = a.OriginalPrice,
-            CurrentValue = a.CurrentValue,
             Status = effectiveStatus,
             StatusName = effectiveStatus.ToString(),
-            WarrantyEndDate = a.WarrantyEndDate,
-            InUseDate = a.InUseDate,
             Unit = a.Unit,
             Quantity = a.Quantity,
-            WarehouseId = a.WarehouseId,
-            WarehouseName = a.Warehouse?.Name,
             CreatedBy = a.CreatedBy,
-            CurrentLocationId = a.AssetLocations
-                .Where(al => al.IsCurrent)
-                .Select(al => (int?)al.LocationId)
-                .FirstOrDefault(),
-            CurrentDepartmentId = a.AssetLocations
-                .Where(al => al.IsCurrent)
-                .Select(al => (int?)al.DepartmentId)
-                .FirstOrDefault(),
-            CurrentDepartmentName = a.AssetLocations
-                .Where(al => al.IsCurrent)
-                .Select(al => al.Department != null ? al.Department.Name : null)
-                .FirstOrDefault(),
-            CurrentResponsibleEmployeeId = a.AssetUsages
-                .Where(u => u.IsCurrent)
-                .Select(u => (int?)u.EmployeeId)
-                .FirstOrDefault(),
-            CurrentResponsibleEmployeeName = a.AssetUsages
-                .Where(u => u.IsCurrent)
-                .Select(u => u.Employee != null ? u.Employee.Name : null)
-                .FirstOrDefault(),
-            CurrentResponsibleUserId = a.AssetUsages
-                .Where(u => u.IsCurrent)
-                .Select(u => u.Employee != null ? (int?)u.Employee.UserId : null)
-                .FirstOrDefault()
+            InUseDate = a.InUseDate,
+            Specification = a.Specification,
+            Note = a.Note
         };
     }
 
-    private static AssetResponseDTO ToResponseDTO(
-        Asset a,
-        DrepreciationRecord? latestDep,
-        List<MaintenanceSchedule> schedules)
+    private static AssetInstanceResponseDTO ToAssetInstanceResponseDTO(
+        AssetInstance i,
+        DepreciationRecord? latestDep,
+        AssetStatus? forcedStatus = null)
     {
-        var dto = ToResponseDTO(a);
+        var effectiveStatus = forcedStatus ?? (AssetStatus)i.Status;
+        var dto = new AssetInstanceResponseDTO
+        {
+            AssetInstanceId = i.AssetInstanceId,
+            AssetId = i.AssetId,
+            AssetTypeId = i.Asset?.AssetTypeId ?? 0,
+            AssetCode = i.Asset?.Code,
+            AssetName = i.Asset?.Name,
+            InstanceCode = i.InstanceCode,
+            SerialNumber = i.SerialNumber,
+            WarehouseId = i.WarehouseId,
+            WarehouseName = i.Warehouse?.Name,
+            PurchaseDate = i.PurchaseDate,
+            OriginalPrice = i.OriginalPrice,
+            CurrentValue = i.CurrentValue,
+            Status = effectiveStatus,
+            StatusName = effectiveStatus.ToString(),
+            InUseDate = i.InUseDate,
+            SupplierId = i.SupplierId,
+            ContractNo = i.ContractNo,
+            Condition = i.Condition,
+            Note = i.Note,
+            CurrentLocationId = i.AssetLocations
+                .Where(al => al.IsCurrent)
+                .Select(al => (int?)al.LocationId)
+                .FirstOrDefault(),
+            CurrentDepartmentId = i.AssetLocations
+                .Where(al => al.IsCurrent)
+                .Select(al => (int?)al.DepartmentId)
+                .FirstOrDefault(),
+            CurrentDepartmentName = i.AssetLocations
+                .Where(al => al.IsCurrent)
+                .Select(al => al.Department != null ? al.Department.Name : null)
+                .FirstOrDefault(),
+            CurrentResponsibleEmployeeId = i.AssetUsages
+                .Where(u => u.IsCurrent)
+                .Select(u => (int?)u.EmployeeId)
+                .FirstOrDefault(),
+            CurrentResponsibleEmployeeName = i.AssetUsages
+                .Where(u => u.IsCurrent)
+                .Select(u => u.Employee != null ? u.Employee.Name : null)
+                .FirstOrDefault(),
+            CurrentResponsibleUserId = i.AssetUsages
+                .Where(u => u.IsCurrent)
+                .Select(u => u.Employee != null ? (int?)u.Employee.UserId : null)
+                .FirstOrDefault(),
+            DepreciationPolicyId = i.DepreciationPolicyId
+        };
 
         if (latestDep != null)
         {
@@ -845,21 +684,31 @@ public class AssetsController : ControllerBase
             dto.RemainingValue = latestDep.RemainingValue;
         }
 
-        dto.MaintenanceSchedules = schedules.Select(s => new MaintenanceScheduleDTO
+        return dto;
+    }
+
+    private static MaintenanceScheduleDTO ToMaintenanceScheduleDto(MaintenanceSchedule s)
+    {
+        int? intervalMonths = s.IntervalUnit == (int)MaintenanceRepeatIntervalUnit.Month
+            ? s.IntervalValue
+            : null;
+        int? intervalHours = null;
+
+        return new MaintenanceScheduleDTO
         {
             ScheduleId = s.ScheduleId,
             TemplateId = s.TemplateId,
             Content = s.Content,
             TemplateName = s.Template?.Name,
             ScheduleType = s.ScheduleType,
-            IntervalMonths = s.IntervalMonths,
-            IntervalHours = s.IntervalHours,
+            IntervalMonths = intervalMonths,
+            IntervalHours = intervalHours,
+            IntervalValue = s.IntervalValue,
+            IntervalUnit = s.IntervalUnit,
             StartDate = s.StartDate,
             NextDueDate = s.NextDueDate,
             EndDate = s.EndDate,
             IsActive = s.IsActive
-        }).ToList();
-
-        return dto;
+        };
     }
 }

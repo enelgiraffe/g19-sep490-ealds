@@ -39,6 +39,8 @@ export interface MaintenanceSchedule {
   scheduleType: number;
   intervalMonths?: number | null;
   intervalHours?: number | null;
+  intervalValue?: number | null;
+  intervalUnit?: number | null;
   startDate: string;
   nextDueDate?: string | null;
   endDate?: string | null;
@@ -52,29 +54,50 @@ export interface AssetDocumentItem {
   uploadedDate: string;
 }
 
-export interface AssetResponse {
+/** Catalog row from GET /api/assets */
+export interface AssetCatalogResponse {
   assetId: number;
   code: string;
   name: string;
   assetTypeId: number;
   assetTypeName?: string | null;
+  status: number;
+  statusName: string;
+  unit: string;
+  quantity?: number | null;
+  createdBy: number;
+  inUseDate?: string | null;
+  specification?: string | null;
+  note?: string | null;
+}
+
+/** Physical instance from GET /api/asset-instances */
+export interface AssetInstanceResponse {
+  assetInstanceId: number;
+  assetId: number;
+  assetTypeId: number;
+  assetCode?: string | null;
+  assetName?: string | null;
+  instanceCode: string;
+  serialNumber?: string | null;
+  warehouseId: number;
+  warehouseName?: string | null;
   purchaseDate: string;
   originalPrice: number;
   currentValue: number;
   status: number;
   statusName: string;
-  warrantyEndDate?: string | null;
   inUseDate?: string | null;
-  unit: string;
-  quantity: number;
-  warehouseId: number;
-  warehouseName?: string | null;
-  createdBy: number;
+  supplierId?: number | null;
+  contractNo?: string | null;
+  condition?: string | null;
+  note?: string | null;
   currentLocationId?: number | null;
   currentDepartmentId?: number | null;
   currentDepartmentName?: string | null;
-
-  // Depreciation (optional; populated in GET by id)
+  currentResponsibleEmployeeId?: number | null;
+  currentResponsibleEmployeeName?: string | null;
+  currentResponsibleUserId?: number | null;
   depreciationPolicyId?: number | null;
   depreciationPolicyName?: string | null;
   depreciationUsefulLifeMonths?: number | null;
@@ -83,11 +106,17 @@ export interface AssetResponse {
   depreciationAmount?: number | null;
   accumulatedDepreciation?: number | null;
   remainingValue?: number | null;
+}
 
-  // Maintenance (optional; populated in GET by id)
+/** GET /api/assets/{id} — catalog + instances + maintenance + documents */
+export interface AssetDetailResponse extends AssetCatalogResponse {
   maintenanceSchedules?: MaintenanceSchedule[] | null;
   documents?: AssetDocumentItem[] | null;
+  instances?: AssetInstanceResponse[] | null;
 }
+
+/** @deprecated Use AssetCatalogResponse / AssetDetailResponse / AssetInstanceResponse as appropriate */
+export type AssetResponse = AssetDetailResponse;
 
 export interface AssetTypeItem {
   assetTypeId: number;
@@ -100,7 +129,15 @@ export interface WarehouseItem {
   description?: string | null;
 }
 
-export interface GetAssetsParams {
+/** Query params for GET /api/assets (catalog only) */
+export interface GetAssetCatalogParams {
+  keyword?: string;
+  status?: number;
+  assetTypeId?: number;
+}
+
+/** Query params for GET /api/asset-instances (physical rows; supports former asset list filters) */
+export interface GetAssetInstancesParams {
   keyword?: string;
   status?: number;
   assetTypeId?: number;
@@ -111,39 +148,82 @@ export interface GetAssetsParams {
   toDate?: string;
 }
 
+/** @deprecated Use GetAssetCatalogParams or GetAssetInstancesParams */
+export type GetAssetsParams = GetAssetInstancesParams;
+
+export interface CreateAssetInstancePayload {
+  assetId?: number;
+  instanceCode: string;
+  serialNumber?: string | null;
+  warehouseId: number;
+  purchaseDate: string;
+  originalPrice: number;
+  currentValue: number;
+  inUseDate?: string | null;
+  depreciationPolicyId?: number | null;
+  supplierId?: number | null;
+  contractNo?: string | null;
+  condition?: string | null;
+  note?: string | null;
+  assignedDepartmentId?: number | null;
+  responsibleEmployeeId?: number | null;
+  assignmentEffectiveDate?: string | null;
+}
+
 export interface CreateAssetPayload {
   code: string;
   name: string;
   assetTypeId: number;
-  purchaseDate: string;
-  originalPrice: number;
-  currentValue: number;
-  warrantyEndDate?: string | null;
-  inUseDate?: string | null;
   unit: string;
-  quantity: number;
-  warehouseId: number;
+  quantity?: number | null;
   createdBy: number;
-  depreciationPolicyId?: number | null;
+  inUseDate?: string | null;
+  specification?: string | null;
+  note?: string | null;
+  /** Optional first physical row (same request as catalog create) */
+  initialInstance?: CreateAssetInstancePayload;
 }
 
 export interface UpdateAssetPayload {
   code?: string;
   name?: string;
   assetTypeId?: number;
+  status?: number;
+  unit?: string;
+  quantity?: number | null;
+  inUseDate?: string | null;
+  specification?: string | null;
+  note?: string | null;
+}
+
+export interface UpdateAssetInstancePayload {
+  instanceCode?: string;
+  serialNumber?: string | null;
+  warehouseId?: number;
   purchaseDate?: string;
   originalPrice?: number;
   currentValue?: number;
   status?: number;
-  warrantyEndDate?: string | null;
   inUseDate?: string | null;
-  unit?: string;
-  quantity?: number;
-  warehouseId?: number;
+  depreciationPolicyId?: number | null;
+  supplierId?: number | null;
+  contractNo?: string | null;
+  condition?: string | null;
+  note?: string | null;
+  assignedDepartmentId?: number | null;
+  responsibleEmployeeId?: number | null;
+  assignmentEffectiveDate?: string | null;
+  clearDepartmentAssignment?: boolean;
+  clearResponsibleEmployee?: boolean;
 }
 
 export interface DeleteAssetPayload {
   status: number; // Disposed=4, Lost=5, Liquidated=6
+  reason?: string | null;
+}
+
+export interface DeleteAssetInstancePayload {
+  status: number;
   reason?: string | null;
 }
 
@@ -175,25 +255,25 @@ export function getStatusLabel(statusName: string): string {
 }
 
 export const assetService = {
-  async getAll(params?: GetAssetsParams): Promise<AssetResponse[]> {
-    const response = await assetApi.get<AssetResponse[]>('/api/assets', {
+  async getAll(params?: GetAssetCatalogParams): Promise<AssetCatalogResponse[]> {
+    const response = await assetApi.get<AssetCatalogResponse[]>('/api/assets', {
       params,
     });
     return response.data;
   },
 
-  async getById(id: number): Promise<AssetResponse> {
-    const response = await assetApi.get<AssetResponse>(`/api/assets/${id}`);
+  async getById(id: number): Promise<AssetDetailResponse> {
+    const response = await assetApi.get<AssetDetailResponse>(`/api/assets/${id}`);
     return response.data;
   },
 
-  async create(payload: CreateAssetPayload): Promise<AssetResponse> {
-    const response = await assetApi.post<AssetResponse>('/api/assets', payload);
+  async create(payload: CreateAssetPayload): Promise<AssetDetailResponse> {
+    const response = await assetApi.post<AssetDetailResponse>('/api/assets', payload);
     return response.data;
   },
 
-  async update(id: number, payload: UpdateAssetPayload): Promise<AssetResponse> {
-    const response = await assetApi.put<AssetResponse>(
+  async update(id: number, payload: UpdateAssetPayload): Promise<AssetDetailResponse> {
+    const response = await assetApi.put<AssetDetailResponse>(
       `/api/assets/${id}`,
       payload
     );
@@ -203,8 +283,8 @@ export const assetService = {
   async softDelete(
     id: number,
     payload: DeleteAssetPayload
-  ): Promise<AssetResponse> {
-    const response = await assetApi.delete<AssetResponse>(
+  ): Promise<AssetCatalogResponse> {
+    const response = await assetApi.delete<AssetCatalogResponse>(
       `/api/assets/${id}`,
       { data: payload }
     );
@@ -218,6 +298,47 @@ export const assetService = {
 
   async getWarehouses(): Promise<WarehouseItem[]> {
     const response = await assetApi.get<WarehouseItem[]>('/api/warehouseassets');
+    return response.data;
+  },
+};
+
+export const assetInstanceService = {
+  async getAll(params?: GetAssetInstancesParams): Promise<AssetInstanceResponse[]> {
+    const response = await assetApi.get<AssetInstanceResponse[]>('/api/asset-instances', {
+      params,
+    });
+    return response.data;
+  },
+
+  async getById(id: number): Promise<AssetInstanceResponse> {
+    const response = await assetApi.get<AssetInstanceResponse>(`/api/asset-instances/${id}`);
+    return response.data;
+  },
+
+  async create(payload: CreateAssetInstancePayload): Promise<AssetInstanceResponse> {
+    const response = await assetApi.post<AssetInstanceResponse>(
+      '/api/asset-instances',
+      payload
+    );
+    return response.data;
+  },
+
+  async update(id: number, payload: UpdateAssetInstancePayload): Promise<AssetInstanceResponse> {
+    const response = await assetApi.put<AssetInstanceResponse>(
+      `/api/asset-instances/${id}`,
+      payload
+    );
+    return response.data;
+  },
+
+  async softDelete(
+    id: number,
+    payload: DeleteAssetInstancePayload
+  ): Promise<AssetInstanceResponse> {
+    const response = await assetApi.delete<AssetInstanceResponse>(
+      `/api/asset-instances/${id}`,
+      { data: payload }
+    );
     return response.data;
   },
 };

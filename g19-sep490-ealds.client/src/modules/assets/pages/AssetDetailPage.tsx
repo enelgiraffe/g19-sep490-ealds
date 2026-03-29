@@ -4,7 +4,7 @@ import {
   assetService,
   formatVnd,
   getStatusLabel,
-  type AssetResponse,
+  type AssetDetailResponse,
 } from '../services/assetService';
 import {
   getMaintenanceRecordStatusLabel,
@@ -71,7 +71,7 @@ function getRepeatUnitLabel(value?: number | string | null): string {
 export function AssetDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id ? Number(params.id) : NaN;
-  const [asset, setAsset] = useState<AssetResponse | null>(null);
+  const [asset, setAsset] = useState<AssetDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -164,33 +164,35 @@ export function AssetDetailPage() {
     );
   }
 
+  const primary = asset.instances?.[0];
+
   const statusLabel = getStatusLabel(asset.statusName);
 
   const depreciationPolicyLabel =
-    asset.depreciationPolicyName ?? 'Chưa cấu hình chính sách khấu hao';
+    primary?.depreciationPolicyName ?? 'Chưa cấu hình chính sách khấu hao';
 
   const depreciationUsefulLifeLabel =
-    asset.depreciationUsefulLifeMonths != null
-      ? `${asset.depreciationUsefulLifeMonths} tháng`
+    primary?.depreciationUsefulLifeMonths != null
+      ? `${primary.depreciationUsefulLifeMonths} tháng`
       : '—';
 
   const depreciationSalvageValueLabel =
-    asset.depreciationSalvageValue != null
-      ? formatVnd(asset.depreciationSalvageValue)
+    primary?.depreciationSalvageValue != null
+      ? formatVnd(primary.depreciationSalvageValue)
       : '—';
 
   const depreciationAmountLabel =
-    asset.depreciationAmount != null
-      ? formatVnd(asset.depreciationAmount)
+    primary?.depreciationAmount != null
+      ? formatVnd(primary.depreciationAmount)
       : '—';
 
   const accumulatedDepreciationLabel =
-    asset.accumulatedDepreciation != null
-      ? formatVnd(asset.accumulatedDepreciation)
+    primary?.accumulatedDepreciation != null
+      ? formatVnd(primary.accumulatedDepreciation)
       : '—';
 
   const remainingValueLabel =
-    asset.remainingValue != null ? formatVnd(asset.remainingValue) : '—';
+    primary?.remainingValue != null ? formatVnd(primary.remainingValue) : '—';
 
   return (
     <div className="asset-detail-page">
@@ -245,26 +247,30 @@ export function AssetDetailPage() {
                 <span className="value">{asset.unit}</span>
               </div>
               <div className="asset-detail__info-row">
-                <span className="label">Giá trị hiện tại</span>
-                <span className="value">{formatVnd(asset.currentValue)}</span>
+                <span className="label">Giá trị hiện tại (phiên bản đầu)</span>
+                <span className="value">
+                  {primary != null ? formatVnd(primary.currentValue) : '—'}
+                </span>
               </div>
             </div>
             <div className="asset-detail__info-col">
               <div className="asset-detail__info-row">
                 <span className="label">Phòng ban sử dụng</span>
-                <span className="value">{asset.currentDepartmentName ?? '—'}</span>
+                <span className="value">{primary?.currentDepartmentName ?? '—'}</span>
               </div>
               <div className="asset-detail__info-row">
                 <span className="label">Ngày mua</span>
-                <span className="value">{formatDate(asset.purchaseDate)}</span>
+                <span className="value">{formatDate(primary?.purchaseDate)}</span>
               </div>
               <div className="asset-detail__info-row">
                 <span className="label">Giá gốc</span>
-                <span className="value">{formatVnd(asset.originalPrice)}</span>
+                <span className="value">
+                  {primary != null ? formatVnd(primary.originalPrice) : '—'}
+                </span>
               </div>
               <div className="asset-detail__info-row">
                 <span className="label">Ngày đưa vào sử dụng</span>
-                <span className="value">{formatDate(asset.inUseDate)}</span>
+                <span className="value">{formatDate(primary?.inUseDate ?? asset.inUseDate)}</span>
               </div>
             </div>
           </div>
@@ -315,7 +321,7 @@ export function AssetDetailPage() {
           <h2 className="asset-detail__section-title">Bảo hành</h2>
           <div className="asset-detail__info-row">
             <span className="label">Hạn bảo hành</span>
-            <span className="value">{formatDate(asset.warrantyEndDate)}</span>
+            <span className="value">—</span>
           </div>
         </div>
 
@@ -336,8 +342,8 @@ export function AssetDetailPage() {
           <div className="asset-detail__info-row">
             <span className="label">Kỳ khấu hao gần nhất</span>
             <span className="value">
-              {asset.depreciationPeriod
-                ? formatDate(asset.depreciationPeriod)
+              {primary?.depreciationPeriod
+                ? formatDate(primary.depreciationPeriod)
                 : '—'}
             </span>
           </div>
@@ -355,11 +361,15 @@ export function AssetDetailPage() {
           </div>
           <div className="asset-detail__info-row">
             <span className="label">Giá trị tính khấu hao (giá gốc)</span>
-            <span className="value">{formatVnd(asset.originalPrice)}</span>
+            <span className="value">
+              {primary != null ? formatVnd(primary.originalPrice) : '—'}
+            </span>
           </div>
           <div className="asset-detail__info-row">
             <span className="label">Giá trị hiện tại</span>
-            <span className="value">{formatVnd(asset.currentValue)}</span>
+            <span className="value">
+              {primary != null ? formatVnd(primary.currentValue) : '—'}
+            </span>
           </div>
         </div>
 
@@ -531,7 +541,7 @@ export function AssetDetailPage() {
                       <div className="asset-detail__record-info-item">
                         <label>Phòng ban sử dụng</label>
                         <div className="asset-detail__record-info-value">
-                          {asset.currentDepartmentName ?? '—'}
+                          {primary?.currentDepartmentName ?? '—'}
                         </div>
                       </div>
                     </div>

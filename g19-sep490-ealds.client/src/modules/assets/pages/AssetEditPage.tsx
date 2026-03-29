@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { assetService, type AssetResponse, type UpdateAssetPayload } from '../services/assetService';
+import { assetService, type AssetDetailResponse, type UpdateAssetPayload } from '../services/assetService';
 import {
   maintenanceScheduleService,
   type MaintenanceScheduleResponse,
@@ -68,7 +68,7 @@ export function AssetEditPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [asset, setAsset] = useState<AssetResponse | null>(null);
+  const [asset, setAsset] = useState<AssetDetailResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [code, setCode] = useState('');
@@ -124,16 +124,17 @@ export function AssetEditPage() {
       .then(async (data) => {
         if (!isMounted) return;
         setAsset(data);
+        const primary = data.instances?.[0];
         setCode(data.code);
         setName(data.name);
         setAssetTypeId(String(data.assetTypeId));
-        setPurchaseDate(data.purchaseDate);
-        setOriginalPrice(String(data.originalPrice));
-        setCurrentValue(String(data.currentValue));
+        setPurchaseDate(primary?.purchaseDate ?? '');
+        setOriginalPrice(primary != null ? String(primary.originalPrice) : '');
+        setCurrentValue(primary != null ? String(primary.currentValue) : '');
         setUnit(data.unit);
-        setQuantity(String(data.quantity));
-        setWarehouseId(String(data.warehouseId));
-        setWarrantyEndDate(data.warrantyEndDate ?? '');
+        setQuantity(String(data.quantity ?? ''));
+        setWarehouseId(primary != null ? String(primary.warehouseId) : '');
+        setWarrantyEndDate('');
         const schedules = await maintenanceScheduleService.findByAssetId(assetId).catch(() => []);
         if (!isMounted) return;
         setMaintenanceSchedules(schedules);
@@ -176,10 +177,11 @@ export function AssetEditPage() {
     setScheduleSubmitting(true);
     setScheduleError(null);
     try {
+      const primary = asset.instances?.[0];
       const startDate =
         startPointMode === 'inUse'
-          ? toIsoWithOffset(asset.inUseDate, startOffsetDays)
-          : toIsoWithOffset(asset.purchaseDate, startOffsetDays);
+          ? toIsoWithOffset(primary?.inUseDate ?? asset.inUseDate, startOffsetDays)
+          : toIsoWithOffset(primary?.purchaseDate, startOffsetDays);
 
       await maintenanceScheduleService.addSchedule({
         assetId: asset.assetId,
@@ -220,13 +222,8 @@ export function AssetEditPage() {
       code: code.trim(),
       name: name.trim(),
       assetTypeId: assetTypeId ? Number(assetTypeId) : undefined,
-      purchaseDate: purchaseDate || undefined,
-      originalPrice: originalPrice ? Number(originalPrice) : undefined,
-      currentValue: currentValue ? Number(currentValue) : undefined,
       unit: unit || undefined,
       quantity: quantity ? Number(quantity) : undefined,
-      warehouseId: warehouseId ? Number(warehouseId) : undefined,
-      warrantyEndDate: warrantyEndDate || null,
     };
 
     setSaving(true);

@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
-import type { AssetResponse } from '../../assets/services/assetService';
+import type { AssetDetailResponse } from '../../assets/services/assetService';
 import './RepairStartModal.css';
 
 interface RepairStartRow {
@@ -26,7 +26,7 @@ interface RepairStartModalProps {
   loading: boolean;
   submitting: boolean;
   row: RepairStartRow | null;
-  asset: AssetResponse | null;
+  asset: AssetDetailResponse | null;
   onClose: () => void;
   onSubmit: (values: RepairStartFormValues) => void;
 }
@@ -98,8 +98,9 @@ function RepairStartModalInner({
     setRepairProgressStatus('');
   }, [open, row]);
 
-  const assetInfo = useMemo(
-    () => ({
+  const assetInfo = useMemo(() => {
+    const primary = asset?.instances?.[0];
+    return {
       code: asset?.code ?? row?.assetCode ?? '-',
       name: asset?.name ?? row?.assetName ?? '-',
       type: asset?.assetTypeName ?? '-',
@@ -108,22 +109,22 @@ function RepairStartModalInner({
             .filter(Boolean)
             .join(' · ')
         : '-',
-      purchaseDate: toDisplayDate(asset?.purchaseDate),
-      warrantyExpiry: toDisplayDate(asset?.warrantyEndDate),
-      currentValue: formatVndValue(asset?.originalPrice),
+      purchaseDate: toDisplayDate(primary?.purchaseDate),
+      warrantyExpiry: '-',
+      currentValue: formatVndValue(primary?.originalPrice),
       remainingValue:
-        asset?.remainingValue != null
-          ? formatVndValue(asset.remainingValue)
-          : asset
-            ? formatVndValue(asset.currentValue)
+        primary?.remainingValue != null
+          ? formatVndValue(primary.remainingValue)
+          : primary
+            ? formatVndValue(primary.currentValue)
             : '-',
-      location: asset?.warehouseName || asset?.currentDepartmentName || row?.location || '-',
-      status: asset?.statusName ?? '-',
-      admissionDate: toDisplayDate(asset?.inUseDate),
-      department: asset?.currentDepartmentName ?? row?.department ?? '-',
-    }),
-    [asset, row]
-  );
+      location:
+        primary?.warehouseName || primary?.currentDepartmentName || row?.location || '-',
+      status: primary?.statusName ?? asset?.statusName ?? '-',
+      admissionDate: toDisplayDate(primary?.inUseDate ?? asset?.inUseDate),
+      department: primary?.currentDepartmentName ?? row?.department ?? '-',
+    };
+  }, [asset, row]);
 
   if (!open) return null;
 
