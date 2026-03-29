@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace g19_sep490_ealds.Server.Models;
@@ -44,6 +44,8 @@ public partial class AssetRequest
     public virtual ICollection<Procurement> Procurements { get; set; } = new List<Procurement>();
 
     public virtual ICollection<RepairTask> RepairTasks { get; set; } = new List<RepairTask>();
+
+    public virtual ICollection<TransferRecord> TransferRecords { get; set; } = new List<TransferRecord>();
 
     public virtual RequestType RequestType { get; set; } = null!;
 

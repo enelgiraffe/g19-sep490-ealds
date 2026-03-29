@@ -37,6 +37,7 @@ interface AssetItem {
 }
 
 interface AssetInfo {
+  assetInstanceId: number;
   assetId: number;
   code: string;
   name: string;
@@ -96,6 +97,7 @@ function mapInstanceToItem(a: AssetInstanceResponse): AssetItem {
 
 function instanceToAssetInfo(a: AssetInstanceResponse): AssetInfo {
   return {
+    assetInstanceId: a.assetInstanceId,
     assetId: a.assetId,
     code: a.assetCode ?? a.instanceCode,
     name: a.assetName ?? a.instanceCode,
@@ -145,8 +147,8 @@ export function AssetListPage() {
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
   const [selectedAssetInfo, setSelectedAssetInfo] = useState<AssetInfo | null>(null);
-  const [transferAssetId, setTransferAssetId] = useState<number | null>(null);
-  const [maintenanceAssetId, setMaintenanceAssetId] = useState<number | null>(null);
+  const [transferAssetInstanceId, setTransferAssetInstanceId] = useState<number | null>(null);
+  const [maintenanceAssetInstanceId, setMaintenanceAssetInstanceId] = useState<number | null>(null);
   const [assetTypes, setAssetTypes] = useState<AssetTypeItem[]>([]);
   const navigate = useNavigate();
 
@@ -269,7 +271,7 @@ export function AssetListPage() {
     const raw = apiAssets?.find((a) => a.assetInstanceId === asset.id);
     if (actionKey === 'move' && raw) {
       setSelectedAssetInfo(instanceToAssetInfo(raw));
-      setTransferAssetId(raw.assetId);
+      setTransferAssetInstanceId(raw.assetInstanceId);
       setIsTransferModalOpen(true);
     } else if (actionKey === 'mark-broken' && raw) {
       setSelectedAssetInfo(instanceToAssetInfo(raw));
@@ -280,7 +282,7 @@ export function AssetListPage() {
       setIsLiquidationModalOpen(true);
     } else if (actionKey === 'maintenance' && raw) {
       setSelectedAssetInfo(instanceToAssetInfo(raw));
-      setMaintenanceAssetId(raw.assetId);
+      setMaintenanceAssetInstanceId(raw.assetInstanceId);
       setIsMaintenanceModalOpen(true);
     } else {
       console.log('Action', actionKey, 'for asset', asset);
@@ -301,13 +303,13 @@ export function AssetListPage() {
   const handleCloseTransferModal = () => {
     setIsTransferModalOpen(false);
     setSelectedAssetInfo(null);
-    setTransferAssetId(null);
+    setTransferAssetInstanceId(null);
   };
 
   const handleCloseMaintenanceModal = () => {
     setIsMaintenanceModalOpen(false);
     setSelectedAssetInfo(null);
-    setMaintenanceAssetId(null);
+    setMaintenanceAssetInstanceId(null);
   };
 
   const handleSubmitMarkDamaged = async (values: { damageDate: string; condition: string }) => {
@@ -365,9 +367,9 @@ export function AssetListPage() {
     notes?: string;
   }) => {
     const createdBy = profile?.id ?? getStoredUserId();
-    const assetId = selectedAssetInfo?.assetId;
-    if (!createdBy || !assetId) {
-      message.error('Không xác định được người dùng hoặc tài sản để gửi đề nghị thanh lý.');
+    const resolvedInstanceId = selectedAssetInfo?.assetInstanceId;
+    if (!createdBy || !resolvedInstanceId) {
+      message.error('Không xác định được người dùng hoặc thể hiện tài sản để gửi đề nghị thanh lý.');
       return;
     }
 
@@ -380,9 +382,9 @@ export function AssetListPage() {
     try {
       await disposalRequestService.create({
         userId: createdBy,
-        assetId,
+        assetInstanceId: resolvedInstanceId,
         createdBy,
-        title: `Đề nghị thanh lý tài sản ${selectedAssetInfo?.code ?? assetId}`,
+        title: `Đề nghị thanh lý tài sản ${selectedAssetInfo?.code ?? resolvedInstanceId}`,
         description: noteText || null,
         diposalMethod: methodValue,
         diposalValue: 0,
@@ -425,18 +427,18 @@ export function AssetListPage() {
   };
 
   const handleSubmitMaintenance = async (values: {
-    assetId: number;
+    assetInstanceId: number;
     recordNumber?: string;
     maintenanceContent: string;
   }) => {
     const createdBy = profile?.id ?? getStoredUserId();
-    if (!createdBy || values.assetId == null) {
+    if (!createdBy || values.assetInstanceId == null) {
       message.error('Không xác định được người dùng hoặc tài sản để gửi đề xuất bảo dưỡng.');
       return;
     }
     try {
       await maintenanceRequestService.create({
-        assetId: values.assetId,
+        assetInstanceId: values.assetInstanceId,
         requestTypeId: 2,
         createdBy,
         title: values.recordNumber
@@ -477,8 +479,8 @@ export function AssetListPage() {
       const assetIds: number[] =
         Array.isArray(values.assetIds) && values.assetIds.length > 0
           ? values.assetIds.map((x: any) => Number(x)).filter((n: number) => Number.isFinite(n) && n > 0)
-          : transferAssetId != null
-            ? [transferAssetId]
+          : transferAssetInstanceId != null
+            ? [transferAssetInstanceId]
             : [];
       if (assetIds.length === 0) {
         message.error('Vui lòng chọn ít nhất 1 tài sản.');
@@ -498,9 +500,9 @@ export function AssetListPage() {
           ? transferDateValue.toISOString()
           : undefined;
 
-      for (const assetId of assetIds) {
+      for (const assetInstanceId of assetIds) {
         await transferRequestService.create({
-          assetId,
+          assetInstanceId,
           requestTypeId: 1, // TODO: Align with backend request type config if needed
           fromLocationId,
           toLocationId,
@@ -511,7 +513,7 @@ export function AssetListPage() {
           createdBy: profile.id,
           title: values.reason
             ? `Điều chuyển: ${values.reason}`
-            : `Yêu cầu điều chuyển tài sản ${assetId}`,
+            : `Yêu cầu điều chuyển tài sản ${assetInstanceId}`,
           description: values.reason ?? undefined,
         });
       }
@@ -852,7 +854,7 @@ export function AssetListPage() {
         onClose={handleCloseMaintenanceModal}
         onSubmit={handleSubmitMaintenance}
         assetInfo={selectedAssetInfo}
-        assetId={maintenanceAssetId}
+        assetInstanceId={maintenanceAssetInstanceId}
       />
     </div>
   );

@@ -20,12 +20,12 @@ interface MaintenanceProposalModalProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (values: {
-    assetId: number;
+    assetInstanceId: number;
     recordNumber?: string;
     maintenanceContent: string;
   }) => void;
   assetInfo: AssetInfo | null;
-  assetId: number | null;
+  assetInstanceId: number | null;
 }
 
 interface AttachmentItem {
@@ -38,7 +38,7 @@ export function MaintenanceProposalModal({
   onClose,
   onSubmit,
   assetInfo,
-  assetId,
+  assetInstanceId,
 }: MaintenanceProposalModalProps) {
   const [attachments, setAttachments] = useState<AttachmentItem[]>([
     { id: '1', name: 'Thông tin máy' },
@@ -48,7 +48,7 @@ export function MaintenanceProposalModal({
   const [maintenanceContent, setMaintenanceContent] = useState<string>('Hỏng nhẹ');
   const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
 
-  if (!open || !assetInfo || assetId == null) return null;
+  if (!open || !assetInfo || assetInstanceId == null) return null;
 
   const handleSubmit = () => {
     if (!maintenanceContent.trim()) {
@@ -57,7 +57,7 @@ export function MaintenanceProposalModal({
     }
 
     onSubmit({
-      assetId,
+      assetInstanceId,
       recordNumber: recordNumber.trim() || undefined,
       maintenanceContent: maintenanceContent.trim(),
     });

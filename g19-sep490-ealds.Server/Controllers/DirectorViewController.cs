@@ -32,8 +32,9 @@ public class DirectorViewController : ControllerBase
         var query = _db.AssetRequests
             .AsNoTracking()
             .Include(x => x.Asset)
-                .ThenInclude(a => a.AssetLocations)
-                    .ThenInclude(al => al.Department)
+                .ThenInclude(a => a.AssetInstances)
+                    .ThenInclude(ai => ai.AssetLocations)
+                        .ThenInclude(al => al.Department)
             .Include(x => x.User)
             .AsQueryable();
 
@@ -76,7 +77,8 @@ public class DirectorViewController : ControllerBase
                 AssetName = ar.Asset != null ? ar.Asset.Name : null,
                 AssetQuantity = ar.Asset != null ? (int?)ar.Asset.Quantity : null,
                 CurrentDepartmentName = ar.Asset != null
-                    ? ar.Asset.AssetLocations
+                    ? ar.Asset.AssetInstances
+                        .SelectMany(ai => ai.AssetLocations)
                         .Where(al => al.IsCurrent)
                         .Select(al => al.Department != null ? al.Department.Name : null)
                         .FirstOrDefault()

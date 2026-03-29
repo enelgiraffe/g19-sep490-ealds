@@ -1,5 +1,6 @@
-﻿using g19_sep490_ealds.Server.DTO.ResponseDTO.AssetMaintenance;
+using g19_sep490_ealds.Server.DTO.ResponseDTO.AssetMaintenance;
 using g19_sep490_ealds.Server.Models;
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
 namespace g19_sep490_ealds.Server.Mappers.Implementation;
 
@@ -16,8 +17,8 @@ public class MaintenanceRecordMapper : IMaintenanceRecordMapper
             WorkPerformed = entity.WorkPerformed,
             ConditionBefore = entity.ConditionBefore,
             ConditionAfter = entity.ConditionAfter,
-            TechnicalNote = entity.TechnicalNote,
-            Status = entity.StatusEnum
+            TechnicalNote = null,
+            Status = (MaintenanceRecordStatus)entity.Status
         };
     }
 

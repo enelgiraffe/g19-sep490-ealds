@@ -24,7 +24,7 @@ export interface AssetLocationOption {
 }
 
 export interface TransferRequestPayload {
-  assetId: number;
+  assetInstanceId: number;
   requestTypeId: number;
   fromLocationId: number;
   toLocationId: number;

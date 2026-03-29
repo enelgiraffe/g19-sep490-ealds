@@ -3,6 +3,7 @@ using g19_sep490_ealds.Server.DTO.ResponseDTO.AssetMaintenance;
 using g19_sep490_ealds.Server.Mappers;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Services.Implementation;
@@ -25,7 +26,7 @@ public class MaintenanceScheduleService : IMaintenanceScheduleService
         var hasTemplate = create.TemplateId.HasValue && create.TemplateId.Value > 0;
         var hasContent = !string.IsNullOrWhiteSpace(create.Content);
         if (!hasTemplate && !hasContent)
-            throw new Exception("Vui l�ng nh?p n?i dung b?o d??ng ho?c ch?n m?u quy ??nh.");
+            throw new Exception("Vui lòng nhập nội dung bảo dưỡng hoặc chọn mẫu quy định.");
 
         if (hasTemplate)
         {
@@ -44,11 +45,18 @@ public class MaintenanceScheduleService : IMaintenanceScheduleService
     {
         var baseDate = schedule.NextDueDate ?? schedule.StartDate;
 
-        if (schedule.IntervalMonths is int months && months > 0)
-            return baseDate.AddMonths(months);
-
-        if (schedule.IntervalHours is int hours && hours > 0)
-            return baseDate.AddHours(hours);
+        if (schedule.IntervalValue is int v && v > 0 && schedule.IntervalUnit is int u)
+        {
+            var unit = (MaintenanceRepeatIntervalUnit)u;
+            return unit switch
+            {
+                MaintenanceRepeatIntervalUnit.Day => baseDate.AddDays(v),
+                MaintenanceRepeatIntervalUnit.Week => baseDate.AddDays(7 * v),
+                MaintenanceRepeatIntervalUnit.Month => baseDate.AddMonths(v),
+                MaintenanceRepeatIntervalUnit.Year => baseDate.AddYears(v),
+                _ => baseDate
+            };
+        }
 
         return baseDate;
     }
@@ -60,7 +68,7 @@ public class MaintenanceScheduleService : IMaintenanceScheduleService
                         .ToListAsync();
 
         if (!schedules.Any())
-            throw new KeyNotFoundException($"T�i s?n {assetId} chua c� l?ch b?o tr�");
+            throw new KeyNotFoundException($"Tài sản {assetId} chưa có lịch bảo trì");
 
         return _mapper.ListEntityToResponse(schedules);
     }

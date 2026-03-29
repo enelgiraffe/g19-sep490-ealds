@@ -34,10 +34,12 @@ public class MaintenanceRequestsController : ControllerBase
         [HttpGet("list")]
         public async Task<ActionResult<IEnumerable<TransferRequestListItemDTO>>> GetList()
         {
-            var query = _db.MaintenaceTasks
+            var query = _db.MaintenanceTasks
                 .AsNoTracking()
-                .Include(t => t.Asset)
-                    .ThenInclude(a => a.AssetLocations)
+                .Include(t => t.AssetInstance)
+                    .ThenInclude(ai => ai.Asset)
+                .Include(t => t.AssetInstance)
+                    .ThenInclude(ai => ai.AssetLocations)
                         .ThenInclude(al => al.Department)
                 .Include(t => t.AssetRequest)
                 .Where(t => t.AssetRequest != null && t.AssetRequest.RequestTypeId == _maintenanceRequestTypeId)
@@ -50,18 +52,17 @@ public class MaintenanceRequestsController : ControllerBase
                     AssetRequestId = t.AssetRequestId ?? 0,
                     Code = "SBB" + t.TaskId,
                     TransferDate = t.PlannedDate,
-                    AssetCode = t.Asset.Code,
-                    AssetName = t.Asset.Name,
-                    // Với bảo dưỡng, phòng ban hiện tại quản lý tài sản được dùng cho cả From/To.
-                    FromDepartment = t.Asset.AssetLocations
+                    AssetCode = t.AssetInstance.Asset.Code,
+                    AssetName = t.AssetInstance.Asset.Name,
+                    FromDepartment = t.AssetInstance.AssetLocations
                         .Where(al => al.IsCurrent)
                         .Select(al => al.Department.Name)
                         .FirstOrDefault() ?? string.Empty,
-                    ToDepartment = t.Asset.AssetLocations
+                    ToDepartment = t.AssetInstance.AssetLocations
                         .Where(al => al.IsCurrent)
                         .Select(al => al.Department.Name)
                         .FirstOrDefault() ?? string.Empty,
-                    Quantity = t.Asset.Quantity,
+                    Quantity = 1,
                     Status = t.AssetRequest!.Status,
                     StatusName =
                         t.AssetRequest.Status == -1 ? "Nháp" :
@@ -84,21 +85,23 @@ public class MaintenanceRequestsController : ControllerBase
         if (dto == null)
             return BadRequest("Request body is required.");
 
-        var asset = await _db.Assets.FirstOrDefaultAsync(a => a.AssetId == dto.AssetId);
-        if (asset == null)
-            return NotFound($"AssetId {dto.AssetId} not found.");
+        var assetInstance = await _db.AssetInstances
+            .Include(ai => ai.Asset)
+            .FirstOrDefaultAsync(ai => ai.AssetInstanceId == dto.AssetInstanceId);
+        if (assetInstance == null)
+            return NotFound($"AssetInstanceId {dto.AssetInstanceId} not found.");
 
         var schedule = dto.ScheduleId.HasValue && dto.ScheduleId.Value > 0
             ? await _db.MaintenanceSchedules.FindAsync(dto.ScheduleId)
             : null;
 
-        var title = dto.Title ?? $"Maintenance request for asset {dto.AssetId}";
+        var title = dto.Title ?? $"Maintenance request for instance {dto.AssetInstanceId}";
 
         var assetRequest = new AssetRequest
         {
             UserId = dto.CreatedBy,
             RequestTypeId = _maintenanceRequestTypeId,
-            AssetId = dto.AssetId,
+            AssetId = assetInstance.AssetId,
             Title = title,
             Description = dto.Description,
             ProposedData = null,
@@ -118,20 +121,20 @@ public class MaintenanceRequestsController : ControllerBase
 
         var assignTo = dto.AssignTo > 0 ? dto.AssignTo : dto.CreatedBy;
 
-        var task = new MaintenaceTask
+        var task = new MaintenanceTask
         {
             ScheduleId = dto.ScheduleId,
             AssetRequestId = assetRequest.AssetRequestId,
-            AssetId = dto.AssetId,
+            AssetInstanceId = dto.AssetInstanceId,
             PlannedDate = planned ?? DateTime.UtcNow,
             AssignTo = assignTo,
             Address = dto.Address,
             Status = 0,
-            CreatDate = DateTime.UtcNow,
+            CreateDate = DateTime.UtcNow,
             CreateBy = dto.CreatedBy
         };
 
-        _db.MaintenaceTasks.Add(task);
+        _db.MaintenanceTasks.Add(task);
 
         // create request record
         var userRole = await _db.UserRoles.AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.CreatedBy);
@@ -153,11 +156,19 @@ public class MaintenanceRequestsController : ControllerBase
 
         // NOTE: Asset status is NOT changed here – only changed when maintenance actually starts (StartMaintenance).
 
-        // update schedule next due date if possible
-        if (schedule != null && schedule.IntervalMonths.HasValue)
+        if (schedule != null && schedule.IntervalValue.HasValue && schedule.IntervalUnit.HasValue)
         {
             var baseDate = schedule.NextDueDate ?? schedule.StartDate;
-            schedule.NextDueDate = baseDate.AddMonths(schedule.IntervalMonths.Value);
+            var v = schedule.IntervalValue.Value;
+            var u = (MaintenanceRepeatIntervalUnit)schedule.IntervalUnit.Value;
+            schedule.NextDueDate = u switch
+            {
+                MaintenanceRepeatIntervalUnit.Day => baseDate.AddDays(v),
+                MaintenanceRepeatIntervalUnit.Week => baseDate.AddDays(7 * v),
+                MaintenanceRepeatIntervalUnit.Month => baseDate.AddMonths(v),
+                MaintenanceRepeatIntervalUnit.Year => baseDate.AddYears(v),
+                _ => baseDate.AddMonths(v)
+            };
             _db.MaintenanceSchedules.Update(schedule);
         }
 
@@ -172,7 +183,7 @@ public class MaintenanceRequestsController : ControllerBase
     [HttpDelete("{assetRequestId:int}")]
     public async Task<IActionResult> DeleteMaintenanceRequest(int assetRequestId)
     {
-        var task = await _db.MaintenaceTasks
+        var task = await _db.MaintenanceTasks
             .Include(t => t.AssetRequest)
             .FirstOrDefaultAsync(t => t.AssetRequestId == assetRequestId);
 
@@ -190,11 +201,11 @@ public class MaintenanceRequestsController : ControllerBase
         {
             var approvals = await _db.Approvals.Where(x => x.AssetRequestId == assetRequestId).ToListAsync();
             var records = await _db.AssetRequestRecords.Where(x => x.AssetRequestId == assetRequestId).ToListAsync();
-            var maintenanceTasks = await _db.MaintenaceTasks.Where(x => x.AssetRequestId == assetRequestId).ToListAsync();
+            var maintenanceTasks = await _db.MaintenanceTasks.Where(x => x.AssetRequestId == assetRequestId).ToListAsync();
 
             if (approvals.Count > 0) _db.Approvals.RemoveRange(approvals);
             if (records.Count > 0) _db.AssetRequestRecords.RemoveRange(records);
-            if (maintenanceTasks.Count > 0) _db.MaintenaceTasks.RemoveRange(maintenanceTasks);
+            if (maintenanceTasks.Count > 0) _db.MaintenanceTasks.RemoveRange(maintenanceTasks);
 
             _db.AssetRequests.Remove(ar);
 
@@ -311,7 +322,7 @@ public class MaintenanceRequestsController : ControllerBase
         ar.Status = 4;
 
         // mark related maintenance task as in-progress and persist start fields
-        var task = await _db.MaintenaceTasks.FirstOrDefaultAsync(t => t.AssetRequestId == ar.AssetRequestId);
+        var task = await _db.MaintenanceTasks.FirstOrDefaultAsync(t => t.AssetRequestId == ar.AssetRequestId);
         if (task != null)
         {
             if (dto.MaintenanceDate.HasValue)
@@ -324,33 +335,31 @@ public class MaintenanceRequestsController : ControllerBase
             if (!string.IsNullOrWhiteSpace(dto.Location))
                 task.Address = dto.Location;
             task.MaintenanceProvider = dto.MaintenanceProvider;
-            task.EstimatedCost = dto.EstimatedCost;
             task.ExpectedCompletionDate = dto.ExpectedCompletionDate ?? dto.ExpectedCompletionTo;
             task.MaintenanceContent = dto.MaintenanceContent;
             task.LocationType = dto.LocationType;
             task.Status = 1; // in-progress
-            _db.MaintenaceTasks.Update(task);
+            _db.MaintenanceTasks.Update(task);
         }
 
         if (!string.IsNullOrWhiteSpace(dto.DetailedDescription))
             ar.Description = dto.DetailedDescription;
 
-        // Set asset status to InMaintenance only now (when maintenance actually starts)
-        var linkedAssetId = task?.AssetId ?? 0;
-        if (linkedAssetId > 0)
+        var linkedInstanceId = task?.AssetInstanceId ?? 0;
+        if (linkedInstanceId > 0)
         {
-            var linkedAsset = await _db.Assets.FindAsync(linkedAssetId);
-            if (linkedAsset != null && linkedAsset.Status != (int)AssetStatus.InMaintenance)
+            var linkedInstance = await _db.AssetInstances.FindAsync(linkedInstanceId);
+            if (linkedInstance != null && linkedInstance.Status != (int)AssetStatus.InMaintenance)
             {
-                var oldStatus = linkedAsset.Status;
-                linkedAsset.Status = (int)AssetStatus.InMaintenance;
-                _db.Assets.Update(linkedAsset);
+                var oldStatus = linkedInstance.Status;
+                linkedInstance.Status = (int)AssetStatus.InMaintenance;
+                _db.AssetInstances.Update(linkedInstance);
                 _db.AssetLifeCycles.Add(new AssetLifeCycle
                 {
-                    AssetId = linkedAsset.AssetId,
+                    AssetInstanceId = linkedInstance.AssetInstanceId,
                     ActionType = (int)AssetLifeActionType.StatusChanged,
                     RelatedEntityType = 1,
-                    RelatedEntityId = linkedAsset.AssetId,
+                    RelatedEntityId = linkedInstance.AssetInstanceId,
                     ActorUserId = actorUserId,
                     ActorRoleId = userRoles.FirstOrDefault()?.RoleId ?? 0,
                     Description = $"Status changed from {(AssetStatus)oldStatus} to {(AssetStatus)AssetStatus.InMaintenance} (maintenance started)",
@@ -455,7 +464,7 @@ public class MaintenanceRequestsController : ControllerBase
         if (!actionRoleId.HasValue)
             return BadRequest("Không tìm thấy Role hợp lệ để ghi nhận lịch sử hoàn thành bảo dưỡng.");
 
-        var task = await _db.MaintenaceTasks.FindAsync(taskId);
+        var task = await _db.MaintenanceTasks.FindAsync(taskId);
         if (task == null) return NotFound();
 
         // Chỉ cho phép hoàn thành khi task đã được bắt đầu (Start) — Status = 1 đang thực hiện.
@@ -490,19 +499,21 @@ public class MaintenanceRequestsController : ControllerBase
         var mr = new MaintenanceRecord
         {
             TaskId = task.TaskId,
+            AssetInstanceId = task.AssetInstanceId,
             ExecutionDate = executionDate,
             TotalCost = totalCost,
-            WorkPerformed = workPerformed,
+            WorkPerformed = string.IsNullOrEmpty(technicalNote)
+                ? workPerformed
+                : (workPerformed + (string.IsNullOrEmpty(workPerformed) ? "" : "\n") + technicalNote),
             ConditionBefore = conditionBefore,
             ConditionAfter = conditionAfter,
-            TechnicalNote = technicalNote,
             Status = 1
         };
 
         _db.MaintenanceRecords.Add(mr);
 
         task.Status = 2; // completed
-        _db.MaintenaceTasks.Update(task);
+        _db.MaintenanceTasks.Update(task);
 
         if (linkedRequest != null)
         {
@@ -562,22 +573,21 @@ public class MaintenanceRequestsController : ControllerBase
             _db.AssetRequestRecords.Add(rec);
         }
 
-        // Bring asset out of maintenance state when task is completed.
-        var linkedAssetId = task.AssetId;
-        if (linkedAssetId > 0)
+        var linkedInstanceId = task.AssetInstanceId;
+        if (linkedInstanceId > 0)
         {
-            var linkedAsset = await _db.Assets.FindAsync(linkedAssetId);
-            if (linkedAsset != null && linkedAsset.Status == (int)AssetStatus.InMaintenance)
+            var linkedInstance = await _db.AssetInstances.FindAsync(linkedInstanceId);
+            if (linkedInstance != null && linkedInstance.Status == (int)AssetStatus.InMaintenance)
             {
-                var oldStatus = linkedAsset.Status;
-                linkedAsset.Status = (int)AssetStatus.InUse;
-                _db.Assets.Update(linkedAsset);
+                var oldStatus = linkedInstance.Status;
+                linkedInstance.Status = (int)AssetStatus.InUse;
+                _db.AssetInstances.Update(linkedInstance);
                 _db.AssetLifeCycles.Add(new AssetLifeCycle
                 {
-                    AssetId = linkedAsset.AssetId,
+                    AssetInstanceId = linkedInstance.AssetInstanceId,
                     ActionType = (int)AssetLifeActionType.StatusChanged,
                     RelatedEntityType = 1,
-                    RelatedEntityId = linkedAsset.AssetId,
+                    RelatedEntityId = linkedInstance.AssetInstanceId,
                     ActorUserId = actorUserId,
                     ActorRoleId = actionRoleId.Value,
                     Description = $"Status changed from {(AssetStatus)oldStatus} to {(AssetStatus)AssetStatus.InUse} (maintenance completed)",

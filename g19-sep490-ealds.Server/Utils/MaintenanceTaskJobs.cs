@@ -49,22 +49,37 @@ public class MaintenanceTaskJobs : IJob
 
         foreach (var schedule in schedules)
         {
-            // tr�nh t?o task tr�ng
             var exist = await db.MaintenanceTasks.AnyAsync(x => x.ScheduleId == schedule.ScheduleId
-                                                               && x.PlannedDate == schedule.NextDueDate.Value.Date
+                                                               && x.PlannedDate == schedule.NextDueDate!.Value.Date
                                                                && x.Status != (int)MaintenanceTaskStatus.Completed);
 
             if (exist)
                 continue;
 
+            int? assetInstanceId = schedule.AssetInstanceId;
+            if (!assetInstanceId.HasValue && schedule.AssetId.HasValue)
+            {
+                assetInstanceId = await db.AssetInstances
+                    .Where(ai => ai.AssetId == schedule.AssetId.Value)
+                    .OrderBy(ai => ai.AssetInstanceId)
+                    .Select(ai => (int?)ai.AssetInstanceId)
+                    .FirstOrDefaultAsync();
+            }
+
+            if (!assetInstanceId.HasValue)
+            {
+                _logger.LogWarning("Schedule {ScheduleId} has no AssetInstanceId; skip task generation.", schedule.ScheduleId);
+                continue;
+            }
+
             var task = new MaintenanceTask
             {
                 ScheduleId = schedule.ScheduleId,
-                AssetId = schedule.AssetId,
-                PlannedDate = schedule.NextDueDate.Value,
-                AssignTo = schedule.CreateBy, // t?m assign ngu?i t?o
-                StatusEnum = MaintenanceTaskStatus.Pending,
-                CreatDate = DateTime.Now,
+                AssetInstanceId = assetInstanceId.Value,
+                PlannedDate = schedule.NextDueDate!.Value,
+                AssignTo = schedule.CreateBy,
+                Status = (int)MaintenanceTaskStatus.Pending,
+                CreateDate = DateTime.UtcNow,
                 CreateBy = schedule.CreateBy
             };
 

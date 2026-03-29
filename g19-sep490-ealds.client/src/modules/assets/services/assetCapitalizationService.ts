@@ -19,7 +19,9 @@ capitalizationApi.interceptors.request.use((config) => {
 });
 
 export interface AssetCapitalizationPayload {
-  assetId: number;
+  /** Catalog asset id (first instance is capitalized when assetInstanceId is omitted). */
+  assetId?: number;
+  assetInstanceId?: number;
   assetRequestId?: number;
   note?: string | null;
   documents?: { name?: string; url: string }[] | null;
@@ -43,7 +45,8 @@ export interface CapitalizePurchaseRequestPayload {
 export const assetCapitalizationService = {
   async changeStatus(payload: AssetCapitalizationPayload) {
     const response = await capitalizationApi.put('/api/AssetCapitalization/change-status', {
-      assetId: payload.assetId,
+      assetId: payload.assetId ?? null,
+      assetInstanceId: payload.assetInstanceId ?? null,
       assetRequestId: payload.assetRequestId ?? null,
       note: payload.note ?? null,
       documents: payload.documents ?? null,

@@ -18,13 +18,13 @@ public class AssetStatusChangedEventHandler : INotificationHandler<AssetStatusCh
     {
         var log = new AssetLifeCycle
         {
-            AssetId = notification.AssetId,
+            AssetInstanceId = notification.AssetInstanceId,
 
             // Vì đây là thay đổi status
             ActionType = (int)AssetLifeActionType.StatusChanged,
 
-            RelatedEntityType = 1, // 1 = Asset
-            RelatedEntityId = notification.AssetId,
+            RelatedEntityType = 2, // 2 = AssetInstance
+            RelatedEntityId = notification.AssetInstanceId,
 
             ActorUserId = notification.ActorUserId,
             ActorRoleId = notification.ActorRoleId,

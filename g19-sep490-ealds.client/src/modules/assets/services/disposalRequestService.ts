@@ -22,7 +22,7 @@ const DEFAULT_DISPOSAL_REQUEST_TYPE_ID = 5;
 
 export interface DisposalRequestPayload {
   userId: number;
-  assetId: number;
+  assetInstanceId: number;
   createdBy: number;
   title: string;
   description?: string | null;
@@ -42,7 +42,7 @@ export const disposalRequestService = {
   async create(payload: DisposalRequestPayload): Promise<DisposalRequestResponse> {
     const body = {
       userId: payload.userId,
-      assetId: payload.assetId,
+      assetInstanceId: payload.assetInstanceId,
       requestTypeId: payload.requestTypeId ?? DEFAULT_DISPOSAL_REQUEST_TYPE_ID,
       title: payload.title,
       description: payload.description ?? null,

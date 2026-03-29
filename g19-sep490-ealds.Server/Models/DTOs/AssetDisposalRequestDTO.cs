@@ -6,7 +6,11 @@ public class AssetDisposalRequestDTO
 {
     public int UserId { get; set; }
 
+    /// <summary>Catalog asset (optional; derived from instance when omitted).</summary>
     public int? AssetId { get; set; }
+
+    /// <summary>Physical instance to dispose.</summary>
+    public int? AssetInstanceId { get; set; }
 
     public int? RequestTypeId { get; set; }
 

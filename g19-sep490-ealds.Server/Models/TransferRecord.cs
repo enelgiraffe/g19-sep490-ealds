@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace g19_sep490_ealds.Server.Models;
@@ -6,6 +6,8 @@ namespace g19_sep490_ealds.Server.Models;
 public partial class TransferRecord
 {
     public int TransferId { get; set; }
+
+    public int AssetRequestId { get; set; }
 
     public int AssetInstanceId { get; set; }
 
@@ -22,6 +24,8 @@ public partial class TransferRecord
     public int ExecutedBy { get; set; }
 
     public virtual AssetInstance AssetInstance { get; set; } = null!;
+
+    public virtual AssetRequest AssetRequest { get; set; } = null!;
 
     public virtual User ExecutedByNavigation { get; set; } = null!;
 

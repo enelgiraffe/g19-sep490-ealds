@@ -33,12 +33,16 @@ public class DisposalRequestsController : ControllerBase
         if (string.IsNullOrWhiteSpace(dto.Title))
             return BadRequest("Title is required.");
 
-        if (!dto.AssetId.HasValue)
-            return BadRequest("AssetId is required.");
+        if (!dto.AssetInstanceId.HasValue || dto.AssetInstanceId.Value <= 0)
+            return BadRequest("AssetInstanceId is required.");
 
-        var asset = await _db.Assets.FindAsync(dto.AssetId.Value);
-        if (asset == null)
-            return NotFound($"Asset with id {dto.AssetId.Value} not found.");
+        var instance = await _db.AssetInstances
+            .Include(ai => ai.Asset)
+            .FirstOrDefaultAsync(ai => ai.AssetInstanceId == dto.AssetInstanceId.Value);
+        if (instance == null)
+            return NotFound($"Asset instance {dto.AssetInstanceId.Value} not found.");
+
+        var catalogAssetId = instance.AssetId;
 
         var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
         var actorUserId = int.TryParse(userIdClaim, out var parsedUserId) && parsedUserId > 0
@@ -133,7 +137,7 @@ public class DisposalRequestsController : ControllerBase
         {
             UserId = actorUserId,
             RequestTypeId = resolvedRequestTypeId,
-            AssetId = dto.AssetId,
+            AssetId = catalogAssetId,
             Title = dto.Title,
             Description = dto.Description,
             ProposedData = null,
@@ -146,10 +150,10 @@ public class DisposalRequestsController : ControllerBase
         _db.AssetRequests.Add(assetRequest);
         await _db.SaveChangesAsync();
 
-        var diposal = new DiposalRecord
+        var diposal = new DisposalRecord
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            AssetId = dto.AssetId.Value,
+            AssetInstanceId = dto.AssetInstanceId.Value,
             DiposalMethod = dto.DiposalMethod,
             DiposalValue = dto.DiposalValue,
             DiposalDate = DateTime.UtcNow,   // Ngày đề nghị do server gán, không nhận từ client
@@ -157,7 +161,7 @@ public class DisposalRequestsController : ControllerBase
             ExecutedBy = actorUserId
         };
 
-        _db.DiposalRecords.Add(diposal);
+        _db.DisposalRecords.Add(diposal);
 
         // NOTE: Asset status is NOT changed to Disposed here.
         // Status will be updated only after the disposal request is approved/finalized.

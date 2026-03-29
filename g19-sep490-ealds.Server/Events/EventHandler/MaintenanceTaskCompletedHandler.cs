@@ -18,18 +18,20 @@ public class MaintenanceTaskCompletedHandler : INotificationHandler<MaintenanceT
     {
         var data = notification.Data;
 
+        var workPerformed = data.WorkPerformed;
+        if (!string.IsNullOrWhiteSpace(data.TechnicalNote))
+            workPerformed = $"{workPerformed}\n\n{data.TechnicalNote}";
+
         var record = new MaintenanceRecord
         {
             TaskId = notification.TaskId,
-            AssetId = notification.AssetId,
+            AssetInstanceId = notification.AssetInstanceId,
             ExecutionDate = DateTime.UtcNow,
             TotalCost = data.TotalCost,
-            StatusEnum = MaintenanceRecordStatus.Completed,
-
-            WorkPerformed = data.WorkPerformed,
+            Status = (int)MaintenanceRecordStatus.Completed,
+            WorkPerformed = workPerformed,
             ConditionBefore = data.ConditionBefore,
             ConditionAfter = data.ConditionAfter,
-            TechnicalNote = data.TechnicalNote
         };
 
         _context.MaintenanceRecords.Add(record);

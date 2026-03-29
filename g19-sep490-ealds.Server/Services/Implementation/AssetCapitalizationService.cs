@@ -36,12 +36,26 @@ public class AssetCapitalizationService : IAssetCapitalizationService
 
     public async Task<AssetCapitalizationResponseDTO> CapitalizeAssetAsync(AssetCapitalizationRequestDTO request, int userId)
     {
-        var asset = await _context.Assets.FindAsync(request.AssetId);
+        AssetInstance? instance = null;
+        if (request.AssetInstanceId is int iid && iid > 0)
+        {
+            instance = await _context.AssetInstances
+                .Include(ai => ai.Asset)
+                .FirstOrDefaultAsync(ai => ai.AssetInstanceId == iid);
+        }
+        else if (request.AssetId is int aid && aid > 0)
+        {
+            instance = await _context.AssetInstances
+                .Include(ai => ai.Asset)
+                .Where(ai => ai.AssetId == aid)
+                .OrderBy(ai => ai.AssetInstanceId)
+                .FirstOrDefaultAsync();
+        }
 
-        if (asset == null)
-            throw new Exception("Asset not found");
+        if (instance == null)
+            throw new Exception("Asset instance not found");
 
-        if (asset.StatusEnum == AssetStatus.Capitalized)
+        if (instance.Status == (int)AssetStatus.Capitalized)
             throw new Exception("Asset is already Capitalized");
 
         var ownsTransaction = _context.Database.CurrentTransaction == null;
@@ -52,27 +66,28 @@ public class AssetCapitalizationService : IAssetCapitalizationService
         }
         try
         {
-            var oldStatus = (int)asset.StatusEnum;
+            var oldStatus = instance.Status;
             var role = 1;
-            //tam check, sau tao validate sau
-            if(asset.OriginalPrice <= 30000000)
+
+            if (instance.OriginalPrice <= 30000000m)
             {
                 _logger.LogWarning("Tai san khong du dieu kien la TSCD");
             }
 
-            var entity = _mapper.ToEntity(request.AssetId, request.Note, userId);
+            var entity = _mapper.ToEntity(instance.AssetInstanceId, request.Note, userId);
+            _context.AssetCapitalizations.Add(entity);
 
-            asset.StatusEnum = AssetStatus.Capitalized;
+            instance.Status = (int)AssetStatus.Capitalized;
 
             await _context.SaveChangesAsync();
 
             await _mediator.Publish(
                 new AssetStatusChangedEvent(
-                    asset.AssetId,
+                    instance.AssetInstanceId,
                     oldStatus,
-                    (int)asset.StatusEnum,
+                    instance.Status,
                     userId,
-                    role  // hoặc lấy role từ context
+                    role
                 )
             );
 
@@ -87,7 +102,7 @@ public class AssetCapitalizationService : IAssetCapitalizationService
                 await transaction.CommitAsync();
             }
 
-            return _mapper.ToResponse(entity);
+            return _mapper.ToResponse(entity, instance.Asset.AssetId);
         }
         catch
         {
@@ -117,7 +132,6 @@ public class AssetCapitalizationService : IAssetCapitalizationService
             if (ar == null)
                 throw new Exception("AssetRequest not found");
 
-            // Capitalization is allowed only after final approval by director (status=2).
             if (ar.Status != PurchaseRequestApprovedStatus)
             {
                 if (ar.Status == PurchaseRequestCapitalizedStatus)
@@ -127,11 +141,16 @@ public class AssetCapitalizationService : IAssetCapitalizationService
 
             if (ar.AssetId.HasValue)
             {
-                // Already has asset => just capitalize
+                var existingInstance = await _context.AssetInstances
+                    .Where(ai => ai.AssetId == ar.AssetId.Value)
+                    .OrderBy(ai => ai.AssetInstanceId)
+                    .FirstOrDefaultAsync()
+                    ?? throw new Exception("No asset instance for catalog asset.");
+
                 var resultExisting = await CapitalizeAssetAsync(
                     new AssetCapitalizationRequestDTO
                     {
-                        AssetId = ar.AssetId.Value,
+                        AssetInstanceId = existingInstance.AssetInstanceId,
                         Note = request.Note,
                         AssetRequestId = ar.AssetRequestId,
                         Documents = request.Documents
@@ -141,7 +160,6 @@ public class AssetCapitalizationService : IAssetCapitalizationService
                 return resultExisting;
             }
 
-            // Create asset first
             if (await _context.Assets.AnyAsync(a => a.Code == request.Code))
                 throw new Exception("Asset code already exists.");
 
@@ -150,17 +168,28 @@ public class AssetCapitalizationService : IAssetCapitalizationService
                 Code = request.Code,
                 Name = ResolveAssetNameFromRequest(ar, request.Name),
                 AssetTypeId = request.AssetTypeId,
-                PurchaseDate = request.PurchaseDate,
-                OriginalPrice = request.OriginalPrice,
-                CurrentValue = request.CurrentValue,
                 Status = (int)AssetStatus.Available,
                 Unit = request.Unit,
                 Quantity = request.Quantity,
-                WarehouseId = request.WarehouseId,
                 CreatedBy = userId,
             };
 
             _context.Assets.Add(asset);
+            await _context.SaveChangesAsync();
+
+            var instance = new AssetInstance
+            {
+                AssetId = asset.AssetId,
+                WarehouseId = request.WarehouseId,
+                InstanceCode = request.Code,
+                PurchaseDate = request.PurchaseDate,
+                OriginalPrice = request.OriginalPrice,
+                CurrentValue = request.CurrentValue,
+                Status = (int)AssetStatus.Available,
+                InUseDate = request.PurchaseDate,
+            };
+
+            _context.AssetInstances.Add(instance);
             await _context.SaveChangesAsync();
 
             ar.AssetId = asset.AssetId;
@@ -169,7 +198,7 @@ public class AssetCapitalizationService : IAssetCapitalizationService
             var result = await CapitalizeAssetAsync(
                 new AssetCapitalizationRequestDTO
                 {
-                    AssetId = asset.AssetId,
+                    AssetInstanceId = instance.AssetInstanceId,
                     Note = request.Note,
                     AssetRequestId = ar.AssetRequestId,
                     Documents = request.Documents

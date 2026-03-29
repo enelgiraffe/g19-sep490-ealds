@@ -227,7 +227,7 @@ public class AssetRequestsController : ControllerBase
             .Include(x => x.RequestType)
             .Include(x => x.Approvals)
             .Include(x => x.AssetRequestRecords)
-            .Include(x => x.MaintenaceTasks)
+            .Include(x => x.MaintenanceTasks)
             .Include(x => x.RepairTasks)
             .Include(x => x.TransferRecords)
             .Include(x => x.Procurements)
@@ -252,9 +252,9 @@ public class AssetRequestsController : ControllerBase
             asset = ar.Asset == null ? null : new { ar.Asset.AssetId, ar.Asset.Name, ar.Asset.Code },
             approvals = ar.Approvals.Select(a => new { a.ApprovalId, a.DecisionDate, a.ApprovedUserId, a.ApprovedRoleId, a.StepId }),
             records = ar.AssetRequestRecords.Select(r => new { r.RecordId, r.FromStatus, r.ToStatus, r.Action, r.ActionByUserId, r.ActionRoleId, r.Comment, r.OccurredAt }),
-            maintenanceTasks = ar.MaintenaceTasks.Select(t => new { t.TaskId, t.PlannedDate, t.Status, t.AssignTo }),
+            maintenanceTasks = ar.MaintenanceTasks.Select(t => new { t.TaskId, t.PlannedDate, t.Status, t.AssignTo }),
             repairTasks = ar.RepairTasks.Select(t => new { t.TaskId, t.EstimatedCost, t.Reason, t.Status }),
-            transferRecords = ar.TransferRecords.Select(tr => new { tr.RecordId, tr.FromLocationId, tr.ToLocationId, tr.TransferDate }),
+            transferRecords = ar.TransferRecords.Select(tr => new { tr.TransferId, tr.AssetRequestId, tr.FromLocationId, tr.ToLocationId, tr.TransferDate }),
             procurements = ar.Procurements.Select(p => new { p.ProcurementId })
         };
 
@@ -271,8 +271,9 @@ public class AssetRequestsController : ControllerBase
         var query = _db.AssetRequests
             .AsNoTracking()
             .Include(x => x.Asset)
-                .ThenInclude(a => a.AssetLocations)
-                    .ThenInclude(al => al.Department)
+                .ThenInclude(a => a.AssetInstances)
+                    .ThenInclude(ai => ai.AssetLocations)
+                        .ThenInclude(al => al.Department)
             .Include(x => x.User)
             .AsQueryable();
 
@@ -305,7 +306,8 @@ public class AssetRequestsController : ControllerBase
                 assetName = ar.Asset != null ? ar.Asset.Name : null,
                 assetQuantity = ar.Asset != null ? (int?)ar.Asset.Quantity : null,
                 currentDepartmentName = ar.Asset != null
-                    ? ar.Asset.AssetLocations
+                    ? ar.Asset.AssetInstances
+                        .SelectMany(ai => ai.AssetLocations)
                         .Where(al => al.IsCurrent)
                         .Select(al => al.Department != null ? al.Department.Name : null)
                         .FirstOrDefault()

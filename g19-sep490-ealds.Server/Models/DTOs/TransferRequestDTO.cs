@@ -4,7 +4,8 @@ namespace g19_sep490_ealds.Server.Models.DTOs;
 
 public class TransferRequestDTO
 {
-    public int AssetId { get; set; }
+    /// <summary>Physical asset instance to transfer.</summary>
+    public int AssetInstanceId { get; set; }
 
     public int RequestTypeId { get; set; }
 

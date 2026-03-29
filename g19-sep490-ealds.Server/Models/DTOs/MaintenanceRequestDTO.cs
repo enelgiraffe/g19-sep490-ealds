@@ -9,7 +9,8 @@ public class MaintenanceRequestDTO
 
     public int RequestTypeId { get; set; }
 
-    public int AssetId { get; set; }
+    /// <summary>Physical asset instance to maintain.</summary>
+    public int AssetInstanceId { get; set; }
 
     public DateTime? PlannedDate { get; set; }
 

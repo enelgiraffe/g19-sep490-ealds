@@ -12,46 +12,18 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
         int? intervalValue,
         MaintenanceRepeatIntervalUnit? intervalUnit)
     {
-        schedule.IntervalMonths = null;
-        schedule.IntervalHours = null;
+        schedule.IntervalValue = null;
+        schedule.IntervalUnit = null;
         if (!intervalUnit.HasValue || !intervalValue.HasValue || intervalValue.Value <= 0)
             return;
-        var v = intervalValue.Value;
-        switch (intervalUnit.Value)
-        {
-            case MaintenanceRepeatIntervalUnit.Day:
-                schedule.IntervalHours = v * 24;
-                break;
-            case MaintenanceRepeatIntervalUnit.Week:
-                schedule.IntervalHours = v * 24 * 7;
-                break;
-            case MaintenanceRepeatIntervalUnit.Month:
-                schedule.IntervalMonths = v;
-                break;
-            case MaintenanceRepeatIntervalUnit.Year:
-                schedule.IntervalMonths = v * 12;
-                break;
-        }
+        schedule.IntervalValue = intervalValue.Value;
+        schedule.IntervalUnit = (int)intervalUnit.Value;
     }
 
     internal static (int? Value, MaintenanceRepeatIntervalUnit? Unit) ReadRepeatIntervalFromEntity(MaintenanceSchedule entity)
     {
-        if (entity.IntervalMonths is int months && months > 0)
-        {
-            if (months % 12 == 0)
-                return (months / 12, MaintenanceRepeatIntervalUnit.Year);
-            return (months, MaintenanceRepeatIntervalUnit.Month);
-        }
-
-        if (entity.IntervalHours is int hours && hours > 0)
-        {
-            const int weekHours = 24 * 7;
-            if (hours % weekHours == 0)
-                return (hours / weekHours, MaintenanceRepeatIntervalUnit.Week);
-            if (hours % 24 == 0)
-                return (hours / 24, MaintenanceRepeatIntervalUnit.Day);
-        }
-
+        if (entity.IntervalValue is int v && v > 0 && entity.IntervalUnit is int u)
+            return (v, (MaintenanceRepeatIntervalUnit)u);
         return (null, null);
     }
 
@@ -59,13 +31,13 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
     {
         MaintenanceSchedule schedule = new MaintenanceSchedule();
         schedule.AssetId = create.AssetId;
-        schedule.TemplateId = create.TemplateId;
+        schedule.TemplateId = create.TemplateId ?? 0;
         schedule.Content = string.IsNullOrWhiteSpace(create.Content) ? null : create.Content.Trim();
-        schedule.ScheduleTypeEnum = create.ScheduleType;
+        schedule.ScheduleType = (int)create.ScheduleType;
         ApplyRepeatIntervalToEntity(schedule, create.IntervalValue, create.IntervalUnit);
         schedule.StartDate = create.StartDate;
         schedule.EndDate = create.EndDate;
-        schedule.IsActive = create.IsActive;
+        schedule.IsActive = create.IsActive ?? true;
         schedule.CreateBy = create.CreateBy;
         schedule.CreateDate = DateTime.UtcNow.AddHours(7);
         return schedule;
@@ -76,13 +48,13 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
         MaintenanceSchedule schedule = new MaintenanceSchedule();
         schedule.ScheduleId = delete.ScheduleId;
         schedule.AssetId = delete.AssetId;
-        schedule.TemplateId = delete.TemplateId;
+        schedule.TemplateId = delete.TemplateId ?? 0;
         schedule.Content = string.IsNullOrWhiteSpace(delete.Content) ? null : delete.Content.Trim();
-        schedule.ScheduleTypeEnum = delete.ScheduleType;
+        schedule.ScheduleType = (int)delete.ScheduleType;
         ApplyRepeatIntervalToEntity(schedule, delete.IntervalValue, delete.IntervalUnit);
         schedule.StartDate = delete.StartDate;
         schedule.EndDate = delete.EndDate;
-        schedule.IsActive = delete.IsActive;
+        schedule.IsActive = delete.IsActive ?? true;
         schedule.CreateBy = delete.CreateBy;
         schedule.CreateDate = DateTime.UtcNow.AddHours(7);
         return schedule;
@@ -92,10 +64,10 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
     {
         MaintenanceScheduleResponseDTO response = new MaintenanceScheduleResponseDTO();
         response.ScheduleId = entity.ScheduleId;
-        response.AssetId = entity.AssetId;
+        response.AssetId = entity.AssetId ?? 0;
         response.TemplateId = entity.TemplateId;
         response.Content = entity.Content;
-        response.ScheduleType = entity.ScheduleTypeEnum;
+        response.ScheduleType = (ScheduleType)entity.ScheduleType;
         var (iv, iu) = ReadRepeatIntervalFromEntity(entity);
         response.IntervalValue = iv;
         response.IntervalUnit = iu;
@@ -117,13 +89,13 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
     {
         MaintenanceSchedule schedule = new MaintenanceSchedule();
         schedule.AssetId = update.AssetId;
-        schedule.TemplateId = update.TemplateId;
+        schedule.TemplateId = update.TemplateId ?? 0;
         schedule.Content = string.IsNullOrWhiteSpace(update.Content) ? null : update.Content.Trim();
-        schedule.ScheduleTypeEnum = update.ScheduleType;
+        schedule.ScheduleType = (int)update.ScheduleType;
         ApplyRepeatIntervalToEntity(schedule, update.IntervalValue, update.IntervalUnit);
         schedule.StartDate = update.StartDate;
         schedule.EndDate = update.EndDate;
-        schedule.IsActive = update.IsActive;
+        schedule.IsActive = update.IsActive ?? true;
         schedule.CreateBy = update.CreateBy;
         schedule.CreateDate = DateTime.UtcNow.AddHours(7);
         return schedule;

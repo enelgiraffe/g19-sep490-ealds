@@ -109,16 +109,16 @@ public class DamageReportsController : ControllerBase
         var approvals = await _db.Approvals.Where(x => x.AssetRequestId == id).ToListAsync();
         var records = await _db.AssetRequestRecords.Where(x => x.AssetRequestId == id).ToListAsync();
         var repairTasks = await _db.RepairTasks.Where(x => x.AssetRequestId == id).ToListAsync();
-        var maintenanceTasks = await _db.MaintenaceTasks.Where(x => x.AssetRequestId == id).ToListAsync();
-        var disposalRecords = await _db.DiposalRecords.Where(x => x.AssetRequestId == id).ToListAsync();
+        var maintenanceTasks = await _db.MaintenanceTasks.Where(x => x.AssetRequestId == id).ToListAsync();
+        var disposalRecords = await _db.DisposalRecords.Where(x => x.AssetRequestId == id).ToListAsync();
         var transferRecords = await _db.TransferRecords.Where(x => x.AssetRequestId == id).ToListAsync();
         var procurements = await _db.Procurements.Where(x => x.AssetRequestId == id).ToListAsync();
 
         if (approvals.Count > 0) _db.Approvals.RemoveRange(approvals);
         if (records.Count > 0) _db.AssetRequestRecords.RemoveRange(records);
         if (repairTasks.Count > 0) _db.RepairTasks.RemoveRange(repairTasks);
-        if (maintenanceTasks.Count > 0) _db.MaintenaceTasks.RemoveRange(maintenanceTasks);
-        if (disposalRecords.Count > 0) _db.DiposalRecords.RemoveRange(disposalRecords);
+        if (maintenanceTasks.Count > 0) _db.MaintenanceTasks.RemoveRange(maintenanceTasks);
+        if (disposalRecords.Count > 0) _db.DisposalRecords.RemoveRange(disposalRecords);
         if (transferRecords.Count > 0) _db.TransferRecords.RemoveRange(transferRecords);
         if (procurements.Count > 0) _db.Procurements.RemoveRange(procurements);
 

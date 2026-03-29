@@ -346,9 +346,9 @@ export function TransfersPage() {
               : undefined;
 
           try {
-            for (const assetId of assetIds) {
+            for (const assetInstanceId of assetIds) {
               await transferRequestService.create({
-                assetId,
+                assetInstanceId,
                 requestTypeId: 1,
                 fromLocationId,
                 toLocationId,
@@ -357,7 +357,7 @@ export function TransfersPage() {
                 transferDate,
                 executeBy: profile.id,
                 createdBy: profile.id,
-                title: values.reason ? `Điều chuyển: ${values.reason}` : `Yêu cầu điều chuyển tài sản ${assetId}`,
+                title: values.reason ? `Điều chuyển: ${values.reason}` : `Yêu cầu điều chuyển tài sản ${assetInstanceId}`,
                 description: values.reason ?? undefined,
               });
             }

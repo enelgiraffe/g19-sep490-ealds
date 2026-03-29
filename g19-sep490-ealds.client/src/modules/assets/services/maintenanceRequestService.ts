@@ -20,7 +20,7 @@ maintenanceApi.interceptors.request.use((config) => {
 
 /** Payload gửi đề xuất bảo dưỡng (Trưởng phòng ban) */
 export interface MaintenanceRequestPayload {
-  assetId: number;
+  assetInstanceId: number;
   requestTypeId: number;
   createdBy: number;
   title?: string | null;

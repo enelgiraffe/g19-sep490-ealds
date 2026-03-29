@@ -1,6 +1,7 @@
 using g19_sep490_ealds.Server.DTO.ResponseDTO.AssetMaintenance;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Services.Implementation;
@@ -18,8 +19,8 @@ public class MaintenanceRecordService : IMaintenanceRecordService
     {
         var records = await (
             from mr in _context.MaintenanceRecords
-            join t in _context.MaintenaceTasks on mr.TaskId equals t.TaskId
-            where t.AssetId == assetId
+            join t in _context.MaintenanceTasks on mr.TaskId equals t.TaskId
+            where t.AssetInstanceId == assetId
             orderby mr.ExecutionDate descending
             select new MaintenanceRecordResponseDTO
             {
@@ -30,8 +31,8 @@ public class MaintenanceRecordService : IMaintenanceRecordService
                 WorkPerformed = mr.WorkPerformed,
                 ConditionBefore = mr.ConditionBefore,
                 ConditionAfter = mr.ConditionAfter,
-                TechnicalNote = mr.TechnicalNote,
-                Status = (Utils.EnumsStatus.MaintenanceRecordStatus)mr.Status
+                TechnicalNote = null,
+                Status = (MaintenanceRecordStatus)mr.Status
             }
         ).ToListAsync();
 

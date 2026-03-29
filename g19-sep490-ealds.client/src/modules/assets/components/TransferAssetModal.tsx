@@ -4,6 +4,7 @@ import { SelectAssetsModal, type SelectableAsset } from './SelectAssetsModal';
 import './TransferAssetModal.css';
 
 interface AssetInfo {
+  assetInstanceId?: number;
   assetId?: number;
   code: string;
   name: string;
@@ -82,7 +83,7 @@ export function TransferAssetModal({
     if (!open) return;
     if (assetInfo) {
       const mapped: SelectableAsset = {
-        assetId: assetInfo.assetId ?? -1,
+        assetId: assetInfo.assetInstanceId ?? assetInfo.assetId ?? -1,
         code: assetInfo.code,
         name: assetInfo.name,
         locationLabel: assetInfo.location ?? '—',

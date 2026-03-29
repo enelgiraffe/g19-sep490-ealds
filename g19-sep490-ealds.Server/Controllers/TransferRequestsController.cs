@@ -40,7 +40,8 @@ public class TransferRequestsController : ControllerBase
 
         var query = _db.TransferRecords
             .AsNoTracking()
-            .Include(tr => tr.Asset)
+            .Include(tr => tr.AssetInstance)
+                .ThenInclude(ai => ai.Asset)
             .Include(tr => tr.AssetRequest)
             .Include(tr => tr.FromLocation).ThenInclude(fl => fl.Department)
             .Include(tr => tr.ToLocation).ThenInclude(tl => tl.Department)
@@ -50,15 +51,15 @@ public class TransferRequestsController : ControllerBase
         var list = await query
             .Select(tr => new TransferRequestListItemDTO
             {
-                RecordId = tr.RecordId,
+                RecordId = tr.TransferId,
                 AssetRequestId = tr.AssetRequestId,
-                Code = "SBB" + tr.RecordId,
+                Code = "SBB" + tr.TransferId,
                 TransferDate = tr.TransferDate,
-                AssetCode = tr.Asset.Code,
-                AssetName = tr.Asset.Name,
+                AssetCode = tr.AssetInstance.Asset.Code,
+                AssetName = tr.AssetInstance.Asset.Name,
                 FromDepartment = tr.FromLocation.Department.Name,
                 ToDepartment = tr.ToLocation.Department.Name,
-                Quantity = tr.Asset.Quantity,
+                Quantity = 1,
                 Status = tr.AssetRequest.Status,
                 StatusName =
                     tr.AssetRequest.Status == 0 ? "Nháp" :
@@ -84,6 +85,15 @@ public class TransferRequestsController : ControllerBase
         if (!int.TryParse(userIdClaim, out var userId))
             return Unauthorized();
 
+        if (dto.AssetInstanceId <= 0)
+            return BadRequest("AssetInstanceId is required.");
+
+        var instance = await _db.AssetInstances
+            .Include(ai => ai.Asset)
+            .FirstOrDefaultAsync(ai => ai.AssetInstanceId == dto.AssetInstanceId);
+        if (instance == null)
+            return NotFound($"AssetInstanceId {dto.AssetInstanceId} not found.");
+
         // NOTE: Frontend selects departments as "locations" (FromLocationId/ToLocationId are DepartmentId).
         if (dto.FromLocationId == dto.ToLocationId)
             return BadRequest("Vị trí nguồn và vị trí đích không được trùng nhau.");
@@ -98,16 +108,17 @@ public class TransferRequestsController : ControllerBase
         var now = dto.TransferDate ?? DateTime.UtcNow;
         var today = DateOnly.FromDateTime(now);
 
-        // Find current location of this asset in the selected from-department.
         var fromLocation = await _db.AssetLocations
-            .FirstOrDefaultAsync(al => al.AssetId == dto.AssetId && al.DepartmentId == dto.FromLocationId && al.IsCurrent);
+            .FirstOrDefaultAsync(al =>
+                al.AssetInstanceId == dto.AssetInstanceId &&
+                al.DepartmentId == dto.FromLocationId &&
+                al.IsCurrent);
 
         if (fromLocation == null)
             return BadRequest("Không tìm thấy vị trí hiện tại của tài sản tại phòng ban nguồn. Vui lòng kiểm tra lại 'Từ vị trí'.");
 
-        // Close current locations for this asset
         var currentLocations = await _db.AssetLocations
-            .Where(al => al.AssetId == dto.AssetId && al.IsCurrent)
+            .Where(al => al.AssetInstanceId == dto.AssetInstanceId && al.IsCurrent)
             .ToListAsync();
         foreach (var loc in currentLocations)
         {
@@ -115,10 +126,9 @@ public class TransferRequestsController : ControllerBase
             loc.EndDate = today;
         }
 
-        // Create new current location for destination department
         var toLocation = new AssetLocation
         {
-            AssetId = dto.AssetId,
+            AssetInstanceId = dto.AssetInstanceId,
             DepartmentId = dto.ToLocationId,
             StartDate = today,
             EndDate = null,
@@ -127,17 +137,16 @@ public class TransferRequestsController : ControllerBase
         };
         _db.AssetLocations.Add(toLocation);
 
-        var title = dto.Title ?? $"Transfer asset {dto.AssetId} from dept {dto.FromLocationId} to dept {dto.ToLocationId}";
+        var title = dto.Title ?? $"Transfer instance {dto.AssetInstanceId} from dept {dto.FromLocationId} to dept {dto.ToLocationId}";
 
         var assetRequest = new AssetRequest
         {
             UserId = userId,
             RequestTypeId = _transferRequestTypeId,
-            AssetId = dto.AssetId,
+            AssetId = instance.AssetId,
             Title = title,
             Description = dto.Description,
             ProposedData = null,
-            // User is submitting a transfer request (not saving draft)
             Status = 1,
             CreatedBy = userId,
             CreateDate = DateTime.UtcNow,
@@ -149,14 +158,14 @@ public class TransferRequestsController : ControllerBase
 
         var transfer = new TransferRecord
         {
-            AssetId = dto.AssetId,
             AssetRequestId = assetRequest.AssetRequestId,
+            AssetInstanceId = dto.AssetInstanceId,
             FromLocationId = fromLocation.LocationId,
             ToLocationId = toLocation.LocationId,
             FromUserId = dto.FromUserId ?? userId,
             ToUserId = dto.ToUserId,
             TransferDate = now,
-            ExecuteBy = dto.ExecuteBy == 0 ? userId : dto.ExecuteBy
+            ExecutedBy = dto.ExecuteBy == 0 ? userId : dto.ExecuteBy
         };
 
         _db.TransferRecords.Add(transfer);
@@ -180,12 +189,11 @@ public class TransferRequestsController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        return Ok(new { assetRequestId = assetRequest.AssetRequestId, recordId = transfer.RecordId });
+        return Ok(new { assetRequestId = assetRequest.AssetRequestId, recordId = transfer.TransferId });
     }
 
     /// <summary>
     /// DELETE /api/Assets/Requests/transfer/{assetRequestId} - Xóa yêu cầu điều chuyển (chỉ khi chưa duyệt).
-    /// Rollback AssetLocation về lại vị trí/phòng ban nguồn đã ghi nhận trong TransferRecord.
     /// </summary>
     [HttpDelete("{assetRequestId:int}")]
     public async Task<IActionResult> DeleteTransferRequest(int assetRequestId)
@@ -207,18 +215,16 @@ public class TransferRequestsController : ControllerBase
             return Forbid();
 
         var status = transfer.AssetRequest?.Status ?? 0;
-        // Allow delete only for Draft(0) or Submitted(1)
         if (status > 1)
             return BadRequest("Chỉ được xóa yêu cầu khi đang ở trạng thái Nháp hoặc Đã nộp.");
 
         await using var tx = await _db.Database.BeginTransactionAsync();
         try
         {
-            // Rollback current location to the FromLocation recorded in TransferRecord
-            var assetId = transfer.AssetId;
+            var assetInstanceId = transfer.AssetInstanceId;
 
             var currentLocations = await _db.AssetLocations
-                .Where(al => al.AssetId == assetId && al.IsCurrent)
+                .Where(al => al.AssetInstanceId == assetInstanceId && al.IsCurrent)
                 .ToListAsync();
             foreach (var loc in currentLocations)
             {
@@ -233,14 +239,12 @@ public class TransferRequestsController : ControllerBase
                 fromLocation.EndDate = null;
             }
 
-            // Remove created destination location record if it matches ToLocationId
             var toLocation = await _db.AssetLocations.FirstOrDefaultAsync(al => al.LocationId == transfer.ToLocationId);
             if (toLocation != null)
             {
                 toLocation.IsCurrent = false;
             }
 
-            // Delete request records and transfer record, then asset request
             var records = await _db.AssetRequestRecords
                 .Where(r => r.AssetRequestId == assetRequestId)
                 .ToListAsync();

@@ -920,6 +920,10 @@ public partial class EaldsDbContext : DbContext
 
             entity.Property(e => e.TransferDate).HasColumnType("datetime");
 
+            entity.HasOne(d => d.AssetRequest).WithMany(p => p.TransferRecords)
+                .HasForeignKey(d => d.AssetRequestId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             entity.HasOne(d => d.AssetInstance).WithMany(p => p.TransferRecords)
                 .HasForeignKey(d => d.AssetInstanceId)
                 .OnDelete(DeleteBehavior.ClientSetNull)

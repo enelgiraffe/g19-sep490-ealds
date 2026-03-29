@@ -24,32 +24,30 @@ public class MaintenanceTaskService : IMaintenanceTaskService
     public async Task StartTaskAsync(int taskId, int userId, int roleId)
     {
         var task = await _context.MaintenanceTasks
-        .Include(x => x.Asset)
-        .FirstOrDefaultAsync(x => x.TaskId == taskId)
-        ?? throw new Exception("Task not found");
+            .Include(x => x.AssetInstance)
+            .FirstOrDefaultAsync(x => x.TaskId == taskId)
+            ?? throw new Exception("Task not found");
 
-        if (task.StatusEnum != MaintenanceTaskStatus.Pending)
+        if (task.Status != (int)MaintenanceTaskStatus.Pending)
             throw new Exception("Task must be Pending");
 
-        if (task.Asset == null)
-            throw new Exception("Asset not found");
+        if (task.AssetInstance == null)
+            throw new Exception("Asset instance not found");
 
         if (task.AssignTo != userId)
             throw new Exception("You are not assigned to this task");
-        // update task
-        task.StatusEnum = MaintenanceTaskStatus.InProgress;
 
-        // update asset
-        var asset = task.Asset;
+        task.Status = (int)MaintenanceTaskStatus.InProgress;
+
+        var asset = task.AssetInstance;
         var oldStatus = asset.Status;
 
         asset.Status = (int)AssetStatus.UnderMaintenance;
 
         await _context.SaveChangesAsync();
 
-        // publish event
         await _mediator.Publish(new AssetStatusChangedEvent(
-            asset.AssetId,
+            asset.AssetInstanceId,
             oldStatus,
             asset.Status,
             userId,
@@ -60,38 +58,36 @@ public class MaintenanceTaskService : IMaintenanceTaskService
     public async Task CompleteTaskAsync(int taskId, int userId, int roleId, CompleteTaskDTO dto)
     {
         var task = await _context.MaintenanceTasks
-        .Include(x => x.Asset)
-        .FirstOrDefaultAsync(x => x.TaskId == taskId)
-        ?? throw new Exception("Task not found");
+            .Include(x => x.AssetInstance)
+            .FirstOrDefaultAsync(x => x.TaskId == taskId)
+            ?? throw new Exception("Task not found");
 
-        if (task.StatusEnum != MaintenanceTaskStatus.InProgress)
+        if (task.Status != (int)MaintenanceTaskStatus.InProgress)
             throw new Exception("Task must be InProgress");
 
         if (task.AssignTo != userId)
             throw new Exception("You are not assigned to this task");
 
-        // update task
-        task.StatusEnum = MaintenanceTaskStatus.Completed;
+        task.Status = (int)MaintenanceTaskStatus.Completed;
 
-        var asset = task.Asset;
+        var asset = task.AssetInstance;
         var oldStatus = asset.Status;
 
         asset.Status = (int)AssetStatus.Active;
 
         await _context.SaveChangesAsync();
 
-        // publish event k�m data user nh?p
         await _mediator.Publish(
             new MaintenanceTaskCompletedEvent(
                 task.TaskId,
-                task.AssetId,
+                task.AssetInstanceId,
                 userId,
                 dto
             )
         );
 
         await _mediator.Publish(new AssetStatusChangedEvent(
-            asset.AssetId,
+            asset.AssetInstanceId,
             oldStatus,
             asset.Status,
             userId,

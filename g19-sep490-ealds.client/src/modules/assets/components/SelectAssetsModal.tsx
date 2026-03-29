@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { message } from 'antd';
 import {
-  assetService,
+  assetInstanceService,
   getStatusLabel,
-  type AssetResponse,
-  type GetAssetsParams,
+  type AssetInstanceResponse,
+  type GetAssetInstancesParams,
 } from '../services/assetService';
 import './SelectAssetsModal.css';
 
+/** `assetId` is the physical row id (`assetInstanceId`) for transfer/maintenance APIs. */
 export type SelectableAsset = {
   assetId: number;
   code: string;
@@ -19,16 +20,16 @@ export type SelectableAsset = {
   currentDepartmentId: number | null;
 };
 
-function toSelectableAsset(a: AssetResponse): SelectableAsset {
+function toSelectableAsset(a: AssetInstanceResponse): SelectableAsset {
   const locationLabel =
     a.currentLocationId != null ? `AL-${a.currentLocationId}` : '—';
   return {
-    assetId: a.assetId,
-    code: a.code,
-    name: a.name,
+    assetId: a.assetInstanceId,
+    code: a.instanceCode,
+    name: a.assetName ?? a.assetCode ?? a.instanceCode,
     locationLabel,
     statusLabel: getStatusLabel(a.statusName),
-    quantity: a.quantity ?? 1,
+    quantity: 1,
     currentDepartmentName: a.currentDepartmentName ?? '—',
     currentDepartmentId: a.currentDepartmentId ?? null,
   };
@@ -72,8 +73,8 @@ export function SelectAssetsModal({
     }
     searchDebounceRef.current = window.setTimeout(() => {
       setLoading(true);
-      const params: GetAssetsParams = { keyword: kw || undefined };
-      assetService
+      const params: GetAssetInstancesParams = { keyword: kw || undefined };
+      assetInstanceService
         .getAll(params)
         .then((data) => setRows(data.map(toSelectableAsset)))
         .catch(() => {

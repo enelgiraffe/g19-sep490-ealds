@@ -38,13 +38,18 @@ public class RepairRequestsController : ControllerBase
         if (dto.DamageDate.HasValue && dto.DamageDate.Value.Date > DateTime.UtcNow.Date)
             return BadRequest("Ngày hỏng không được lớn hơn ngày hiện tại.");
 
-        var title = dto.Title ?? $"Repair request for asset {dto.AssetId}";
+        var instance = await _db.AssetInstances.AsNoTracking()
+            .FirstOrDefaultAsync(ai => ai.AssetInstanceId == dto.AssetInstanceId);
+        if (instance == null)
+            return NotFound($"AssetInstanceId {dto.AssetInstanceId} not found.");
+
+        var title = dto.Title ?? $"Repair request for instance {dto.AssetInstanceId}";
 
         var assetRequest = new AssetRequest
         {
             UserId = dto.CreatedBy,
             RequestTypeId = _repairRequestTypeId,
-            AssetId = dto.AssetId,
+            AssetId = instance.AssetId,
             Title = title,
             Description = dto.Description ?? dto.Reason,
             ProposedData = null,
@@ -62,7 +67,7 @@ public class RepairRequestsController : ControllerBase
         var repairTask = new RepairTask
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            AssetId = dto.AssetId,
+            AssetInstanceId = dto.AssetInstanceId,
             EstimatedCost = dto.EstimatedCost,
             Reason = dto.Reason,
             Status = 0
@@ -142,15 +147,22 @@ public class RepairRequestsController : ControllerBase
         ar.Status = 4;
 
         if (!ar.AssetId.HasValue || ar.AssetId.Value <= 0)
-            return BadRequest("Repair request must be linked to an asset.");
+            return BadRequest("Repair request must be linked to a catalog asset.");
 
         var task = await _db.RepairTasks.FirstOrDefaultAsync(t => t.AssetRequestId == ar.AssetRequestId);
         if (task == null)
         {
+            var fallbackInstance = await _db.AssetInstances
+                .Where(ai => ai.AssetId == ar.AssetId.Value)
+                .Select(ai => ai.AssetInstanceId)
+                .FirstOrDefaultAsync();
+            if (fallbackInstance == 0)
+                return BadRequest("No asset instance found for this request.");
+
             task = new RepairTask
             {
                 AssetRequestId = ar.AssetRequestId,
-                AssetId = ar.AssetId.Value,
+                AssetInstanceId = fallbackInstance,
                 EstimatedCost = dto.EstimatedCost ?? 0,
                 Reason = dto.DamageCondition ?? string.Empty,
                 RepairDate = dto.RepairDate,
@@ -174,22 +186,21 @@ public class RepairRequestsController : ControllerBase
             _db.RepairTasks.Update(task);
         }
 
-        // Move asset status out of Damaged when repair really starts.
-        var linkedAssetId = task.AssetId > 0 ? task.AssetId : ar.AssetId;
-        if (linkedAssetId.HasValue && linkedAssetId.Value > 0)
+        var linkedInstanceId = task.AssetInstanceId;
+        if (linkedInstanceId > 0)
         {
-            var linkedAsset = await _db.Assets.FindAsync(linkedAssetId.Value);
-            if (linkedAsset != null && linkedAsset.Status != (int)AssetStatus.InRepair)
+            var linkedInstance = await _db.AssetInstances.FindAsync(linkedInstanceId);
+            if (linkedInstance != null && linkedInstance.Status != (int)AssetStatus.InRepair)
             {
-                var oldStatus = linkedAsset.Status;
-                linkedAsset.Status = (int)AssetStatus.InRepair;
-                _db.Assets.Update(linkedAsset);
+                var oldStatus = linkedInstance.Status;
+                linkedInstance.Status = (int)AssetStatus.InRepair;
+                _db.AssetInstances.Update(linkedInstance);
                 _db.AssetLifeCycles.Add(new AssetLifeCycle
                 {
-                    AssetId = linkedAsset.AssetId,
+                    AssetInstanceId = linkedInstance.AssetInstanceId,
                     ActionType = (int)AssetLifeActionType.StatusChanged,
                     RelatedEntityType = 1,
-                    RelatedEntityId = linkedAsset.AssetId,
+                    RelatedEntityId = linkedInstance.AssetInstanceId,
                     ActorUserId = dto.StartedBy,
                     ActorRoleId = userRole?.RoleId ?? 0,
                     Description = $"Status changed from {(AssetStatus)oldStatus} to {(AssetStatus)AssetStatus.InRepair} (repair started)",
@@ -362,21 +373,21 @@ public class RepairRequestsController : ControllerBase
             ar.ProposedData = root.ToJsonString();
 
             // If return-to-use date is today (or in the past), move asset back to InUse.
-            if (dto.ReturnToUseDate.HasValue && task.AssetId > 0)
+            if (dto.ReturnToUseDate.HasValue && task.AssetInstanceId > 0)
             {
-                var linkedAsset = await _db.Assets.FindAsync(task.AssetId);
-                if (linkedAsset != null && dto.ReturnToUseDate.Value.Date <= DateTime.UtcNow.Date)
+                var linkedInstance = await _db.AssetInstances.FindAsync(task.AssetInstanceId);
+                if (linkedInstance != null && dto.ReturnToUseDate.Value.Date <= DateTime.UtcNow.Date)
                 {
-                    var oldStatus = linkedAsset.Status;
-                    linkedAsset.Status = (int)AssetStatus.InUse;
-                    linkedAsset.InUseDate = DateOnly.FromDateTime(dto.ReturnToUseDate.Value.Date);
-                    _db.Assets.Update(linkedAsset);
+                    var oldStatus = linkedInstance.Status;
+                    linkedInstance.Status = (int)AssetStatus.InUse;
+                    linkedInstance.InUseDate = DateOnly.FromDateTime(dto.ReturnToUseDate.Value.Date);
+                    _db.AssetInstances.Update(linkedInstance);
                     _db.AssetLifeCycles.Add(new AssetLifeCycle
                     {
-                        AssetId = linkedAsset.AssetId,
+                        AssetInstanceId = linkedInstance.AssetInstanceId,
                         ActionType = (int)AssetLifeActionType.StatusChanged,
                         RelatedEntityType = 1,
-                        RelatedEntityId = linkedAsset.AssetId,
+                        RelatedEntityId = linkedInstance.AssetInstanceId,
                         ActorUserId = dto.CompletedBy,
                         ActorRoleId = completedByRoleId ?? 0,
                         Description = $"Status changed from {(AssetStatus)oldStatus} to {(AssetStatus)AssetStatus.InUse} (repair completed)",
@@ -405,6 +416,6 @@ public class RepairRequestsController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        return Ok(new { recordId = rr.RecordId, taskId = task.TaskId });
+        return Ok(new { recordId = rr.RepairId, taskId = task.TaskId });
     }
 }
