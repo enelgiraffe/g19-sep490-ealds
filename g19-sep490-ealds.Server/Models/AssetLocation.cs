@@ -1,13 +1,16 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace g19_sep490_ealds.Server.Models;
 
+[Table("AssetLocation")]
 public partial class AssetLocation
 {
+    [Key]
     public int LocationId { get; set; }
 
-    public int AssetId { get; set; }
+    public int AssetInstanceId { get; set; }
 
     public int DepartmentId { get; set; }
 
@@ -17,19 +20,29 @@ public partial class AssetLocation
 
     public bool IsCurrent { get; set; }
 
+    [StringLength(255)]
     public string? Note { get; set; }
 
-    public virtual Asset Asset { get; set; } = null!;
+    [ForeignKey("AssetInstanceId")]
+    [InverseProperty("AssetLocations")]
+    public virtual AssetInstance AssetInstance { get; set; } = null!;
 
+    [ForeignKey("DepartmentId")]
+    [InverseProperty("AssetLocations")]
     public virtual Department Department { get; set; } = null!;
 
-    public virtual ICollection<InventoryDiscrepancy> InventoryDiscrepancyActualLocations { get; set; } = new List<InventoryDiscrepancy>();
+    [InverseProperty("FromLocation")]
+    public virtual ICollection<TransferRecord> TransferRecordsFrom { get; set; } = new List<TransferRecord>();
 
-    public virtual ICollection<InventoryDiscrepancy> InventoryDiscrepancyBookLocations { get; set; } = new List<InventoryDiscrepancy>();
+    [InverseProperty("ToLocation")]
+    public virtual ICollection<TransferRecord> TransferRecordsTo { get; set; } = new List<TransferRecord>();
 
+    [InverseProperty("ActualLocation")]
     public virtual ICollection<InventoryRecord> InventoryRecords { get; set; } = new List<InventoryRecord>();
 
-    public virtual ICollection<TransferRecord> TransferRecordFromLocations { get; set; } = new List<TransferRecord>();
+    [InverseProperty("ActualLocation")]
+    public virtual ICollection<InventoryDiscrepancy> InventoryDiscrepancyActualLocations { get; set; } = new List<InventoryDiscrepancy>();
 
-    public virtual ICollection<TransferRecord> TransferRecordToLocations { get; set; } = new List<TransferRecord>();
+    [InverseProperty("BookLocation")]
+    public virtual ICollection<InventoryDiscrepancy> InventoryDiscrepancyBookLocations { get; set; } = new List<InventoryDiscrepancy>();
 }

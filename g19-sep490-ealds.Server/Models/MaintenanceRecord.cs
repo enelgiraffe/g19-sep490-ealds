@@ -1,16 +1,23 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace g19_sep490_ealds.Server.Models;
 
+[Table("MaintenanceRecord")]
 public partial class MaintenanceRecord
 {
+    [Key]
     public int RecordId { get; set; }
 
     public int TaskId { get; set; }
 
+    public int AssetInstanceId { get; set; }
+
+    [Column(TypeName = "datetime")]
     public DateTime ExecutionDate { get; set; }
 
+    [Column(TypeName = "decimal(18, 2)")]
     public decimal TotalCost { get; set; }
 
     public int Status { get; set; }
@@ -21,7 +28,14 @@ public partial class MaintenanceRecord
 
     public string ConditionAfter { get; set; } = null!;
 
-    public string? TechnicalNote { get; set; }
+    [StringLength(255)]
+    public string? PerformedBy { get; set; }
 
-    public virtual MaintenaceTask Task { get; set; } = null!;
+    [ForeignKey("TaskId")]
+    [InverseProperty("MaintenanceRecords")]
+    public virtual MaintenanceTask Task { get; set; } = null!;
+
+    [ForeignKey("AssetInstanceId")]
+    [InverseProperty("MaintenanceRecords")]
+    public virtual AssetInstance AssetInstance { get; set; } = null!;
 }

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace g19_sep490_ealds.Server.Models;
@@ -19,5 +19,7 @@ public partial class DepreciationPolicy
 
     public bool IsActive { get; set; }
 
-    public virtual ICollection<DrepreciationRecord> DrepreciationRecords { get; set; } = new List<DrepreciationRecord>();
+    public virtual ICollection<DepreciationRecord> DepreciationRecords { get; set; } = new List<DepreciationRecord>();
+
+    public virtual ICollection<AssetInstance> AssetInstances { get; set; } = new List<AssetInstance>();
 }

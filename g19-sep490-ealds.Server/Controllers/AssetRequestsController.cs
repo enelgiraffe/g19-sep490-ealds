@@ -32,7 +32,7 @@ public class AssetRequestsController : ControllerBase
         {
             UserId = dto.UserId,
             RequestTypeId = dto.RequestTypeId,
-            AssetId = dto.AssetId,
+            AssetInstanceId = dto.AssetId,
             Title = dto.Title,
             Description = dto.Description,
             ProposedData = dto.ProposedData,
@@ -71,12 +71,12 @@ public class AssetRequestsController : ControllerBase
     public async Task<IActionResult> GetById(int id)
     {
         var ar = await _db.AssetRequests
-            .Include(x => x.Asset)
+            .Include(x => x.AssetInstance)
             .Include(x => x.User)
             .Include(x => x.RequestType)
             .Include(x => x.Approvals)
             .Include(x => x.AssetRequestRecords)
-            .Include(x => x.MaintenaceTasks)
+            .Include(x => x.MaintenanceTasks)
             .Include(x => x.RepairTasks)
             .Include(x => x.TransferRecords)
             .Include(x => x.Procurements)
@@ -98,12 +98,12 @@ public class AssetRequestsController : ControllerBase
             stepId = ar.StepId,
             user = ar.User == null ? null : new { ar.User.UserId, ar.User.Email },
             requestType = ar.RequestType == null ? null : new { ar.RequestType.RequestTypeId, ar.RequestType.WorkflowId },
-            asset = ar.Asset == null ? null : new { ar.Asset.AssetId, ar.Asset.Name, ar.Asset.Code },
+            assetInstance = ar.AssetInstance == null ? null : new { ar.AssetInstance.AssetInstanceId, ar.AssetInstance.InstanceCode },
             approvals = ar.Approvals.Select(a => new { a.ApprovalId, a.DecisionDate, a.ApprovedUserId, a.ApprovedRoleId, a.StepId }),
             records = ar.AssetRequestRecords.Select(r => new { r.RecordId, r.FromStatus, r.ToStatus, r.Action, r.ActionByUserId, r.ActionRoleId, r.Comment, r.OccurredAt }),
-            maintenanceTasks = ar.MaintenaceTasks.Select(t => new { t.TaskId, t.PlannedDate, t.Status, t.AssignTo }),
+            maintenanceTasks = ar.MaintenanceTasks.Select(t => new { t.TaskId, t.PlannedDate, t.Status, t.AssignTo }),
             repairTasks = ar.RepairTasks.Select(t => new { t.TaskId, t.EstimatedCost, t.Reason, t.Status }),
-            transferRecords = ar.TransferRecords.Select(tr => new { tr.RecordId, tr.FromLocationId, tr.ToLocationId, tr.TransferDate }),
+            transferRecords = ar.TransferRecords.Select(tr => new { tr.TransferId, tr.FromLocationId, tr.ToLocationId, tr.TransferDate }),
             procurements = ar.Procurements.Select(p => new { p.ProcurementId })
         };
 
@@ -131,7 +131,7 @@ public class AssetRequestsController : ControllerBase
         var total = await query.CountAsync();
 
         var items = await query
-            .Include(x => x.Asset)
+            .Include(x => x.AssetInstance)
             .Include(x => x.User)
             .OrderByDescending(x => x.CreateDate)
             .Skip((page - 1) * pageSize)
@@ -144,7 +144,7 @@ public class AssetRequestsController : ControllerBase
                 status = ar.Status,
                 createDate = ar.CreateDate,
                 userId = ar.UserId,
-                assetId = ar.AssetId,
+                assetInstanceId = ar.AssetInstanceId,
                 requestTypeId = ar.RequestTypeId
             })
             .ToListAsync();

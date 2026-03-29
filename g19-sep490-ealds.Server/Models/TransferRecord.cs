@@ -1,13 +1,16 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace g19_sep490_ealds.Server.Models;
 
+[Table("TransferRecord")]
 public partial class TransferRecord
 {
-    public int RecordId { get; set; }
+    [Key]
+    public int TransferId { get; set; }
 
-    public int AssetId { get; set; }
+    public int AssetInstanceId { get; set; }
 
     public int AssetRequestId { get; set; }
 
@@ -22,19 +25,33 @@ public partial class TransferRecord
     [Column(TypeName = "datetime")]
     public DateTime TransferDate { get; set; }
 
-    public int ExecuteBy { get; set; }
+    public int ExecutedBy { get; set; }
 
-    public virtual Asset Asset { get; set; } = null!;
+    [ForeignKey("AssetInstanceId")]
+    [InverseProperty("TransferRecords")]
+    public virtual AssetInstance AssetInstance { get; set; } = null!;
 
+    [ForeignKey("AssetRequestId")]
+    [InverseProperty("TransferRecords")]
     public virtual AssetRequest AssetRequest { get; set; } = null!;
 
-    public virtual User ExecuteByNavigation { get; set; } = null!;
-
+    [ForeignKey("FromLocationId")]
+    [InverseProperty("TransferRecordsFrom")]
     public virtual AssetLocation FromLocation { get; set; } = null!;
 
-    public virtual User? FromUser { get; set; }
-
+    [ForeignKey("ToLocationId")]
+    [InverseProperty("TransferRecordsTo")]
     public virtual AssetLocation ToLocation { get; set; } = null!;
 
+    [ForeignKey("FromUserId")]
+    [InverseProperty("TransferRecordFromUsers")]
+    public virtual User? FromUser { get; set; }
+
+    [ForeignKey("ToUserId")]
+    [InverseProperty("TransferRecordToUsers")]
     public virtual User? ToUser { get; set; }
+
+    [ForeignKey("ExecutedBy")]
+    [InverseProperty("TransferRecordExecutors")]
+    public virtual User ExecutedByNavigation { get; set; } = null!;
 }

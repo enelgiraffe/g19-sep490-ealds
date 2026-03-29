@@ -17,5 +17,4 @@ public class RepairCompleteDto
     public decimal ActualCost { get; set; }
     public string Result { get; set; } = string.Empty;
     public int? SupplierId { get; set; }
-    public int CompletedBy { get; set; }
 }

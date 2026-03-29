@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,4 +27,6 @@ public partial class Supplier
     public virtual ICollection<Procurement> Procurements { get; set; } = new List<Procurement>();
 
     public virtual ICollection<RepairRecord> RepairRecords { get; set; } = new List<RepairRecord>();
+
+    public virtual ICollection<AssetInstance> AssetInstances { get; set; } = new List<AssetInstance>();
 }

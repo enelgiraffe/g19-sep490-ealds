@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace g19_sep490_ealds.Server.Models;
@@ -14,6 +14,9 @@ public partial class Procurement
     public string ContractNo { get; set; } = null!;
 
     public DateOnly ContractDate { get; set; }
+
+    [StringLength(255)]
+    public string Title { get; set; } = null!;
 
     public decimal TotalAmount { get; set; }
 

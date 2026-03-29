@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
 
@@ -36,7 +36,7 @@ public partial class User
 
     public virtual ICollection<Department> Departments { get; set; } = new List<Department>();
 
-    public virtual ICollection<DiposalRecord> DiposalRecords { get; set; } = new List<DiposalRecord>();
+    public virtual ICollection<DisposalRecord> DisposalRecords { get; set; } = new List<DisposalRecord>();
 
     public virtual ICollection<Employee> EmployeeCreatedByNavigations { get; set; } = new List<Employee>();
 
@@ -54,9 +54,15 @@ public partial class User
 
     public virtual ICollection<InventoryTask> InventoryTasks { get; set; } = new List<InventoryTask>();
 
-    public virtual ICollection<MaintenaceTask> MaintenaceTaskAssignToNavigations { get; set; } = new List<MaintenaceTask>();
+    public virtual ICollection<MaintenanceTask> MaintenanceTaskAssignToNavigations { get; set; } = new List<MaintenanceTask>();
 
-    public virtual ICollection<MaintenaceTask> MaintenaceTaskCreateByNavigations { get; set; } = new List<MaintenaceTask>();
+    public virtual ICollection<MaintenanceTask> MaintenanceTaskCreateByNavigations { get; set; } = new List<MaintenanceTask>();
+
+    public virtual ICollection<MaintenanceTask> MaintenanceTaskPerformerNavigations { get; set; } = new List<MaintenanceTask>();
+
+    public virtual ICollection<AssetCapitalization> AssetCapitalizations { get; set; } = new List<AssetCapitalization>();
+
+    public virtual ICollection<TransferRecord> TransferRecordExecutors { get; set; } = new List<TransferRecord>();
 
     public virtual ICollection<MaintenanceSchedule> MaintenanceSchedules { get; set; } = new List<MaintenanceSchedule>();
 
@@ -69,4 +75,8 @@ public partial class User
     public virtual ICollection<TransferRecord> TransferRecordFromUsers { get; set; } = new List<TransferRecord>();
 
     public virtual ICollection<TransferRecord> TransferRecordToUsers { get; set; } = new List<TransferRecord>();
+
+    public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
+
+    public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
 }

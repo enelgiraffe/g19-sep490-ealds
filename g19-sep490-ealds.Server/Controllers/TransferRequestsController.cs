@@ -30,7 +30,7 @@ public class TransferRequestsController : ControllerBase
         {
             UserId = dto.CreatedBy,
             RequestTypeId = dto.RequestTypeId,
-            AssetId = dto.AssetId,
+            AssetInstanceId = dto.AssetId,
             Title = title,
             Description = dto.Description,
             ProposedData = null,
@@ -45,14 +45,14 @@ public class TransferRequestsController : ControllerBase
 
         var transfer = new TransferRecord
         {
-            AssetId = dto.AssetId,
+            AssetInstanceId = dto.AssetId,
             AssetRequestId = assetRequest.AssetRequestId,
             FromLocationId = dto.FromLocationId,
             ToLocationId = dto.ToLocationId,
             FromUserId = dto.FromUserId,
             ToUserId = dto.ToUserId,
             TransferDate = dto.TransferDate ?? DateTime.UtcNow,
-            ExecuteBy = dto.ExecuteBy
+            ExecutedBy = dto.ExecuteBy
         };
 
         _db.TransferRecords.Add(transfer);
@@ -76,6 +76,6 @@ public class TransferRequestsController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        return Ok(new { assetRequestId = assetRequest.AssetRequestId, recordId = transfer.RecordId });
+        return Ok(new { assetRequestId = assetRequest.AssetRequestId, transferId = transfer.TransferId });
     }
 }

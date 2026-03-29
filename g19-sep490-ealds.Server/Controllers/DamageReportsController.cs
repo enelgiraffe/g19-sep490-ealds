@@ -34,7 +34,7 @@ public class DamageReportsController : ControllerBase
         {
             UserId = dto.ReportedBy,
             RequestTypeId = dto.RequestTypeId ?? 0,
-            AssetId = dto.AssetId,
+            AssetInstanceId = dto.AssetId,
             // store a short title using the report date
             Title = $"Damage report - {dto.ReportDate:yyyy-MM-dd}",
             Description = dto.Description,

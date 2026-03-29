@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace g19_sep490_ealds.Server.Models;
@@ -28,4 +28,6 @@ public partial class Role
     public virtual User? CreatedByNavigation { get; set; }
 
     public virtual ICollection<WorkflowStep> WorkflowSteps { get; set; } = new List<WorkflowStep>();
+
+    public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
 }

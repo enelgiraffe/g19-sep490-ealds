@@ -36,7 +36,7 @@ public class RepairRequestsController : ControllerBase
         {
             UserId = dto.CreatedBy,
             RequestTypeId = dto.RequestTypeId,
-            AssetId = dto.AssetId,
+            AssetInstanceId = dto.AssetId,
             Title = title,
             Description = dto.Description ?? dto.Reason,
             ProposedData = null,
@@ -52,7 +52,7 @@ public class RepairRequestsController : ControllerBase
         var repairTask = new RepairTask
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            AssetId = dto.AssetId,
+            AssetInstanceId = dto.AssetId,
             EstimatedCost = dto.EstimatedCost,
             Reason = dto.Reason,
             Status = 0
@@ -83,7 +83,7 @@ public class RepairRequestsController : ControllerBase
     }
 
     [HttpPost("{id}/start")]
-    public async Task<IActionResult> StartRepair(int id, [FromBody] ApprovalActionDto dto)
+    public async Task<IActionResult> StartRepair(int id, [FromBody] RepairStartDto dto)
     {
         var ar = await _db.AssetRequests.FindAsync(id);
         if (ar == null) return NotFound();
@@ -91,7 +91,7 @@ public class RepairRequestsController : ControllerBase
         if (ar.Status != (int)AssetRequestStatus.Approved)
             return BadRequest("Only approved requests can be started.");
 
-        var userRole = await _db.UserRoles.Include(ur => ur.Role).AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.ApprovedBy);
+        var userRole = await _db.UserRoles.Include(ur => ur.Role).AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.StartedBy);
         var role = userRole?.Role;
         var allowed = role != null && (
             (role.Code != null && (role.Code.Equals("DepartmentManager", StringComparison.OrdinalIgnoreCase) || role.Code.Equals("Accountant", StringComparison.OrdinalIgnoreCase)))
@@ -124,7 +124,7 @@ public class RepairRequestsController : ControllerBase
             FromStatus = from,
             ToStatus = ar.Status,
             Action = 2,
-            ActionByUserId = dto.ApprovedBy,
+            ActionByUserId = dto.StartedBy,
             ActionRoleId = userRole?.RoleId ?? 0,
             Comment = dto.Comment,
             OccurredAt = DateTime.UtcNow
@@ -146,8 +146,8 @@ public class RepairRequestsController : ControllerBase
         {
             TaskId = task.TaskId,
             ActualCost = dto.ActualCost,
-            RepairDate = repairDate,
-            Result = resultText,
+            RepairDate = dto.RepairDate ?? DateTime.UtcNow,
+            Result = dto.Result,
             SupplierId = dto.SupplierId,
             DamageDate = dto.DamageDate,
             DamageCondition = dto.DamageCondition

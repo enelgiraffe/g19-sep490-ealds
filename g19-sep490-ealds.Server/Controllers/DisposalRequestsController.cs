@@ -29,11 +29,11 @@ public class DisposalRequestsController : ControllerBase
             return BadRequest("Title is required.");
 
         if (!dto.AssetId.HasValue)
-            return BadRequest("AssetId is required.");
+            return BadRequest("AssetInstanceId is required.");
 
-        var asset = await _db.Assets.FindAsync(dto.AssetId.Value);
+        var asset = await _db.AssetInstances.FindAsync(dto.AssetId.Value);
         if (asset == null)
-            return NotFound($"Asset with id {dto.AssetId.Value} not found.");
+            return NotFound($"AssetInstance with id {dto.AssetId.Value} not found.");
 
         // permission check: only department managers can submit disposal
         var userRoles = await _db.UserRoles.Include(ur => ur.Role).AsNoTracking().Where(ur => ur.UserId == dto.CreatedBy).ToListAsync();
@@ -49,7 +49,7 @@ public class DisposalRequestsController : ControllerBase
         {
             UserId = dto.UserId,
             RequestTypeId = dto.RequestTypeId ?? 0,
-            AssetId = dto.AssetId,
+            AssetInstanceId = dto.AssetId,
             Title = dto.Title,
             Description = dto.Description,
             ProposedData = null,
@@ -62,18 +62,18 @@ public class DisposalRequestsController : ControllerBase
         _db.AssetRequests.Add(assetRequest);
         await _db.SaveChangesAsync();
 
-        var diposal = new DiposalRecord
+        var diposal = new DisposalRecord
         {
             AssetRequestId = assetRequest.AssetRequestId,
-            AssetId = dto.AssetId.Value,
+            AssetInstanceId = dto.AssetId.Value,
             DiposalMethod = dto.DiposalMethod,
             DiposalValue = dto.DiposalValue,
-            DiposalDate = DateTime.UtcNow,   // Ngày đề nghị do server gán, không nhận từ client
+            DiposalDate = DateTime.UtcNow,
             Reason = dto.Reason,
             ExecutedBy = dto.CreatedBy
         };
 
-        _db.DiposalRecords.Add(diposal);
+        _db.DisposalRecords.Add(diposal);
 
         // NOTE: Asset status is NOT changed to Disposed here.
         // Status will be updated only after the disposal request is approved/finalized.
