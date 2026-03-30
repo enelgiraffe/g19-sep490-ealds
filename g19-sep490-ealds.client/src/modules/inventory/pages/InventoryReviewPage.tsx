@@ -9,7 +9,24 @@ import {
   type InventoryDiscrepancyDetail,
   type InventoryReviewSummary,
 } from '../services/inventoryService';
+import { getStatusLabel } from '../../assets/services/assetService';
 import './InventoryReviewPage.css';
+
+function formatReviewBookUseLine(bookCondition: string | undefined): string {
+  const s = bookCondition?.trim() ?? '';
+  return s ? getStatusLabel(s) : '—';
+}
+
+function formatReviewActualUseLine(
+  actualQuantity: number | null | undefined,
+  actualCondition: string | undefined,
+): string {
+  const cond = actualCondition?.trim();
+  if (cond) return getStatusLabel(cond);
+  if (actualQuantity === null || actualQuantity === undefined) return '—';
+  if (actualQuantity === 1) return 'Đang sử dụng';
+  return '—';
+}
 
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '-';
@@ -55,15 +72,15 @@ export function InventoryReviewPage() {
   }, [load]);
 
   const columns: ColumnsType<InventoryDiscrepancyDetail> = [
-    { title: 'Mã DM', dataIndex: 'assetCode', key: 'assetCode', width: 100 },
-    { title: 'Mã TH', dataIndex: 'instanceCode', key: 'instanceCode', width: 110 },
+    { title: 'Mã tài sản', dataIndex: 'assetCode', key: 'assetCode', width: 100 },
+    { title: 'Mã cá thể', dataIndex: 'instanceCode', key: 'instanceCode', width: 110 },
     { title: 'Tên tài sản', dataIndex: 'assetName', key: 'assetName', ellipsis: true },
     {
       title: 'Sổ sách',
       key: 'book',
       render: (_, r) => (
         <div className="inv-review__cell-stack">
-          <span>{`Số lượng: ${r.bookQuantity ?? '—'}`}</span>
+          <span>{formatReviewBookUseLine(r.bookCondition)}</span>
           <span>{r.bookDepartmentName ?? '—'}</span>
           <span className="inv-review__muted">{r.bookUserName ?? '—'}</span>
         </div>
@@ -72,19 +89,13 @@ export function InventoryReviewPage() {
     {
       title: 'Thực tế',
       key: 'actual',
-      render: (_, r) => {
-        const conditionNote = r.actualCondition?.trim();
-        return (
-          <div className="inv-review__cell-stack">
-            <span>{`Số lượng: ${r.actualQuantity ?? '—'}`}</span>
-            {conditionNote ? (
-              <span className="inv-review__muted inv-review__note">{`(${conditionNote})`}</span>
-            ) : null}
-            <span>{r.actualDepartmentName ?? '—'}</span>
-            <span className="inv-review__muted">{r.actualUserName ?? '—'}</span>
-          </div>
-        );
-      },
+      render: (_, r) => (
+        <div className="inv-review__cell-stack">
+          <span>{formatReviewActualUseLine(r.actualQuantity, r.actualCondition)}</span>
+          <span>{r.actualDepartmentName ?? '—'}</span>
+          <span className="inv-review__muted">{r.actualUserName ?? '—'}</span>
+        </div>
+      ),
     },
   ];
 

@@ -15,7 +15,13 @@ import {
   type AssetInventoryDetail,
   type CompleteSessionResult,
 } from '../services/inventoryService';
+import {
+  formatAssetStatusVi,
+  getInventoryExecutionStatusSelectOptions,
+} from '../../assets/services/assetService';
 import './PeriodicInventoryExecutionPage.css';
+
+const INVENTORY_STATUS_SELECT_OPTIONS = getInventoryExecutionStatusSelectOptions();
 
 const CHECK_STATUS_TABS: { label: string; value: number | undefined }[] = [
   { label: 'Tất cả', value: undefined },
@@ -31,15 +37,9 @@ function getSessionBadgeClass(status: number): string {
   return 'exec-badge--default';
 }
 
-function formatStillInUse(v: boolean | null | undefined): string {
-  if (v === true) return 'Có';
-  if (v === false) return 'Không';
-  return '—';
-}
-
-function formatInUseMatch(useMatch: boolean | null): string {
-  if (useMatch === null) return '—';
-  return useMatch ? '✓' : '✗';
+function formatStatusMatch(match: boolean | null): string {
+  if (match === null) return '—';
+  return match ? '✓' : '✗';
 }
 
 export function PeriodicInventoryExecutionPage() {
@@ -52,10 +52,9 @@ export function PeriodicInventoryExecutionPage() {
   const [selectedAssetInstanceId, setSelectedAssetInstanceId] = useState<number | null>(null);
   const [assetDetail, setAssetDetail] = useState<AssetInventoryDetail | null>(null);
 
-  const [stillInUse, setStillInUse] = useState(false);
+  const [actualStatus, setActualStatus] = useState<number>(0);
   const [actualLocationId, setActualLocationId] = useState<number | null>(null);
   const [actualManagerId, setActualManagerId] = useState<number | null>(null);
-  const [actualCondition, setActualCondition] = useState<string>('');
 
   const [searchText, setSearchText] = useState('');
   const [checkStatusFilter, setCheckStatusFilter] = useState<number | undefined>(undefined);
@@ -108,10 +107,9 @@ export function PeriodicInventoryExecutionPage() {
     try {
       const detail = await inventoryService.getAssetInventoryDetail(sessionIdNum, assetInstanceId);
       setAssetDetail(detail);
-      setStillInUse(detail.actualStillInUse ?? detail.bookStillInUse);
+      setActualStatus(detail.actualStatus ?? detail.bookStatus);
       setActualLocationId(detail.actualLocationId);
       setActualManagerId(detail.actualManagerId);
-      setActualCondition(detail.actualCondition ?? '');
     } catch {
       message.error('Không thể tải chi tiết tài sản.');
     } finally {
@@ -121,10 +119,9 @@ export function PeriodicInventoryExecutionPage() {
 
   const handleReset = () => {
     if (!assetDetail) return;
-    setStillInUse(assetDetail.actualStillInUse ?? assetDetail.bookStillInUse);
+    setActualStatus(assetDetail.actualStatus ?? assetDetail.bookStatus);
     setActualLocationId(assetDetail.actualLocationId);
     setActualManagerId(assetDetail.actualManagerId);
-    setActualCondition(assetDetail.actualCondition ?? '');
   };
 
   const handleSave = async () => {
@@ -133,8 +130,7 @@ export function PeriodicInventoryExecutionPage() {
     try {
       await inventoryService.saveAssetInventory(sessionIdNum, {
         assetInstanceId: assetDetail.assetInstanceId,
-        stillInUse,
-        actualCondition: actualCondition.trim(),
+        actualStatus,
         actualLocationId,
         actualManagerId,
         checkedBy: getCurrentUserId(),
@@ -188,10 +184,10 @@ export function PeriodicInventoryExecutionPage() {
         hasActual: mgrActual !== '-',
       },
       {
-        field: 'Đang sử dụng',
-        book: formatStillInUse(assetDetail.bookStillInUse),
-        actual: formatStillInUse(stillInUse),
-        isMatch: stillInUse === assetDetail.bookStillInUse,
+        field: 'Trạng thái',
+        book: formatAssetStatusVi(assetDetail.bookStatus),
+        actual: formatAssetStatusVi(actualStatus),
+        isMatch: actualStatus === assetDetail.bookStatus,
         hasActual: true,
       },
     ];
@@ -228,11 +224,11 @@ export function PeriodicInventoryExecutionPage() {
           <div className="exec-asset-meta">
             <div className="exec-asset-meta__row">
               <div className="exec-asset-meta__item">
-                <span className="exec-asset-meta__label">Mã danh mục:</span>
+                <span className="exec-asset-meta__label">Mã tài sảnsản:</span>
                 <span className="exec-asset-meta__value">{assetDetail.assetCode}</span>
               </div>
               <div className="exec-asset-meta__item">
-                <span className="exec-asset-meta__label">Mã thể hiện:</span>
+                <span className="exec-asset-meta__label">Mã cá thể:</span>
                 <span className="exec-asset-meta__value">{assetDetail.instanceCode}</span>
               </div>
             </div>
@@ -254,41 +250,32 @@ export function PeriodicInventoryExecutionPage() {
             </div>
           </div>
 
-          {/* Per-instance: still in use + status clarification (ActualCondition) */}
+          {/* Per-instance: reported status vs book */}
           <div className="exec-instance-check">
             <div className="exec-instance-check__head">
-              <span className="exec-instance-check__title">Xác nhận thể hiện tài sản</span>
+              <span className="exec-instance-check__title">Trạng thái thực tế (so với sổ sách)</span>
               <span className="exec-instance-check__hint">
-                Sổ sách: {formatStillInUse(assetDetail.bookStillInUse)}
+                Sổ sách: {formatAssetStatusVi(assetDetail.bookStatus)}
               </span>
             </div>
             <div className="exec-instance-use-row">
-              <label className="exec-still-in-use-label">
-                <input
-                  type="checkbox"
-                  className="exec-still-in-use-checkbox"
-                  checked={stillInUse}
-                  onChange={(e) => setStillInUse(e.target.checked)}
-                  disabled={!isEditable}
-                />
-                <span>Còn đang sử dụng</span>
-              </label>
-              <div className="exec-condition-field">
-                <label htmlFor="exec-actual-condition" className="exec-condition-field__label">
-                  Tình trạng / ghi chú thực tế
+              <div className="exec-condition-field exec-condition-field--full">
+                <label htmlFor="exec-actual-status" className="exec-condition-field__label">
+                  Trạng thái kiểm kê
+                  {isEditable ? <span className="exec-condition-field__required"> *</span> : null}
                 </label>
                 {isEditable ? (
-                  <input
-                    id="exec-actual-condition"
-                    type="text"
-                    className="exec-condition-field__input"
-                    value={actualCondition}
-                    onChange={(e) => setActualCondition(e.target.value)}
-                    placeholder="Làm rõ tình trạng thể hiện (lưu vào biên bản kiểm kê)"
+                  <Select
+                    id="exec-actual-status"
+                    className="exec-condition-field__select"
+                    value={actualStatus}
+                    onChange={(v) => setActualStatus(v ?? assetDetail.bookStatus)}
+                    placeholder="Chọn trạng thái thể hiện"
+                    options={INVENTORY_STATUS_SELECT_OPTIONS}
                   />
                 ) : (
                   <span className="exec-condition-field__readonly">
-                    {actualCondition || '—'}
+                    {formatAssetStatusVi(actualStatus)}
                   </span>
                 )}
               </div>
@@ -456,12 +443,12 @@ export function PeriodicInventoryExecutionPage() {
               <table className="exec-asset-table">
                 <thead>
                   <tr>
-                    <th>Mã danh mục</th>
-                    <th>Mã thể hiện</th>
+                    <th>Mã tài sản</th>
+                    <th>Mã cá thể</th>
                     <th>Tên tài sản</th>
                     <th>Phòng ban</th>
-                    <th>Sổ sách</th>
-                    <th>Thực tế</th>
+                    <th>Trạng thái (sổ)</th>
+                    <th>Trạng thái (kiểm kê)</th>
                     <th>Khớp</th>
                   </tr>
                 </thead>
@@ -474,10 +461,10 @@ export function PeriodicInventoryExecutionPage() {
                     </tr>
                   ) : (
                     assets.map((asset) => {
-                      const useMatch =
-                        asset.actualStillInUse == null
+                      const statusMatch =
+                        asset.actualStatus == null
                           ? null
-                          : asset.actualStillInUse === asset.bookStillInUse;
+                          : asset.actualStatus === asset.bookStatus;
                       return (
                       <tr
                         key={asset.assetInstanceId}
@@ -488,10 +475,14 @@ export function PeriodicInventoryExecutionPage() {
                         <td>{asset.instanceCode}</td>
                         <td>{asset.assetName}</td>
                         <td>{asset.departmentName}</td>
-                        <td>{formatStillInUse(asset.bookStillInUse)}</td>
-                        <td>{formatStillInUse(asset.actualStillInUse)}</td>
-                        <td className={useMatch === false ? 'exec-diff-cell' : ''}>
-                          {formatInUseMatch(useMatch)}
+                        <td>{formatAssetStatusVi(asset.bookStatus)}</td>
+                        <td>
+                          {asset.actualStatus == null
+                            ? '—'
+                            : formatAssetStatusVi(asset.actualStatus)}
+                        </td>
+                        <td className={statusMatch === false ? 'exec-diff-cell' : ''}>
+                          {formatStatusMatch(statusMatch)}
                         </td>
                       </tr>
                       );

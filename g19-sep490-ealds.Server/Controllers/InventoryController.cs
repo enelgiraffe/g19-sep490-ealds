@@ -50,6 +50,7 @@ public class InventoryController : ControllerBase
             .Include(s => s.AssetCategory)
             .Include(s => s.AssetType)
             .Include(s => s.InventoryTasks)
+                .ThenInclude(t => t.AssetInstance)
             .AsNoTracking()
             .AsQueryable();
 
@@ -98,8 +99,10 @@ public class InventoryController : ControllerBase
                 Status = displayStatus,
                 StatusName = GetSessionStatusName(displayStatus),
                 ProgressPercent = s.ProgressPercent,
-                TotalTasks = s.InventoryTasks.Count,
-                CompletedTasks = s.InventoryTasks.Count(t => t.Status == (int)InventoryTaskStatus.Checked),
+                TotalTasks = s.InventoryTasks.Count(t => !IsExcludedFromInventoryExecution(t.AssetInstance.Status)),
+                CompletedTasks = s.InventoryTasks.Count(t =>
+                    !IsExcludedFromInventoryExecution(t.AssetInstance.Status) &&
+                    t.Status == (int)InventoryTaskStatus.Checked),
                 CreateDate = s.CreateDate,
                 IsPeriodic = s.IsPeriodic,
                 PeriodDays = s.PeriodDays
@@ -263,8 +266,10 @@ public class InventoryController : ControllerBase
             Status = detailDisplayStatus,
             StatusName = GetSessionStatusName(detailDisplayStatus),
             ProgressPercent = session.ProgressPercent,
-            TotalTasks = session.InventoryTasks.Count,
-            CompletedTasks = session.InventoryTasks.Count(t => t.Status == (int)InventoryTaskStatus.Checked),
+            TotalTasks = session.InventoryTasks.Count(t => !IsExcludedFromInventoryExecution(t.AssetInstance.Status)),
+            CompletedTasks = session.InventoryTasks.Count(t =>
+                !IsExcludedFromInventoryExecution(t.AssetInstance.Status) &&
+                t.Status == (int)InventoryTaskStatus.Checked),
             CreateDate = session.CreateDate,
             QuantityDiffCount = allDiscrepancies.Count(d =>
                 (d.DiscrepancyType & (int)DiscrepancyType.AssetNotFound) != 0 ||
@@ -332,6 +337,10 @@ public class InventoryController : ControllerBase
 
         var tasks = await query.ToListAsync();
 
+        tasks = tasks
+            .Where(t => !IsExcludedFromInventoryExecution(t.AssetInstance.Status))
+            .ToList();
+
         if (!string.IsNullOrWhiteSpace(keyword))
         {
             var kw = keyword.Trim().ToLower();
@@ -351,7 +360,6 @@ public class InventoryController : ControllerBase
             var inst = t.AssetInstance;
             var asset = inst.Asset;
             var record = t.InventoryRecords.FirstOrDefault();
-            bool? actualStillInUse = record == null ? null : record.IsFound;
             int cs = t.Status == (int)InventoryTaskStatus.Checked ? 2 : 0;
             var currentLoc = inst.AssetLocations.FirstOrDefault(al => al.IsCurrent);
 
@@ -363,8 +371,8 @@ public class InventoryController : ControllerBase
                 InstanceCode = inst.InstanceCode,
                 AssetName = asset.Name,
                 DepartmentName = currentLoc?.Department?.Name ?? t.Department?.Name ?? string.Empty,
-                BookStillInUse = BookImpliesInUse(inst.Status),
-                ActualStillInUse = actualStillInUse,
+                BookStatus = inst.Status,
+                ActualStatus = ResolveRecordedActualStatus(record, inst.Status),
                 CheckStatus = cs
             };
         }).ToList();
@@ -405,6 +413,9 @@ public class InventoryController : ControllerBase
 
         var inst = task.AssetInstance;
         var asset = inst.Asset;
+        if (IsExcludedFromInventoryExecution(inst.Status))
+            return NotFound(new { message = "Thể hiện tài sản này không thuộc phạm vi kiểm kê." });
+
         var currentLoc = inst.AssetLocations.FirstOrDefault(al => al.IsCurrent);
 
         var bookUsage = await _context.AssetUsages
@@ -414,8 +425,8 @@ public class InventoryController : ControllerBase
             .FirstOrDefaultAsync();
 
         var record = task.InventoryRecords.FirstOrDefault();
-        bool? actualStillInUse = record?.IsFound;
         int? actualLocationId = record?.ActualLocation?.DepartmentId;
+        var actualStatusResolved = ResolveRecordedActualStatus(record, inst.Status);
 
         var departments = await _context.Departments
             .AsNoTracking()
@@ -437,8 +448,9 @@ public class InventoryController : ControllerBase
             AssetName = asset.Name,
             CategoryName = asset.AssetType?.Category?.Name ?? string.Empty,
             TypeName = asset.AssetType?.Name ?? string.Empty,
-            BookStillInUse = BookImpliesInUse(inst.Status),
-            ActualStillInUse = actualStillInUse,
+            BookStatus = inst.Status,
+            BookAssetStatus = ((AssetStatus)inst.Status).ToString(),
+            ActualStatus = actualStatusResolved,
             ActualCondition = record?.ActualCondition ?? string.Empty,
             BookLocationId = currentLoc?.DepartmentId,
             BookLocationName = currentLoc?.Department?.Name ?? string.Empty,
@@ -488,9 +500,17 @@ public class InventoryController : ControllerBase
         var inst = task.AssetInstance;
         var asset = inst.Asset;
         var bookLocation = inst.AssetLocations.FirstOrDefault(al => al.IsCurrent);
-        bool stillInUse = dto.StillInUse;
-        bool bookInUse = BookImpliesInUse(inst.Status);
-        var storedCondition = (dto.ActualCondition ?? string.Empty).Trim();
+        if (IsExcludedFromInventoryExecution(inst.Status))
+            return BadRequest(new { message = "Thể hiện tài sản này không thuộc phạm vi kiểm kê (đã thanh lý / mất / hỏng…)." });
+
+        if (!Enum.IsDefined(typeof(AssetStatus), dto.ActualStatus))
+            return BadRequest(new { message = "Trạng thái tài sản không hợp lệ." });
+
+        var reported = (AssetStatus)dto.ActualStatus;
+        var storedCondition = reported.ToString();
+        bool actualInUseBucket = BookImpliesInUse(dto.ActualStatus);
+        int bookStatusInt = inst.Status;
+        bool bookInUseBucket = BookImpliesInUse(bookStatusInt);
 
         // Resolve actual location: dto.ActualLocationId is a DepartmentId
         AssetLocation? actualLocation = null;
@@ -530,7 +550,7 @@ public class InventoryController : ControllerBase
 
         // Create or update inventory record
         var record = task.InventoryRecords.FirstOrDefault();
-        int? actualQtyLegacy = stillInUse ? 1 : 0;
+        int? actualQtyLegacy = actualInUseBucket ? 1 : 0;
 
         if (record == null)
         {
@@ -540,7 +560,7 @@ public class InventoryController : ControllerBase
                 ActualLocationId = actualLocation.LocationId,
                 ActualUserId = dto.ActualManagerId,
                 ActualCondition = storedCondition,
-                IsFound = stillInUse,
+                IsFound = actualInUseBucket,
                 ActualQuantity = actualQtyLegacy,
                 CheckedBy = dto.CheckedBy > 0 ? dto.CheckedBy : (dto.ActualManagerId ?? 1),
                 CheckedDate = DateTime.UtcNow,
@@ -553,7 +573,7 @@ public class InventoryController : ControllerBase
             record.ActualLocationId = actualLocation.LocationId;
             record.ActualUserId = dto.ActualManagerId;
             record.ActualCondition = storedCondition;
-            record.IsFound = stillInUse;
+            record.IsFound = actualInUseBucket;
             record.ActualQuantity = actualQtyLegacy;
             record.CheckedDate = DateTime.UtcNow;
             record.DateCheckCompleted = DateTime.UtcNow;
@@ -567,12 +587,12 @@ public class InventoryController : ControllerBase
         var bookManagerId = bookUsage?.Employee?.UserId;
 
         int discrepancyFlags = 0;
-        if (!stillInUse && bookInUse)
-            discrepancyFlags |= (int)DiscrepancyType.AssetNotFound;
-        if (stillInUse && !bookInUse)
+        if (dto.ActualStatus != bookStatusInt)
             discrepancyFlags |= (int)DiscrepancyType.ConditionMismatch;
+        if (!actualInUseBucket && bookInUseBucket)
+            discrepancyFlags |= (int)DiscrepancyType.AssetNotFound;
 
-        if (stillInUse)
+        if (BookImpliesInUse(dto.ActualStatus))
         {
             if (bookLocation != null && dto.ActualLocationId.HasValue &&
                 bookLocation.DepartmentId != dto.ActualLocationId.Value)
@@ -606,12 +626,7 @@ public class InventoryController : ControllerBase
         task.Status = (int)InventoryTaskStatus.Checked;
         await _context.SaveChangesAsync();
 
-        var totalTasks = await _context.InventoryTasks.CountAsync(t => t.SessionId == sessionId);
-        var checkedTasks = await _context.InventoryTasks
-            .CountAsync(t => t.SessionId == sessionId && t.Status == (int)InventoryTaskStatus.Checked);
-        session.ProgressPercent = totalTasks > 0
-            ? (int)Math.Round((double)checkedTasks / totalTasks * 100)
-            : 0;
+        await UpdateSessionProgressPercentForEligibleTasksAsync(session);
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "Đã lưu thông tin kiểm kê." });
@@ -646,7 +661,8 @@ public class InventoryController : ControllerBase
                 ai.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == dto.DepartmentId) &&
                 ai.Status != (int)AssetStatus.Disposed &&
                 ai.Status != (int)AssetStatus.Lost &&
-                ai.Status != (int)AssetStatus.Liquidated)
+                ai.Status != (int)AssetStatus.Liquidated &&
+                ai.Status != (int)AssetStatus.Damaged)
             .AsNoTracking()
             .ToListAsync();
 
@@ -836,13 +852,7 @@ public class InventoryController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        // Recalculate session progress
-        var totalTasks = await _context.InventoryTasks.CountAsync(t => t.SessionId == id);
-        var checkedTasks = await _context.InventoryTasks
-            .CountAsync(t => t.SessionId == id && t.Status == (int)InventoryTaskStatus.Checked);
-        session.ProgressPercent = totalTasks > 0
-            ? (int)Math.Round((double)checkedTasks / totalTasks * 100)
-            : 0;
+        await UpdateSessionProgressPercentForEligibleTasksAsync(session);
         await _context.SaveChangesAsync();
 
         return Ok(new
@@ -866,6 +876,7 @@ public class InventoryController : ControllerBase
 
         var session = await _context.InventorySessions
             .Include(s => s.InventoryTasks)
+                .ThenInclude(t => t.AssetInstance)
             .FirstOrDefaultAsync(s => s.SessionId == id);
 
         if (session == null)
@@ -874,8 +885,11 @@ public class InventoryController : ControllerBase
         if (session.Status == (int)InventorySessionStatus.Completed)
             return BadRequest(new { message = "Phiên kiểm kê này đã hoàn thành." });
 
-        var totalTasks = session.InventoryTasks.Count;
-        var checkedTasks = session.InventoryTasks.Count(t => t.Status == (int)InventoryTaskStatus.Checked);
+        var eligibleTasks = session.InventoryTasks
+            .Where(t => !IsExcludedFromInventoryExecution(t.AssetInstance.Status))
+            .ToList();
+        var totalTasks = eligibleTasks.Count;
+        var checkedTasks = eligibleTasks.Count(t => t.Status == (int)InventoryTaskStatus.Checked);
 
         session.Status = (int)InventorySessionStatus.Completed;
         session.ProgressPercent = totalTasks > 0
@@ -923,6 +937,7 @@ public class InventoryController : ControllerBase
             .Include(s => s.AssetCategory)
             .Include(s => s.AssetType)
             .Include(s => s.InventoryTasks)
+                .ThenInclude(t => t.AssetInstance)
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.SessionId == id);
 
@@ -993,8 +1008,10 @@ public class InventoryController : ControllerBase
             AssetTypeName = session.AssetType?.Name,
             Status = displayStatus,
             StatusName = GetSessionStatusName(displayStatus),
-            TotalTasks = session.InventoryTasks.Count,
-            CompletedTasks = session.InventoryTasks.Count(t => t.Status == (int)InventoryTaskStatus.Checked),
+            TotalTasks = session.InventoryTasks.Count(t => !IsExcludedFromInventoryExecution(t.AssetInstance.Status)),
+            CompletedTasks = session.InventoryTasks.Count(t =>
+                !IsExcludedFromInventoryExecution(t.AssetInstance.Status) &&
+                t.Status == (int)InventoryTaskStatus.Checked),
             ProgressPercent = session.ProgressPercent,
             TotalDiscrepancies = detailList.Count,
             AssetNotFoundCount = discrepancies.Count(d => (d.DiscrepancyType & (int)DiscrepancyType.AssetNotFound) != 0),
@@ -1041,7 +1058,8 @@ public class InventoryController : ControllerBase
             .ToDictionaryAsync(u => u.AssetInstanceId, u => u.Employee?.UserId);
 
         var hasMismatch = false;
-        foreach (var task in session.InventoryTasks)
+        foreach (var task in session.InventoryTasks.Where(t =>
+                     !IsExcludedFromInventoryExecution(t.AssetInstance.Status)))
         {
             var inst = task.AssetInstance;
             bookUsages.TryGetValue(task.AssetInstanceId, out var bookUserId);
@@ -1542,7 +1560,7 @@ public class InventoryController : ControllerBase
             Status = buildDisplayStatus,
             StatusName = GetSessionStatusName(buildDisplayStatus),
             ProgressPercent = session.ProgressPercent,
-            TotalTasks = session.InventoryTasks.Count,
+            TotalTasks = session.InventoryTasks.Count(t => !IsExcludedFromInventoryExecution(t.AssetInstance.Status)),
             CompletedTasks = 0,
             CreateDate = session.CreateDate,
             IsPeriodic = session.IsPeriodic,
@@ -1599,6 +1617,39 @@ public class InventoryController : ControllerBase
         AssetStatus.Liquidated => false,
         _ => true
     };
+
+    /// <summary>Parses reported status from inventory record; legacy rows may infer from book when IsFound only.</summary>
+    private static int? ResolveRecordedActualStatus(InventoryRecord? record, int bookInstanceStatus)
+    {
+        if (record == null) return null;
+        if (!string.IsNullOrWhiteSpace(record.ActualCondition) &&
+            Enum.TryParse<AssetStatus>(record.ActualCondition, true, out var parsed))
+            return (int)parsed;
+        if (string.IsNullOrWhiteSpace(record.ActualCondition) && record.IsFound == true)
+            return bookInstanceStatus;
+        return null;
+    }
+
+    /// <summary>Excluded from execution list and from session progress / director checks.</summary>
+    private static bool IsExcludedFromInventoryExecution(int instanceStatus) =>
+        instanceStatus == (int)AssetStatus.Disposed ||
+        instanceStatus == (int)AssetStatus.Lost ||
+        instanceStatus == (int)AssetStatus.Liquidated ||
+        instanceStatus == (int)AssetStatus.Damaged;
+
+    private async Task UpdateSessionProgressPercentForEligibleTasksAsync(InventorySession session)
+    {
+        var rows = await _context.InventoryTasks
+            .Where(t => t.SessionId == session.SessionId)
+            .Select(t => new { t.Status, InstStatus = t.AssetInstance.Status })
+            .ToListAsync();
+        var eligible = rows.Where(r => !IsExcludedFromInventoryExecution(r.InstStatus)).ToList();
+        var total = eligible.Count;
+        var checkedCount = eligible.Count(t => t.Status == (int)InventoryTaskStatus.Checked);
+        session.ProgressPercent = total > 0
+            ? (int)Math.Round((double)checkedCount / total * 100)
+            : 0;
+    }
 
     /// <summary>
     /// Returns the display status for a session. Status 5 ("Đến lịch") is a computed status:

@@ -22,7 +22,7 @@ public class AssetInstancesController : ControllerBase
     }
 
     /// <summary>
-    /// GET /api/asset-instances — Search and filter instances (replaces former filters on GET /api/assets).
+    /// GET /api/assetinstances — Search and filter instances (replaces former filters on GET /api/assets).
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<IEnumerable<AssetInstanceResponseDTO>>> GetAll(
@@ -114,7 +114,7 @@ public class AssetInstancesController : ControllerBase
     }
 
     /// <summary>
-    /// GET /api/asset-instances/{id}
+    /// GET /api/assetinstances/{id}
     /// </summary>
     [HttpGet("{id:int}")]
     public async Task<ActionResult<AssetInstanceResponseDTO>> GetById(int id)
@@ -151,7 +151,7 @@ public class AssetInstancesController : ControllerBase
     }
 
     /// <summary>
-    /// POST /api/asset-instances — Add a physical instance to an existing catalog asset.
+    /// POST /api/assetinstances — Add a physical instance to an existing catalog asset.
     /// </summary>
     [HttpPost]
     public async Task<ActionResult<AssetInstanceResponseDTO>> Create([FromBody] CreateAssetInstanceDTO dto)
@@ -246,7 +246,7 @@ public class AssetInstancesController : ControllerBase
     }
 
     /// <summary>
-    /// PUT /api/asset-instances/{id}
+    /// PUT /api/assetinstances/{id}
     /// </summary>
     [HttpPut("{id:int}")]
     public async Task<ActionResult<AssetInstanceResponseDTO>> Update(int id, [FromBody] UpdateAssetInstanceDTO dto)
@@ -343,7 +343,7 @@ public class AssetInstancesController : ControllerBase
     }
 
     /// <summary>
-    /// PUT /api/asset-instances/{id}/status — Accountants set operational status on the instance.
+    /// PUT /api/assetinstances/{id}/status — Accountants set operational status on the instance.
     /// </summary>
     [HttpPut("{id:int}/status")]
     [Authorize(Roles = "ACCOUNTANT")]
@@ -387,7 +387,7 @@ public class AssetInstancesController : ControllerBase
     }
 
     /// <summary>
-    /// DELETE /api/asset-instances/{id} — Set instance status to Disposed, Lost, or Liquidated.
+    /// DELETE /api/assetinstances/{id} — Set instance status to Disposed, Lost, or Liquidated.
     /// </summary>
     [HttpDelete("{id:int}")]
     public async Task<ActionResult<AssetInstanceResponseDTO>> Delete(

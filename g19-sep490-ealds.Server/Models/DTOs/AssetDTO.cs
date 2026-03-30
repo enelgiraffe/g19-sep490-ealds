@@ -61,7 +61,7 @@ public class DeleteAssetDTO
 /// </summary>
 public class CreateAssetInstanceDTO
 {
-    /// <summary>Required when POSTing to <c>/api/asset-instances</c>; omitted when nested under <see cref="CreateAssetDTO.InitialInstance"/>.</summary>
+    /// <summary>Required when POSTing to <c>/api/assetinstances</c>; omitted when nested under <see cref="CreateAssetDTO.InitialInstance"/>.</summary>
     public int? AssetId { get; set; }
 
     public string InstanceCode { get; set; } = null!;
@@ -110,7 +110,7 @@ public class UpdateAssetInstanceDTO
 }
 
 /// <summary>
-/// Accountant status change for an instance (<c>PUT /api/asset-instances/{id}/status</c>).
+/// Accountant status change for an instance (<c>PUT /api/assetinstances/{id}/status</c>).
 /// </summary>
 public class ChangeAssetInstanceStatusDTO
 {
@@ -119,7 +119,7 @@ public class ChangeAssetInstanceStatusDTO
 }
 
 /// <summary>
-/// Soft delete / retirement for an instance (<c>DELETE /api/asset-instances/{id}</c>).
+/// Soft delete / retirement for an instance (<c>DELETE /api/assetinstances/{id}</c>).
 /// </summary>
 public class DeleteAssetInstanceDTO
 {

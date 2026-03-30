@@ -67,10 +67,10 @@ export interface SessionAssetCheckItem {
   instanceCode: string;
   assetName: string;
   departmentName: string;
-  /** Book expectation: instance still in active use */
-  bookStillInUse: boolean;
-  /** Recorded after check; null if not yet submitted */
-  actualStillInUse: boolean | null;
+  /** Book-side AssetStatus int */
+  bookStatus: number;
+  /** Reported status after check; null if not yet submitted */
+  actualStatus: number | null;
   checkStatus: number; // 0=Chưa kiểm kê, 1=Đang kiểm kê, 2=Hoàn tất
 }
 
@@ -82,9 +82,13 @@ export interface AssetInventoryDetail {
   assetName: string;
   categoryName: string;
   typeName: string;
-  bookStillInUse: boolean;
-  actualStillInUse: boolean | null;
-  /** Saved checker notes (inventory record ActualCondition) */
+  /** Book-side AssetStatus int */
+  bookStatus: number;
+  /** Book-side status name */
+  bookAssetStatus?: string;
+  /** Last reported status (int); null if never saved */
+  actualStatus: number | null;
+  /** Stored enum name on record */
   actualCondition: string;
   bookLocationId: number | null;
   bookLocationName: string;
@@ -98,8 +102,8 @@ export interface AssetInventoryDetail {
 
 export interface SaveAssetInventoryPayload {
   assetInstanceId: number;
-  stillInUse: boolean;
-  actualCondition?: string;
+  /** Reported AssetStatus int */
+  actualStatus: number;
   actualLocationId: number | null;
   actualManagerId: number | null;
   checkedBy: number;
@@ -390,7 +394,7 @@ export const inventoryService = {
         assetName?: string | null;
         currentDepartmentId?: number | null;
       }[]
-    >('/api/asset-instances', { params });
+    >('/api/assetinstances', { params });
     return res.data.map((a) => ({
       assetId: a.assetId,
       code: a.instanceCode,

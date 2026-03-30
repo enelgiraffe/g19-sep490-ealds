@@ -71,7 +71,7 @@ export interface AssetCatalogResponse {
   note?: string | null;
 }
 
-/** Physical instance from GET /api/asset-instances */
+/** Physical instance from GET /api/assetinstances */
 export interface AssetInstanceResponse {
   assetInstanceId: number;
   assetId: number;
@@ -136,7 +136,7 @@ export interface GetAssetCatalogParams {
   assetTypeId?: number;
 }
 
-/** Query params for GET /api/asset-instances (physical rows; supports former asset list filters) */
+/** Query params for GET /api/assetinstances (physical rows; supports former asset list filters) */
 export interface GetAssetInstancesParams {
   keyword?: string;
   status?: number;
@@ -242,16 +242,61 @@ export function getStatusLabel(statusName: string): string {
   const map: Record<string, string> = {
     Available: 'Sẵn có',
     InUse: 'Đang sử dụng',
+    Active: 'Đang sử dụng',
     InMaintenance: 'Đang bảo trì',
+    UnderMaintenance: 'Đang bảo trì',
     InRepair: 'Đang sửa chữa',
     Reserved: 'Đã đặt trước',
-    Disposed: 'Đã thanh lý',
+    Disposed: 'Đã loại bỏ',
     Lost: 'Mất',
     Liquidated: 'Đã thanh lý',
     Capitalized: 'Đã vốn hoá',
     Damaged: 'Đã hỏng',
   };
   return map[statusName] ?? statusName;
+}
+
+/** Backend `AssetStatus` int → enum member name (see `Status.cs`). */
+const ASSET_STATUS_INT_TO_NAME: Record<number, string> = {
+  0: 'Available',
+  1: 'InUse',
+  2: 'InMaintenance',
+  3: 'Reserved',
+  4: 'Disposed',
+  5: 'Lost',
+  6: 'Liquidated',
+  7: 'Capitalized',
+  8: 'Damaged',
+  9: 'InRepair',
+};
+
+export function assetStatusNameFromValue(status: number): string {
+  return ASSET_STATUS_INT_TO_NAME[status] ?? String(status);
+}
+
+export function formatAssetStatusVi(status: number): string {
+  return getStatusLabel(assetStatusNameFromValue(status));
+}
+
+/** Select options for inventory execution (all statuses). */
+export function getInventoryExecutionStatusSelectOptions(): { value: number; label: string }[] {
+  return (
+    [
+      [0, 'Available'],
+      [1, 'InUse'],
+      [2, 'InMaintenance'],
+      [3, 'Reserved'],
+      [4, 'Disposed'],
+      [5, 'Lost'],
+      [6, 'Liquidated'],
+      [7, 'Capitalized'],
+      [8, 'Damaged'],
+      [9, 'InRepair'],
+    ] as const
+  ).map(([value, name]) => ({
+    value,
+    label: getStatusLabel(name),
+  }));
 }
 
 export const assetService = {
@@ -304,20 +349,20 @@ export const assetService = {
 
 export const assetInstanceService = {
   async getAll(params?: GetAssetInstancesParams): Promise<AssetInstanceResponse[]> {
-    const response = await assetApi.get<AssetInstanceResponse[]>('/api/asset-instances', {
+    const response = await assetApi.get<AssetInstanceResponse[]>('/api/assetinstances', {
       params,
     });
     return response.data;
   },
 
   async getById(id: number): Promise<AssetInstanceResponse> {
-    const response = await assetApi.get<AssetInstanceResponse>(`/api/asset-instances/${id}`);
+    const response = await assetApi.get<AssetInstanceResponse>(`/api/assetinstances/${id}`);
     return response.data;
   },
 
   async create(payload: CreateAssetInstancePayload): Promise<AssetInstanceResponse> {
     const response = await assetApi.post<AssetInstanceResponse>(
-      '/api/asset-instances',
+      '/api/assetinstances',
       payload
     );
     return response.data;
@@ -325,7 +370,7 @@ export const assetInstanceService = {
 
   async update(id: number, payload: UpdateAssetInstancePayload): Promise<AssetInstanceResponse> {
     const response = await assetApi.put<AssetInstanceResponse>(
-      `/api/asset-instances/${id}`,
+      `/api/assetinstances/${id}`,
       payload
     );
     return response.data;
@@ -336,7 +381,7 @@ export const assetInstanceService = {
     payload: DeleteAssetInstancePayload
   ): Promise<AssetInstanceResponse> {
     const response = await assetApi.delete<AssetInstanceResponse>(
-      `/api/asset-instances/${id}`,
+      `/api/assetinstances/${id}`,
       { data: payload }
     );
     return response.data;
