@@ -304,20 +304,20 @@ export const assetService = {
 
 export const assetInstanceService = {
   async getAll(params?: GetAssetInstancesParams): Promise<AssetInstanceResponse[]> {
-    const response = await assetApi.get<AssetInstanceResponse[]>('/api/asset-instances', {
+    const response = await assetApi.get<AssetInstanceResponse[]>('/api/assetinstances', {
       params,
     });
     return response.data;
   },
 
   async getById(id: number): Promise<AssetInstanceResponse> {
-    const response = await assetApi.get<AssetInstanceResponse>(`/api/asset-instances/${id}`);
+    const response = await assetApi.get<AssetInstanceResponse>(`/api/assetinstances/${id}`);
     return response.data;
   },
 
   async create(payload: CreateAssetInstancePayload): Promise<AssetInstanceResponse> {
     const response = await assetApi.post<AssetInstanceResponse>(
-      '/api/asset-instances',
+      '/api/assetinstances',
       payload
     );
     return response.data;
@@ -325,7 +325,7 @@ export const assetInstanceService = {
 
   async update(id: number, payload: UpdateAssetInstancePayload): Promise<AssetInstanceResponse> {
     const response = await assetApi.put<AssetInstanceResponse>(
-      `/api/asset-instances/${id}`,
+      `/api/assetinstances/${id}`,
       payload
     );
     return response.data;
@@ -336,7 +336,7 @@ export const assetInstanceService = {
     payload: DeleteAssetInstancePayload
   ): Promise<AssetInstanceResponse> {
     const response = await assetApi.delete<AssetInstanceResponse>(
-      `/api/asset-instances/${id}`,
+      `/api/assetinstances/${id}`,
       { data: payload }
     );
     return response.data;

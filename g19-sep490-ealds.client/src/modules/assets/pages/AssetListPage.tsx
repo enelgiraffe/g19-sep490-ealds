@@ -204,8 +204,24 @@ export function AssetListPage() {
       };
       const data = await assetInstanceService.getAll(params);
       setApiAssets(data);
-    } catch {
-      setError('Không tải được danh sách tài sản. Kiểm tra kết nối backend.');
+    } catch (e: any) {
+      const status = e?.response?.status;
+      const data = e?.response?.data;
+      
+      if (!e?.response) {
+        setError('Không tải được danh sách tài sản. Kiểm tra kết nối backend.');
+      } else if (status === 401) {
+        setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+      } else if (status === 403) {
+        setError('Bạn không có quyền xem danh sách tài sản.');
+      } else if (status === 404) {
+        setError('Không tìm thấy API endpoint. Vui lòng kiểm tra cấu hình backend.');
+      } else if (status >= 500) {
+        setError('Lỗi máy chủ. Vui lòng thử lại sau hoặc liên hệ quản trị viên.');
+      } else {
+        const msg = data?.title ?? data?.message ?? 'Không tải được danh sách tài sản.';
+        setError(typeof msg === 'string' ? msg : 'Không tải được danh sách tài sản.');
+      }
     } finally {
       setLoading(false);
     }
