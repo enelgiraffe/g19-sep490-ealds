@@ -46,18 +46,14 @@ public class SessionAssetCheckItemDTO
 
     public string AssetName { get; set; } = null!;
     public string DepartmentName { get; set; } = null!;
-    public int BookQty { get; set; }
-    public int? ActualQty { get; set; }
-    public int? Difference { get; set; }
-    public int CheckStatus { get; set; } // 0=Chưa kiểm kê, 2=Hoàn tất
-}
 
-public class AssetStatusEntryDTO
-{
-    public string StatusKey { get; set; } = null!;
-    public string StatusLabel { get; set; } = null!;
-    public int BookQty { get; set; }
-    public int? ActualQty { get; set; }
+    /// <summary>Whether books imply this instance is still in active use (derived from asset status).</summary>
+    public bool BookStillInUse { get; set; }
+
+    /// <summary>Recorded on-site answer after check; null if not yet submitted.</summary>
+    public bool? ActualStillInUse { get; set; }
+
+    public int CheckStatus { get; set; } // 0=Chưa kiểm kê, 2=Hoàn tất
 }
 
 public class AssetInventoryDetailDTO
@@ -74,7 +70,16 @@ public class AssetInventoryDetailDTO
     public string AssetName { get; set; } = null!;
     public string CategoryName { get; set; } = null!;
     public string TypeName { get; set; } = null!;
-    public List<AssetStatusEntryDTO> StatusEntries { get; set; } = new();
+
+    /// <summary>Whether books imply this instance is still in active use.</summary>
+    public bool BookStillInUse { get; set; }
+
+    /// <summary>Last saved answer from inventory record; null if never checked.</summary>
+    public bool? ActualStillInUse { get; set; }
+
+    /// <summary>Checker clarification stored on the inventory record.</summary>
+    public string ActualCondition { get; set; } = string.Empty;
+
     public int? BookLocationId { get; set; }
     public string BookLocationName { get; set; } = null!;
     public int? ActualLocationId { get; set; }

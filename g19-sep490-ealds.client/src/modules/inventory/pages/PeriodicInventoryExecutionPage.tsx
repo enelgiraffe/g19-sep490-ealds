@@ -31,6 +31,17 @@ function getSessionBadgeClass(status: number): string {
   return 'exec-badge--default';
 }
 
+function formatStillInUse(v: boolean | null | undefined): string {
+  if (v === true) return 'Có';
+  if (v === false) return 'Không';
+  return '—';
+}
+
+function formatInUseMatch(useMatch: boolean | null): string {
+  if (useMatch === null) return '—';
+  return useMatch ? '✓' : '✗';
+}
+
 export function PeriodicInventoryExecutionPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
@@ -41,7 +52,7 @@ export function PeriodicInventoryExecutionPage() {
   const [selectedAssetInstanceId, setSelectedAssetInstanceId] = useState<number | null>(null);
   const [assetDetail, setAssetDetail] = useState<AssetInventoryDetail | null>(null);
 
-  const [actualQties, setActualQties] = useState<Record<string, number | null>>({});
+  const [stillInUse, setStillInUse] = useState(false);
   const [actualLocationId, setActualLocationId] = useState<number | null>(null);
   const [actualManagerId, setActualManagerId] = useState<number | null>(null);
   const [actualCondition, setActualCondition] = useState<string>('');
@@ -97,12 +108,10 @@ export function PeriodicInventoryExecutionPage() {
     try {
       const detail = await inventoryService.getAssetInventoryDetail(sessionIdNum, assetInstanceId);
       setAssetDetail(detail);
-      const qties: Record<string, number | null> = {};
-      detail.statusEntries.forEach((e) => { qties[e.statusKey] = e.actualQty; });
-      setActualQties(qties);
+      setStillInUse(detail.actualStillInUse ?? detail.bookStillInUse);
       setActualLocationId(detail.actualLocationId);
       setActualManagerId(detail.actualManagerId);
-      setActualCondition('');
+      setActualCondition(detail.actualCondition ?? '');
     } catch {
       message.error('Không thể tải chi tiết tài sản.');
     } finally {
@@ -112,12 +121,10 @@ export function PeriodicInventoryExecutionPage() {
 
   const handleReset = () => {
     if (!assetDetail) return;
-    const qties: Record<string, number | null> = {};
-    assetDetail.statusEntries.forEach((e) => { qties[e.statusKey] = e.actualQty; });
-    setActualQties(qties);
+    setStillInUse(assetDetail.actualStillInUse ?? assetDetail.bookStillInUse);
     setActualLocationId(assetDetail.actualLocationId);
     setActualManagerId(assetDetail.actualManagerId);
-    setActualCondition('');
+    setActualCondition(assetDetail.actualCondition ?? '');
   };
 
   const handleSave = async () => {
@@ -126,14 +133,11 @@ export function PeriodicInventoryExecutionPage() {
     try {
       await inventoryService.saveAssetInventory(sessionIdNum, {
         assetInstanceId: assetDetail.assetInstanceId,
-        statusEntries: assetDetail.statusEntries.map((e) => ({
-          statusKey: e.statusKey,
-          actualQty: actualQties[e.statusKey] ?? 0,
-        })),
+        stillInUse,
+        actualCondition: actualCondition.trim(),
         actualLocationId,
         actualManagerId,
         checkedBy: getCurrentUserId(),
-        actualCondition: actualCondition.trim() || undefined,
       });
       message.success('Đã lưu thông tin kiểm kê.');
       fetchAssets();
@@ -160,21 +164,8 @@ export function PeriodicInventoryExecutionPage() {
     }
   };
 
-  const getTotals = () => {
-    if (!assetDetail) return { bookTotal: 0, actualTotal: 0, diffTotal: 0 };
-    const bookTotal = assetDetail.statusEntries.reduce((sum, e) => sum + e.bookQty, 0);
-    const actualTotal = assetDetail.statusEntries.reduce(
-      (sum, e) => sum + (actualQties[e.statusKey] ?? 0),
-      0,
-    );
-    return { bookTotal, actualTotal, diffTotal: actualTotal - bookTotal };
-  };
-
   const getComparisonRows = () => {
     if (!assetDetail) return [];
-    const inUseEntry = assetDetail.statusEntries.find((e) => e.statusKey === 'in_use');
-    const bookInUse = inUseEntry?.bookQty ?? 0;
-    const actualInUse = actualQties['in_use'] ?? null;
     const selectedLocation = assetDetail.locations.find((l) => l.id === actualLocationId);
     const selectedManager = assetDetail.managers.find((m) => m.id === actualManagerId);
     const locActual = selectedLocation?.name ?? '-';
@@ -198,24 +189,15 @@ export function PeriodicInventoryExecutionPage() {
       },
       {
         field: 'Đang sử dụng',
-        book: String(bookInUse),
-        actual: actualInUse?.toString() ?? '-',
-        isMatch: actualInUse != null && actualInUse === bookInUse,
-        hasActual: actualInUse != null,
+        book: formatStillInUse(assetDetail.bookStillInUse),
+        actual: formatStillInUse(stillInUse),
+        isMatch: stillInUse === assetDetail.bookStillInUse,
+        hasActual: true,
       },
     ];
   };
 
-  const handleQtyChange = useCallback(
-    (statusKey: string, rawValue: string) => {
-      const val = rawValue === '' ? null : Number(rawValue);
-      setActualQties((prev) => ({ ...prev, [statusKey]: val }));
-    },
-    [],
-  );
-
   const isEditable = sessionDetail?.status === 1;
-  const { bookTotal, actualTotal, diffTotal } = getTotals();
   const comparisonRows = getComparisonRows();
 
   const renderComparisonStatus = (row: { hasActual: boolean; isMatch: boolean }) => {
@@ -272,79 +254,46 @@ export function PeriodicInventoryExecutionPage() {
             </div>
           </div>
 
-          {/* Status quantity table */}
-          <table className="exec-status-table">
-            <thead>
-              <tr>
-                <th>Tình trạng</th>
-                <th>Số sách</th>
-                <th>Thực tế</th>
-                <th>Chênh lệch</th>
-              </tr>
-            </thead>
-            <tbody>
-              {assetDetail.statusEntries.map((entry, idx) => {
-                const actual = actualQties[entry.statusKey];
-                const diff =
-                  actual == null ? null : actual - entry.bookQty;
-                const diffClass = diff != null && diff !== 0 ? 'exec-diff-cell' : '';
-                return (
-                  <tr
-                    key={entry.statusKey}
-                    className={idx % 2 === 0 ? 'exec-status-row--even' : ''}
-                  >
-                    <td>{entry.statusLabel}</td>
-                    <td>{entry.bookQty}</td>
-                    <td>
-                      {isEditable ? (
-                        <input
-                          type="number"
-                          min={0}
-                          className="exec-qty-input"
-                          value={actual ?? ''}
-                          onChange={(e) =>
-                            handleQtyChange(entry.statusKey, e.target.value)
-                          }
-                        />
-                      ) : (
-                        <span>{actual ?? '-'}</span>
-                      )}
-                    </td>
-                    <td className={diffClass}>{diff ?? '-'}</td>
-                  </tr>
-                );
-              })}
-              <tr className="exec-status-row--total">
-                <td><strong>Tổng</strong></td>
-                <td><strong>{bookTotal}</strong></td>
-                <td><strong>{actualTotal}</strong></td>
-                <td className={diffTotal === 0 ? '' : 'exec-diff-cell'}>
-                  <strong>{diffTotal}</strong>
-                </td>
-              </tr>
-              <tr className="exec-status-row--note">
-                <td colSpan={4} className="exec-note-cell">
-                  <label htmlFor="exec-actual-condition" className="exec-note-label">
-                    Ghi chú tình trạng
-                  </label>
-                  {isEditable ? (
-                    <input
-                      id="exec-actual-condition"
-                      type="text"
-                      className="exec-note-input"
-                      value={actualCondition}
-                      onChange={(e) => setActualCondition(e.target.value)}
-                      placeholder="Nhập ghi chú tình trạng tài sản (tùy chọn)"
-                    />
-                  ) : (
-                    <span className="exec-note-value">
-                      {actualCondition || '-'}
-                    </span>
-                  )}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          {/* Per-instance: still in use + status clarification (ActualCondition) */}
+          <div className="exec-instance-check">
+            <div className="exec-instance-check__head">
+              <span className="exec-instance-check__title">Xác nhận thể hiện tài sản</span>
+              <span className="exec-instance-check__hint">
+                Sổ sách: {formatStillInUse(assetDetail.bookStillInUse)}
+              </span>
+            </div>
+            <div className="exec-instance-use-row">
+              <label className="exec-still-in-use-label">
+                <input
+                  type="checkbox"
+                  className="exec-still-in-use-checkbox"
+                  checked={stillInUse}
+                  onChange={(e) => setStillInUse(e.target.checked)}
+                  disabled={!isEditable}
+                />
+                <span>Còn đang sử dụng</span>
+              </label>
+              <div className="exec-condition-field">
+                <label htmlFor="exec-actual-condition" className="exec-condition-field__label">
+                  Tình trạng / ghi chú thực tế
+                </label>
+                {isEditable ? (
+                  <input
+                    id="exec-actual-condition"
+                    type="text"
+                    className="exec-condition-field__input"
+                    value={actualCondition}
+                    onChange={(e) => setActualCondition(e.target.value)}
+                    placeholder="Làm rõ tình trạng thể hiện (lưu vào biên bản kiểm kê)"
+                  />
+                ) : (
+                  <span className="exec-condition-field__readonly">
+                    {actualCondition || '—'}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
 
           {/* Location and Manager */}
           <div className="exec-loc-mgr">
@@ -511,9 +460,9 @@ export function PeriodicInventoryExecutionPage() {
                     <th>Mã thể hiện</th>
                     <th>Tên tài sản</th>
                     <th>Phòng ban</th>
-                    <th>Số sách</th>
+                    <th>Sổ sách</th>
                     <th>Thực tế</th>
-                    <th>Chênh lệch</th>
+                    <th>Khớp</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -524,7 +473,12 @@ export function PeriodicInventoryExecutionPage() {
                       </td>
                     </tr>
                   ) : (
-                    assets.map((asset) => (
+                    assets.map((asset) => {
+                      const useMatch =
+                        asset.actualStillInUse == null
+                          ? null
+                          : asset.actualStillInUse === asset.bookStillInUse;
+                      return (
                       <tr
                         key={asset.assetInstanceId}
                         className={`exec-asset-row${selectedAssetInstanceId === asset.assetInstanceId ? ' exec-asset-row--selected' : ''}`}
@@ -534,13 +488,14 @@ export function PeriodicInventoryExecutionPage() {
                         <td>{asset.instanceCode}</td>
                         <td>{asset.assetName}</td>
                         <td>{asset.departmentName}</td>
-                        <td>{asset.bookQty}</td>
-                        <td>{asset.actualQty ?? '-'}</td>
-                        <td className={asset.difference !== null && asset.difference !== 0 ? 'exec-diff-cell' : ''}>
-                          {asset.difference ?? '-'}
+                        <td>{formatStillInUse(asset.bookStillInUse)}</td>
+                        <td>{formatStillInUse(asset.actualStillInUse)}</td>
+                        <td className={useMatch === false ? 'exec-diff-cell' : ''}>
+                          {formatInUseMatch(useMatch)}
                         </td>
                       </tr>
-                    ))
+                      );
+                    })
                   )}
                 </tbody>
               </table>

@@ -67,17 +67,11 @@ export interface SessionAssetCheckItem {
   instanceCode: string;
   assetName: string;
   departmentName: string;
-  bookQty: number;
-  actualQty: number | null;
-  difference: number | null;
+  /** Book expectation: instance still in active use */
+  bookStillInUse: boolean;
+  /** Recorded after check; null if not yet submitted */
+  actualStillInUse: boolean | null;
   checkStatus: number; // 0=Chưa kiểm kê, 1=Đang kiểm kê, 2=Hoàn tất
-}
-
-export interface AssetStatusEntry {
-  statusKey: string;
-  statusLabel: string;
-  bookQty: number;
-  actualQty: number | null;
 }
 
 export interface AssetInventoryDetail {
@@ -88,7 +82,10 @@ export interface AssetInventoryDetail {
   assetName: string;
   categoryName: string;
   typeName: string;
-  statusEntries: AssetStatusEntry[];
+  bookStillInUse: boolean;
+  actualStillInUse: boolean | null;
+  /** Saved checker notes (inventory record ActualCondition) */
+  actualCondition: string;
   bookLocationId: number | null;
   bookLocationName: string;
   actualLocationId: number | null;
@@ -101,11 +98,11 @@ export interface AssetInventoryDetail {
 
 export interface SaveAssetInventoryPayload {
   assetInstanceId: number;
-  statusEntries: { statusKey: string; actualQty: number }[];
+  stillInUse: boolean;
+  actualCondition?: string;
   actualLocationId: number | null;
   actualManagerId: number | null;
   checkedBy: number;
-  actualCondition?: string;
 }
 
 export interface CompleteSessionResult {

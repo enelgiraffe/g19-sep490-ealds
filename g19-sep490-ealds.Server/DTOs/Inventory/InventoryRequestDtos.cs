@@ -24,21 +24,20 @@ public class SubmitInventoryTaskDTO
     public string? Note { get; set; }
 }
 
-public class StatusEntryPayloadDTO
-{
-    public string StatusKey { get; set; } = null!;
-    public int ActualQty { get; set; }
-}
-
 public class SaveAssetInventoryDTO
 {
     /// <summary>Optional echo; must match the route <c>assetInstanceId</c> when set.</summary>
     public int AssetInstanceId { get; set; }
-    public List<StatusEntryPayloadDTO> StatusEntries { get; set; } = new();
+
+    /// <summary>Whether this physical instance is still in use on site (per checker).</summary>
+    public bool StillInUse { get; set; }
+
+    /// <summary>Checker&apos;s status / condition notes; stored in inventory record ActualCondition.</summary>
+    public string? ActualCondition { get; set; }
+
     public int? ActualLocationId { get; set; }
     public int? ActualManagerId { get; set; }
     public int CheckedBy { get; set; }
-    public string? ActualCondition { get; set; }
 }
 
 public class UpdateInventorySessionDTO

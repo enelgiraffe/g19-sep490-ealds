@@ -346,16 +346,12 @@ public class InventoryController : ControllerBase
                 .ToList();
         }
 
-        const int bookQtyPerInstance = 1;
         var result = tasks.Select(t =>
         {
             var inst = t.AssetInstance;
             var asset = inst.Asset;
             var record = t.InventoryRecords.FirstOrDefault();
-            int? actualQty = record == null
-                ? null
-                : record.ActualQuantity ?? (record.IsFound == true ? bookQtyPerInstance : 0);
-            int? difference = actualQty.HasValue ? actualQty.Value - bookQtyPerInstance : null;
+            bool? actualStillInUse = record == null ? null : record.IsFound;
             int cs = t.Status == (int)InventoryTaskStatus.Checked ? 2 : 0;
             var currentLoc = inst.AssetLocations.FirstOrDefault(al => al.IsCurrent);
 
@@ -367,9 +363,8 @@ public class InventoryController : ControllerBase
                 InstanceCode = inst.InstanceCode,
                 AssetName = asset.Name,
                 DepartmentName = currentLoc?.Department?.Name ?? t.Department?.Name ?? string.Empty,
-                BookQty = bookQtyPerInstance,
-                ActualQty = actualQty,
-                Difference = difference,
+                BookStillInUse = BookImpliesInUse(inst.Status),
+                ActualStillInUse = actualStillInUse,
                 CheckStatus = cs
             };
         }).ToList();
@@ -419,8 +414,7 @@ public class InventoryController : ControllerBase
             .FirstOrDefaultAsync();
 
         var record = task.InventoryRecords.FirstOrDefault();
-        const int bookQtyPerInstance = 1;
-        int? actualQty = record == null ? null : (record.ActualQuantity ?? (record.IsFound == true ? bookQtyPerInstance : 0));
+        bool? actualStillInUse = record?.IsFound;
         int? actualLocationId = record?.ActualLocation?.DepartmentId;
 
         var departments = await _context.Departments
@@ -443,16 +437,9 @@ public class InventoryController : ControllerBase
             AssetName = asset.Name,
             CategoryName = asset.AssetType?.Category?.Name ?? string.Empty,
             TypeName = asset.AssetType?.Name ?? string.Empty,
-            StatusEntries = new List<AssetStatusEntryDTO>
-            {
-                new AssetStatusEntryDTO
-                {
-                    StatusKey = "in_use",
-                    StatusLabel = GetAssetStatusLabel(inst.Status),
-                    BookQty = bookQtyPerInstance,
-                    ActualQty = actualQty
-                }
-            },
+            BookStillInUse = BookImpliesInUse(inst.Status),
+            ActualStillInUse = actualStillInUse,
+            ActualCondition = record?.ActualCondition ?? string.Empty,
             BookLocationId = currentLoc?.DepartmentId,
             BookLocationName = currentLoc?.Department?.Name ?? string.Empty,
             ActualLocationId = actualLocationId,
@@ -501,11 +488,9 @@ public class InventoryController : ControllerBase
         var inst = task.AssetInstance;
         var asset = inst.Asset;
         var bookLocation = inst.AssetLocations.FirstOrDefault(al => al.IsCurrent);
-        const int bookQtyPerInstance = 1;
-
-        // Compute total actual qty from status entries
-        var totalActualQty = dto.StatusEntries.Sum(e => e.ActualQty);
-        bool isFound = totalActualQty > 0;
+        bool stillInUse = dto.StillInUse;
+        bool bookInUse = BookImpliesInUse(inst.Status);
+        var storedCondition = (dto.ActualCondition ?? string.Empty).Trim();
 
         // Resolve actual location: dto.ActualLocationId is a DepartmentId
         AssetLocation? actualLocation = null;
@@ -545,9 +530,7 @@ public class InventoryController : ControllerBase
 
         // Create or update inventory record
         var record = task.InventoryRecords.FirstOrDefault();
-        var resolvedCondition = !string.IsNullOrWhiteSpace(dto.ActualCondition)
-            ? dto.ActualCondition
-            : ((AssetStatus)inst.Status).ToString();
+        int? actualQtyLegacy = stillInUse ? 1 : 0;
 
         if (record == null)
         {
@@ -556,9 +539,9 @@ public class InventoryController : ControllerBase
                 TaskId = task.TaskId,
                 ActualLocationId = actualLocation.LocationId,
                 ActualUserId = dto.ActualManagerId,
-                ActualCondition = resolvedCondition,
-                IsFound = isFound,
-                ActualQuantity = totalActualQty,
+                ActualCondition = storedCondition,
+                IsFound = stillInUse,
+                ActualQuantity = actualQtyLegacy,
                 CheckedBy = dto.CheckedBy > 0 ? dto.CheckedBy : (dto.ActualManagerId ?? 1),
                 CheckedDate = DateTime.UtcNow,
                 DateCheckCompleted = DateTime.UtcNow
@@ -569,14 +552,14 @@ public class InventoryController : ControllerBase
         {
             record.ActualLocationId = actualLocation.LocationId;
             record.ActualUserId = dto.ActualManagerId;
-            record.ActualCondition = resolvedCondition;
-            record.IsFound = isFound;
-            record.ActualQuantity = totalActualQty;
+            record.ActualCondition = storedCondition;
+            record.IsFound = stillInUse;
+            record.ActualQuantity = actualQtyLegacy;
             record.CheckedDate = DateTime.UtcNow;
             record.DateCheckCompleted = DateTime.UtcNow;
         }
 
-        // Detect discrepancies
+        // Detect discrepancies (per instance; no quantity comparison)
         var bookUsage = await _context.AssetUsages
             .Where(u => u.AssetInstanceId == assetInstanceId && u.IsCurrent)
             .Include(u => u.Employee)
@@ -584,15 +567,13 @@ public class InventoryController : ControllerBase
         var bookManagerId = bookUsage?.Employee?.UserId;
 
         int discrepancyFlags = 0;
-        if (!isFound)
-        {
+        if (!stillInUse && bookInUse)
             discrepancyFlags |= (int)DiscrepancyType.AssetNotFound;
-        }
-        else
-        {
-            if (totalActualQty != bookQtyPerInstance)
-                discrepancyFlags |= (int)DiscrepancyType.QuantityMismatch;
+        if (stillInUse && !bookInUse)
+            discrepancyFlags |= (int)DiscrepancyType.ConditionMismatch;
 
+        if (stillInUse)
+        {
             if (bookLocation != null && dto.ActualLocationId.HasValue &&
                 bookLocation.DepartmentId != dto.ActualLocationId.Value)
                 discrepancyFlags |= (int)DiscrepancyType.LocationMismatch;
@@ -618,7 +599,7 @@ public class InventoryController : ControllerBase
                 ActualValue = inst.CurrentValue,
                 ActualLocationId = actualLocation.LocationId,
                 ActualUserId = dto.ActualManagerId,
-                ActualCondition = resolvedCondition
+                ActualCondition = storedCondition
             });
         }
 
@@ -1605,6 +1586,18 @@ public class InventoryController : ControllerBase
         6 => "Đã lý",
         7 => "Vốn hóa",
         _ => "Khác"
+    };
+
+    /// <summary>
+    /// Book-side expectation for &quot;still in use&quot;: anything except idle/terminal statuses.
+    /// </summary>
+    private static bool BookImpliesInUse(int status) => (AssetStatus)status switch
+    {
+        AssetStatus.Available => false,
+        AssetStatus.Disposed => false,
+        AssetStatus.Lost => false,
+        AssetStatus.Liquidated => false,
+        _ => true
     };
 
     /// <summary>
