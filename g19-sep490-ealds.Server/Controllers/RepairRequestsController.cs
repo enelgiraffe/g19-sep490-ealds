@@ -26,6 +26,54 @@ public class RepairRequestsController : ControllerBase
         _repairRequestTypeId = configuration.GetValue<int>("App:RepairRequestTypeId", 4);
     }
 
+    /// <summary>
+    /// GET /api/Assets/Requests/repair - Danh sách yêu cầu sửa chữa.
+    /// </summary>
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<TransferRequestListItemDTO>>> GetList()
+    {
+        var list = await _db.RepairTasks
+            .AsNoTracking()
+            .Include(t => t.AssetInstance)
+                .ThenInclude(ai => ai.Asset)
+            .Include(t => t.AssetInstance)
+                .ThenInclude(ai => ai.AssetLocations)
+                    .ThenInclude(al => al.Department)
+            .Include(t => t.AssetRequest)
+            .Where(t => t.AssetRequest != null && t.AssetRequest.RequestTypeId == _repairRequestTypeId)
+            .OrderByDescending(t => t.AssetRequest!.CreateDate)
+            .Select(t => new TransferRequestListItemDTO
+            {
+                RecordId = t.TaskId,
+                AssetRequestId = t.AssetRequestId,
+                Code = "SCC" + t.TaskId,
+                TransferDate = t.AssetRequest!.CreateDate,
+                AssetCode = t.AssetInstance.Asset != null ? t.AssetInstance.Asset.Code : string.Empty,
+                AssetName = t.AssetInstance.Asset != null ? t.AssetInstance.Asset.Name : string.Empty,
+                AssetInstanceId = t.AssetInstanceId,
+                InstanceCode = t.AssetInstance.InstanceCode,
+                FromDepartment = t.AssetInstance.AssetLocations
+                    .Where(al => al.IsCurrent)
+                    .Select(al => al.Department != null ? al.Department.Name : string.Empty)
+                    .FirstOrDefault() ?? string.Empty,
+                ToDepartment = string.Empty,
+                Quantity = 1,
+                Status = t.AssetRequest.Status,
+                StatusName =
+                    t.AssetRequest.Status == 0 ? "Đã nộp" :
+                    t.AssetRequest.Status == 1 ? "Chờ phê duyệt" :
+                    t.AssetRequest.Status == 2 ? "Đã duyệt" :
+                    t.AssetRequest.Status == 3 ? "Từ chối" :
+                    t.AssetRequest.Status == 4 ? "Đang sửa chữa" :
+                    t.AssetRequest.Status == 5 ? "Hoàn thành" :
+                    "Không xác định",
+                Reason = t.Reason
+            })
+            .ToListAsync();
+
+        return Ok(list);
+    }
+
     [HttpPost]
     public async Task<IActionResult> CreateRepairRequest([FromBody] RepairRequestDTO dto)
     {

@@ -50,10 +50,12 @@ public class MaintenanceRequestsController : ControllerBase
                 {
                     RecordId = t.TaskId,
                     AssetRequestId = t.AssetRequestId ?? 0,
-                    Code = "SBB" + t.TaskId,
+                    Code = "SBD" + t.TaskId,
                     TransferDate = t.PlannedDate,
                     AssetCode = t.AssetInstance.Asset.Code,
                     AssetName = t.AssetInstance.Asset.Name,
+                    AssetInstanceId = t.AssetInstanceId,
+                    InstanceCode = t.AssetInstance.InstanceCode,
                     FromDepartment = t.AssetInstance.AssetLocations
                         .Where(al => al.IsCurrent)
                         .Select(al => al.Department.Name)
@@ -70,7 +72,7 @@ public class MaintenanceRequestsController : ControllerBase
                         t.AssetRequest.Status == 1 ? "Chờ phê duyệt" :
                         t.AssetRequest.Status == 2 ? "Phê duyệt" :
                         t.AssetRequest.Status == 3 ? "Từ chối" :
-                        t.AssetRequest.Status == 4 ? "Phê duyệt" :
+                        t.AssetRequest.Status == 4 ? "Đang thực hiện" :
                         "Không xác định",
                     Reason = t.AssetRequest.Description
                 })

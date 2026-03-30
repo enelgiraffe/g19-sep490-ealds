@@ -57,6 +57,8 @@ public class TransferRequestsController : ControllerBase
                 TransferDate = tr.TransferDate,
                 AssetCode = tr.AssetInstance.Asset.Code,
                 AssetName = tr.AssetInstance.Asset.Name,
+                AssetInstanceId = tr.AssetInstanceId,
+                InstanceCode = tr.AssetInstance.InstanceCode,
                 FromDepartment = tr.FromLocation.Department.Name,
                 ToDepartment = tr.ToLocation.Department.Name,
                 Quantity = 1,
