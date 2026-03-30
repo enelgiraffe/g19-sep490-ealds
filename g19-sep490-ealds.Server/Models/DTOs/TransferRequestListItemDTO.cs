@@ -16,6 +16,10 @@ public class TransferRequestListItemDTO
 
     public string AssetName { get; set; } = null!;
 
+    public int? AssetInstanceId { get; set; }
+
+    public string? InstanceCode { get; set; }
+
     public string FromDepartment { get; set; } = null!;
 
     public string ToDepartment { get; set; } = null!;
