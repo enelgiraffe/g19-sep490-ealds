@@ -193,9 +193,7 @@ export function AccountantAssetListPage() {
           <table className="asset-table">
             <thead>
               <tr>
-                <th className="asset-table__cell asset-table__cell--checkbox">
-                  <input type="checkbox" />
-                </th>
+                <th className="asset-table__cell asset-table__cell--stt">STT</th>
                 <th>MÃ TÀI SẢN</th>
                 <th>TÊN TÀI SẢN</th>
                 <th>LOẠI TÀI SẢN</th>
@@ -215,11 +213,9 @@ export function AccountantAssetListPage() {
                   </td>
                 </tr>
               ) : (
-                data.map((row) => (
+                data.map((row, index) => (
                   <tr key={row.key} className="asset-row">
-                    <td className="asset-table__cell asset-table__cell--checkbox">
-                      <input type="checkbox" />
-                    </td>
+                    <td className="asset-table__cell asset-table__cell--stt">{index + 1}</td>
                     <td>
                       <button
                         type="button"

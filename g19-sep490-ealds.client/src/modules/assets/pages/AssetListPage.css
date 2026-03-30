@@ -113,6 +113,111 @@
   background: #1d4ed8;
 }
 
+.asset-list-split {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid #e6e6e6;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.asset-list-split__top {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.asset-list-split--with-panel .asset-list-split__top,
+.asset-list-split--with-panel .asset-list-split__bottom {
+  flex: 1 1 50%;
+}
+
+.asset-list-split__top .asset-table-wrapper {
+  flex: 1;
+}
+
+.asset-list-split__bottom {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-top: 1px solid #e6e6e6;
+  background: #fafafa;
+}
+
+.asset-row--selected {
+  background: #fff4f2 !important;
+}
+
+.asset-row__more-btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+}
+
+.asset-row__more-btn--icon:hover {
+  color: #fe3720;
+}
+
+.asset-instances-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.asset-instances-panel__header {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  border-bottom: 1px solid #e6e6e6;
+  background: #ffffff;
+}
+
+.asset-instances-panel__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.asset-instances-panel__empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  font-size: 13px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.asset-instances-panel__loading {
+  margin: 16px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.asset-table-wrapper--panel {
+  flex: 1;
+  background: #ffffff;
+}
+
+.asset-table--panel {
+  min-width: 640px;
+}
+
+.asset-table--compact {
+  min-width: 720px;
+}
+
 .asset-table-wrapper {
   overflow: auto;
   flex: 1;
@@ -147,15 +252,11 @@
   background: #fcfcfc;
 }
 
-.asset-table__cell--checkbox {
-  width: 40px;
-}
-.asset-table__cell--checkbox input[type="checkbox"] {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  border: 2px solid #dad9d9;
-  accent-color: #fe3720;
+.asset-table__cell--stt {
+  width: 48px;
+  text-align: center;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
 }
 
 .asset-table__cell--actions {

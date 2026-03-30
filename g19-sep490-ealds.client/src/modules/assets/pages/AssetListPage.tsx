@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { message, Popover, Slider, Button } from 'antd';
+import { message } from 'antd';
+import { EyeOutlined } from '@ant-design/icons';
 import {
   assetInstanceService,
   assetService,
   formatVnd,
   getStatusLabel,
+  type AssetCatalogResponse,
   type AssetInstanceResponse,
-  type GetAssetInstancesParams,
+  type GetAssetCatalogParams,
   type AssetTypeItem,
 } from '../services/assetService';
 import { transferRequestService } from '../services/transferRequestService';
@@ -22,18 +24,21 @@ import { profileService, type UserProfile } from '../../profile/services/profile
 import './AssetListPage.css';
 
 interface AssetItem {
-  /** Physical row id (AssetInstance) */
   id: number;
-  /** Catalog Asset id for navigation and requests that still use AssetId */
-  catalogAssetId: number;
   code: string;
   name: string;
   type: string;
   quantity: number;
-  price: string;
+}
+
+interface InstanceItem {
+  assetInstanceId: number;
+  instanceCode: string;
+  serialNumber: string;
   status: string;
+  originalPrice: string;
+  currentValue: string;
   statusColor: 'green' | 'gray';
-  depreciation: string;
 }
 
 interface AssetInfo {
@@ -76,22 +81,29 @@ function formatDate(iso?: string | null): string {
   }
 }
 
-function mapInstanceToItem(a: AssetInstanceResponse): AssetItem {
+function mapAssetToItem(a: AssetCatalogResponse, instanceCount: number): AssetItem {
+  return {
+    id: a.assetId,
+    code: a.code,
+    name: a.name,
+    type: a.assetTypeName ?? '—',
+    quantity: instanceCount,
+  };
+}
+
+function mapInstanceToInstanceItem(a: AssetInstanceResponse): InstanceItem {
   const statusName = a.statusName ?? 'Available';
   const activeStatuses = ['Available', 'InUse', 'InMaintenance', 'Reserved'];
   const statusColor: 'green' | 'gray' =
     activeStatuses.includes(statusName) ? 'green' : 'gray';
   return {
-    id: a.assetInstanceId,
-    catalogAssetId: a.assetId,
-    code: a.instanceCode,
-    name: a.assetName ?? a.assetCode ?? a.instanceCode,
-    type: '—',
-    quantity: 1,
-    price: formatVnd(a.currentValue),
+    assetInstanceId: a.assetInstanceId,
+    instanceCode: a.instanceCode,
+    serialNumber: a.serialNumber ?? '—',
     status: getStatusLabel(statusName),
+    originalPrice: formatVnd(a.originalPrice),
+    currentValue: formatVnd(a.currentValue),
     statusColor,
-    depreciation: formatVnd(a.remainingValue ?? a.currentValue),
   };
 }
 
@@ -115,20 +127,9 @@ function instanceToAssetInfo(a: AssetInstanceResponse): AssetInfo {
   };
 }
 
-function buildPriceFilterLabel(
-  minPrice: string,
-  maxPrice: string
-): string {
-  if (!minPrice && !maxPrice) return 'Giá';
-  const hasMin = !!minPrice;
-  const hasMax = !!maxPrice;
-  const minLabel = hasMin ? formatVnd(Number(minPrice)) : 'Tất cả';
-  const maxLabel = hasMax ? formatVnd(Number(maxPrice)) : 'Tất cả';
-  return `${minLabel} - ${maxLabel}`;
-}
 
 export function AssetListPage() {
-  const [apiAssets, setApiAssets] = useState<AssetInstanceResponse[] | null>(null);
+  const [apiAssets, setApiAssets] = useState<AssetCatalogResponse[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
@@ -136,11 +137,11 @@ export function AssetListPage() {
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
   const [assetTypeFilter, setAssetTypeFilter] = useState<number | undefined>(undefined);
-  const [minPrice, setMinPrice] = useState<string>('');
-  const [maxPrice, setMaxPrice] = useState<string>('');
-  const [isPriceFilterOpen, setIsPriceFilterOpen] = useState(false);
+  const [expandedAssetId, setExpandedAssetId] = useState<number | null>(null);
+  const [instancesMap, setInstancesMap] = useState<Record<number, InstanceItem[]>>({});
+  const [loadingInstances, setLoadingInstances] = useState<Record<number, boolean>>({});
+  const [instanceCountByAssetId, setInstanceCountByAssetId] = useState<Record<number, number>>({});
   const [markDamagedAssetId, setMarkDamagedAssetId] = useState<number | null>(null);
-  const [draftPriceRange, setDraftPriceRange] = useState<[number, number] | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isMarkDamagedModalOpen, setIsMarkDamagedModalOpen] = useState(false);
   const [isLiquidationModalOpen, setIsLiquidationModalOpen] = useState(false);
@@ -152,58 +153,37 @@ export function AssetListPage() {
   const [assetTypes, setAssetTypes] = useState<AssetTypeItem[]>([]);
   const navigate = useNavigate();
 
-  const assets: AssetItem[] = apiAssets?.map(mapInstanceToItem) ?? [];
-
-  const PRICE_SLIDER_MIN = 0;
-  const PRICE_SLIDER_MAX = 1_000_000_000;
-
-  const currentMinNumber = minPrice ? Number(minPrice) : PRICE_SLIDER_MIN;
-  const currentMaxNumber = maxPrice ? Number(maxPrice) : PRICE_SLIDER_MAX;
-
-  const effectiveDraftRange: [number, number] =
-    draftPriceRange ?? [currentMinNumber, currentMaxNumber];
-
-  const priceButtonLabel = buildPriceFilterLabel(minPrice, maxPrice);
-
-  const handleOpenPriceFilter = (open: boolean) => {
-    if (open) {
-      setDraftPriceRange([currentMinNumber, currentMaxNumber]);
-    }
-    setIsPriceFilterOpen(open);
-  };
-
-  const handleApplyPriceFilter = () => {
-    if (!draftPriceRange) {
-      setMinPrice('');
-      setMaxPrice('');
-    } else {
-      const [min, max] = draftPriceRange;
-      setMinPrice(min > PRICE_SLIDER_MIN ? String(min) : '');
-      setMaxPrice(max < PRICE_SLIDER_MAX ? String(max) : '');
-    }
-    setIsPriceFilterOpen(false);
-  };
-
-  const handleClearPriceFilter = () => {
-    setDraftPriceRange([PRICE_SLIDER_MIN, PRICE_SLIDER_MAX]);
-    setMinPrice('');
-    setMaxPrice('');
-    setIsPriceFilterOpen(false);
-  };
+  const assets: AssetItem[] = useMemo(() => {
+    if (!apiAssets) return [];
+    return apiAssets.map((a) =>
+      mapAssetToItem(a, instanceCountByAssetId[a.assetId] ?? 0)
+    );
+  }, [apiAssets, instanceCountByAssetId]);
 
   const fetchAssets = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const params: GetAssetInstancesParams = {
+      const params: GetAssetCatalogParams = {
         keyword: keyword || undefined,
         status: statusFilter,
         assetTypeId: assetTypeFilter,
-        minPrice: minPrice ? Number(minPrice) : undefined,
-        maxPrice: maxPrice ? Number(maxPrice) : undefined,
       };
-      const data = await assetInstanceService.getAll(params);
+      const data = await assetService.getAll(params);
       setApiAssets(data);
+
+      try {
+        const countParams =
+          assetTypeFilter !== undefined ? { assetTypeId: assetTypeFilter } : undefined;
+        const allInstances = await assetInstanceService.getAll(countParams);
+        const countMap: Record<number, number> = {};
+        for (const inst of allInstances) {
+          countMap[inst.assetId] = (countMap[inst.assetId] ?? 0) + 1;
+        }
+        setInstanceCountByAssetId(countMap);
+      } catch {
+        setInstanceCountByAssetId({});
+      }
     } catch (e: any) {
       const status = e?.response?.status;
       const data = e?.response?.data;
@@ -225,7 +205,20 @@ export function AssetListPage() {
     } finally {
       setLoading(false);
     }
-  }, [keyword, statusFilter, assetTypeFilter, minPrice, maxPrice]);
+  }, [keyword, statusFilter, assetTypeFilter]);
+
+  const fetchInstancesForAsset = async (assetId: number) => {
+    setLoadingInstances((prev) => ({ ...prev, [assetId]: true }));
+    try {
+      const detail = await assetService.getById(assetId);
+      const instances = detail.instances?.map(mapInstanceToInstanceItem) ?? [];
+      setInstancesMap((prev) => ({ ...prev, [assetId]: instances }));
+    } catch (e: any) {
+      message.error('Không tải được danh sách cá thể tài sản.');
+    } finally {
+      setLoadingInstances((prev) => ({ ...prev, [assetId]: false }));
+    }
+  };
 
   useEffect(() => {
     fetchAssets();
@@ -282,26 +275,41 @@ export function AssetListPage() {
     setOpenMenuId((current) => (current === id ? null : id));
   };
 
-  const handleMenuAction = (actionKey: string, asset: AssetItem) => {
-    setOpenMenuId(null);
-    const raw = apiAssets?.find((a) => a.assetInstanceId === asset.id);
-    if (actionKey === 'move' && raw) {
-      setSelectedAssetInfo(instanceToAssetInfo(raw));
-      setTransferAssetInstanceId(raw.assetInstanceId);
-      setIsTransferModalOpen(true);
-    } else if (actionKey === 'mark-broken' && raw) {
-      setSelectedAssetInfo(instanceToAssetInfo(raw));
-      setMarkDamagedAssetId(raw.assetId);
-      setIsMarkDamagedModalOpen(true);
-    } else if (actionKey === 'liquidate' && raw) {
-      setSelectedAssetInfo(instanceToAssetInfo(raw));
-      setIsLiquidationModalOpen(true);
-    } else if (actionKey === 'maintenance' && raw) {
-      setSelectedAssetInfo(instanceToAssetInfo(raw));
-      setMaintenanceAssetInstanceId(raw.assetInstanceId);
-      setIsMaintenanceModalOpen(true);
+  const handleAssetCodeClick = async (assetId: number) => {
+    if (expandedAssetId === assetId) {
+      setExpandedAssetId(null);
     } else {
-      console.log('Action', actionKey, 'for asset', asset);
+      setExpandedAssetId(assetId);
+      await fetchInstancesForAsset(assetId);
+    }
+  };
+
+  const handleInstanceMenuAction = async (actionKey: string, instanceId: number) => {
+    setOpenMenuId(null);
+    try {
+      const raw = await assetInstanceService.getById(instanceId);
+      const assetInfo = instanceToAssetInfo(raw);
+      
+      if (actionKey === 'move') {
+        setSelectedAssetInfo(assetInfo);
+        setTransferAssetInstanceId(raw.assetInstanceId);
+        setIsTransferModalOpen(true);
+      } else if (actionKey === 'mark-broken') {
+        setSelectedAssetInfo(assetInfo);
+        setMarkDamagedAssetId(raw.assetId);
+        setIsMarkDamagedModalOpen(true);
+      } else if (actionKey === 'liquidate') {
+        setSelectedAssetInfo(assetInfo);
+        setIsLiquidationModalOpen(true);
+      } else if (actionKey === 'maintenance') {
+        setSelectedAssetInfo(assetInfo);
+        setMaintenanceAssetInstanceId(raw.assetInstanceId);
+        setIsMaintenanceModalOpen(true);
+      } else {
+        console.log('Action', actionKey, 'for instance', instanceId);
+      }
+    } catch (e: any) {
+      message.error('Không tải được thông tin cá thể tài sản.');
     }
   };
 
@@ -567,6 +575,9 @@ export function AssetListPage() {
     );
   }
 
+  const selectedListAsset =
+    expandedAssetId != null ? assets.find((a) => a.id === expandedAssetId) : undefined;
+
   return (
     <div className="asset-page">
       <h1 className="asset-page__title">Tài sản</h1>
@@ -616,56 +627,6 @@ export function AssetListPage() {
               <option value={6}>Đã thanh lý</option>
               <option value={7}>Đã ghi tăng</option>
             </select>
-            <Popover
-              open={isPriceFilterOpen}
-              onOpenChange={handleOpenPriceFilter}
-              trigger="click"
-              placement="bottomRight"
-              overlayClassName="asset-price-popover"
-              content={
-                <div className="asset-price-popover__content">
-                  <Slider
-                    range
-                    min={PRICE_SLIDER_MIN}
-                    max={PRICE_SLIDER_MAX}
-                    step={1_000_000}
-                    value={effectiveDraftRange}
-                    onChange={(value) => {
-                      const [min, max] = value as [number, number];
-                      setDraftPriceRange([min, max]);
-                    }}
-                  />
-                  <div className="asset-price-popover__labels">
-                    <div className="asset-price-label">
-                      {formatVnd(effectiveDraftRange[0])}
-                    </div>
-                    <span className="asset-price-label-separator">-</span>
-                    <div className="asset-price-label">
-                      {formatVnd(effectiveDraftRange[1])}
-                    </div>
-                  </div>
-                  <Button
-                    type="primary"
-                    block
-                    className="asset-price-popover__apply"
-                    onClick={handleApplyPriceFilter}
-                  >
-                    Áp dụng
-                  </Button>
-                  <button
-                    type="button"
-                    className="asset-price-popover__clear"
-                    onClick={handleClearPriceFilter}
-                  >
-                    Xóa bộ lọc
-                  </button>
-                </div>
-              }
-            >
-              <button type="button" className="asset-filter-select">
-                {priceButtonLabel}
-              </button>
-            </Popover>
             <button
               className="asset-filter-reset"
               type="button"
@@ -674,9 +635,6 @@ export function AssetListPage() {
                 setKeyword('');
                 setStatusFilter(undefined);
                 setAssetTypeFilter(undefined);
-                setMinPrice('');
-                setMaxPrice('');
-                setDraftPriceRange(null);
               }}
             >
               Gỡ bộ lọc
@@ -690,129 +648,205 @@ export function AssetListPage() {
           </div>
         </div>
 
-        <div className="asset-table-wrapper">
-          <table className="asset-table">
-            <thead>
-              <tr>
-                <th className="asset-table__cell asset-table__cell--checkbox">
-                  <input type="checkbox" />
-                </th>
-                <th>MÃ TÀI SẢN</th>
-                <th>TÊN TÀI SẢN</th>
-                <th>LOẠI TÀI SẢN</th>
-                <th>SỐ LƯỢNG</th>
-                <th>GIÁ</th>
-                <th>TRẠNG THÁI</th>
-                <th>GIÁ TRỊ KHẤU HAO</th>
-                <th className="asset-table__cell asset-table__cell--actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {assets.map((asset) => (
-                <tr key={asset.id} className="asset-row">
-                  <td className="asset-table__cell asset-table__cell--checkbox">
-                    <input type="checkbox" />
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="asset-code asset-code--link"
-                      onClick={() => navigate(`/assets/${asset.catalogAssetId}`)}
-                    >
-                      {asset.code}
-                    </button>
-                  </td>
-                  <td>{asset.name}</td>
-                  <td>{asset.type}</td>
-                  <td className="asset-align-right">{asset.quantity}</td>
-                  <td className="asset-align-right">{asset.price}</td>
-                  <td>
-                    <span
+        <div
+          className={
+            expandedAssetId != null
+              ? 'asset-list-split asset-list-split--with-panel'
+              : 'asset-list-split'
+          }
+        >
+          <div className="asset-list-split__top">
+            <div className="asset-table-wrapper">
+              <table className="asset-table asset-table--compact">
+                <thead>
+                  <tr>
+                    <th className="asset-table__cell asset-table__cell--stt">STT</th>
+                    <th>MÃ TÀI SẢN</th>
+                    <th>TÊN TÀI SẢN</th>
+                    <th>LOẠI TÀI SẢN</th>
+                    <th>SỐ LƯỢNG</th>
+                    <th className="asset-table__cell asset-table__cell--actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {assets.map((asset, index) => (
+                    <tr
+                      key={asset.id}
                       className={
-                        asset.statusColor === 'green'
-                          ? 'asset-status-pill asset-status-pill--active'
-                          : 'asset-status-pill asset-status-pill--inactive'
+                        expandedAssetId === asset.id
+                          ? 'asset-row asset-row--selected'
+                          : 'asset-row'
                       }
                     >
-                      {asset.status}
-                    </span>
-                  </td>
-                  <td className="asset-align-right">{asset.depreciation}</td>
-                  <td className="asset-table__cell asset-table__cell--actions">
-                    <div className="asset-row__more">
-                      <button
-                        type="button"
-                        className="asset-row__more-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleMenu(asset.id);
-                        }}
-                      >
-                        ⋯
-                      </button>
-                      {openMenuId === asset.id && (
-                        <div className="asset-row-menu">
+                      <td className="asset-table__cell asset-table__cell--stt">{index + 1}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="asset-code asset-code--link"
+                          onClick={() => handleAssetCodeClick(asset.id)}
+                        >
+                          {expandedAssetId === asset.id ? '▼ ' : '▶ '}
+                          {asset.code}
+                        </button>
+                      </td>
+                      <td>{asset.name}</td>
+                      <td>{asset.type}</td>
+                      <td className="asset-align-right">{asset.quantity}</td>
+                      <td className="asset-table__cell asset-table__cell--actions">
+                        <div className="asset-row__more">
                           <button
-                            className="asset-row-menu__item"
-                            onClick={() => handleMenuAction('move', asset)}
+                            type="button"
+                            className="asset-row__more-btn asset-row__more-btn--icon"
+                            aria-label="Xem chi tiết"
+                            onClick={() => navigate(`/assets/${asset.id}`)}
                           >
-                            <span className="asset-row-menu__icon">↔</span>
-                            <span>Di chuyển</span>
-                          </button>
-                          <button
-                            className="asset-row-menu__item"
-                            onClick={() =>
-                              handleMenuAction('maintenance', asset)
-                            }
-                          >
-                            <span className="asset-row-menu__icon">🛠</span>
-                            <span>Bảo dưỡng</span>
-                          </button>
-                          <button
-                            className="asset-row-menu__item"
-                            onClick={() => handleMenuAction('mark-lost', asset)}
-                          >
-                            <span className="asset-row-menu__icon">−</span>
-                            <span>Đánh dấu mất</span>
-                          </button>
-                          <button
-                            className="asset-row-menu__item"
-                            onClick={() => handleMenuAction('liquidate', asset)}
-                          >
-                            <span className="asset-row-menu__icon">$</span>
-                            <span>Đề nghị thanh lý</span>
-                          </button>
-                          <button
-                            className="asset-row-menu__item"
-                            onClick={() =>
-                              handleMenuAction('mark-broken', asset)
-                            }
-                          >
-                            <span className="asset-row-menu__icon">!</span>
-                            <span>Đánh dấu hỏng</span>
-                          </button>
-                          <button
-                            className="asset-row-menu__item"
-                            onClick={() => handleMenuAction('print-qr', asset)}
-                          >
-                            <span className="asset-row-menu__icon">▤</span>
-                            <span>In mã QR</span>
-                          </button>
-                          <button
-                            className="asset-row-menu__item asset-row-menu__item--danger"
-                            onClick={() => handleMenuAction('delete', asset)}
-                          >
-                            <span className="asset-row-menu__icon">🗑</span>
-                            <span>Xóa</span>
+                            <EyeOutlined />
                           </button>
                         </div>
-                      )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {expandedAssetId != null && (
+            <div className="asset-list-split__bottom">
+              <div className="asset-instances-panel">
+                <div className="asset-instances-panel__header">
+                  Cá thể tài sản:{' '}
+                  <strong>{selectedListAsset?.code ?? expandedAssetId}</strong>
+                  {selectedListAsset?.name ? ` — ${selectedListAsset.name}` : null}
+                </div>
+                <div className="asset-instances-panel__body">
+                  {loadingInstances[expandedAssetId] ? (
+                    <p className="asset-instances-panel__loading">Đang tải danh sách cá thể...</p>
+                  ) : instancesMap[expandedAssetId]?.length ? (
+                    <div className="asset-table-wrapper asset-table-wrapper--panel">
+                      <table className="asset-table asset-table--panel">
+                        <thead>
+                          <tr>
+                            <th className="asset-table__cell asset-table__cell--stt">STT</th>
+                            <th>MÃ CÁ THỂ</th>
+                            <th>SERIAL NUMBER</th>
+                            <th>TRẠNG THÁI</th>
+                            <th>GIÁ GỐC</th>
+                            <th>GIÁ TRỊ HIỆN TẠI</th>
+                            <th className="asset-table__cell asset-table__cell--actions" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {instancesMap[expandedAssetId]!.map((instance, index) => (
+                              <tr key={instance.assetInstanceId} className="asset-instance-row">
+                                <td className="asset-table__cell asset-table__cell--stt">{index + 1}</td>
+                                <td>{instance.instanceCode}</td>
+                                <td>{instance.serialNumber}</td>
+                                <td>
+                                  <span
+                                    className={
+                                      instance.statusColor === 'green'
+                                        ? 'asset-status-pill asset-status-pill--active'
+                                        : 'asset-status-pill asset-status-pill--inactive'
+                                    }
+                                  >
+                                    {instance.status}
+                                  </span>
+                                </td>
+                                <td className="asset-align-right">{instance.originalPrice}</td>
+                                <td className="asset-align-right">{instance.currentValue}</td>
+                                <td className="asset-table__cell asset-table__cell--actions">
+                                  <div className="asset-row__more">
+                                    <button
+                                      type="button"
+                                      className="asset-row__more-btn"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleMenu(instance.assetInstanceId);
+                                      }}
+                                    >
+                                      ⋯
+                                    </button>
+                                    {openMenuId === instance.assetInstanceId && (
+                                      <div className="asset-row-menu">
+                                        <button
+                                          className="asset-row-menu__item"
+                                          onClick={() =>
+                                            handleInstanceMenuAction('move', instance.assetInstanceId)
+                                          }
+                                        >
+                                          <span className="asset-row-menu__icon">↔</span>
+                                          <span>Di chuyển</span>
+                                        </button>
+                                        <button
+                                          className="asset-row-menu__item"
+                                          onClick={() =>
+                                            handleInstanceMenuAction('maintenance', instance.assetInstanceId)
+                                          }
+                                        >
+                                          <span className="asset-row-menu__icon">🛠</span>
+                                          <span>Bảo dưỡng</span>
+                                        </button>
+                                        <button
+                                          className="asset-row-menu__item"
+                                          onClick={() =>
+                                            handleInstanceMenuAction('mark-lost', instance.assetInstanceId)
+                                          }
+                                        >
+                                          <span className="asset-row-menu__icon">−</span>
+                                          <span>Đánh dấu mất</span>
+                                        </button>
+                                        <button
+                                          className="asset-row-menu__item"
+                                          onClick={() =>
+                                            handleInstanceMenuAction('liquidate', instance.assetInstanceId)
+                                          }
+                                        >
+                                          <span className="asset-row-menu__icon">$</span>
+                                          <span>Đề nghị thanh lý</span>
+                                        </button>
+                                        <button
+                                          className="asset-row-menu__item"
+                                          onClick={() =>
+                                            handleInstanceMenuAction('mark-broken', instance.assetInstanceId)
+                                          }
+                                        >
+                                          <span className="asset-row-menu__icon">!</span>
+                                          <span>Đánh dấu hỏng</span>
+                                        </button>
+                                        <button
+                                          className="asset-row-menu__item"
+                                          onClick={() =>
+                                            handleInstanceMenuAction('print-qr', instance.assetInstanceId)
+                                          }
+                                        >
+                                          <span className="asset-row-menu__icon">▤</span>
+                                          <span>In mã QR</span>
+                                        </button>
+                                        <button
+                                          className="asset-row-menu__item asset-row-menu__item--danger"
+                                          onClick={() =>
+                                            handleInstanceMenuAction('delete', instance.assetInstanceId)
+                                          }
+                                        >
+                                          <span className="asset-row-menu__icon">🗑</span>
+                                          <span>Xóa</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  ) : (
+                    <p className="asset-instances-panel__empty">Không có cá thể nào.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="asset-card__footer">
