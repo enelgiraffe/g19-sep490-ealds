@@ -4,7 +4,8 @@ namespace g19_sep490_ealds.Server.Models.DTOs;
 
 public class ReportDamageDTO
 {
-    public int AssetId { get; set; }
+    // The physical instance being reported for damage
+    public int AssetInstanceId { get; set; }
 
     public int ReportedBy { get; set; }
 

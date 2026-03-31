@@ -26,21 +26,22 @@ public class DamageReportsController : ControllerBase
         if (dto == null)
             return BadRequest("Request body is required.");
 
-        if (dto.AssetId <= 0 || dto.ReportedBy <= 0)
-            return BadRequest("AssetId and ReportedBy are required.");
+        if (dto.AssetInstanceId <= 0 || dto.ReportedBy <= 0)
+            return BadRequest("AssetInstanceId and ReportedBy are required.");
 
         if (dto.ReportDate == default)
             return BadRequest("ReportDate is required.");
 
-        var asset = await _db.Assets.FindAsync(dto.AssetId);
-        if (asset == null)
-            return NotFound("Asset not found.");
+        var instance = await _db.AssetInstances.FindAsync(dto.AssetInstanceId);
+        if (instance == null)
+            return NotFound("Asset instance not found.");
 
         var assetRequest = new AssetRequest
         {
             UserId = dto.ReportedBy,
             RequestTypeId = dto.RequestTypeId ?? 0,
-            AssetId = dto.AssetId,
+            AssetId = instance.AssetId,
+            AssetInstanceId = instance.AssetInstanceId,
             // store a short title using the report date
             Title = $"Damage report - {dto.ReportDate:yyyy-MM-dd}",
             Description = dto.Description,
@@ -55,8 +56,8 @@ public class DamageReportsController : ControllerBase
 
         _db.AssetRequests.Add(assetRequest);
 
-        // Mark asset as damaged immediately after reporting
-        asset.Status = (int)AssetStatus.Damaged;
+        // Mark physical instance as damaged immediately after reporting
+        instance.Status = (int)AssetStatus.Damaged;
 
         await _db.SaveChangesAsync();
 
