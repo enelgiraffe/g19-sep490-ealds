@@ -653,6 +653,7 @@ public class AssetInstancesController : ControllerBase
             AssetTypeId = i.Asset?.AssetTypeId ?? 0,
             AssetCode = i.Asset?.Code,
             AssetName = i.Asset?.Name,
+            Specification = i.Asset?.Specification,
             InstanceCode = i.InstanceCode,
             SerialNumber = i.SerialNumber,
             WarehouseId = i.WarehouseId,

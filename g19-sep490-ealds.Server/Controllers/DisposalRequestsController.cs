@@ -180,6 +180,15 @@ public class DisposalRequestsController : ControllerBase
         {
             return BadRequest($"RequestTypeId '{resolvedRequestTypeId}' không tồn tại trong bảng RequestType.");
         }
+        var initialStepId = await _db.RequestTypes
+            .AsNoTracking()
+            .Where(rt => rt.RequestTypeId == resolvedRequestTypeId)
+            .SelectMany(rt => _db.WorkflowSteps.Where(ws => ws.WorkflowId == rt.WorkflowId))
+            .OrderBy(ws => ws.StepOrder)
+            .Select(ws => (int?)ws.StepId)
+            .FirstOrDefaultAsync();
+        if (!initialStepId.HasValue)
+            return BadRequest($"No workflow step configured for RequestTypeId '{resolvedRequestTypeId}'.");
 
         var assetRequest = new AssetRequest
         {
@@ -193,7 +202,7 @@ public class DisposalRequestsController : ControllerBase
             Status = 0,
             CreatedBy = actorUserId,
             CreateDate = DateTime.UtcNow,
-            StepId = 0
+            StepId = initialStepId.Value
         };
 
         _db.AssetRequests.Add(assetRequest);

@@ -71,8 +71,8 @@ public class TransferRequestsController : ControllerBase
                     tr.AssetRequest.Status == 4 ? "Phê duyệt" :
                     "Không xác định",
                 Reason = tr.AssetRequest.Description,
-                IsSenderConfirmed = tr.IsSenderConfirmed,
-                IsReceiverConfirmed = tr.IsReceiverConfirmed
+                IsSenderConfirmed = false,
+                IsReceiverConfirmed = false
             })
             .ToListAsync();
 
@@ -135,6 +135,15 @@ public class TransferRequestsController : ControllerBase
         _db.AssetLocations.Add(toLocation);
 
         var title = dto.Title ?? $"Transfer instance {dto.AssetInstanceId} from dept {dto.FromLocationId} to dept {dto.ToLocationId}";
+        var initialStepId = await _db.RequestTypes
+            .AsNoTracking()
+            .Where(rt => rt.RequestTypeId == _transferRequestTypeId)
+            .SelectMany(rt => _db.WorkflowSteps.Where(ws => ws.WorkflowId == rt.WorkflowId))
+            .OrderBy(ws => ws.StepOrder)
+            .Select(ws => (int?)ws.StepId)
+            .FirstOrDefaultAsync();
+        if (!initialStepId.HasValue)
+            return BadRequest($"No workflow step configured for RequestTypeId '{_transferRequestTypeId}'.");
 
         var assetRequest = new AssetRequest
         {
@@ -148,7 +157,7 @@ public class TransferRequestsController : ControllerBase
             Status = 1,
             CreatedBy = userId,
             CreateDate = DateTime.UtcNow,
-            StepId = 0
+            StepId = initialStepId.Value
         };
 
         _db.AssetRequests.Add(assetRequest);

@@ -320,6 +320,23 @@
   max-width: 280px;
 }
 
+.maintenance-form-modal__money-input {
+  position: relative;
+}
+
+.maintenance-form-modal__money-input .maintenance-form-modal__input {
+  padding-right: 36px;
+}
+
+.maintenance-form-modal__money-suffix {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280;
+  text-decoration: underline;
+}
+
 .maintenance-form-modal__textarea {
   resize: vertical;
   min-height: 96px;
@@ -348,6 +365,10 @@
   font-size: 14px;
 }
 
+.maintenance-form-modal__radio-group input[type='radio'] {
+  margin-right: 5px;
+}
+
 .maintenance-form-modal__location-field {
   margin-top: 8px;
 }
@@ -372,6 +393,10 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.maintenance-form-modal__info-item--full {
+  grid-column: 1 / -1;
 }
 
 .maintenance-form-modal__info-item label {
@@ -439,6 +464,7 @@
   font-weight: 500;
   height: 40px;
   padding: 0 20px;
+  border-radius: 6px;
 }
 
 .maintenance-form-modal__btn-confirm:hover {
@@ -479,4 +505,250 @@
   .maintenance-form-modal__input--narrow {
     max-width: 100%;
   }
+}
+
+/* Modal thiết lập quy định bảo dưỡng */
+.template-setup-modal-overlay,
+.template-form-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.template-setup-modal,
+.template-form-modal {
+  position: relative;
+  width: min(1100px, 96vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.template-form-modal {
+  width: min(760px, 96vw);
+}
+
+.template-setup-modal__header,
+.template-form-modal__header {
+  background: #ffe5e0;
+  border-bottom: 1px solid #ffd4cc;
+  padding: 16px 24px;
+}
+
+.template-setup-modal__title,
+.template-form-modal__title {
+  margin: 0;
+  color: #fe3720;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.template-setup-modal__close-btn,
+.template-form-modal__close-btn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.template-setup-modal__close,
+.template-form-modal__close {
+  color: #fe3720;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.template-setup-modal__body,
+.template-form-modal__body {
+  padding: 20px 24px;
+  overflow: auto;
+}
+
+.template-setup-modal__toolbar {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.template-setup-modal__search {
+  width: 100%;
+  max-width: 340px;
+  height: 40px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0 12px;
+}
+
+.template-setup-modal__btn-primary,
+.template-form-modal__btn-primary {
+  border: 1px solid #fe3720;
+  background: #fe3720;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0 16px;
+  height: 40px;
+  cursor: pointer;
+}
+
+.template-setup-modal__btn-secondary,
+.template-form-modal__btn-secondary {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #111827;
+  border-radius: 8px;
+  padding: 0 16px;
+  height: 40px;
+  cursor: pointer;
+}
+
+.template-setup-modal__table-scroll {
+  overflow-x: auto;
+}
+
+.template-setup-modal__table {
+  min-width: 980px;
+}
+
+.template-setup-modal__status-btn {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #4b5563;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.template-setup-modal__status-btn--active {
+  border-color: #16a34a;
+  background: #dcfce7;
+  color: #166534;
+}
+
+.template-setup-modal__icon-btn {
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.template-setup-modal__icon-btn--danger {
+  color: #ef4444;
+}
+
+.template-setup-modal__footer,
+.template-form-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid #e5e7eb;
+  padding: 14px 24px 18px;
+}
+
+.template-form-modal__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
+}
+
+.template-form-modal__item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.template-form-modal__item--full {
+  grid-column: 1 / -1;
+}
+
+.template-form-modal__input,
+.template-form-modal__textarea {
+  width: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.template-form-modal__textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+
+.template-form-modal__radio-group {
+  display: flex;
+  gap: 16px;
+}
+
+.template-delete-confirm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.template-delete-confirm-modal {
+  width: min(420px, 92vw);
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.18);
+}
+
+.template-delete-confirm-modal__header {
+  background: #ffe5e0;
+  border-bottom: 1px solid #ffd4cc;
+  padding: 14px 18px;
+}
+
+.template-delete-confirm-modal__title {
+  margin: 0;
+  color: #fe3720;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.template-delete-confirm-modal__body {
+  padding: 18px;
+  color: #1f2937;
+  line-height: 1.45;
+}
+
+.template-delete-confirm-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 18px 18px;
+}
+
+.template-delete-confirm-modal__btn {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.template-delete-confirm-modal__btn--secondary {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #111827;
+}
+
+.template-delete-confirm-modal__btn--danger {
+  border: 1px solid #ef4444;
+  background: #ef4444;
+  color: #fff;
 }

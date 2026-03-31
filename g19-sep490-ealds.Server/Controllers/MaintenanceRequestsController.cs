@@ -52,8 +52,11 @@ public class MaintenanceRequestsController : ControllerBase
                     AssetRequestId = t.AssetRequestId ?? 0,
                     Code = "SBD" + t.TaskId,
                     TransferDate = t.PlannedDate,
-                    AssetCode = t.AssetInstance.Asset.Code,
+                    AssetCode = t.AssetInstance.InstanceCode,
                     AssetName = t.AssetInstance.Asset.Name,
+                    AssetTypeName = t.AssetInstance.Asset.AssetType != null
+                        ? t.AssetInstance.Asset.AssetType.Name
+                        : null,
                     AssetInstanceId = t.AssetInstanceId,
                     InstanceCode = t.AssetInstance.InstanceCode,
                     FromDepartment = t.AssetInstance.AssetLocations
@@ -98,6 +101,15 @@ public class MaintenanceRequestsController : ControllerBase
             : null;
 
         var title = dto.Title ?? $"Maintenance request for instance {dto.AssetInstanceId}";
+        var initialStepId = await _db.RequestTypes
+            .AsNoTracking()
+            .Where(rt => rt.RequestTypeId == _maintenanceRequestTypeId)
+            .SelectMany(rt => _db.WorkflowSteps.Where(ws => ws.WorkflowId == rt.WorkflowId))
+            .OrderBy(ws => ws.StepOrder)
+            .Select(ws => (int?)ws.StepId)
+            .FirstOrDefaultAsync();
+        if (!initialStepId.HasValue)
+            return BadRequest($"No workflow step configured for RequestTypeId '{_maintenanceRequestTypeId}'.");
 
         var assetRequest = new AssetRequest
         {
@@ -112,7 +124,7 @@ public class MaintenanceRequestsController : ControllerBase
             Status = 1,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow,
-            StepId = 0
+            StepId = initialStepId.Value
         };
 
         _db.AssetRequests.Add(assetRequest);
@@ -243,6 +255,8 @@ public class MaintenanceRequestsController : ControllerBase
         if (!isFinalApproved)
             return BadRequest("Only requests approved at final workflow step can be started.");
 
+        var task = await _db.MaintenanceTasks.FirstOrDefaultAsync(t => t.AssetRequestId == ar.AssetRequestId);
+
         var hasAllowedRoleFromToken =
             User.IsInRole("DIRECTOR") ||
             User.IsInRole("DepartmentManager") ||
@@ -286,7 +300,7 @@ public class MaintenanceRequestsController : ControllerBase
             .Select(r => r.RoleId)
             .ToListAsync();
 
-        var allowed = hasAllowedRoleFromToken || userRoles.Any(ur =>
+        var allowedByRole = hasAllowedRoleFromToken || userRoles.Any(ur =>
             allowedRoleIds.Contains(ur.RoleId) ||
             (ur.Role?.Code != null &&
                 (
@@ -308,6 +322,12 @@ public class MaintenanceRequestsController : ControllerBase
                     ur.Role.Name.ToUpper().Contains("TRUONG PHONG")
                 ))
         );
+        var allowedByOwnership =
+            ar.CreatedBy == actorUserId ||
+            task?.CreateBy == actorUserId ||
+            task?.AssignTo == actorUserId ||
+            task?.PerformerUserId == actorUserId;
+        var allowed = allowedByRole || allowedByOwnership;
 
         if (!allowed)
         {
@@ -325,7 +345,6 @@ public class MaintenanceRequestsController : ControllerBase
         ar.Status = 4;
 
         // mark related maintenance task as in-progress and persist start fields
-        var task = await _db.MaintenanceTasks.FirstOrDefaultAsync(t => t.AssetRequestId == ar.AssetRequestId);
         if (task != null)
         {
             if (dto.MaintenanceDate.HasValue)
@@ -413,6 +432,11 @@ public class MaintenanceRequestsController : ControllerBase
 
     private async Task<bool> IsFinalApprovedByWorkflowAsync(AssetRequest ar)
     {
+        // Backward-compatible: many existing flows mark "approved" directly on AssetRequest.Status
+        // without persisting final-step approval rows.
+        if (ar.Status == 2 || ar.Status == 4)
+            return true;
+
         var workflowId = await _db.RequestTypes.AsNoTracking()
             .Where(rt => rt.RequestTypeId == ar.RequestTypeId)
             .Select(rt => (int?)rt.WorkflowId)

@@ -360,9 +360,6 @@ export function AssetInstanceDetailPage() {
 
         <div className="asset-detail__section">
           <h2 className="asset-detail__section-title">Quy định bảo dưỡng</h2>
-          <p className="asset-detail__empty" style={{ marginBottom: 8, fontSize: 13 }}>
-            Gồm quy định chung của tài sản danh mục và quy định riêng cho cá thể này (nếu có).
-          </p>
           <div className="asset-detail__table-wrapper">
             <table className="asset-detail__table">
               <thead>

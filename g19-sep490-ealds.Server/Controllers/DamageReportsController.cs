@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -35,11 +36,23 @@ public class DamageReportsController : ControllerBase
         var instance = await _db.AssetInstances.FindAsync(dto.AssetInstanceId);
         if (instance == null)
             return NotFound("Asset instance not found.");
+        if (!dto.RequestTypeId.HasValue || dto.RequestTypeId.Value <= 0)
+            return BadRequest("RequestTypeId is required.");
+
+        var initialStepId = await _db.RequestTypes
+            .AsNoTracking()
+            .Where(rt => rt.RequestTypeId == dto.RequestTypeId.Value)
+            .SelectMany(rt => _db.WorkflowSteps.Where(ws => ws.WorkflowId == rt.WorkflowId))
+            .OrderBy(ws => ws.StepOrder)
+            .Select(ws => (int?)ws.StepId)
+            .FirstOrDefaultAsync();
+        if (!initialStepId.HasValue)
+            return BadRequest($"No workflow step configured for RequestTypeId '{dto.RequestTypeId.Value}'.");
 
         var assetRequest = new AssetRequest
         {
             UserId = dto.ReportedBy,
-            RequestTypeId = dto.RequestTypeId ?? 0,
+            RequestTypeId = dto.RequestTypeId.Value,
             AssetId = instance.AssetId,
             AssetInstanceId = instance.AssetInstanceId,
             // store a short title using the report date
@@ -51,7 +64,7 @@ public class DamageReportsController : ControllerBase
             Status = 1,
             CreatedBy = dto.ReportedBy,
             CreateDate = DateTime.UtcNow,
-            StepId = 0
+            StepId = initialStepId.Value
         };
 
         _db.AssetRequests.Add(assetRequest);

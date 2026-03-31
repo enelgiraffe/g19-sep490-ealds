@@ -195,6 +195,7 @@ public class AssetInstanceResponseDTO
     public int AssetTypeId { get; set; }
     public string? AssetCode { get; set; }
     public string? AssetName { get; set; }
+    public string? Specification { get; set; }
     public string InstanceCode { get; set; } = null!;
     public string? SerialNumber { get; set; }
     public int WarehouseId { get; set; }

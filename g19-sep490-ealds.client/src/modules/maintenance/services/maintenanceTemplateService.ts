@@ -19,7 +19,7 @@ maintenanceTemplateApi.interceptors.request.use((config) => {
 });
 
 export type MaintenanceFrequencyType = 1 | 2; // 1: OneTime, 2: Periodic
-export type MaintenanceRepeatIntervalUnit = 1 | 2 | 3 | 4; // Day/Week/Month/Year
+export type MaintenanceRepeatIntervalUnit = 0 | 1 | 2 | 3 | 4; // 0 for OneTime on backend
 
 export interface MaintenanceTemplatePayload {
   assetTypeId: number;

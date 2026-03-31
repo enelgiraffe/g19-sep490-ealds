@@ -39,10 +39,13 @@ export interface MaintenanceRequestResponse {
 export interface MaintenanceRequestListItemDTO {
   recordId: number;
   assetRequestId: number;
+  assetInstanceId?: number | null;
+  instanceCode?: string | null;
   code: string;
   transferDate: string;
   assetCode: string;
   assetName: string;
+  assetTypeName?: string | null;
   fromDepartment: string;
   toDepartment: string;
   quantity: number;

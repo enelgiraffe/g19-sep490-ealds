@@ -90,6 +90,7 @@ export interface AssetInstanceResponse {
   assetTypeId: number;
   assetCode?: string | null;
   assetName?: string | null;
+  specification?: string | null;
   instanceCode: string;
   serialNumber?: string | null;
   warehouseId: number;

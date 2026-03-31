@@ -111,6 +111,18 @@ function instanceToAssetInfo(
   a: AssetInstanceResponse,
   catalog?: AssetCatalogResponse | null
 ): AssetInfo {
+  const latestWarrantyEndDate =
+    a.warrantyEndDate ??
+    (a.guarantees && a.guarantees.length > 0
+      ? a.guarantees.reduce<string | null>((latest, current) => {
+          if (!current.warrantyEndDate) return latest;
+          if (!latest) return current.warrantyEndDate;
+          return new Date(current.warrantyEndDate) > new Date(latest)
+            ? current.warrantyEndDate
+            : latest;
+        }, null)
+      : null);
+
   return {
     assetInstanceId: a.assetInstanceId,
     assetId: a.assetId,
@@ -119,7 +131,7 @@ function instanceToAssetInfo(
     type: catalog?.assetTypeName ?? '—',
     specification: catalog?.specification ?? '—',
     purchaseDate: formatDate(a.purchaseDate),
-    warrantyExpiry: '—',
+    warrantyExpiry: formatDate(latestWarrantyEndDate),
     currentValue: formatVnd(a.currentValue),
     remainingValue: formatVnd(a.remainingValue ?? a.currentValue),
     location: a.warehouseName ?? a.currentDepartmentName ?? '—',
@@ -356,7 +368,7 @@ export function AssetListPage() {
 
     try {
       await damageReportService.report({
-        assetId: markDamagedAssetId,
+        assetInstanceId: markDamagedAssetId,
         reportedBy,
         requestTypeId: undefined,
         reportDate: damageDate

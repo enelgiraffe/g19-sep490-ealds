@@ -92,6 +92,15 @@ public class RepairRequestsController : ControllerBase
             return NotFound($"AssetInstanceId {dto.AssetInstanceId} not found.");
 
         var title = dto.Title ?? $"Repair request for instance {dto.AssetInstanceId}";
+        var initialStepId = await _db.RequestTypes
+            .AsNoTracking()
+            .Where(rt => rt.RequestTypeId == _repairRequestTypeId)
+            .SelectMany(rt => _db.WorkflowSteps.Where(ws => ws.WorkflowId == rt.WorkflowId))
+            .OrderBy(ws => ws.StepOrder)
+            .Select(ws => (int?)ws.StepId)
+            .FirstOrDefaultAsync();
+        if (!initialStepId.HasValue)
+            return BadRequest($"No workflow step configured for RequestTypeId '{_repairRequestTypeId}'.");
 
         var assetRequest = new AssetRequest
         {
@@ -107,7 +116,7 @@ public class RepairRequestsController : ControllerBase
             Status = 1,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow,
-            StepId = 0
+            StepId = initialStepId.Value
         };
 
         _db.AssetRequests.Add(assetRequest);

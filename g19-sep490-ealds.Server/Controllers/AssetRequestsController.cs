@@ -106,6 +106,15 @@ public class AssetRequestsController : ControllerBase
         {
             return BadRequest($"Configured purchase RequestTypeId '{_purchaseRequestTypeId}' does not exist in RequestType table.");
         }
+        var initialStepId = await _db.RequestTypes
+            .AsNoTracking()
+            .Where(rt => rt.RequestTypeId == _purchaseRequestTypeId)
+            .SelectMany(rt => _db.WorkflowSteps.Where(ws => ws.WorkflowId == rt.WorkflowId))
+            .OrderBy(ws => ws.StepOrder)
+            .Select(ws => (int?)ws.StepId)
+            .FirstOrDefaultAsync();
+        if (!initialStepId.HasValue)
+            return BadRequest($"No workflow step configured for RequestTypeId '{_purchaseRequestTypeId}'.");
 
         var assetRequest = new AssetRequest
         {
@@ -119,7 +128,7 @@ public class AssetRequestsController : ControllerBase
             Status = desiredStatus,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow,
-            StepId = 0
+            StepId = initialStepId.Value
         };
 
         _db.AssetRequests.Add(assetRequest);

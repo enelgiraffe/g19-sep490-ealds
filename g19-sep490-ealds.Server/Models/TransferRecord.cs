@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace g19_sep490_ealds.Server.Models;
 
@@ -23,12 +24,16 @@ public partial class TransferRecord
 
     public int ExecutedBy { get; set; }
 
+    [NotMapped]
     public bool IsSenderConfirmed { get; set; }
 
+    [NotMapped]
     public DateTime? SenderConfirmedAt { get; set; }
 
+    [NotMapped]
     public bool IsReceiverConfirmed { get; set; }
 
+    [NotMapped]
     public DateTime? ReceiverConfirmedAt { get; set; }
 
     public virtual AssetInstance AssetInstance { get; set; } = null!;
