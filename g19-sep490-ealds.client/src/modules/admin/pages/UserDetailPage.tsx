@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Input, Select, message, Switch } from 'antd';
 import { isAxiosError } from 'axios';
 import { LeftOutlined } from '@ant-design/icons';
@@ -80,6 +80,21 @@ export function UserDetailPage() {
         // keep detail page usable even when lookup API unavailable
       });
   }, [id, navigate]);
+
+  const departmentSelectOptions = useMemo(() => {
+    const base = metadata.departments.map((d) => ({
+      value: d.departmentId,
+      label: d.name,
+    }));
+    const uid = user?.departmentId;
+    if (uid != null && uid > 0 && !base.some((o) => o.value === uid)) {
+      base.push({
+        value: uid,
+        label: `${user?.departmentName ?? 'Phòng ban'} (không hoạt động)`,
+      });
+    }
+    return base;
+  }, [metadata.departments, user?.departmentId, user?.departmentName]);
 
   const handleSaveEdit = async () => {
     if (!user) return;
@@ -239,7 +254,7 @@ export function UserDetailPage() {
                 <Select
                   value={editDraft.departmentId || undefined}
                   onChange={(value) => setEditDraft((d) => ({ ...d, departmentId: value }))}
-                  options={metadata.departments.map((d) => ({ value: d.departmentId, label: d.name }))}
+                  options={departmentSelectOptions}
                   getPopupContainer={(trigger) => trigger.parentElement ?? document.body}
                 />
               ) : (

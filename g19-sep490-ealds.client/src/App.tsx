@@ -28,6 +28,7 @@ import { InventoryReviewPage } from './modules/inventory/pages/InventoryReviewPa
 import { LiquidationPage } from './modules/liquidation/pages/LiquidationPage';
 import { RequestsPage } from './modules/requests/pages/RequestsPage';
 import { CategoriesPage } from './modules/admin/pages/CategoriesPage';
+import { DepartmentsPage } from './modules/admin/pages/DepartmentsPage';
 import { UsersPage } from './modules/admin/pages/UsersPage';
 import { UserDetailPage } from './modules/admin/pages/UserDetailPage';
 import { CostRecordingPage } from './modules/cost-recording/pages/CostRecordingPage';
@@ -89,7 +90,7 @@ function App() {
           <Route path="users" element={<UsersPage />} />
           <Route path="users/:id" element={<UserDetailPage />} />
           <Route path="roles" element={<ModulePlaceholder title="Vai trò" />} />
-          <Route path="departments" element={<ModulePlaceholder title="Phòng ban" />} />
+          <Route path="departments" element={<DepartmentsPage />} />
           <Route path="categories" element={<CategoriesPage />} />
           <Route path="approval-workflows" element={<ModulePlaceholder title="Quy trình phê duyệt" />} />
           <Route path="extended-fields" element={<ModulePlaceholder title="Trường mở rộng" />} />

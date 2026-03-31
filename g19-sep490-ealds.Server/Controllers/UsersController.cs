@@ -135,10 +135,11 @@ public class UsersController : ControllerBase
             return BadRequest("An employee with this code already exists.");
         }
 
-        var departmentExists = await _context.Departments.AnyAsync(d => d.DepartmentId == dto.DepartmentId);
-        if (!departmentExists)
+        var departmentActive = await _context.Departments.AnyAsync(d =>
+            d.DepartmentId == dto.DepartmentId && d.Status == 1);
+        if (!departmentActive)
         {
-            return BadRequest("Department not found.");
+            return BadRequest("Department not found or inactive.");
         }
 
         var user = new User
@@ -229,10 +230,12 @@ public class UsersController : ControllerBase
             return BadRequest("Employee profile not found for this user.");
         }
 
-        var departmentExists = await _context.Departments.AnyAsync(d => d.DepartmentId == dto.DepartmentId);
-        if (!departmentExists)
+        var departmentOk = dto.DepartmentId == employee.DepartmentId
+            ? await _context.Departments.AnyAsync(d => d.DepartmentId == dto.DepartmentId)
+            : await _context.Departments.AnyAsync(d => d.DepartmentId == dto.DepartmentId && d.Status == 1);
+        if (!departmentOk)
         {
-            return BadRequest("Department not found.");
+            return BadRequest("Department not found or inactive.");
         }
 
         if (!string.Equals(user.Email, dto.Email, StringComparison.OrdinalIgnoreCase))
@@ -366,6 +369,7 @@ public class UsersController : ControllerBase
             .ToListAsync();
 
         var departments = await _context.Departments
+            .Where(d => d.Status == 1)
             .OrderBy(d => d.Name)
             .Select(d => new DepartmentOptionDTO
             {
@@ -400,6 +404,7 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> GetDepartments()
     {
         var departments = await _context.Departments
+            .Where(d => d.Status == 1)
             .OrderBy(d => d.Name)
             .Select(d => new DepartmentOptionDTO
             {
