@@ -111,6 +111,12 @@ export interface AssetInstanceResponse {
   depreciationAmount?: number | null;
   accumulatedDepreciation?: number | null;
   remainingValue?: number | null;
+  guaranteeId?: number | null;
+  warrantyPeriodValue?: number | null;
+  warrantyPeriodUnit?: string | null;
+  warrantyConditions?: string | null;
+  warrantyStartDate?: string | null;
+  warrantyEndDate?: string | null;
 }
 
 /** GET /api/assets/{id} — catalog + instances + maintenance + documents */

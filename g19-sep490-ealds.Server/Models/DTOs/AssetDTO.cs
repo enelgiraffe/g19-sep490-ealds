@@ -227,4 +227,11 @@ public class AssetInstanceResponseDTO
     public decimal? DepreciationAmount { get; set; }
     public decimal? AccumulatedDepreciation { get; set; }
     public decimal? RemainingValue { get; set; }
+
+    public int? GuaranteeId { get; set; }
+    public int? WarrantyPeriodValue { get; set; }
+    public string? WarrantyPeriodUnit { get; set; }
+    public string? WarrantyConditions { get; set; }
+    public DateOnly? WarrantyStartDate { get; set; }
+    public DateOnly? WarrantyEndDate { get; set; }
 }

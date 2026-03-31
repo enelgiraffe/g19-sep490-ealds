@@ -40,6 +40,7 @@ public class AssetInstancesController : ControllerBase
             .Include(i => i.Warehouse)
             .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
+            .Include(i => i.Guarantees)
             .AsNoTracking()
             .AsQueryable();
 
@@ -124,6 +125,7 @@ public class AssetInstancesController : ControllerBase
             .Include(i => i.Warehouse)
             .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
+            .Include(i => i.Guarantees)
             .AsNoTracking()
             .FirstOrDefaultAsync(i => i.AssetInstanceId == id);
 
@@ -238,6 +240,7 @@ public class AssetInstancesController : ControllerBase
             .Include(i => i.Warehouse)
             .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
+            .Include(i => i.Guarantees)
             .AsNoTracking()
             .FirstAsync(i => i.AssetInstanceId == instance.AssetInstanceId);
 
@@ -336,6 +339,7 @@ public class AssetInstancesController : ControllerBase
             .Include(i => i.Warehouse)
             .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
+            .Include(i => i.Guarantees)
             .AsNoTracking()
             .FirstAsync(i => i.AssetInstanceId == id);
 
@@ -372,6 +376,7 @@ public class AssetInstancesController : ControllerBase
             .Include(i => i.Warehouse)
             .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
+            .Include(i => i.Guarantees)
             .AsNoTracking()
             .FirstAsync(i => i.AssetInstanceId == id);
 
@@ -414,6 +419,7 @@ public class AssetInstancesController : ControllerBase
         var reloaded = await _context.AssetInstances
             .Include(i => i.Asset).ThenInclude(a => a!.AssetType)
             .Include(i => i.Warehouse)
+            .Include(i => i.Guarantees)
             .AsNoTracking()
             .FirstAsync(i => i.AssetInstanceId == id);
 
@@ -640,6 +646,10 @@ public class AssetInstancesController : ControllerBase
         AssetStatus? forcedStatus)
     {
         var effectiveStatus = forcedStatus ?? (AssetStatus)i.Status;
+        var latestGuarantee = i.Guarantees
+            .OrderByDescending(g => g.WarrantyEndDate)
+            .ThenByDescending(g => g.StartDate)
+            .FirstOrDefault();
         var dto = new AssetInstanceResponseDTO
         {
             AssetInstanceId = i.AssetInstanceId,
@@ -702,6 +712,16 @@ public class AssetInstancesController : ControllerBase
             dto.DepreciationAmount = latestDep.DepreciationAmount;
             dto.AccumulatedDepreciation = latestDep.AccumulatedDepreciation;
             dto.RemainingValue = latestDep.RemainingValue;
+        }
+
+        if (latestGuarantee != null)
+        {
+            dto.GuaranteeId = latestGuarantee.GuaranteeId;
+            dto.WarrantyPeriodValue = latestGuarantee.WarrantyPeriodValue;
+            dto.WarrantyPeriodUnit = latestGuarantee.WarrantyPeriodUnit;
+            dto.WarrantyConditions = latestGuarantee.WarrantyConditions;
+            dto.WarrantyStartDate = latestGuarantee.StartDate;
+            dto.WarrantyEndDate = latestGuarantee.WarrantyEndDate;
         }
 
         return dto;
