@@ -1,26 +1,33 @@
-import { FormEvent, useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { assetService, type CreateAssetPayload } from '../services/assetService';
+import {
+  assetService,
+  ASSET_MEASUREMENT_UNITS,
+  type CreateAssetPayload,
+} from '../services/assetService';
+import { transferRequestService, type AssetLocationOption } from '../services/transferRequestService';
 import { useAppStore } from '../../../stores/appStore';
 import './AssetCreatePage.css';
 
 interface GeneralInfoForm {
-  code: string;
+  assetCodePrefix: string;
   name: string;
   assetTypeId: string;
-  location: string;
-  manager: string;
+  departmentId: string;
+  managerEmployeeId: string;
+  warehouseId: string;
   purchaseDate: string;
-  supplier: string;
+  supplierId: string;
   contractNumber: string;
   serialNumber: string;
   specification: string;
   quantity: string;
   unit: string;
+  instanceCodePrefix: string;
   value: string;
   origin: string;
   note: string;
-  warehouseId: string;
   isFixedAsset: boolean;
 }
 
@@ -45,11 +52,6 @@ interface AllocationForm {
   usageTarget: string;
 }
 
-interface ExtraInfoForm {
-  customFieldKey: string;
-  contactInfo: string;
-}
-
 export function AssetCreatePage() {
   const navigate = useNavigate();
   const currentRole = useAppStore((s) => s.currentRole);
@@ -57,22 +59,23 @@ export function AssetCreatePage() {
   const backToListPath = currentRole === 'accountant' ? '/accountant-assets' : '/assets';
 
   const [general, setGeneral] = useState<GeneralInfoForm>({
-    code: '',
+    assetCodePrefix: '',
     name: '',
     assetTypeId: '',
-    location: '',
-    manager: '',
+    departmentId: '',
+    managerEmployeeId: '',
+    warehouseId: '',
     purchaseDate: '',
-    supplier: '',
+    supplierId: '',
     contractNumber: '',
     serialNumber: '',
     specification: '',
     quantity: '1',
-    unit: '',
+    unit: 'Cái',
+    instanceCodePrefix: '',
     value: '',
     origin: '',
     note: '',
-    warehouseId: '',
     isFixedAsset: true,
   });
 
@@ -97,44 +100,159 @@ export function AssetCreatePage() {
     usageTarget: '',
   });
 
-  const [extra, setExtra] = useState<ExtraInfoForm>({
-    customFieldKey: '',
-    contactInfo: '',
-  });
-
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const [departments, setDepartments] = useState<AssetLocationOption[]>([]);
+  const [assetTypes, setAssetTypes] = useState<{ assetTypeId: number; name: string }[]>([]);
+  const [warehouses, setWarehouses] = useState<{ warehouseId: number; name: string }[]>([]);
+  const [suppliers, setSuppliers] = useState<{ supplierId: number; name: string; code: string }[]>(
+    []
+  );
+  const [instancePrefixes, setInstancePrefixes] = useState<string[]>([]);
+  const [assetCatalogPrefixes, setAssetCatalogPrefixes] = useState<string[]>([]);
+  const [deptEmployees, setDeptEmployees] = useState<
+    { employeeId: number; name: string; code: string }[]
+  >([]);
+  const [loadMetaError, setLoadMetaError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [deptList, types, wh, sup, instPrefixes, catPrefixes] = await Promise.all([
+          transferRequestService.getAssetLocations(),
+          assetService.getAssetTypes(),
+          assetService.getWarehouses(),
+          assetService.getSuppliers(),
+          assetService.getInstanceCodePrefixes(),
+          assetService.getAssetCodePrefixes(),
+        ]);
+        if (cancelled) return;
+        setDepartments(deptList);
+        setAssetTypes(types);
+        setWarehouses(wh);
+        setGeneral((g) =>
+          g.warehouseId === '' && wh.length > 0
+            ? { ...g, warehouseId: String(wh[0].warehouseId) }
+            : g
+        );
+        setSuppliers(sup.map((s) => ({ supplierId: s.supplierId, name: s.name, code: s.code })));
+        setInstancePrefixes(instPrefixes);
+        setAssetCatalogPrefixes(catPrefixes);
+        setLoadMetaError(null);
+      } catch {
+        if (!cancelled) {
+          setLoadMetaError(
+            'Không tải được danh mục (phòng ban, loại tài sản, kho, nhà cung cấp).'
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const deptId = general.departmentId;
+    if (!deptId || Number(deptId) <= 0) {
+      setDeptEmployees([]);
+      setGeneral((g) => ({ ...g, managerEmployeeId: '' }));
+      return;
+    }
+
+    let cancelled = false;
+    setDeptEmployees([]);
+    (async () => {
+      try {
+        const list = await assetService.getEmployeesByDepartment(Number(deptId));
+        if (cancelled) return;
+        const sorted = [...list].sort((a, b) => {
+          const ua = a.userId ?? Number.MAX_SAFE_INTEGER;
+          const ub = b.userId ?? Number.MAX_SAFE_INTEGER;
+          if (ua !== ub) return ua - ub;
+          return a.employeeId - b.employeeId;
+        });
+        setDeptEmployees(sorted);
+        setGeneral((g) => ({
+          ...g,
+          managerEmployeeId:
+            sorted.length > 0 ? String(sorted[0].employeeId) : '',
+        }));
+      } catch {
+        if (!cancelled) {
+          setDeptEmployees([]);
+          setGeneral((g) => ({ ...g, managerEmployeeId: '' }));
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [general.departmentId]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!general.code || !general.name || !general.assetTypeId || !general.purchaseDate) {
+    if (!general.name || !general.assetTypeId || !general.purchaseDate) {
       alert('Vui lòng nhập đầy đủ các trường bắt buộc được đánh dấu *.');
       return;
     }
+    const isAccountant = currentRole === 'accountant';
+    if (isAccountant && (!general.departmentId || Number(general.departmentId) <= 0)) {
+      alert('Vui lòng chọn vị trí tài sản (phòng ban).');
+      return;
+    }
+    const assetPrefix = general.assetCodePrefix.trim();
+    if (!assetPrefix) {
+      alert('Vui lòng nhập mã tài sản (tiền tố mã).');
+      return;
+    }
+
+    const prefix = general.instanceCodePrefix.trim();
+    const qty = Math.max(1, Number(general.quantity || 1));
+    if (!prefix) {
+      alert('Vui lòng nhập mã cá thể (tiền tố mã).');
+      return;
+    }
+
     if (!general.warehouseId || Number(general.warehouseId) <= 0) {
       alert('Vui lòng chọn kho.');
       return;
     }
+    const selectedWarehouseId = Number(general.warehouseId);
 
     setSubmitError(null);
     setIsSubmitting(true);
 
-    const code = general.code.trim();
     const val = Number(general.value || 0);
+    const deptId =
+      isAccountant && general.departmentId && Number(general.departmentId) > 0
+        ? Number(general.departmentId)
+        : null;
+    const managerId =
+      isAccountant && general.managerEmployeeId
+        ? Number(general.managerEmployeeId)
+        : null;
+    const supplierId = general.supplierId ? Number(general.supplierId) : null;
+
     const payload: CreateAssetPayload = {
-      code,
+      assetCodePrefix: assetPrefix,
+      code: '_',
       name: general.name.trim(),
       assetTypeId: Number(general.assetTypeId),
       unit: general.unit || 'Cái',
-      quantity: Number(general.quantity || 1),
+      quantity: qty,
+      instanceCodePrefix: prefix,
       createdBy: 0,
       inUseDate: general.purchaseDate || null,
       specification: general.specification?.trim() || null,
       note: general.note?.trim() || null,
       initialInstance: {
-        instanceCode: (general.serialNumber?.trim() || `${code}-1`).slice(0, 100),
-        serialNumber: general.serialNumber?.trim() || null,
-        warehouseId: Number(general.warehouseId),
+        instanceCode: '_',
+        serialNumber: qty === 1 ? general.serialNumber?.trim() || null : null,
+        warehouseId: selectedWarehouseId,
         purchaseDate: general.purchaseDate,
         originalPrice: val,
         currentValue: val,
@@ -144,6 +262,13 @@ export function AssetCreatePage() {
           : null,
         contractNo: general.contractNumber?.trim() || null,
         condition: general.specification?.trim() || null,
+        supplierId: supplierId && supplierId > 0 ? supplierId : null,
+        assignedDepartmentId: deptId,
+        responsibleEmployeeId: managerId,
+        assignmentEffectiveDate:
+          isAccountant && (deptId != null || managerId != null)
+            ? general.purchaseDate || null
+            : null,
       },
     };
 
@@ -191,6 +316,11 @@ export function AssetCreatePage() {
       </div>
 
       <form id="asset-create-form" onSubmit={handleSubmit} className="asset-create__card">
+        {loadMetaError && (
+          <div className="asset-create__error" role="alert">
+            {loadMetaError}
+          </div>
+        )}
         {submitError && (
           <div className="asset-create__error" role="alert">
             {submitError}
@@ -207,18 +337,21 @@ export function AssetCreatePage() {
                 </label>
                 <input
                   className="asset-create__input"
-                  value={general.code}
-                  onChange={(e) => setGeneral({ ...general, code: e.target.value })}
+                  list="asset-catalog-prefix-options"
+                  placeholder="Ví dụ: TS"
+                  value={general.assetCodePrefix}
+                  onChange={(e) =>
+                    setGeneral({ ...general, assetCodePrefix: e.target.value })
+                  }
                 />
-              </div>
-
-              <div className="asset-create__field">
-                <label className="asset-create__label">Người quản lý</label>
-                <input
-                  className="asset-create__input"
-                  value={general.manager}
-                  onChange={(e) => setGeneral({ ...general, manager: e.target.value })}
-                />
+                <datalist id="asset-catalog-prefix-options">
+                  {assetCatalogPrefixes.map((p) => (
+                    <option key={p} value={p} />
+                  ))}
+                </datalist>
+                <p className="asset-create__hint">
+                  Hệ thống gắn số thứ tự tự động cho mã danh mục (ví dụ TS → TS01).
+                </p>
               </div>
 
               <div className="asset-create__field">
@@ -231,9 +364,11 @@ export function AssetCreatePage() {
                   onChange={(e) => setGeneral({ ...general, assetTypeId: e.target.value })}
                 >
                   <option value="">Chọn loại tài sản</option>
-                  <option value="1">Máy móc</option>
-                  <option value="2">Thiết bị</option>
-                  <option value="3">Khác</option>
+                  {assetTypes.map((t) => (
+                    <option key={t.assetTypeId} value={t.assetTypeId}>
+                      {t.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -248,8 +383,31 @@ export function AssetCreatePage() {
                 />
               </div>
 
-              <div className="asset-create__field asset-create__field--inline">
-                <div>
+              <div className="asset-create__field">
+                <label className="asset-create__label">
+                  Mã cá thể<span className="asset-create__required">*</span>
+                </label>
+                <input
+                  className="asset-create__input"
+                  list="asset-instance-prefix-options"
+                  placeholder="Ví dụ: LAP"
+                  value={general.instanceCodePrefix}
+                  onChange={(e) =>
+                    setGeneral({ ...general, instanceCodePrefix: e.target.value })
+                  }
+                />
+                <datalist id="asset-instance-prefix-options">
+                  {instancePrefixes.map((p) => (
+                    <option key={p} value={p} />
+                  ))}
+                </datalist>
+                <p className="asset-create__hint">
+                  Hệ thống gắn số thứ tự tự động (ví dụ LAP → LAP01, LAP02…).
+                </p>
+              </div>
+
+              <div className="asset-create__field asset-create__field--quantity-unit-row">
+                <div className="asset-create__quantity-unit-cell">
                   <label className="asset-create__label">Số lượng</label>
                   <input
                     type="number"
@@ -259,13 +417,20 @@ export function AssetCreatePage() {
                     onChange={(e) => setGeneral({ ...general, quantity: e.target.value })}
                   />
                 </div>
-                <div>
+                <div className="asset-create__quantity-unit-cell">
                   <label className="asset-create__label">Đơn vị tính</label>
-                  <input
-                    className="asset-create__input"
+                  <select
+                    className="asset-create__select"
                     value={general.unit}
                     onChange={(e) => setGeneral({ ...general, unit: e.target.value })}
-                  />
+                  >
+                    <option value="">Chọn đơn vị tính</option>
+                    {ASSET_MEASUREMENT_UNITS.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -302,18 +467,78 @@ export function AssetCreatePage() {
             <div className="asset-create__column">
               <div className="asset-create__field">
                 <label className="asset-create__label">
-                  Vị trí tài sản<span className="asset-create__required">*</span>
+                  Vị trí tài sản
+                  {currentRole === 'accountant' && (
+                    <span className="asset-create__required">*</span>
+                  )}
+                </label>
+                <select
+                  className="asset-create__select"
+                  value={general.departmentId}
+                  onChange={(e) =>
+                    setGeneral({
+                      ...general,
+                      departmentId: e.target.value,
+                      managerEmployeeId: '',
+                    })
+                  }
+                >
+                  <option value="">Chọn phòng ban</option>
+                  {departments.map((d) => (
+                    <option key={d.locationId} value={d.locationId}>
+                      {d.displayName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="asset-create__field">
+                <label className="asset-create__label">Người quản lý</label>
+                <select
+                  className="asset-create__select"
+                  value={
+                    !general.departmentId || deptEmployees.length === 0
+                      ? ''
+                      : deptEmployees.some(
+                            (e) => String(e.employeeId) === general.managerEmployeeId
+                          )
+                        ? general.managerEmployeeId
+                        : String(deptEmployees[0].employeeId)
+                  }
+                  disabled={!general.departmentId || deptEmployees.length === 0}
+                  onChange={(e) =>
+                    setGeneral({ ...general, managerEmployeeId: e.target.value })
+                  }
+                >
+                  {!general.departmentId && (
+                    <option value="">Chọn phòng ban trước</option>
+                  )}
+                  {general.departmentId && deptEmployees.length === 0 && (
+                    <option value="">Không có nhân viên trong phòng ban</option>
+                  )}
+                  {deptEmployees.map((emp) => (
+                    <option key={emp.employeeId} value={emp.employeeId}>
+                      {emp.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="asset-create__field">
+                <label className="asset-create__label">
+                  Kho<span className="asset-create__required">*</span>
                 </label>
                 <select
                   className="asset-create__select"
                   value={general.warehouseId}
-                  onChange={(e) =>
-                    setGeneral({ ...general, warehouseId: e.target.value, location: e.target.value })
-                  }
+                  onChange={(e) => setGeneral({ ...general, warehouseId: e.target.value })}
                 >
-                  <option value="">Chọn vị trí tài sản</option>
-                  <option value="1">Kho Hà Nội</option>
-                  <option value="2">Kho Thạch Thất</option>
+                  <option value="">Chọn kho</option>
+                  {warehouses.map((w) => (
+                    <option key={w.warehouseId} value={w.warehouseId}>
+                      {w.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -331,11 +556,19 @@ export function AssetCreatePage() {
 
               <div className="asset-create__field">
                 <label className="asset-create__label">Nhà cung cấp</label>
-                <input
-                  className="asset-create__input"
-                  value={general.supplier}
-                  onChange={(e) => setGeneral({ ...general, supplier: e.target.value })}
-                />
+                <select
+                  className="asset-create__select"
+                  value={general.supplierId}
+                  onChange={(e) => setGeneral({ ...general, supplierId: e.target.value })}
+                >
+                  <option value="">Chọn nhà cung cấp</option>
+                  {suppliers.map((s) => (
+                    <option key={s.supplierId} value={s.supplierId}>
+                      {s.name}
+                      {s.code ? ` (${s.code})` : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="asset-create__field">
@@ -353,7 +586,11 @@ export function AssetCreatePage() {
                   className="asset-create__input"
                   value={general.serialNumber}
                   onChange={(e) => setGeneral({ ...general, serialNumber: e.target.value })}
+                  disabled={Number(general.quantity || 1) > 1}
                 />
+                {Number(general.quantity || 1) > 1 && (
+                  <p className="asset-create__hint">Chỉ áp dụng khi số lượng là 1.</p>
+                )}
               </div>
 
               <div className="asset-create__field">
@@ -568,4 +805,3 @@ export function AssetCreatePage() {
     </div>
   );
 }
-

@@ -8,7 +8,12 @@ namespace g19_sep490_ealds.Server.Models.DTOs;
 /// </summary>
 public class CreateAssetDTO
 {
+    /// <summary>Catalog code when <see cref="AssetCodePrefix"/> is not used; ignored when prefix is set (server generates <c>Code</c>).</summary>
     public string Code { get; set; } = null!;
+
+    /// <summary>Optional prefix for generated catalog <c>Code</c>: next sequential number is appended (global max suffix for this prefix among <see cref="Asset"/> rows + 1).</summary>
+    public string? AssetCodePrefix { get; set; }
+
     public string Name { get; set; } = null!;
     public int AssetTypeId { get; set; }
     public string Unit { get; set; } = null!;
@@ -17,6 +22,12 @@ public class CreateAssetDTO
     public DateOnly? InUseDate { get; set; }
     public string? Specification { get; set; }
     public string? Note { get; set; }
+
+    /// <summary>
+    /// When <see cref="InitialInstance"/> is set, optional prefix for generated <c>InstanceCode</c> values:
+    /// sequential numbers are appended (global max suffix for this prefix + 1). Required when <see cref="Quantity"/> &gt; 1.
+    /// </summary>
+    public string? InstanceCodePrefix { get; set; }
 
     /// <summary>Optional first physical row: same transaction as the asset when provided.</summary>
     public CreateAssetInstanceDTO? InitialInstance { get; set; }

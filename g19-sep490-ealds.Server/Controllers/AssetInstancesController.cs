@@ -114,6 +114,72 @@ public class AssetInstancesController : ControllerBase
     }
 
     /// <summary>
+    /// GET /api/assetinstances/instance-code-prefixes — Distinct letter-prefixes used for instance codes (LAP01-style),
+    /// not catalog <see cref="Asset.Code"/> (mã tài sản). Only instance rows whose code ends with digits and differs
+    /// from the parent asset code contribute; suggested prefix must not equal any catalog code.
+    /// </summary>
+    [HttpGet("instance-code-prefixes")]
+    public async Task<ActionResult<IEnumerable<string>>> GetInstanceCodePrefixes()
+    {
+        var catalogCodes = await _context.Assets
+            .AsNoTracking()
+            .Where(a => a.Code != null && a.Code != string.Empty)
+            .Select(a => a.Code!)
+            .ToListAsync();
+
+        var catalogSet = new HashSet<string>(catalogCodes, StringComparer.OrdinalIgnoreCase);
+
+        var rows = await _context.AssetInstances
+            .AsNoTracking()
+            .Select(i => new
+            {
+                i.InstanceCode,
+                AssetCode = i.Asset != null ? i.Asset.Code : null
+            })
+            .ToListAsync();
+
+        var prefixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            var ic = row.InstanceCode;
+            if (string.IsNullOrWhiteSpace(ic))
+                continue;
+
+            var icTrim = ic.Trim();
+            if (!EndsWithDigit(icTrim))
+                continue;
+
+            if (!string.IsNullOrEmpty(row.AssetCode) &&
+                string.Equals(icTrim, row.AssetCode.Trim(), StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var p = StripTrailingDigitsPrefix(icTrim);
+            if (string.IsNullOrWhiteSpace(p))
+                continue;
+
+            if (catalogSet.Contains(p))
+                continue;
+
+            prefixes.Add(p);
+        }
+
+        return Ok(prefixes.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList());
+    }
+
+    private static bool EndsWithDigit(string code) =>
+        code.Length > 0 && char.IsDigit(code[^1]);
+
+    private static string StripTrailingDigitsPrefix(string code)
+    {
+        if (string.IsNullOrEmpty(code))
+            return string.Empty;
+        var i = code.Length - 1;
+        while (i >= 0 && char.IsDigit(code[i]))
+            i--;
+        return i < 0 ? string.Empty : code[..(i + 1)];
+    }
+
+    /// <summary>
     /// GET /api/assetinstances/{id}
     /// </summary>
     [HttpGet("{id:int}")]

@@ -15,17 +15,21 @@ public class WarehouseAssetsController : ControllerBase
         _context = context;
     }
 
+    /// <summary>
+    /// Lists warehouses for dropdowns. Uses <see cref="Warehouse"/> — the table referenced by <see cref="AssetInstance.WarehouseId"/>.
+    /// (The separate <c>WarehouseAsset</c> entity/table is not used for instance storage.)
+    /// </summary>
     [HttpGet]
     public async Task<ActionResult<IEnumerable<object>>> GetAll()
     {
-        var items = await _context.WarehouseAssets
+        var items = await _context.Warehouses
             .AsNoTracking()
             .OrderBy(w => w.Name)
             .Select(w => new
             {
                 warehouseId = w.WarehouseId,
                 name = w.Name,
-                description = w.Description
+                description = w.Location
             })
             .ToListAsync();
 
