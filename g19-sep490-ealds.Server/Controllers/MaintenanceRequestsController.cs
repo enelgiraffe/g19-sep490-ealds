@@ -104,6 +104,7 @@ public class MaintenanceRequestsController : ControllerBase
             UserId = dto.CreatedBy,
             RequestTypeId = _maintenanceRequestTypeId,
             AssetId = assetInstance.AssetId,
+            AssetInstanceId = dto.AssetInstanceId,
             Title = title,
             Description = dto.Description,
             ProposedData = null,

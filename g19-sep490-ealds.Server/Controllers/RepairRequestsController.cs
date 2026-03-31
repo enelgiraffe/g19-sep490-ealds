@@ -98,6 +98,7 @@ public class RepairRequestsController : ControllerBase
             UserId = dto.CreatedBy,
             RequestTypeId = _repairRequestTypeId,
             AssetId = instance.AssetId,
+            AssetInstanceId = dto.AssetInstanceId,
             Title = title,
             Description = dto.Description ?? dto.Reason,
             ProposedData = null,

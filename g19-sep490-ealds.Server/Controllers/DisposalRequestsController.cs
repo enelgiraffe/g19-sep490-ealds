@@ -186,6 +186,7 @@ public class DisposalRequestsController : ControllerBase
             UserId = actorUserId,
             RequestTypeId = resolvedRequestTypeId,
             AssetId = catalogAssetId,
+            AssetInstanceId = dto.AssetInstanceId,
             Title = dto.Title,
             Description = dto.Description,
             ProposedData = null,
