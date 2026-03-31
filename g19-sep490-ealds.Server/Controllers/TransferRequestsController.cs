@@ -146,6 +146,7 @@ public class TransferRequestsController : ControllerBase
             UserId = userId,
             RequestTypeId = _transferRequestTypeId,
             AssetId = instance.AssetId,
+            AssetInstanceId = dto.AssetInstanceId,
             Title = title,
             Description = dto.Description,
             ProposedData = null,

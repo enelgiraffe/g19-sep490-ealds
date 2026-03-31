@@ -11,6 +11,8 @@ public partial class AssetRequest
 
     public int? AssetId { get; set; }
 
+    public int? AssetInstanceId { get; set; }
+
     public int RequestTypeId { get; set; }
 
     public string Title { get; set; } = null!;
@@ -32,6 +34,8 @@ public partial class AssetRequest
     public virtual ICollection<Approval> Approvals { get; set; } = new List<Approval>();
 
     public virtual Asset? Asset { get; set; }
+
+    public virtual AssetInstance? AssetInstance { get; set; }
 
     public virtual ICollection<AssetRequestRecord> AssetRequestRecords { get; set; } = new List<AssetRequestRecord>();
 

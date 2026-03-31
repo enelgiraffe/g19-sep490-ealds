@@ -29,6 +29,8 @@ public class AssetRequestsController : ControllerBase
         var typeId = requestTypeId ?? _purchaseRequestTypeId;
         var list = await _db.AssetRequests
             .AsNoTracking()
+            .Include(r => r.Asset)
+            .Include(r => r.User)
             .Where(r => r.RequestTypeId == typeId)
             .OrderByDescending(r => r.CreateDate)
             .Select(r => new AssetRequestListItemDTO
@@ -47,7 +49,8 @@ public class AssetRequestsController : ControllerBase
                     ? r.User.EmployeeUsers.Select(e => e.Department != null ? e.Department.Name : null).FirstOrDefault()
                     : null,
                 AssetCode = r.Asset != null ? r.Asset.Code : null,
-                AssetName = r.Asset != null ? r.Asset.Name : null
+                AssetName = r.Asset != null ? r.Asset.Name : null,
+                AssetQuantity = r.Asset != null ? (int?)r.Asset.Quantity : null
             })
             .ToListAsync();
         return Ok(list);
@@ -109,6 +112,7 @@ public class AssetRequestsController : ControllerBase
             UserId = dto.UserId,
             RequestTypeId = _purchaseRequestTypeId,
             AssetId = dto.AssetId,
+            AssetInstanceId = dto.AssetInstanceId,
             Title = dto.Title,
             Description = dto.Description,
             ProposedData = dto.ProposedData,
@@ -228,8 +232,14 @@ public class AssetRequestsController : ControllerBase
             .Include(x => x.Approvals)
             .Include(x => x.AssetRequestRecords)
             .Include(x => x.MaintenanceTasks)
+                .ThenInclude(t => t.AssetInstance)
+                    .ThenInclude(ai => ai.Asset)
             .Include(x => x.RepairTasks)
+                .ThenInclude(t => t.AssetInstance)
+                    .ThenInclude(ai => ai.Asset)
             .Include(x => x.TransferRecords)
+                .ThenInclude(tr => tr.AssetInstance)
+                    .ThenInclude(ai => ai.Asset)
             .Include(x => x.Procurements)
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.AssetRequestId == id);
@@ -247,14 +257,45 @@ public class AssetRequestsController : ControllerBase
             createDate = ar.CreateDate,
             approveDate = ar.ApproveDate,
             stepId = ar.StepId,
+            requestTypeId = ar.RequestTypeId,
             user = ar.User == null ? null : new { ar.User.UserId, ar.User.Email },
             requestType = ar.RequestType == null ? null : new { ar.RequestType.RequestTypeId, ar.RequestType.WorkflowId },
-            asset = ar.Asset == null ? null : new { ar.Asset.AssetId, ar.Asset.Name, ar.Asset.Code },
+            // Catalog asset (for purchase / damage-report requests)
+            asset = ar.Asset == null ? null : new { ar.Asset.AssetId, ar.Asset.Name, ar.Asset.Code, ar.Asset.Quantity },
             approvals = ar.Approvals.Select(a => new { a.ApprovalId, a.DecisionDate, a.ApprovedUserId, a.ApprovedRoleId, a.StepId }),
             records = ar.AssetRequestRecords.Select(r => new { r.RecordId, r.FromStatus, r.ToStatus, r.Action, r.ActionByUserId, r.ActionRoleId, r.Comment, r.OccurredAt }),
-            maintenanceTasks = ar.MaintenanceTasks.Select(t => new { t.TaskId, t.PlannedDate, t.Status, t.AssignTo }),
-            repairTasks = ar.RepairTasks.Select(t => new { t.TaskId, t.EstimatedCost, t.Reason, t.Status }),
-            transferRecords = ar.TransferRecords.Select(tr => new { tr.TransferId, tr.AssetRequestId, tr.FromLocationId, tr.ToLocationId, tr.TransferDate }),
+            // Child tasks — each stores the specific instance via AssetInstanceId
+            maintenanceTasks = ar.MaintenanceTasks.Select(t => new
+            {
+                t.TaskId,
+                t.PlannedDate,
+                t.Status,
+                t.AssignTo,
+                t.AssetInstanceId,
+                InstanceCode = t.AssetInstance != null ? t.AssetInstance.InstanceCode : null,
+                AssetName = t.AssetInstance != null && t.AssetInstance.Asset != null ? t.AssetInstance.Asset.Name : null
+            }),
+            repairTasks = ar.RepairTasks.Select(t => new
+            {
+                t.TaskId,
+                t.EstimatedCost,
+                t.Reason,
+                t.Status,
+                t.AssetInstanceId,
+                InstanceCode = t.AssetInstance != null ? t.AssetInstance.InstanceCode : null,
+                AssetName = t.AssetInstance != null && t.AssetInstance.Asset != null ? t.AssetInstance.Asset.Name : null
+            }),
+            transferRecords = ar.TransferRecords.Select(tr => new
+            {
+                tr.TransferId,
+                tr.AssetRequestId,
+                tr.AssetInstanceId,
+                tr.FromLocationId,
+                tr.ToLocationId,
+                tr.TransferDate,
+                InstanceCode = tr.AssetInstance != null ? tr.AssetInstance.InstanceCode : null,
+                AssetName = tr.AssetInstance != null && tr.AssetInstance.Asset != null ? tr.AssetInstance.Asset.Name : null
+            }),
             procurements = ar.Procurements.Select(p => new { p.ProcurementId })
         };
 
@@ -271,9 +312,6 @@ public class AssetRequestsController : ControllerBase
         var query = _db.AssetRequests
             .AsNoTracking()
             .Include(x => x.Asset)
-                .ThenInclude(a => a.AssetInstances)
-                    .ThenInclude(ai => ai.AssetLocations)
-                        .ThenInclude(al => al.Department)
             .Include(x => x.User)
             .AsQueryable();
 
@@ -305,26 +343,10 @@ public class AssetRequestsController : ControllerBase
                 assetCode = ar.Asset != null ? ar.Asset.Code : null,
                 assetName = ar.Asset != null ? ar.Asset.Name : null,
                 assetQuantity = ar.Asset != null ? (int?)ar.Asset.Quantity : null,
-                currentDepartmentName = ar.Asset != null
-                    ? ar.Asset.AssetInstances
-                        .SelectMany(ai => ai.AssetLocations)
-                        .Where(al => al.IsCurrent)
-                        .Select(al => al.Department != null ? al.Department.Name : null)
-                        .FirstOrDefault()
-                    : null,
                 requestTypeId = ar.RequestTypeId
             })
             .ToListAsync();
 
-        var result = new
-        {
-            items,
-            total,
-            page,
-            pageSize,
-            totalPages = (int)Math.Ceiling(total / (double)pageSize)
-        };
-
-        return Ok(result);
+        return Ok(new { items, total, page, pageSize, totalPages = (int)Math.Ceiling(total / (double)pageSize) });
     }
 }

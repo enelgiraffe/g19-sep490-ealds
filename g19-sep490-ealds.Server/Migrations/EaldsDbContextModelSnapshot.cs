@@ -205,7 +205,7 @@ namespace g19_sep490_ealds.Server.Migrations
 
                     b.HasIndex("CapitalizedBy");
 
-                    b.ToTable("AssetCapitalization");
+                    b.ToTable("AssetCapitalization", (string)null);
                 });
 
             modelBuilder.Entity("g19_sep490_ealds.Server.Models.AssetCategory", b =>

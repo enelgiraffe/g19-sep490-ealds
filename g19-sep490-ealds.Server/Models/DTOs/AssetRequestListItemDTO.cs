@@ -15,4 +15,7 @@ public class AssetRequestListItemDTO
     public string? CreatorDepartmentName { get; set; }
     public string? AssetCode { get; set; }
     public string? AssetName { get; set; }
+    public int? AssetQuantity { get; set; }
+    public int? AssetInstanceId { get; set; }
+    public string? InstanceCode { get; set; }
 }

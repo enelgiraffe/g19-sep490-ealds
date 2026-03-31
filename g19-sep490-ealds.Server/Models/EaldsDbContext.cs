@@ -292,6 +292,10 @@ public partial class EaldsDbContext : DbContext
                 .HasForeignKey(d => d.AssetId)
                 .HasConstraintName("FK__AssetRequ__Asset__72C60C4A");
 
+            entity.HasOne(d => d.AssetInstance).WithMany(p => p.AssetRequests)
+                .HasForeignKey(d => d.AssetInstanceId)
+                .HasConstraintName("FK__AssetRequ__AssetInst");
+
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.AssetRequestCreatedByNavigations)
                 .HasForeignKey(d => d.CreatedBy)
                 .OnDelete(DeleteBehavior.ClientSetNull)
