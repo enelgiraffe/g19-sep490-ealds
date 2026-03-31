@@ -51,6 +51,8 @@ public class InventoryController : ControllerBase
             .Include(s => s.AssetType)
             .Include(s => s.InventoryTasks)
                 .ThenInclude(t => t.AssetInstance)
+            .Include(s => s.InventoryTasks)
+                .ThenInclude(t => t.InventoryDiscrepancies)
             .AsNoTracking()
             .AsQueryable();
 
@@ -105,7 +107,11 @@ public class InventoryController : ControllerBase
                     t.Status == (int)InventoryTaskStatus.Checked),
                 CreateDate = s.CreateDate,
                 IsPeriodic = s.IsPeriodic,
-                PeriodDays = s.PeriodDays
+                PeriodDays = s.PeriodDays,
+                UnresolvedDiscrepancyCount = s.InventoryTasks
+                    .Where(t => !IsExcludedFromInventoryExecution(t.AssetInstance.Status))
+                    .SelectMany(t => t.InventoryDiscrepancies)
+                    .Count(d => d.ResolvedAt == null)
             };
         }).ToList();
 
@@ -221,7 +227,8 @@ public class InventoryController : ControllerBase
                 ActualDepartmentName = d.ActualLocation?.Department?.Name,
                 ActualUserId = d.ActualUserId,
                 ActualUserName = ResolveDisplayName(discrepancyUserNameMap, d.ActualUserId),
-                ActualCondition = record?.ActualCondition ?? d.ActualCondition
+                ActualCondition = record?.ActualCondition ?? d.ActualCondition,
+                ResolvedAt = d.ResolvedAt
             }).ToList();
 
             return new InventoryTaskDTO
@@ -271,6 +278,7 @@ public class InventoryController : ControllerBase
                 !IsExcludedFromInventoryExecution(t.AssetInstance.Status) &&
                 t.Status == (int)InventoryTaskStatus.Checked),
             CreateDate = session.CreateDate,
+            UnresolvedDiscrepancyCount = allDiscrepancies.Count(d => d.ResolvedAt == null),
             QuantityDiffCount = allDiscrepancies.Count(d =>
                 (d.DiscrepancyType & (int)DiscrepancyType.AssetNotFound) != 0 ||
                 (d.DiscrepancyType & (int)DiscrepancyType.QuantityMismatch) != 0),
@@ -885,11 +893,17 @@ public class InventoryController : ControllerBase
         if (session.Status == (int)InventorySessionStatus.Completed)
             return BadRequest(new { message = "Phiên kiểm kê này đã hoàn thành." });
 
+        if (session.Status != (int)InventorySessionStatus.InProgress)
+            return BadRequest(new { message = "Chỉ có thể hoàn thành kiểm kê khi phiên đang ở trạng thái Đang thực hiện." });
+
         var eligibleTasks = session.InventoryTasks
             .Where(t => !IsExcludedFromInventoryExecution(t.AssetInstance.Status))
             .ToList();
         var totalTasks = eligibleTasks.Count;
         var checkedTasks = eligibleTasks.Count(t => t.Status == (int)InventoryTaskStatus.Checked);
+
+        if (totalTasks == 0 || checkedTasks < totalTasks)
+            return BadRequest(new { message = "Cần hoàn tất kiểm kê 100% tài sản trước khi kết thúc phiên." });
 
         session.Status = (int)InventorySessionStatus.Completed;
         session.ProgressPercent = totalTasks > 0
@@ -989,7 +1003,8 @@ public class InventoryController : ControllerBase
                 ActualDepartmentName = d.ActualLocation?.Department?.Name,
                 ActualUserId = d.ActualUserId,
                 ActualUserName = ResolveDisplayName(userNameMap, d.ActualUserId),
-                ActualCondition = record?.ActualCondition ?? d.ActualCondition
+                ActualCondition = record?.ActualCondition ?? d.ActualCondition,
+                ResolvedAt = d.ResolvedAt
             };
         }).ToList();
 
@@ -1041,6 +1056,8 @@ public class InventoryController : ControllerBase
                     .ThenInclude(ai => ai.Asset)
             .Include(s => s.InventoryTasks)
                 .ThenInclude(t => t.InventoryRecords)
+            .Include(s => s.InventoryTasks)
+                .ThenInclude(t => t.InventoryDiscrepancies)
             .FirstOrDefaultAsync(s => s.SessionId == id);
 
         if (session == null)
@@ -1061,7 +1078,6 @@ public class InventoryController : ControllerBase
         foreach (var task in session.InventoryTasks.Where(t =>
                      !IsExcludedFromInventoryExecution(t.AssetInstance.Status)))
         {
-            var inst = task.AssetInstance;
             bookUsages.TryGetValue(task.AssetInstanceId, out var bookUserId);
 
             var record = task.InventoryRecords.FirstOrDefault();
@@ -1092,6 +1108,14 @@ public class InventoryController : ControllerBase
             }
         }
 
+        // Any unresolved discrepancy row (tình trạng, vị trí, giá trị, không tìm thấy, …) → Chờ xử lý (kế toán).
+        if (!hasMismatch)
+        {
+            hasMismatch = session.InventoryTasks
+                .Where(t => !IsExcludedFromInventoryExecution(t.AssetInstance.Status))
+                .Any(t => t.InventoryDiscrepancies.Any(d => d.ResolvedAt == null));
+        }
+
         session.Status = hasMismatch
             ? (int)InventorySessionStatus.PendingAccountant
             : (int)InventorySessionStatus.Confirmed;
@@ -1107,8 +1131,8 @@ public class InventoryController : ControllerBase
         return Ok(new
         {
             message = hasMismatch
-                ? "Đã xác nhận. Phiên chuyển sang Chờ xử lý (kế toán)."
-                : "Đã xác nhận. Không có chênh lệch số lượng hoặc người phụ trách so với sổ — phiên đã xử lý.",
+                ? "Đã xác nhận. Có chênh lệch so với sổ — phiên chuyển sang Chờ xử lý (kế toán)."
+                : "Đã xác nhận. Không có chênh lệch so với sổ — phiên đã xử lý.",
             newStatus = displayStatus,
             statusName = GetSessionStatusName(displayStatus),
             hasQuantityOrUserDiscrepancy = hasMismatch
@@ -1173,6 +1197,11 @@ public class InventoryController : ControllerBase
         if (session.Status != (int)InventorySessionStatus.PendingAccountant)
             return BadRequest(new { message = "Chỉ có thể hoàn tất khi phiên đang ở trạng thái Chờ xử lý." });
 
+        var unresolved = await _context.InventoryDiscrepancies
+            .CountAsync(d => d.Task.SessionId == id && d.ResolvedAt == null);
+        if (unresolved > 0)
+            return BadRequest(new { message = "Còn chênh lệch chưa cập nhật lên sổ. Vui lòng xử lý hết trước khi hoàn tất." });
+
         if (dto.ApplyCorrections)
         {
             // Áp dụng chỉnh sửa sổ từ chênh lệch — có thể mở rộng sau.
@@ -1183,6 +1212,101 @@ public class InventoryController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "Đã hoàn tất xử lý chênh lệch trên sổ sách.", sessionId = id });
+    }
+
+    /// <summary>
+    /// POST /api/inventory/sessions/{sessionId}/discrepancies/{discrepancyId}/apply-actual —
+    /// Kế toán: cập nhật sổ (trạng thái, vị trí, người phụ trách, giá trị) theo kết quả thực tế đã ghi nhận; đánh dấu dòng chênh lệch đã xử lý (giữ trong báo cáo).
+    /// Chỉ khi phiên ở trạng thái Chờ xử lý.
+    /// </summary>
+    [HttpPost("sessions/{sessionId:int}/discrepancies/{discrepancyId:int}/apply-actual")]
+    public async Task<ActionResult> AccountantApplyDiscrepancyActual(int sessionId, int discrepancyId)
+    {
+        var roleGate = await EnsureInventoryAccountantOrAdminAsync();
+        if (roleGate != null) return roleGate;
+
+        var gate = await EnsureInventorySessionDepartmentAccessAsync(sessionId);
+        if (gate != null) return gate;
+
+        var discrepancy = await _context.InventoryDiscrepancies
+            .Include(d => d.Task)
+                .ThenInclude(t => t.Session)
+            .Include(d => d.Task)
+                .ThenInclude(t => t.AssetInstance)
+                    .ThenInclude(ai => ai.AssetLocations)
+            .Include(d => d.Task)
+                .ThenInclude(t => t.InventoryRecords)
+            .FirstOrDefaultAsync(d => d.DiscrepancyId == discrepancyId && d.Task.SessionId == sessionId);
+
+        if (discrepancy == null)
+            return NotFound(new { message = "Không tìm thấy chênh lệch trong phiên này." });
+
+        var session = discrepancy.Task.Session;
+        if (session.Status != (int)InventorySessionStatus.PendingAccountant)
+            return BadRequest(new { message = "Chỉ có thể cập nhật sổ khi phiên đang ở trạng thái Chờ xử lý." });
+
+        if (discrepancy.ResolvedAt.HasValue)
+            return BadRequest(new { message = "Chênh lệch này đã được cập nhật lên sổ trước đó." });
+
+        var record = discrepancy.Task.InventoryRecords
+            .OrderByDescending(r => r.RecordId)
+            .FirstOrDefault();
+        if (record == null)
+            return BadRequest(new { message = "Không có bản ghi kiểm kê cho nhiệm vụ này." });
+
+        var inst = discrepancy.Task.AssetInstance;
+        var effective = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        if (!Enum.TryParse<AssetStatus>(record.ActualCondition, true, out var newStatus))
+        {
+            if (record.IsFound == false)
+                newStatus = AssetStatus.Lost;
+            else
+                return BadRequest(new { message = "Không đọc được tình trạng thực tế (ActualCondition) từ bản ghi kiểm kê." });
+        }
+
+        inst.Status = (int)newStatus;
+
+        if ((discrepancy.DiscrepancyType & (int)DiscrepancyType.ValueMismatch) != 0)
+            inst.CurrentValue = discrepancy.ActualValue;
+
+        var targetLocation = await _context.AssetLocations
+            .FirstOrDefaultAsync(al => al.LocationId == record.ActualLocationId);
+        if (targetLocation == null || targetLocation.AssetInstanceId != inst.AssetInstanceId)
+            return BadRequest(new { message = "Vị trí thực tế không hợp lệ cho thể hiện tài sản này." });
+
+        await CloseCurrentAssetLocationsExceptAsync(inst.AssetInstanceId, targetLocation.LocationId, effective);
+        targetLocation.IsCurrent = true;
+        targetLocation.EndDate = null;
+        if (targetLocation.StartDate > effective)
+            targetLocation.StartDate = effective;
+
+        await CloseCurrentAssetUsagesAsync(inst.AssetInstanceId, effective);
+        if (record.ActualUserId.HasValue)
+        {
+            var employee = await _context.Employees
+                .FirstOrDefaultAsync(e => e.UserId == record.ActualUserId.Value);
+            if (employee == null)
+                return BadRequest(new { message = "Không tìm thấy nhân viên gắn với người dùng được ghi nhận khi kiểm kê." });
+
+            if (employee.DepartmentId != targetLocation.DepartmentId)
+                return BadRequest(new { message = "Phòng ban của nhân viên phụ trách phải trùng với phòng ban vị trí thực tế." });
+
+            _context.AssetUsages.Add(new AssetUsage
+            {
+                AssetInstanceId = inst.AssetInstanceId,
+                EmployeeId = employee.EmployeeId,
+                StartDate = effective,
+                EndDate = null,
+                IsCurrent = true,
+                Note = "Cập nhật từ xử lý chênh lệch kiểm kê"
+            });
+        }
+
+        discrepancy.ResolvedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Đã cập nhật sổ sách theo thông tin thực tế kiểm kê." });
     }
 
     /// <summary>
@@ -1241,7 +1365,7 @@ public class InventoryController : ControllerBase
 
     /// <summary>
     /// POST /api/inventory/sessions/{id}/cancel
-    /// Cancels a scheduled (status = Đã lên lịch) inventory session.
+    /// Hủy phiên ở trạng thái Đã lên lịch hoặc Đang thực hiện → Đã hủy.
     /// </summary>
     [HttpPost("sessions/{id:int}/cancel")]
     public async Task<ActionResult> CancelSession(int id, [FromBody] ReviewInventorySessionDTO dto)
@@ -1256,24 +1380,36 @@ public class InventoryController : ControllerBase
         if (session == null)
             return NotFound();
 
-        if (session.Status != (int)InventorySessionStatus.Scheduled)
-            return BadRequest(new { message = "Chỉ có thể hủy phiên kiểm kê đang ở trạng thái 'Đã lên lịch'." });
+        if (session.Status != (int)InventorySessionStatus.Scheduled &&
+            session.Status != (int)InventorySessionStatus.InProgress)
+            return BadRequest(new { message = "Chỉ có thể hủy phiên ở trạng thái Đã lên lịch hoặc Đang thực hiện." });
+
+        var wasScheduled = session.Status == (int)InventorySessionStatus.Scheduled;
 
         session.Status = (int)InventorySessionStatus.Cancelled;
 
-        _context.Notifications.Add(new Notification
+        // Notification.RefId is an FK to User in the schema, not a generic ref — do not store session id there.
+        int? notifyUserId = dto.ReviewedBy > 0 ? dto.ReviewedBy : null;
+        if (notifyUserId == null && TryGetCurrentUserId(out var curId))
+            notifyUserId = curId;
+        if (notifyUserId is > 0)
         {
-            Title = $"Lịch kiểm kê bị hủy: {session.Code}",
-            Content = TruncateNotificationContent($"Phiên {session.Code} đã bị hủy. Lý do: {dto.ReviewNotes ?? "Không có ghi chú."}"),
-            RefId = id,
-            SentDate = DateTime.UtcNow,
-            IsSend = true
-        });
+            _context.Notifications.Add(new Notification
+            {
+                Title = wasScheduled
+                    ? $"Lịch kiểm kê bị hủy: {session.Code}"
+                    : $"Phiên kiểm kê bị hủy: {session.Code}",
+                Content = TruncateNotificationContent($"Phiên {session.Code} đã bị hủy. Lý do: {dto.ReviewNotes ?? "Không có ghi chú."}"),
+                RefId = null,
+                UserId = notifyUserId.Value,
+                SentDate = DateTime.UtcNow,
+                IsSend = true
+            });
+        }
 
-        // If this is a periodic session, also cancel all future scheduled periodic sessions
-        // for the same department so the recurrence chain is stopped.
+        // Đã lên lịch + định kỳ: dừng luôn các phiên định kỳ đã lên lịch sau này.
         int cancelledChainCount = 0;
-        if (session.IsPeriodic)
+        if (session.IsPeriodic && wasScheduled)
         {
             var futurePeriodicSessions = await _context.InventorySessions
                 .Where(s =>
@@ -1353,7 +1489,8 @@ public class InventoryController : ControllerBase
                 ActualDepartmentName = d.ActualLocation?.Department?.Name,
                 ActualUserId = d.ActualUserId,
                 ActualUserName = ResolveDisplayName(userNameMap, d.ActualUserId),
-                ActualCondition = record?.ActualCondition ?? d.ActualCondition
+                ActualCondition = record?.ActualCondition ?? d.ActualCondition,
+                ResolvedAt = d.ResolvedAt
             };
         }).ToList();
 
@@ -1484,6 +1621,60 @@ public class InventoryController : ControllerBase
             return Forbid();
 
         return null;
+    }
+
+    /// <summary>Kế toán / Admin: được ghi nhận cập nhật sổ từ chênh lệch kiểm kê.</summary>
+    private async Task<ActionResult?> EnsureInventoryAccountantOrAdminAsync()
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var roleCodes = await _context.UserRoles
+            .AsNoTracking()
+            .Where(ur => ur.UserId == userId)
+            .Select(ur => ur.Role.Code)
+            .ToListAsync();
+
+        if (!roleCodes.Any(IsAccountantOrAdminRole))
+            return Forbid();
+
+        return null;
+    }
+
+    private static bool IsAccountantOrAdminRole(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return false;
+        var c = code.Trim().ToLowerInvariant().Replace(' ', '_');
+        return c is "accountant" or "admin" or "kế_toán" or "ke_toan";
+    }
+
+    private async Task CloseCurrentAssetLocationsExceptAsync(
+        int assetInstanceId,
+        int exceptLocationId,
+        DateOnly newStartDate)
+    {
+        var others = await _context.AssetLocations
+            .Where(l => l.AssetInstanceId == assetInstanceId && l.IsCurrent && l.LocationId != exceptLocationId)
+            .ToListAsync();
+
+        foreach (var loc in others)
+        {
+            loc.IsCurrent = false;
+            loc.EndDate = newStartDate.AddDays(-1);
+        }
+    }
+
+    private async Task CloseCurrentAssetUsagesAsync(int assetInstanceId, DateOnly newStartDate)
+    {
+        var currents = await _context.AssetUsages
+            .Where(u => u.AssetInstanceId == assetInstanceId && u.IsCurrent)
+            .ToListAsync();
+
+        foreach (var u in currents)
+        {
+            u.IsCurrent = false;
+            u.EndDate = newStartDate.AddDays(-1);
+        }
     }
 
     private static bool IsDepartmentHeadRole(string? code)

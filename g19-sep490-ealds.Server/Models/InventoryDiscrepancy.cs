@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace g19_sep490_ealds.Server.Models;
@@ -26,6 +26,9 @@ public partial class InventoryDiscrepancy
     public int? ActualUserId { get; set; }
 
     public string ActualCondition { get; set; } = null!;
+
+    /// <summary>When set, kế toán đã đồng bộ sổ theo thực tế; dòng vẫn giữ trong báo cáo.</summary>
+    public DateTime? ResolvedAt { get; set; }
 
     public virtual AssetLocation ActualLocation { get; set; } = null!;
 

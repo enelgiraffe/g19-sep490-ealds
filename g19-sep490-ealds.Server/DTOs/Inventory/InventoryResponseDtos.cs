@@ -19,6 +19,9 @@ public class InventorySessionListItemDTO
     public DateTime? CreateDate { get; set; }
     public bool IsPeriodic { get; set; }
     public int? PeriodDays { get; set; }
+
+    /// <summary>Discrepancy rows not yet applied to the book (ResolvedAt null). Zero when not applicable.</summary>
+    public int UnresolvedDiscrepancyCount { get; set; }
 }
 
 public class InventorySessionDetailDTO : InventorySessionListItemDTO
@@ -156,6 +159,9 @@ public class InventoryDiscrepancyDTO
     public int? ActualUserId { get; set; }
     public string? ActualUserName { get; set; }
     public string ActualCondition { get; set; } = null!;
+
+    /// <summary>UTC when accountant applied actuals to the book; null if still pending.</summary>
+    public DateTime? ResolvedAt { get; set; }
 }
 
 public class DropdownItemDTO

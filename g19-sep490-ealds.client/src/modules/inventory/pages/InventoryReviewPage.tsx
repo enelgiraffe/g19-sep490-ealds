@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, Spin, Table, Tag, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SyncOutlined } from '@ant-design/icons';
 import {
   inventoryService,
   SESSION_STATUS,
@@ -10,6 +10,7 @@ import {
   type InventoryReviewSummary,
 } from '../services/inventoryService';
 import { getStatusLabel } from '../../assets/services/assetService';
+import { useAppStore } from '../../../stores/appStore';
 import './InventoryReviewPage.css';
 
 function formatReviewBookUseLine(bookCondition: string | undefined): string {
@@ -49,9 +50,11 @@ export function InventoryReviewPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const id = Number(sessionId);
+  const currentRole = useAppStore((s) => s.currentRole);
 
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<InventoryReviewSummary | null>(null);
+  const [resolvingId, setResolvingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -70,6 +73,25 @@ export function InventoryReviewPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const canResolveOnBook = currentRole === 'accountant' || currentRole === 'admin';
+
+  const handleApplyActual = async (discrepancyId: number) => {
+    if (!id) return;
+    setResolvingId(discrepancyId);
+    try {
+      const res = await inventoryService.applyDiscrepancyActual(id, discrepancyId);
+      message.success(res.message ?? 'Đã cập nhật sổ theo thực tế.');
+      await load();
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      message.error(
+        axiosErr?.response?.data?.message ?? 'Không thể cập nhật sổ. Vui lòng thử lại.',
+      );
+    } finally {
+      setResolvingId(null);
+    }
+  };
 
   const columns: ColumnsType<InventoryDiscrepancyDetail> = [
     { title: 'Mã tài sản', dataIndex: 'assetCode', key: 'assetCode', width: 100 },
@@ -97,6 +119,32 @@ export function InventoryReviewPage() {
         </div>
       ),
     },
+    ...(summary?.status === SESSION_STATUS.PendingAccountant && canResolveOnBook
+      ? [
+          {
+            title: 'Thao tác',
+            key: 'resolve',
+            width: 140,
+            render: (_: unknown, r: InventoryDiscrepancyDetail) =>
+              r.resolvedAt ? (
+                <Tag color="success" className="inv-review__resolved-tag">
+                  Đã xử lý
+                </Tag>
+              ) : (
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<SyncOutlined />}
+                  loading={resolvingId === r.discrepancyId}
+                  disabled={resolvingId !== null && resolvingId !== r.discrepancyId}
+                  onClick={() => handleApplyActual(r.discrepancyId)}
+                >
+                  Cập nhật sổ
+                </Button>
+              ),
+          } as ColumnsType<InventoryDiscrepancyDetail>[number],
+        ]
+      : []),
   ];
 
   if (loading) {

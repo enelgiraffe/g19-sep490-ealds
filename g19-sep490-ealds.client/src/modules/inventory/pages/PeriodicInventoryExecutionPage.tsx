@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Input, Select, Button, Spin, message, Modal } from 'antd';
+import { Input, Select, Button, Spin, message, Modal, Tooltip } from 'antd';
 import {
   SearchOutlined,
   ArrowLeftOutlined,
@@ -20,6 +20,8 @@ import {
   getInventoryExecutionStatusSelectOptions,
 } from '../../assets/services/assetService';
 import './PeriodicInventoryExecutionPage.css';
+
+const { TextArea } = Input;
 
 const INVENTORY_STATUS_SELECT_OPTIONS = getInventoryExecutionStatusSelectOptions();
 
@@ -64,6 +66,9 @@ export function PeriodicInventoryExecutionPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelNote, setCancelNote] = useState('');
+  const [cancellingSession, setCancellingSession] = useState(false);
 
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
   const [completeResult, setCompleteResult] = useState<CompleteSessionResult | null>(null);
@@ -153,10 +158,34 @@ export function PeriodicInventoryExecutionPage() {
       setIsCompleteModalOpen(true);
       fetchSession();
       fetchAssets();
-    } catch {
-      message.error('Không thể hoàn thành kiểm kê. Vui lòng thử lại.');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      message.error(
+        axiosErr?.response?.data?.message ?? 'Không thể hoàn thành kiểm kê. Vui lòng thử lại.',
+      );
     } finally {
       setCompleting(false);
+    }
+  };
+
+  const handleCancelSession = async () => {
+    setCancellingSession(true);
+    try {
+      await inventoryService.cancelSession(sessionIdNum, {
+        reviewedBy: getCurrentUserId(),
+        reviewerRoleId: 4,
+        reviewNotes: cancelNote || undefined,
+      });
+      message.success('Phiên kiểm kê đã được hủy.');
+      setCancelModalOpen(false);
+      setCancelNote('');
+      fetchSession();
+      fetchAssets();
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      message.error(axiosErr?.response?.data?.message ?? 'Hủy phiên thất bại. Vui lòng thử lại.');
+    } finally {
+      setCancellingSession(false);
     }
   };
 
@@ -194,6 +223,8 @@ export function PeriodicInventoryExecutionPage() {
   };
 
   const isEditable = sessionDetail?.status === 1;
+  const progressPct = sessionDetail?.progressPercent ?? 0;
+  const canCompleteInventory = progressPct >= 100;
   const comparisonRows = getComparisonRows();
 
   const renderComparisonStatus = (row: { hasActual: boolean; isMatch: boolean }) => {
@@ -401,13 +432,34 @@ export function PeriodicInventoryExecutionPage() {
           )}
         </div>
         {isEditable && (
-          <Button
-            className="exec-complete-btn"
-            onClick={handleComplete}
-            loading={completing}
-          >
-            Hoàn thành kiểm kê
-          </Button>
+          <div className="exec-header__actions">
+            <Button
+              danger
+              loading={cancellingSession}
+              onClick={() => setCancelModalOpen(true)}
+            >
+              Hủy phiên kiểm kê
+            </Button>
+            <Tooltip
+              title={
+                canCompleteInventory
+                  ? undefined
+                  : `Cần kiểm kê đủ 100% tài sản (hiện ${progressPct}%).`
+              }
+            >
+              <span className="exec-header__complete-wrap">
+                <Button
+                  type="primary"
+                  className="exec-complete-btn"
+                  disabled={!canCompleteInventory}
+                  onClick={handleComplete}
+                  loading={completing}
+                >
+                  Hoàn thành kiểm kê
+                </Button>
+              </span>
+            </Tooltip>
+          </div>
         )}
       </div>
 
@@ -499,6 +551,25 @@ export function PeriodicInventoryExecutionPage() {
           {renderRightPanelContent()}
         </div>
       </div>
+
+      <Modal
+        open={cancelModalOpen}
+        title="Hủy phiên kiểm kê"
+        okText="Xác nhận hủy"
+        cancelText="Đóng"
+        okButtonProps={{ danger: true, loading: cancellingSession }}
+        onOk={handleCancelSession}
+        onCancel={() => {
+          setCancelModalOpen(false);
+          setCancelNote('');
+        }}
+        centered
+        width={440}
+      >
+        <p style={{ marginBottom: 12 }}>
+          Bạn có chắc muốn kết thúc phiên này?
+        </p>
+      </Modal>
 
       {/* Completion summary modal */}
       <Modal

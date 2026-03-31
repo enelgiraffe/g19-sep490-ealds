@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Input, Select, Tag, Spin, message, Modal, Input as AntInput } from 'antd';
+import { Button, Input, Select, Tag, Spin, message, Modal, Tooltip, Input as AntInput } from 'antd';
 import {
   CheckOutlined,
   FileTextOutlined,
@@ -54,6 +54,16 @@ function ConfirmModalBody({
         —
         {session.departmentName}
       </p>
+
+      {(session.unresolvedDiscrepancyCount ?? 0) > 0 && (
+        <p className="dir-inv-modal-warning">
+          Còn
+          {' '}
+          {session.unresolvedDiscrepancyCount}
+          {' '}
+          chênh lệch chưa cập nhật lên sổ. Vui lòng xử lý trong báo cáo trước khi hoàn tất.
+        </p>
+      )}
 
       <div className="dir-inv-modal-notes">
         <label htmlFor="acc-inv-action-notes" className="dir-inv-modal-label">
@@ -137,7 +147,7 @@ export function AccountantInventoryPage() {
     const accountantId = getCurrentUserId();
     const payload = {
       reviewedBy: accountantId,
-      reviewerRoleId: 4,
+      reviewerRoleId: 3,
       reviewNotes: notes || undefined,
       applyCorrections: false,
     };
@@ -175,20 +185,33 @@ export function AccountantInventoryPage() {
     );
 
     if (row.status === SESSION_STATUS.PendingAccountant) {
+      const unresolved = row.unresolvedDiscrepancyCount ?? 0;
+      const canFinish = unresolved === 0;
       return (
         <div className="dir-inv-row-actions">
           {viewReport}
-          <Button
-            size="small"
-            type="primary"
-            icon={<CheckOutlined />}
-            onClick={(e) => {
-              e.stopPropagation();
-              openConfirmModal(row);
-            }}
+          <Tooltip
+            title={
+              canFinish
+                ? undefined
+                : `Còn ${unresolved} chênh lệch chưa cập nhật lên sổ. Mở báo cáo và dùng «Cập nhật sổ» cho từng dòng.`
+            }
           >
-            Hoàn tất
-          </Button>
+            <span>
+              <Button
+                size="small"
+                type="primary"
+                icon={<CheckOutlined />}
+                disabled={!canFinish}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openConfirmModal(row);
+                }}
+              >
+                Hoàn tất
+              </Button>
+            </span>
+          </Tooltip>
         </div>
       );
     }
@@ -332,7 +355,10 @@ export function AccountantInventoryPage() {
         title="Hoàn tất xử lý chênh lệch"
         okText="Hoàn tất"
         cancelText="Hủy bỏ"
-        okButtonProps={{ loading: submitting }}
+        okButtonProps={{
+          loading: submitting,
+          disabled: (confirmMeta?.session.unresolvedDiscrepancyCount ?? 0) > 0,
+        }}
         onOk={handleConfirmAction}
         onCancel={closeConfirmModal}
         centered

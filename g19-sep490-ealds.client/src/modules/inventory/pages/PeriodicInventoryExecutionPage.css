@@ -31,6 +31,16 @@
   gap: 12px;
 }
 
+.exec-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.exec-header__complete-wrap {
+  display: inline-block;
+}
+
 .exec-back-btn {
   display: inline-flex;
   align-items: center;

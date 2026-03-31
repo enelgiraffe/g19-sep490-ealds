@@ -21,7 +21,8 @@ inventoryApi.interceptors.response.use((response) => {
   if (
     url.includes('/complete') ||
     url.includes('/director-approve') ||
-    url.includes('/reject')
+    url.includes('/reject') ||
+    url.includes('/cancel')
   ) {
     window.dispatchEvent(new Event('ealds-notifications-changed'));
   }
@@ -52,6 +53,10 @@ export interface SessionDetail {
   assetTypeName: string;
   status: number;
   statusName: string;
+  progressPercent: number | null;
+  totalTasks: number;
+  completedTasks: number;
+  unresolvedDiscrepancyCount?: number;
   quantityDiffCount: number;
   locationChangeCount: number;
   departmentChangeCount: number;
@@ -145,6 +150,8 @@ export interface InventoryDiscrepancyDetail {
   actualUserId?: number;
   actualUserName?: string;
   actualCondition: string;
+  /** Set when accountant applied actuals to the book (UTC ISO string from API). */
+  resolvedAt?: string | null;
 }
 
 export interface InventoryReviewSummary {
@@ -209,6 +216,8 @@ export interface InventorySessionListItem {
   createDate: string | null;
   isPeriodic: boolean;
   periodDays: number | null;
+  /** Rows in InventoryDiscrepancy with ResolvedAt null (eligible tasks only). */
+  unresolvedDiscrepancyCount?: number;
 }
 
 export interface CreateInventorySessionPayload {
@@ -326,6 +335,16 @@ export const inventoryService = {
   async getReviewSummary(sessionId: number): Promise<InventoryReviewSummary> {
     const res = await inventoryApi.get<InventoryReviewSummary>(
       `/api/inventory/sessions/${sessionId}/review-summary`,
+    );
+    return res.data;
+  },
+
+  async applyDiscrepancyActual(
+    sessionId: number,
+    discrepancyId: number,
+  ): Promise<{ message?: string }> {
+    const res = await inventoryApi.post<{ message?: string }>(
+      `/api/inventory/sessions/${sessionId}/discrepancies/${discrepancyId}/apply-actual`,
     );
     return res.data;
   },
