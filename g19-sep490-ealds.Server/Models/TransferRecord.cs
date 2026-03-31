@@ -23,6 +23,14 @@ public partial class TransferRecord
 
     public int ExecutedBy { get; set; }
 
+    public bool IsSenderConfirmed { get; set; }
+
+    public DateTime? SenderConfirmedAt { get; set; }
+
+    public bool IsReceiverConfirmed { get; set; }
+
+    public DateTime? ReceiverConfirmedAt { get; set; }
+
     public virtual AssetInstance AssetInstance { get; set; } = null!;
 
     public virtual AssetRequest AssetRequest { get; set; } = null!;

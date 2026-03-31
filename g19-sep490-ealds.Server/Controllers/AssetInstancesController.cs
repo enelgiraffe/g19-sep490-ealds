@@ -124,6 +124,7 @@ public class AssetInstancesController : ControllerBase
             .Include(i => i.Warehouse)
             .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
+            .Include(i => i.Guarantees)
             .AsNoTracking()
             .FirstOrDefaultAsync(i => i.AssetInstanceId == id);
 
@@ -685,7 +686,16 @@ public class AssetInstancesController : ControllerBase
                 .Where(u => u.IsCurrent)
                 .Select(u => u.Employee != null ? (int?)u.Employee.UserId : null)
                 .FirstOrDefault(),
-            DepreciationPolicyId = i.DepreciationPolicyId
+            DepreciationPolicyId = i.DepreciationPolicyId,
+            Guarantees = i.Guarantees?.Select(g => new GuaranteeDTO
+            {
+                GuaranteeId = g.GuaranteeId,
+                WarrantyPeriodValue = g.WarrantyPeriodValue,
+                WarrantyPeriodUnit = g.WarrantyPeriodUnit,
+                WarrantyConditions = g.WarrantyConditions,
+                StartDate = g.StartDate,
+                WarrantyEndDate = g.WarrantyEndDate
+            }).ToList()
         };
 
         if (latestDep != null)

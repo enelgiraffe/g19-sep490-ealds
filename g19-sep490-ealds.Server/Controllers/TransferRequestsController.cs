@@ -70,7 +70,9 @@ public class TransferRequestsController : ControllerBase
                     tr.AssetRequest.Status == 3 ? "Từ chối" :
                     tr.AssetRequest.Status == 4 ? "Phê duyệt" :
                     "Không xác định",
-                Reason = tr.AssetRequest.Description
+                Reason = tr.AssetRequest.Description,
+                IsSenderConfirmed = tr.IsSenderConfirmed,
+                IsReceiverConfirmed = tr.IsReceiverConfirmed
             })
             .ToListAsync();
 
@@ -119,22 +121,15 @@ public class TransferRequestsController : ControllerBase
         if (fromLocation == null)
             return BadRequest("Không tìm thấy vị trí hiện tại của tài sản tại phòng ban nguồn. Vui lòng kiểm tra lại 'Từ vị trí'.");
 
-        var currentLocations = await _db.AssetLocations
-            .Where(al => al.AssetInstanceId == dto.AssetInstanceId && al.IsCurrent)
-            .ToListAsync();
-        foreach (var loc in currentLocations)
-        {
-            loc.IsCurrent = false;
-            loc.EndDate = today;
-        }
-
+        // Keep the old location current until it's approved.
+        // We still create the new location string to store ToLocationId, but it stays IsCurrent = false.
         var toLocation = new AssetLocation
         {
             AssetInstanceId = dto.AssetInstanceId,
             DepartmentId = dto.ToLocationId,
             StartDate = today,
             EndDate = null,
-            IsCurrent = true,
+            IsCurrent = false, // Pending approval
             Note = dto.Description
         };
         _db.AssetLocations.Add(toLocation);
@@ -226,26 +221,11 @@ public class TransferRequestsController : ControllerBase
         {
             var assetInstanceId = transfer.AssetInstanceId;
 
-            var currentLocations = await _db.AssetLocations
-                .Where(al => al.AssetInstanceId == assetInstanceId && al.IsCurrent)
-                .ToListAsync();
-            foreach (var loc in currentLocations)
-            {
-                loc.IsCurrent = false;
-                loc.EndDate ??= DateOnly.FromDateTime(DateTime.UtcNow);
-            }
-
-            var fromLocation = await _db.AssetLocations.FirstOrDefaultAsync(al => al.LocationId == transfer.FromLocationId);
-            if (fromLocation != null)
-            {
-                fromLocation.IsCurrent = true;
-                fromLocation.EndDate = null;
-            }
-
+            // Trả lại trạng thái IsCurrent cho vị trí đích nếu nó chưa được cấp quyền
             var toLocation = await _db.AssetLocations.FirstOrDefaultAsync(al => al.LocationId == transfer.ToLocationId);
             if (toLocation != null)
             {
-                toLocation.IsCurrent = false;
+                _db.AssetLocations.Remove(toLocation); // Bỏ đi vị trí nháp
             }
 
             var records = await _db.AssetRequestRecords
@@ -267,6 +247,101 @@ public class TransferRequestsController : ControllerBase
         {
             await tx.RollbackAsync();
             throw;
+        }
+    }
+
+    [HttpPost("{id:int}/confirm-send")]
+    public async Task<IActionResult> ConfirmSend(int id)
+    {
+        var ar = await _db.AssetRequests.FindAsync(id);
+        if (ar == null || ar.RequestTypeId != _transferRequestTypeId) return NotFound("Transfer request not found");
+        if (ar.Status != 4) return BadRequest("Chỉ được xác nhận gửi khi yêu cầu đã được Giám đốc phê duyệt (Status = 4).");
+
+        var transfer = await _db.TransferRecords.FirstOrDefaultAsync(t => t.AssetRequestId == id);
+        if (transfer == null) return NotFound("Transfer record not found");
+
+        if (transfer.IsSenderConfirmed) return BadRequest("Bên gửi đã xác nhận rồi.");
+
+        transfer.IsSenderConfirmed = true;
+        transfer.SenderConfirmedAt = DateTime.UtcNow;
+
+        var rec = new AssetRequestRecord
+        {
+            AssetRequestId = id,
+            FromStatus = 4, ToStatus = 4,
+            Action = 1,
+            ActionByUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0"),
+            ActionRoleId = 0,
+            Comment = "Bên gửi đã xác nhận chuyển",
+            OccurredAt = DateTime.UtcNow
+        };
+        _db.AssetRequestRecords.Add(rec);
+
+        await TryExecutePhysicalTransfer(transfer);
+        await _db.SaveChangesAsync();
+        return Ok(new { message = "Xác nhận gửi thành công.", isReady = transfer.IsSenderConfirmed && transfer.IsReceiverConfirmed });
+    }
+
+    [HttpPost("{id:int}/confirm-receive")]
+    public async Task<IActionResult> ConfirmReceive(int id)
+    {
+        var ar = await _db.AssetRequests.FindAsync(id);
+        if (ar == null || ar.RequestTypeId != _transferRequestTypeId) return NotFound("Transfer request not found");
+        if (ar.Status != 4) return BadRequest("Chỉ được xác nhận nhận khi yêu cầu đã được Giám đốc phê duyệt (Status = 4).");
+
+        var transfer = await _db.TransferRecords.FirstOrDefaultAsync(t => t.AssetRequestId == id);
+        if (transfer == null) return NotFound("Transfer record not found");
+
+        if (transfer.IsReceiverConfirmed) return BadRequest("Bên nhận đã xác nhận rồi.");
+
+        transfer.IsReceiverConfirmed = true;
+        transfer.ReceiverConfirmedAt = DateTime.UtcNow;
+
+        var rec = new AssetRequestRecord
+        {
+            AssetRequestId = id,
+            FromStatus = 4, ToStatus = 4,
+            Action = 1,
+            ActionByUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0"),
+            ActionRoleId = 0,
+            Comment = "Bên nhận đã xác nhận nhận",
+            OccurredAt = DateTime.UtcNow
+        };
+        _db.AssetRequestRecords.Add(rec);
+
+        await TryExecutePhysicalTransfer(transfer);
+        await _db.SaveChangesAsync();
+        return Ok(new { message = "Xác nhận nhận thành công.", isReady = transfer.IsSenderConfirmed && transfer.IsReceiverConfirmed });
+    }
+
+    private async Task TryExecutePhysicalTransfer(TransferRecord transfer)
+    {
+        if (transfer.IsSenderConfirmed && transfer.IsReceiverConfirmed)
+        {
+            var todayDate = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            var fromLocation = await _db.AssetLocations.FirstOrDefaultAsync(al => al.LocationId == transfer.FromLocationId);
+            if (fromLocation != null && fromLocation.IsCurrent)
+            {
+                fromLocation.IsCurrent = false;
+                fromLocation.EndDate = todayDate;
+            }
+
+            var otherLocations = await _db.AssetLocations
+                .Where(al => al.AssetInstanceId == transfer.AssetInstanceId && al.IsCurrent && al.LocationId != transfer.FromLocationId)
+                .ToListAsync();
+            foreach (var loc in otherLocations)
+            {
+                loc.IsCurrent = false;
+                loc.EndDate = todayDate;
+            }
+
+            var toLocation = await _db.AssetLocations.FirstOrDefaultAsync(al => al.LocationId == transfer.ToLocationId);
+            if (toLocation != null)
+            {
+                toLocation.IsCurrent = true;
+                toLocation.StartDate = todayDate;
+            }
         }
     }
 }

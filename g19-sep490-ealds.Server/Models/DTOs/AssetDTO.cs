@@ -222,4 +222,15 @@ public class AssetInstanceResponseDTO
     public decimal? DepreciationAmount { get; set; }
     public decimal? AccumulatedDepreciation { get; set; }
     public decimal? RemainingValue { get; set; }
+    public List<GuaranteeDTO>? Guarantees { get; set; }
+}
+
+public class GuaranteeDTO
+{
+    public int GuaranteeId { get; set; }
+    public int WarrantyPeriodValue { get; set; }
+    public string WarrantyPeriodUnit { get; set; } = null!;
+    public string? WarrantyConditions { get; set; }
+    public DateOnly StartDate { get; set; }
+    public DateOnly WarrantyEndDate { get; set; }
 }

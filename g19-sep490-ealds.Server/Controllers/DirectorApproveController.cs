@@ -110,6 +110,8 @@ public class DirectorApproveController : ControllerBase
         };
         _db.AssetRequestRecords.Add(record);
 
+
+
         // Bug 3 fix: create a Procurement record when a purchase request is approved by director
         var isPurchase = ar.RequestTypeId == _purchaseRequestTypeId;
         if (isPurchase && ar.Status == 2)
