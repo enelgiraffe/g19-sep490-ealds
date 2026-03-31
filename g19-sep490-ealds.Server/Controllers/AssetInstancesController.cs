@@ -673,6 +673,10 @@ public class AssetInstancesController : ControllerBase
                 .Where(al => al.IsCurrent)
                 .Select(al => al.Department != null ? al.Department.Name : null)
                 .FirstOrDefault(),
+            CurrentLocationNote = i.AssetLocations
+                .Where(al => al.IsCurrent)
+                .Select(al => al.Note)
+                .FirstOrDefault(),
             CurrentResponsibleEmployeeId = i.AssetUsages
                 .Where(u => u.IsCurrent)
                 .Select(u => (int?)u.EmployeeId)

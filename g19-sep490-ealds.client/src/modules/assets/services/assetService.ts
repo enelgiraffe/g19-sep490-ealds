@@ -95,6 +95,8 @@ export interface AssetInstanceResponse {
   currentLocationId?: number | null;
   currentDepartmentId?: number | null;
   currentDepartmentName?: string | null;
+  /** Ghi chú trên bản ghi AssetLocation hiện tại (IsCurrent). */
+  currentLocationNote?: string | null;
   currentResponsibleEmployeeId?: number | null;
   currentResponsibleEmployeeName?: string | null;
   currentResponsibleUserId?: number | null;

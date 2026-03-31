@@ -5,6 +5,7 @@ import {
   formatVnd,
   getStatusLabel,
   type AssetDetailResponse,
+  type AssetInstanceResponse,
 } from '../services/assetService';
 import {
   getMaintenanceRecordStatusLabel,
@@ -68,6 +69,16 @@ function getRepeatUnitLabel(value?: number | string | null): string {
   return '—';
 }
 
+/** Vị trí hiện tại từ bảng AssetLocation (phòng ban + ghi chú vị trí). */
+function formatInstanceCurrentLocation(row: AssetInstanceResponse): string {
+  const dept = row.currentDepartmentName?.trim();
+  const note = row.currentLocationNote?.trim();
+  if (dept && note) return `${dept} · ${note}`;
+  if (dept) return dept;
+  if (note) return note;
+  return '—';
+}
+
 export function AssetDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id ? Number(params.id) : NaN;
@@ -95,7 +106,8 @@ export function AssetDetailPage() {
     }
   })();
 
-  const isAccountant = mapBackendRoleToAppRole(profile?.role ?? storedRole) === 'accountant';
+  const isAccountant =
+    mapBackendRoleToAppRole(profile?.role ?? storedRole) === 'accountant';
 
   useEffect(() => {
     if (!id || Number.isNaN(id)) {
@@ -164,7 +176,9 @@ export function AssetDetailPage() {
     );
   }
 
-  const primary = asset.instances?.[0];
+  const instances = asset.instances ?? [];
+  const instanceCount = instances.length;
+  const primary = instances[0];
 
   const statusLabel = getStatusLabel(asset.statusName);
 
@@ -240,7 +254,7 @@ export function AssetDetailPage() {
               </div>
               <div className="asset-detail__info-row">
                 <span className="label">Số lượng</span>
-                <span className="value">{asset.quantity}</span>
+                <span className="value">{instanceCount}</span>
               </div>
               <div className="asset-detail__info-row">
                 <span className="label">Đơn vị tính</span>
@@ -252,6 +266,10 @@ export function AssetDetailPage() {
                   {primary != null ? formatVnd(primary.currentValue) : '—'}
                 </span>
               </div>
+              <label className="asset-detail__checkbox asset-detail__checkbox--readonly">
+                <input type="checkbox" checked readOnly />
+                <span>Là tài sản cố định</span>
+              </label>
             </div>
             <div className="asset-detail__info-col">
               <div className="asset-detail__info-row">
@@ -271,6 +289,16 @@ export function AssetDetailPage() {
               <div className="asset-detail__info-row">
                 <span className="label">Ngày đưa vào sử dụng</span>
                 <span className="value">{formatDate(primary?.inUseDate ?? asset.inUseDate)}</span>
+              </div>
+              <div className="asset-detail__info-row asset-detail__info-row--multiline">
+                <span className="label">Quy cách tài sản</span>
+                <span className="value">
+                  {asset.specification?.trim() ? asset.specification.trim() : '—'}
+                </span>
+              </div>
+              <div className="asset-detail__info-row asset-detail__info-row--multiline">
+                <span className="label">Ghi chú</span>
+                <span className="value">{asset.note?.trim() ? asset.note.trim() : '—'}</span>
               </div>
             </div>
           </div>
@@ -314,14 +342,6 @@ export function AssetDetailPage() {
                 )}
               </tbody>
             </table>
-          </div>
-        </div>
-
-        <div className="asset-detail__section">
-          <h2 className="asset-detail__section-title">Bảo hành</h2>
-          <div className="asset-detail__info-row">
-            <span className="label">Hạn bảo hành</span>
-            <span className="value">—</span>
           </div>
         </div>
 
@@ -474,6 +494,64 @@ export function AssetDetailPage() {
             ) : (
               <p className="asset-detail__empty">Chưa có tài liệu đính kèm.</p>
             )}
+          </div>
+        </div>
+
+        <div className="asset-detail__section">
+          <h2 className="asset-detail__section-title">Danh sách cá thể</h2>
+          <div className="asset-detail__table-wrapper">
+            <table className="asset-detail__table">
+              <thead>
+                <tr>
+                  <th>MÃ CÁ THỂ</th>
+                  <th>SỐ SERI</th>
+                  <th>TRẠNG THÁI</th>
+                  <th>KHO</th>
+                  <th>VỊ TRÍ TÀI SẢN</th>
+                  <th>GIÁ TRỊ HIỆN TẠI</th>
+                  <th>NGÀY MUA</th>
+                  <th className="asset-detail__th-narrow">CHI TIẾT</th>
+                </tr>
+              </thead>
+              <tbody>
+                {instances.length > 0 ? (
+                  instances.map((row) => {
+                    const detailPath = `/asset-instances/${row.assetInstanceId}`;
+                    return (
+                      <tr key={row.assetInstanceId}>
+                        <td>
+                          <Link className="asset-detail__table-link" to={detailPath}>
+                            {row.instanceCode}
+                          </Link>
+                        </td>
+                        <td>{row.serialNumber?.trim() || '—'}</td>
+                        <td>{getStatusLabel(row.statusName)}</td>
+                        <td>{row.warehouseName?.trim() || '—'}</td>
+                        <td>{formatInstanceCurrentLocation(row)}</td>
+                        <td>{formatVnd(row.currentValue)}</td>
+                        <td>{formatDate(row.purchaseDate)}</td>
+                        <td>
+                          <Link
+                            className="asset-detail__icon-btn asset-detail__icon-btn--link"
+                            to={detailPath}
+                            title="Xem chi tiết cá thể"
+                            aria-label="Xem chi tiết cá thể"
+                          >
+                            👁️
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={8} className="asset-detail__empty">
+                      Chưa có cá thể nào cho tài sản này.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

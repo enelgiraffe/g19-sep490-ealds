@@ -102,6 +102,15 @@
   flex: 1;
 }
 
+.asset-detail__info-row--multiline {
+  align-items: flex-start;
+}
+
+.asset-detail__info-row--multiline .value {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .asset-detail__checkbox {
   display: flex;
   align-items: center;
@@ -115,6 +124,18 @@
   width: 16px;
   height: 16px;
   cursor: pointer;
+}
+
+.asset-detail__checkbox--readonly {
+  cursor: default;
+  pointer-events: none;
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.asset-detail__checkbox--readonly input[type='checkbox'] {
+  cursor: default;
+  accent-color: #6b7280;
 }
 
 .asset-detail__table-wrapper {
@@ -131,6 +152,11 @@
 
 .asset-detail__table thead {
   background: #f9fafb;
+}
+
+.asset-detail__th-narrow {
+  width: 72px;
+  text-align: center;
 }
 
 .asset-detail__table th {
@@ -270,6 +296,28 @@
 
 .asset-detail__icon-btn:hover {
   background: #f3f4f6;
+}
+
+.asset-detail__icon-btn--link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  color: inherit;
+}
+
+.asset-detail__icon-btn--link:hover {
+  color: #111827;
+}
+
+.asset-detail__table-link {
+  color: #2563eb;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.asset-detail__table-link:hover {
+  text-decoration: underline;
 }
 
 .asset-detail__record-modal-overlay {

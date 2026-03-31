@@ -210,6 +210,8 @@ public class AssetInstanceResponseDTO
     public int? CurrentLocationId { get; set; }
     public int? CurrentDepartmentId { get; set; }
     public string? CurrentDepartmentName { get; set; }
+    /// <summary>Note on the current <see cref="AssetLocation"/> row (IsCurrent).</summary>
+    public string? CurrentLocationNote { get; set; }
     public int? CurrentResponsibleEmployeeId { get; set; }
     public string? CurrentResponsibleEmployeeName { get; set; }
     public int? CurrentResponsibleUserId { get; set; }
