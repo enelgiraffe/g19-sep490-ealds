@@ -175,6 +175,22 @@ export function AssetInstanceDetailPage() {
   const backToAssetPath = state.backToPath?.trim() || `/assets/${instance.assetId}`;
   const backLabel = state.backLabel?.trim() || '← Quay lại chi tiết tài sản';
   const statusLabel = getStatusLabel(instance.statusName);
+  const latestGuarantee =
+    instance.guarantees && instance.guarantees.length > 0
+      ? [...instance.guarantees].sort((a, b) =>
+          String(a.warrantyEndDate ?? '').localeCompare(String(b.warrantyEndDate ?? ''))
+        )[instance.guarantees.length - 1]
+      : null;
+
+  const displayGuaranteeId = latestGuarantee?.guaranteeId ?? instance.guaranteeId;
+  const displayWarrantyPeriodValue =
+    latestGuarantee?.warrantyPeriodValue ?? instance.warrantyPeriodValue;
+  const displayWarrantyPeriodUnit =
+    latestGuarantee?.warrantyPeriodUnit ?? instance.warrantyPeriodUnit;
+  const displayWarrantyConditions =
+    latestGuarantee?.warrantyConditions ?? instance.warrantyConditions;
+  const displayWarrantyStartDate = latestGuarantee?.startDate ?? instance.warrantyStartDate;
+  const displayWarrantyEndDate = latestGuarantee?.warrantyEndDate ?? instance.warrantyEndDate;
 
   const scheduleScopeLabel = (row: MaintenanceScheduleResponse) =>
     row.assetInstanceId != null && row.assetInstanceId === instanceId
@@ -269,26 +285,26 @@ export function AssetInstanceDetailPage() {
           <div className="asset-detail__info-row">
             <span className="label">Mã bảo hành</span>
             <span className="value">
-              {instance.guaranteeId != null ? `BH-${instance.guaranteeId}` : '—'}
+              {displayGuaranteeId != null ? `BH-${displayGuaranteeId}` : '—'}
             </span>
           </div>
           <div className="asset-detail__info-row">
             <span className="label">Thời hạn bảo hành</span>
             <span className="value">
-              {getWarrantyPeriodLabel(instance.warrantyPeriodValue, instance.warrantyPeriodUnit)}
+              {getWarrantyPeriodLabel(displayWarrantyPeriodValue, displayWarrantyPeriodUnit)}
             </span>
           </div>
           <div className="asset-detail__info-row">
             <span className="label">Ngày bắt đầu</span>
-            <span className="value">{formatDate(instance.warrantyStartDate)}</span>
+            <span className="value">{formatDate(displayWarrantyStartDate)}</span>
           </div>
           <div className="asset-detail__info-row">
             <span className="label">Ngày kết thúc</span>
-            <span className="value">{formatDate(instance.warrantyEndDate)}</span>
+            <span className="value">{formatDate(displayWarrantyEndDate)}</span>
           </div>
           <div className="asset-detail__info-row asset-detail__info-row--multiline">
             <span className="label">Điều kiện bảo hành</span>
-            <span className="value">{instance.warrantyConditions?.trim() || '—'}</span>
+            <span className="value">{displayWarrantyConditions?.trim() || '—'}</span>
           </div>
         </div>
 

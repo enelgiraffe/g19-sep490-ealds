@@ -57,6 +57,15 @@ export interface AssetDocumentItem {
   uploadedDate: string;
 }
 
+export interface GuaranteeItem {
+  guaranteeId: number;
+  warrantyPeriodValue: number;
+  warrantyPeriodUnit: string;
+  warrantyConditions?: string | null;
+  startDate: string;
+  warrantyEndDate: string;
+}
+
 /** Catalog row from GET /api/assets */
 export interface AssetCatalogResponse {
   assetId: number;
@@ -117,6 +126,7 @@ export interface AssetInstanceResponse {
   warrantyConditions?: string | null;
   warrantyStartDate?: string | null;
   warrantyEndDate?: string | null;
+  guarantees?: GuaranteeItem[] | null;
 }
 
 /** GET /api/assets/{id} — catalog + instances + maintenance + documents */

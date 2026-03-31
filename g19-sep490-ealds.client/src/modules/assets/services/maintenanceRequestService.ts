@@ -61,7 +61,7 @@ export const maintenanceRequestService = {
    */
   async create(payload: MaintenanceRequestPayload): Promise<MaintenanceRequestResponse> {
     const body = {
-      assetId: payload.assetId,
+      assetInstanceId: payload.assetInstanceId,
       requestTypeId: payload.requestTypeId ?? MAINTENANCE_REQUEST_TYPE_ID,
       createdBy: payload.createdBy,
       title: payload.title ?? null,

@@ -239,4 +239,3 @@ public class GuaranteeDTO
     public DateOnly StartDate { get; set; }
     public DateOnly WarrantyEndDate { get; set; }
 }
-}
