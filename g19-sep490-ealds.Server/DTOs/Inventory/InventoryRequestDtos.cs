@@ -29,11 +29,8 @@ public class SaveAssetInventoryDTO
     /// <summary>Optional echo; must match the route <c>assetInstanceId</c> when set.</summary>
     public int AssetInstanceId { get; set; }
 
-    /// <summary>Whether this physical instance is still in use on site (per checker).</summary>
-    public bool StillInUse { get; set; }
-
-    /// <summary>Checker&apos;s status / condition notes; stored in inventory record ActualCondition.</summary>
-    public string? ActualCondition { get; set; }
+    /// <summary>On-site reported status: AssetStatus enum int (required).</summary>
+    public int ActualStatus { get; set; }
 
     public int? ActualLocationId { get; set; }
     public int? ActualManagerId { get; set; }

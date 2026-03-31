@@ -31,6 +31,16 @@
   gap: 12px;
 }
 
+.exec-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.exec-header__complete-wrap {
+  display: inline-block;
+}
+
 .exec-back-btn {
   display: inline-flex;
   align-items: center;
@@ -373,10 +383,25 @@
   gap: 4px;
 }
 
+.exec-condition-field--full {
+  flex: 1 1 100%;
+  min-width: 0;
+  max-width: 480px;
+}
+
 .exec-condition-field__label {
   font-size: 12px;
   font-weight: 500;
   color: #555;
+}
+
+.exec-condition-field__required {
+  color: #cf1322;
+}
+
+.exec-condition-field__select {
+  width: 100%;
+  max-width: 480px;
 }
 
 .exec-condition-field__input {

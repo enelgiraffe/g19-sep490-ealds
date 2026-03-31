@@ -122,7 +122,7 @@ export function DirectorInventoryPage() {
     const directorId = getCurrentUserId();
     const payload = {
       reviewedBy: directorId,
-      reviewerRoleId: 3,
+      reviewerRoleId: 2,
       reviewNotes: actionNotes || undefined,
       applyCorrections: false,
     };

@@ -21,7 +21,8 @@ inventoryApi.interceptors.response.use((response) => {
   if (
     url.includes('/complete') ||
     url.includes('/director-approve') ||
-    url.includes('/reject')
+    url.includes('/reject') ||
+    url.includes('/cancel')
   ) {
     window.dispatchEvent(new Event('ealds-notifications-changed'));
   }
@@ -52,6 +53,10 @@ export interface SessionDetail {
   assetTypeName: string;
   status: number;
   statusName: string;
+  progressPercent: number | null;
+  totalTasks: number;
+  completedTasks: number;
+  unresolvedDiscrepancyCount?: number;
   quantityDiffCount: number;
   locationChangeCount: number;
   departmentChangeCount: number;
@@ -67,10 +72,10 @@ export interface SessionAssetCheckItem {
   instanceCode: string;
   assetName: string;
   departmentName: string;
-  /** Book expectation: instance still in active use */
-  bookStillInUse: boolean;
-  /** Recorded after check; null if not yet submitted */
-  actualStillInUse: boolean | null;
+  /** Book-side AssetStatus int */
+  bookStatus: number;
+  /** Reported status after check; null if not yet submitted */
+  actualStatus: number | null;
   checkStatus: number; // 0=Chưa kiểm kê, 1=Đang kiểm kê, 2=Hoàn tất
 }
 
@@ -82,9 +87,13 @@ export interface AssetInventoryDetail {
   assetName: string;
   categoryName: string;
   typeName: string;
-  bookStillInUse: boolean;
-  actualStillInUse: boolean | null;
-  /** Saved checker notes (inventory record ActualCondition) */
+  /** Book-side AssetStatus int */
+  bookStatus: number;
+  /** Book-side status name */
+  bookAssetStatus?: string;
+  /** Last reported status (int); null if never saved */
+  actualStatus: number | null;
+  /** Stored enum name on record */
   actualCondition: string;
   bookLocationId: number | null;
   bookLocationName: string;
@@ -98,8 +107,8 @@ export interface AssetInventoryDetail {
 
 export interface SaveAssetInventoryPayload {
   assetInstanceId: number;
-  stillInUse: boolean;
-  actualCondition?: string;
+  /** Reported AssetStatus int */
+  actualStatus: number;
   actualLocationId: number | null;
   actualManagerId: number | null;
   checkedBy: number;
@@ -141,6 +150,8 @@ export interface InventoryDiscrepancyDetail {
   actualUserId?: number;
   actualUserName?: string;
   actualCondition: string;
+  /** Set when accountant applied actuals to the book (UTC ISO string from API). */
+  resolvedAt?: string | null;
 }
 
 export interface InventoryReviewSummary {
@@ -205,6 +216,8 @@ export interface InventorySessionListItem {
   createDate: string | null;
   isPeriodic: boolean;
   periodDays: number | null;
+  /** Rows in InventoryDiscrepancy with ResolvedAt null (eligible tasks only). */
+  unresolvedDiscrepancyCount?: number;
 }
 
 export interface CreateInventorySessionPayload {
@@ -326,6 +339,16 @@ export const inventoryService = {
     return res.data;
   },
 
+  async applyDiscrepancyActual(
+    sessionId: number,
+    discrepancyId: number,
+  ): Promise<{ message?: string }> {
+    const res = await inventoryApi.post<{ message?: string }>(
+      `/api/inventory/sessions/${sessionId}/discrepancies/${discrepancyId}/apply-actual`,
+    );
+    return res.data;
+  },
+
   async directorApproveSession(
     sessionId: number,
     payload: ReviewSessionPayload,
@@ -390,7 +413,7 @@ export const inventoryService = {
         assetName?: string | null;
         currentDepartmentId?: number | null;
       }[]
-    >('/api/asset-instances', { params });
+    >('/api/assetinstances', { params });
     return res.data.map((a) => ({
       assetId: a.assetId,
       code: a.instanceCode,

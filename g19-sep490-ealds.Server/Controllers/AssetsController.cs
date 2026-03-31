@@ -21,7 +21,7 @@ public class AssetsController : ControllerBase
 
     /// <summary>
     /// GET /api/assets — Catalog assets (keyword, type, catalog status).
-    /// Filters for warehouse, price, purchase date, and per-instance location belong on <c>GET /api/asset-instances</c>.
+    /// Filters for warehouse, price, purchase date, and per-instance location belong on <c>GET /api/assetinstances</c>.
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<IEnumerable<AssetResponseDTO>>> GetAll(

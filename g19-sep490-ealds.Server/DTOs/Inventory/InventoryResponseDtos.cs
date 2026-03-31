@@ -19,6 +19,9 @@ public class InventorySessionListItemDTO
     public DateTime? CreateDate { get; set; }
     public bool IsPeriodic { get; set; }
     public int? PeriodDays { get; set; }
+
+    /// <summary>Discrepancy rows not yet applied to the book (ResolvedAt null). Zero when not applicable.</summary>
+    public int UnresolvedDiscrepancyCount { get; set; }
 }
 
 public class InventorySessionDetailDTO : InventorySessionListItemDTO
@@ -47,11 +50,11 @@ public class SessionAssetCheckItemDTO
     public string AssetName { get; set; } = null!;
     public string DepartmentName { get; set; } = null!;
 
-    /// <summary>Whether books imply this instance is still in active use (derived from asset status).</summary>
-    public bool BookStillInUse { get; set; }
+    /// <summary>Book-side instance status (AssetStatus int).</summary>
+    public int BookStatus { get; set; }
 
-    /// <summary>Recorded on-site answer after check; null if not yet submitted.</summary>
-    public bool? ActualStillInUse { get; set; }
+    /// <summary>Reported status after check; null if not yet submitted.</summary>
+    public int? ActualStatus { get; set; }
 
     public int CheckStatus { get; set; } // 0=Chưa kiểm kê, 2=Hoàn tất
 }
@@ -71,13 +74,16 @@ public class AssetInventoryDetailDTO
     public string CategoryName { get; set; } = null!;
     public string TypeName { get; set; } = null!;
 
-    /// <summary>Whether books imply this instance is still in active use.</summary>
-    public bool BookStillInUse { get; set; }
+    /// <summary>Book-side instance status (AssetStatus int).</summary>
+    public int BookStatus { get; set; }
 
-    /// <summary>Last saved answer from inventory record; null if never checked.</summary>
-    public bool? ActualStillInUse { get; set; }
+    /// <summary>Book-side asset status enum name for display.</summary>
+    public string BookAssetStatus { get; set; } = string.Empty;
 
-    /// <summary>Checker clarification stored on the inventory record.</summary>
+    /// <summary>Last reported status after check; null if not yet saved.</summary>
+    public int? ActualStatus { get; set; }
+
+    /// <summary>AssetStatus enum name stored on the inventory record (empty if legacy / cleared).</summary>
     public string ActualCondition { get; set; } = string.Empty;
 
     public int? BookLocationId { get; set; }
@@ -153,6 +159,9 @@ public class InventoryDiscrepancyDTO
     public int? ActualUserId { get; set; }
     public string? ActualUserName { get; set; }
     public string ActualCondition { get; set; } = null!;
+
+    /// <summary>UTC when accountant applied actuals to the book; null if still pending.</summary>
+    public DateTime? ResolvedAt { get; set; }
 }
 
 public class DropdownItemDTO

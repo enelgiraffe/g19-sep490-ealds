@@ -2,14 +2,32 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, Spin, Table, Tag, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SyncOutlined } from '@ant-design/icons';
 import {
   inventoryService,
   SESSION_STATUS,
   type InventoryDiscrepancyDetail,
   type InventoryReviewSummary,
 } from '../services/inventoryService';
+import { getStatusLabel } from '../../assets/services/assetService';
+import { useAppStore } from '../../../stores/appStore';
 import './InventoryReviewPage.css';
+
+function formatReviewBookUseLine(bookCondition: string | undefined): string {
+  const s = bookCondition?.trim() ?? '';
+  return s ? getStatusLabel(s) : '—';
+}
+
+function formatReviewActualUseLine(
+  actualQuantity: number | null | undefined,
+  actualCondition: string | undefined,
+): string {
+  const cond = actualCondition?.trim();
+  if (cond) return getStatusLabel(cond);
+  if (actualQuantity === null || actualQuantity === undefined) return '—';
+  if (actualQuantity === 1) return 'Đang sử dụng';
+  return '—';
+}
 
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '-';
@@ -32,9 +50,11 @@ export function InventoryReviewPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const id = Number(sessionId);
+  const currentRole = useAppStore((s) => s.currentRole);
 
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<InventoryReviewSummary | null>(null);
+  const [resolvingId, setResolvingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -54,16 +74,35 @@ export function InventoryReviewPage() {
     load();
   }, [load]);
 
+  const canResolveOnBook = currentRole === 'accountant' || currentRole === 'admin';
+
+  const handleApplyActual = async (discrepancyId: number) => {
+    if (!id) return;
+    setResolvingId(discrepancyId);
+    try {
+      const res = await inventoryService.applyDiscrepancyActual(id, discrepancyId);
+      message.success(res.message ?? 'Đã cập nhật sổ theo thực tế.');
+      await load();
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      message.error(
+        axiosErr?.response?.data?.message ?? 'Không thể cập nhật sổ. Vui lòng thử lại.',
+      );
+    } finally {
+      setResolvingId(null);
+    }
+  };
+
   const columns: ColumnsType<InventoryDiscrepancyDetail> = [
-    { title: 'Mã DM', dataIndex: 'assetCode', key: 'assetCode', width: 100 },
-    { title: 'Mã TH', dataIndex: 'instanceCode', key: 'instanceCode', width: 110 },
+    { title: 'Mã tài sản', dataIndex: 'assetCode', key: 'assetCode', width: 100 },
+    { title: 'Mã cá thể', dataIndex: 'instanceCode', key: 'instanceCode', width: 110 },
     { title: 'Tên tài sản', dataIndex: 'assetName', key: 'assetName', ellipsis: true },
     {
       title: 'Sổ sách',
       key: 'book',
       render: (_, r) => (
         <div className="inv-review__cell-stack">
-          <span>{`Số lượng: ${r.bookQuantity ?? '—'}`}</span>
+          <span>{formatReviewBookUseLine(r.bookCondition)}</span>
           <span>{r.bookDepartmentName ?? '—'}</span>
           <span className="inv-review__muted">{r.bookUserName ?? '—'}</span>
         </div>
@@ -72,20 +111,40 @@ export function InventoryReviewPage() {
     {
       title: 'Thực tế',
       key: 'actual',
-      render: (_, r) => {
-        const conditionNote = r.actualCondition?.trim();
-        return (
-          <div className="inv-review__cell-stack">
-            <span>{`Số lượng: ${r.actualQuantity ?? '—'}`}</span>
-            {conditionNote ? (
-              <span className="inv-review__muted inv-review__note">{`(${conditionNote})`}</span>
-            ) : null}
-            <span>{r.actualDepartmentName ?? '—'}</span>
-            <span className="inv-review__muted">{r.actualUserName ?? '—'}</span>
-          </div>
-        );
-      },
+      render: (_, r) => (
+        <div className="inv-review__cell-stack">
+          <span>{formatReviewActualUseLine(r.actualQuantity, r.actualCondition)}</span>
+          <span>{r.actualDepartmentName ?? '—'}</span>
+          <span className="inv-review__muted">{r.actualUserName ?? '—'}</span>
+        </div>
+      ),
     },
+    ...(summary?.status === SESSION_STATUS.PendingAccountant && canResolveOnBook
+      ? [
+          {
+            title: 'Thao tác',
+            key: 'resolve',
+            width: 140,
+            render: (_: unknown, r: InventoryDiscrepancyDetail) =>
+              r.resolvedAt ? (
+                <Tag color="success" className="inv-review__resolved-tag">
+                  Đã xử lý
+                </Tag>
+              ) : (
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<SyncOutlined />}
+                  loading={resolvingId === r.discrepancyId}
+                  disabled={resolvingId !== null && resolvingId !== r.discrepancyId}
+                  onClick={() => handleApplyActual(r.discrepancyId)}
+                >
+                  Cập nhật sổ
+                </Button>
+              ),
+          } as ColumnsType<InventoryDiscrepancyDetail>[number],
+        ]
+      : []),
   ];
 
   if (loading) {

@@ -562,6 +562,7 @@ public partial class EaldsDbContext : DbContext
 
             entity.Property(e => e.ActualValue).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.BookValue).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ResolvedAt).HasColumnType("datetime2");
 
             entity.HasOne(d => d.ActualLocation).WithMany(p => p.InventoryDiscrepancyActualLocations)
                 .HasForeignKey(d => d.ActualLocationId)
