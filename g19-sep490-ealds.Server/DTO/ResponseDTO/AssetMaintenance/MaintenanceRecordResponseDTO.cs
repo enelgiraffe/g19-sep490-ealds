@@ -1,4 +1,4 @@
-﻿using g19_sep490_ealds.Server.Utils.EnumsStatus;
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
 namespace g19_sep490_ealds.Server.DTO.ResponseDTO.AssetMaintenance;
 
@@ -6,6 +6,8 @@ public class MaintenanceRecordResponseDTO
 {
     public int RecordId { get; set; }
     public int TaskId { get; set; }
+    public int AssetInstanceId { get; set; }
+    public string InstanceCode { get; set; } = string.Empty;
 
     public DateTime ExecutionDate { get; set; }
     public decimal TotalCost { get; set; }

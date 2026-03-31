@@ -21,6 +21,8 @@ maintenanceRecordApi.interceptors.request.use((config) => {
 export interface MaintenanceRecordResponse {
   recordId: number;
   taskId: number;
+  assetInstanceId: number;
+  instanceCode: string;
   executionDate: string;
   totalCost: number;
   workPerformed: string;
@@ -47,6 +49,13 @@ export const maintenanceRecordService = {
   async getByAssetId(assetId: number): Promise<MaintenanceRecordResponse[]> {
     const response = await maintenanceRecordApi.get<MaintenanceRecordResponse[]>(
       `/api/MaintenanceRecord/asset/${assetId}`
+    );
+    return response.data;
+  },
+
+  async getByInstanceId(instanceId: number): Promise<MaintenanceRecordResponse[]> {
+    const response = await maintenanceRecordApi.get<MaintenanceRecordResponse[]>(
+      `/api/MaintenanceRecord/instance/${instanceId}`
     );
     return response.data;
   },

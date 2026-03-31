@@ -33,6 +33,9 @@ export type AssetStatus =
 
 export interface MaintenanceSchedule {
   scheduleId: number;
+  /** Có giá trị khi quy định chỉ áp dụng cho một cá thể. */
+  assetInstanceId?: number | null;
+  instanceCode?: string | null;
   templateId?: number | null;
   content?: string | null;
   templateName?: string | null;

@@ -18,14 +18,42 @@ public class MaintenanceRecordService : IMaintenanceRecordService
     public async Task<IEnumerable<MaintenanceRecordResponseDTO>> GetRecordsByAssetAsync(int assetId)
     {
         var records = await (
-            from mr in _context.MaintenanceRecords
-            join t in _context.MaintenanceTasks on mr.TaskId equals t.TaskId
-            where t.AssetInstanceId == assetId
+            from mr in _context.MaintenanceRecords.AsNoTracking()
+            join ai in _context.AssetInstances.AsNoTracking() on mr.AssetInstanceId equals ai.AssetInstanceId
+            where ai.AssetId == assetId
             orderby mr.ExecutionDate descending
             select new MaintenanceRecordResponseDTO
             {
                 RecordId = mr.RecordId,
                 TaskId = mr.TaskId,
+                AssetInstanceId = mr.AssetInstanceId,
+                InstanceCode = ai.InstanceCode,
+                ExecutionDate = mr.ExecutionDate,
+                TotalCost = mr.TotalCost,
+                WorkPerformed = mr.WorkPerformed,
+                ConditionBefore = mr.ConditionBefore,
+                ConditionAfter = mr.ConditionAfter,
+                TechnicalNote = null,
+                Status = (MaintenanceRecordStatus)mr.Status
+            }
+        ).ToListAsync();
+
+        return records;
+    }
+
+    public async Task<IEnumerable<MaintenanceRecordResponseDTO>> GetRecordsByInstanceAsync(int assetInstanceId)
+    {
+        var records = await (
+            from mr in _context.MaintenanceRecords.AsNoTracking()
+            join ai in _context.AssetInstances.AsNoTracking() on mr.AssetInstanceId equals ai.AssetInstanceId
+            where mr.AssetInstanceId == assetInstanceId
+            orderby mr.ExecutionDate descending
+            select new MaintenanceRecordResponseDTO
+            {
+                RecordId = mr.RecordId,
+                TaskId = mr.TaskId,
+                AssetInstanceId = mr.AssetInstanceId,
+                InstanceCode = ai.InstanceCode,
                 ExecutionDate = mr.ExecutionDate,
                 TotalCost = mr.TotalCost,
                 WorkPerformed = mr.WorkPerformed,

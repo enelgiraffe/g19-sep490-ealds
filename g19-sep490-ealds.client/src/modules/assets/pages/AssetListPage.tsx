@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { message } from 'antd';
 import { EyeOutlined } from '@ant-design/icons';
 import {
@@ -107,14 +107,17 @@ function mapInstanceToInstanceItem(a: AssetInstanceResponse): InstanceItem {
   };
 }
 
-function instanceToAssetInfo(a: AssetInstanceResponse): AssetInfo {
+function instanceToAssetInfo(
+  a: AssetInstanceResponse,
+  catalog?: AssetCatalogResponse | null
+): AssetInfo {
   return {
     assetInstanceId: a.assetInstanceId,
     assetId: a.assetId,
-    code: a.assetCode ?? a.instanceCode,
+    code: a.instanceCode,
     name: a.assetName ?? a.instanceCode,
-    type: '—',
-    specification: a.condition ?? '—',
+    type: catalog?.assetTypeName ?? '—',
+    specification: catalog?.specification ?? '—',
     purchaseDate: formatDate(a.purchaseDate),
     warrantyExpiry: '—',
     currentValue: formatVnd(a.currentValue),
@@ -288,7 +291,8 @@ export function AssetListPage() {
     setOpenMenuId(null);
     try {
       const raw = await assetInstanceService.getById(instanceId);
-      const assetInfo = instanceToAssetInfo(raw);
+      const catalog = await assetService.getById(raw.assetId);
+      const assetInfo = instanceToAssetInfo(raw, catalog);
       
       if (actionKey === 'move') {
         setSelectedAssetInfo(assetInfo);
@@ -739,7 +743,18 @@ export function AssetListPage() {
                           {instancesMap[expandedAssetId]!.map((instance, index) => (
                               <tr key={instance.assetInstanceId} className="asset-instance-row">
                                 <td className="asset-table__cell asset-table__cell--stt">{index + 1}</td>
-                                <td>{instance.instanceCode}</td>
+                                <td>
+                                  <Link
+                                    className="asset-code asset-code--link"
+                                    to={`/asset-instances/${instance.assetInstanceId}`}
+                                    state={{
+                                      backToPath: '/assets',
+                                      backLabel: '← Quay lại danh sách tài sản',
+                                    }}
+                                  >
+                                    {instance.instanceCode}
+                                  </Link>
+                                </td>
                                 <td>{instance.serialNumber}</td>
                                 <td>
                                   <span

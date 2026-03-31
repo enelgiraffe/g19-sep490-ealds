@@ -130,6 +130,9 @@ public class DeleteAssetInstanceDTO
 public class MaintenanceScheduleDTO
 {
     public int ScheduleId { get; set; }
+    /// <summary>Null = quy định áp dụng chung cho toàn bộ cá thể của tài sản.</summary>
+    public int? AssetInstanceId { get; set; }
+    public string? InstanceCode { get; set; }
     public int? TemplateId { get; set; }
     public string? Content { get; set; }
     public string? TemplateName { get; set; }

@@ -30,6 +30,7 @@ interface LiquidationRequestModalProps {
 
 export function LiquidationRequestModal({ open, onClose, onSubmit, assetInfo }: LiquidationRequestModalProps) {
   const [liquidationDate, setLiquidationDate] = useState<string>('');
+  const [recordNumber, setRecordNumber] = useState<string>('');
   const [reason, setReason] = useState<string>('');
   const [disposalMethod, setDisposalMethod] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
@@ -39,6 +40,9 @@ export function LiquidationRequestModal({ open, onClose, onSubmit, assetInfo }: 
     if (open) {
       const today = new Date().toISOString().slice(0, 10);
       setLiquidationDate(today);
+      const datePart = today.replace(/-/g, '');
+      const randomPart = Math.floor(Math.random() * 900 + 100);
+      setRecordNumber(`BB-TL-${datePart}-${randomPart}`);
       setReason('');
       setDisposalMethod('');
       setNotes('');
@@ -88,8 +92,8 @@ export function LiquidationRequestModal({ open, onClose, onSubmit, assetInfo }: 
               <input
                 id="liquidation-record-number"
                 type="text"
-                value="-"
-                disabled
+                value={recordNumber}
+                readOnly
                 className="liquidation-input--disabled"
               />
             </div>
@@ -100,7 +104,7 @@ export function LiquidationRequestModal({ open, onClose, onSubmit, assetInfo }: 
               <div className="liquidation-info-grid">
                 <div className="liquidation-info-row">
                   <div className="liquidation-info-item">
-                    <label>Mã tài sản</label>
+                    <label>Mã cá thể</label>
                     <div className="liquidation-info-value">{assetInfo.code}</div>
                   </div>
                   <div className="liquidation-info-item">
@@ -226,48 +230,6 @@ export function LiquidationRequestModal({ open, onClose, onSubmit, assetInfo }: 
                 </div>
               </div>
 
-              <div className="liquidation-attachments-section">
-                <h4 className="liquidation-attachments-title">Tài liệu đính kèm</h4>
-                <div className="liquidation-attachments-list">
-                  <div className="liquidation-attachment-item">
-                    <span className="liquidation-attachment-number">#1</span>
-                    <span className="liquidation-attachment-name">Thông tin máy</span>
-                    <div className="liquidation-attachment-actions">
-                      <button type="button" className="liquidation-attachment-btn">
-                        ✏
-                      </button>
-                      <button
-                        type="button"
-                        className="liquidation-attachment-btn liquidation-attachment-btn--danger"
-                      >
-                        🗑
-                      </button>
-                    </div>
-                  </div>
-                  <div className="liquidation-attachment-item">
-                    <span className="liquidation-attachment-number">#2</span>
-                    <span className="liquidation-attachment-name">Thông tin nhà cung cấp</span>
-                    <div className="liquidation-attachment-actions">
-                      <button type="button" className="liquidation-attachment-btn">
-                        ✏
-                      </button>
-                      <button
-                        type="button"
-                        className="liquidation-attachment-btn liquidation-attachment-btn--danger"
-                      >
-                        🗑
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="liquidation-btn-upload"
-                >
-                  <span className="liquidation-btn-upload-icon">☁</span>
-                  <span>Thêm file đính kèm</span>
-                </button>
-              </div>
             </div>
           </div>
         </div>

@@ -220,7 +220,14 @@ export function AccountantAssetListPage() {
                       <button
                         type="button"
                         className="asset-code asset-code--link"
-                        onClick={() => navigate(`/assets/${row.catalogAssetId}`)}
+                        onClick={() =>
+                          navigate(`/asset-instances/${row.id}`, {
+                            state: {
+                              backToPath: '/accountant-assets',
+                              backLabel: '← Quay lại danh sách tài sản',
+                            },
+                          })
+                        }
                       >
                         {row.code}
                       </button>

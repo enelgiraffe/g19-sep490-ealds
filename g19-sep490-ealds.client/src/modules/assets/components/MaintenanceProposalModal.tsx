@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import './MaintenanceProposalModal.css';
 
 export interface AssetInfo {
@@ -28,11 +28,6 @@ interface MaintenanceProposalModalProps {
   assetInstanceId: number | null;
 }
 
-interface AttachmentItem {
-  id: string;
-  name: string;
-}
-
 export function MaintenanceProposalModal({
   open,
   onClose,
@@ -40,13 +35,16 @@ export function MaintenanceProposalModal({
   assetInfo,
   assetInstanceId,
 }: MaintenanceProposalModalProps) {
-  const [attachments, setAttachments] = useState<AttachmentItem[]>([
-    { id: '1', name: 'Thông tin máy' },
-    { id: '2', name: 'Thông tin nhà cung cấp' },
-  ]);
-  const [recordNumber, setRecordNumber] = useState<string>('BA001');
+  const [recordNumber, setRecordNumber] = useState<string>('');
   const [maintenanceContent, setMaintenanceContent] = useState<string>('Hỏng nhẹ');
   const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const randomPart = Math.floor(Math.random() * 900 + 100);
+    setRecordNumber(`BB-BD-${datePart}-${randomPart}`);
+  }, [open]);
 
   if (!open || !assetInfo || assetInstanceId == null) return null;
 
@@ -61,17 +59,6 @@ export function MaintenanceProposalModal({
       recordNumber: recordNumber.trim() || undefined,
       maintenanceContent: maintenanceContent.trim(),
     });
-  };
-
-  const handleAddAttachment = () => {
-    setAttachments((prev) => [
-      ...prev,
-      { id: String(Date.now()), name: `File đính kèm #${prev.length + 1}` },
-    ]);
-  };
-
-  const handleRemoveAttachment = (id: string) => {
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
   };
 
   return (
@@ -100,9 +87,8 @@ export function MaintenanceProposalModal({
                 id="maintenance-record-number"
                 type="text"
                 className="maintenance-proposal-input"
-                placeholder="BA001"
                 value={recordNumber}
-                onChange={(e) => setRecordNumber(e.target.value)}
+                readOnly
               />
             </div>
 
@@ -111,7 +97,7 @@ export function MaintenanceProposalModal({
             <div className="maintenance-proposal-info-grid">
               <div className="maintenance-proposal-info-row">
                 <div className="maintenance-proposal-info-item">
-                  <label>Mã tài sản</label>
+                  <label>Mã cá thể</label>
                   <div className="maintenance-proposal-info-value">{assetInfo.code}</div>
                 </div>
                 <div className="maintenance-proposal-info-item">
@@ -192,40 +178,6 @@ export function MaintenanceProposalModal({
               {maintenanceError && (
                 <div className="maintenance-proposal-error-text">{maintenanceError}</div>
               )}
-            </div>
-
-            <div className="maintenance-proposal-attachments-section">
-              <h4 className="maintenance-proposal-attachments-title">Tài liệu đính kèm</h4>
-              <div className="maintenance-proposal-attachments-list">
-                {attachments.map((att) => (
-                  <div key={att.id} className="maintenance-proposal-attachment-item">
-                    <span className="maintenance-proposal-attachment-number">
-                      #{attachments.indexOf(att) + 1}
-                    </span>
-                    <span className="maintenance-proposal-attachment-name">{att.name}</span>
-                    <div className="maintenance-proposal-attachment-actions">
-                      <button type="button" className="maintenance-proposal-attachment-btn">
-                        ✏
-                      </button>
-                      <button
-                        type="button"
-                        className="maintenance-proposal-attachment-btn maintenance-proposal-attachment-btn--danger"
-                        onClick={() => handleRemoveAttachment(att.id)}
-                      >
-                        🗑
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                className="maintenance-proposal-btn-upload"
-                onClick={handleAddAttachment}
-              >
-                <span className="maintenance-proposal-btn-upload-icon">+</span>
-                <span>Thêm file đính kèm</span>
-              </button>
             </div>
           </div>
         </div>

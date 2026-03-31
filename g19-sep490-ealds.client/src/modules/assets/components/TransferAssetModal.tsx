@@ -41,6 +41,7 @@ export function TransferAssetModal({
   const [locations, setLocations] = useState<AssetLocationOption[]>([]);
   const [locationsLoading, setLocationsLoading] = useState(false);
   const [transferDate, setTransferDate] = useState<string>('');
+  const [recordNumber, setRecordNumber] = useState<string>('');
   const [reason, setReason] = useState<string>('');
   const [fromLocationId, setFromLocationId] = useState<string>('');
   const [toLocationId, setToLocationId] = useState<string>('');
@@ -64,6 +65,9 @@ export function TransferAssetModal({
   useEffect(() => {
     if (open) {
       const today = new Date().toISOString().slice(0, 10);
+      const datePart = today.replace(/-/g, '');
+      const randomPart = Math.floor(Math.random() * 900 + 100);
+      setRecordNumber(`BB-DC-${datePart}-${randomPart}`);
       setTransferDate(today);
       setReason('');
       setDateError(null);
@@ -155,8 +159,8 @@ export function TransferAssetModal({
                 <input
                   id="transfer-record-number"
                   type="text"
-                  value="-"
-                  disabled
+                  value={recordNumber}
+                  readOnly
                   className="transfer-input transfer-input--disabled"
                 />
               </div>
@@ -299,19 +303,6 @@ export function TransferAssetModal({
             )}
           </div>
 
-          <div className="transfer-form__section">
-            <h3 className="transfer-section-title">Tài liệu đính kèm</h3>
-            <div className="transfer-attachments">
-              <div className="transfer-attachment-item">
-                <span>#1</span>
-                <span>Thông tin máy</span>
-              </div>
-              <div className="transfer-attachment-item">
-                <span>#2</span>
-                <span>Thông tin nhà cung cấp</span>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="transfer-modal__footer">

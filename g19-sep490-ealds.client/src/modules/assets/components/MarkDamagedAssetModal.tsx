@@ -30,6 +30,7 @@ export function MarkDamagedAssetModal({
   assetInfo,
 }: MarkDamagedAssetModalProps) {
   const [damageDate, setDamageDate] = useState<string>('');
+  const [recordNumber, setRecordNumber] = useState<string>('');
   const [condition, setCondition] = useState<string>('');
   const [dateError, setDateError] = useState<string | null>(null);
 
@@ -37,6 +38,9 @@ export function MarkDamagedAssetModal({
     if (open) {
       const today = new Date().toISOString().slice(0, 10);
       setDamageDate(today);
+      const datePart = today.replace(/-/g, '');
+      const randomPart = Math.floor(Math.random() * 900 + 100);
+      setRecordNumber(`BB-HONG-${datePart}-${randomPart}`);
       setCondition('');
       setDateError(null);
     }
@@ -83,8 +87,8 @@ export function MarkDamagedAssetModal({
               <input
                 id="mark-damaged-record-number"
                 type="text"
-                value="-"
-                disabled
+                value={recordNumber}
+                readOnly
                 className="mark-damaged-input--disabled"
               />
             </div>
@@ -95,7 +99,7 @@ export function MarkDamagedAssetModal({
               <div className="mark-damaged-info-grid">
                 <div className="mark-damaged-info-row">
                   <div className="mark-damaged-info-item">
-                    <label>Mã tài sản</label>
+                    <label>Mã cá thể</label>
                     <div className="mark-damaged-info-value">{assetInfo.code}</div>
                   </div>
                   <div className="mark-damaged-info-item">
@@ -193,54 +197,6 @@ export function MarkDamagedAssetModal({
                 />
               </div>
 
-              <div className="mark-damaged-attachments-section">
-                <h4 className="mark-damaged-attachments-title">Tài liệu đính kèm</h4>
-                <div className="mark-damaged-attachments-list">
-                  <div className="mark-damaged-attachment-item">
-                    <span className="mark-damaged-attachment-number">#1</span>
-                    <span className="mark-damaged-attachment-name">Thông tin máy</span>
-                    <div className="mark-damaged-attachment-actions">
-                      <button
-                        type="button"
-                        className="mark-damaged-attachment-btn"
-                      >
-                        ✏
-                      </button>
-                      <button
-                        type="button"
-                        className="mark-damaged-attachment-btn mark-damaged-attachment-btn--danger"
-                      >
-                        🗑
-                      </button>
-                    </div>
-                  </div>
-                  <div className="mark-damaged-attachment-item">
-                    <span className="mark-damaged-attachment-number">#2</span>
-                    <span className="mark-damaged-attachment-name">Thông tin nhà cung cấp</span>
-                    <div className="mark-damaged-attachment-actions">
-                      <button
-                        type="button"
-                        className="mark-damaged-attachment-btn"
-                      >
-                        ✏
-                      </button>
-                      <button
-                        type="button"
-                        className="mark-damaged-attachment-btn mark-damaged-attachment-btn--danger"
-                      >
-                        🗑
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="mark-damaged-btn-upload"
-                >
-                  <span className="mark-damaged-btn-upload-icon">☁</span>
-                  <span>Thêm file đính kèm</span>
-                </button>
-              </div>
             </div>
           </div>
         </div>

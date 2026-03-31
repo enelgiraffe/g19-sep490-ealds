@@ -12,10 +12,6 @@ import {
   maintenanceRecordService,
   type MaintenanceRecordResponse,
 } from '../services/maintenanceRecordService';
-import {
-  maintenanceScheduleService,
-  type MaintenanceScheduleResponse,
-} from '../services/maintenanceScheduleService';
 import { profileService, type UserProfile } from '../../profile/services/profileService';
 import { mapBackendRoleToAppRole } from '../../auth/types/auth.types';
 import './AssetDetailPage.css';
@@ -89,9 +85,6 @@ export function AssetDetailPage() {
   const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecordResponse[]>(
     []
   );
-  const [maintenanceSchedules, setMaintenanceSchedules] = useState<MaintenanceScheduleResponse[]>(
-    []
-  );
   const [selectedMaintenanceRecord, setSelectedMaintenanceRecord] =
     useState<MaintenanceRecordResponse | null>(null);
 
@@ -125,12 +118,10 @@ export function AssetDetailPage() {
           profileService.getProfile().catch(() => null),
           maintenanceRecordService.getByAssetId(id).catch(() => []),
         ]);
-        const scheduleRes = await maintenanceScheduleService.findByAssetId(id).catch(() => []);
         if (cancelled) return;
         setAsset(assetRes);
         if (profileRes) setProfile(profileRes);
         setMaintenanceRecords(maintenanceRecordRes);
-        setMaintenanceSchedules(scheduleRes);
       } catch {
         if (!cancelled) setError('Không tải được thông tin tài sản.');
       } finally {
@@ -179,34 +170,14 @@ export function AssetDetailPage() {
   const instances = asset.instances ?? [];
   const instanceCount = instances.length;
   const primary = instances[0];
+  const maintenanceSchedules = asset.maintenanceSchedules ?? [];
 
   const statusLabel = getStatusLabel(asset.statusName);
 
-  const depreciationPolicyLabel =
-    primary?.depreciationPolicyName ?? 'Chưa cấu hình chính sách khấu hao';
-
-  const depreciationUsefulLifeLabel =
-    primary?.depreciationUsefulLifeMonths != null
-      ? `${primary.depreciationUsefulLifeMonths} tháng`
-      : '—';
-
-  const depreciationSalvageValueLabel =
-    primary?.depreciationSalvageValue != null
-      ? formatVnd(primary.depreciationSalvageValue)
-      : '—';
-
-  const depreciationAmountLabel =
-    primary?.depreciationAmount != null
-      ? formatVnd(primary.depreciationAmount)
-      : '—';
-
-  const accumulatedDepreciationLabel =
-    primary?.accumulatedDepreciation != null
-      ? formatVnd(primary.accumulatedDepreciation)
-      : '—';
-
-  const remainingValueLabel =
-    primary?.remainingValue != null ? formatVnd(primary.remainingValue) : '—';
+  const scheduleInstanceLabel = (row: (typeof maintenanceSchedules)[0]) =>
+    row.instanceCode?.trim()
+      ? row.instanceCode.trim()
+      : '— (chung toàn bộ cá thể)';
 
   return (
     <div className="asset-detail-page">
@@ -310,6 +281,7 @@ export function AssetDetailPage() {
             <table className="asset-detail__table">
               <thead>
                 <tr>
+                  <th>MÃ CÁ THỂ</th>
                   <th>NỘI DUNG BẢO DƯỠNG</th>
                   <th>THỜI ĐIỂM ÁP DỤNG</th>
                   <th>LẶP LẠI THEO</th>
@@ -320,9 +292,12 @@ export function AssetDetailPage() {
                 {maintenanceSchedules.length > 0 ? (
                   maintenanceSchedules.map((schedule) => (
                     <tr key={schedule.scheduleId}>
+                      <td>{scheduleInstanceLabel(schedule)}</td>
                       <td>
                         {schedule.content?.trim() ||
-                          (schedule.templateId ? `Mẫu quy định #${schedule.templateId}` : '—')}
+                          (schedule.templateId
+                            ? `Mẫu quy định #${schedule.templateId}`
+                            : '—')}
                       </td>
                       <td>{formatDate(schedule.startDate)}</td>
                       <td>{getScheduleTypeLabel(schedule.scheduleType)}</td>
@@ -335,7 +310,7 @@ export function AssetDetailPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={4} className="asset-detail__empty">
+                    <td colSpan={5} className="asset-detail__empty">
                       Chưa có quy định bảo dưỡng cho tài sản này.
                     </td>
                   </tr>
@@ -346,59 +321,12 @@ export function AssetDetailPage() {
         </div>
 
         <div className="asset-detail__section">
-          <h2 className="asset-detail__section-title">Thông tin khấu hao</h2>
-          <div className="asset-detail__info-row">
-            <span className="label">Chính sách khấu hao</span>
-            <span className="value">{depreciationPolicyLabel}</span>
-          </div>
-          <div className="asset-detail__info-row">
-            <span className="label">Thời gian sử dụng hữu ích</span>
-            <span className="value">{depreciationUsefulLifeLabel}</span>
-          </div>
-          <div className="asset-detail__info-row">
-            <span className="label">Giá trị thu hồi ước tính</span>
-            <span className="value">{depreciationSalvageValueLabel}</span>
-          </div>
-          <div className="asset-detail__info-row">
-            <span className="label">Kỳ khấu hao gần nhất</span>
-            <span className="value">
-              {primary?.depreciationPeriod
-                ? formatDate(primary.depreciationPeriod)
-                : '—'}
-            </span>
-          </div>
-          <div className="asset-detail__info-row">
-            <span className="label">Mức khấu hao kỳ gần nhất</span>
-            <span className="value">{depreciationAmountLabel}</span>
-          </div>
-          <div className="asset-detail__info-row">
-            <span className="label">Khấu hao lũy kế</span>
-            <span className="value">{accumulatedDepreciationLabel}</span>
-          </div>
-          <div className="asset-detail__info-row">
-            <span className="label">Giá trị còn lại</span>
-            <span className="value">{remainingValueLabel}</span>
-          </div>
-          <div className="asset-detail__info-row">
-            <span className="label">Giá trị tính khấu hao (giá gốc)</span>
-            <span className="value">
-              {primary != null ? formatVnd(primary.originalPrice) : '—'}
-            </span>
-          </div>
-          <div className="asset-detail__info-row">
-            <span className="label">Giá trị hiện tại</span>
-            <span className="value">
-              {primary != null ? formatVnd(primary.currentValue) : '—'}
-            </span>
-          </div>
-        </div>
-
-        <div className="asset-detail__section">
           <h2 className="asset-detail__section-title">Quá trình sử dụng</h2>
           <div className="asset-detail__table-wrapper">
             <table className="asset-detail__table">
               <thead>
                 <tr>
+                  <th>MÃ CÁ THỂ</th>
                   <th>NGÀY THỰC HIỆN</th>
                   <th>SỐ BIÊN BẢN</th>
                   <th>NGHIỆP VỤ</th>
@@ -409,8 +337,8 @@ export function AssetDetailPage() {
               </thead>
               <tbody>
                 <tr>
-                  <td colSpan={6} className="asset-detail__empty">
-                    Chưa có dữ liệu (cần API quá trình sử dụng).
+                  <td colSpan={7} className="asset-detail__empty">
+                    Chưa có dữ liệu (cần API quá trình sử dụng theo từng cá thể).
                   </td>
                 </tr>
               </tbody>
@@ -426,6 +354,7 @@ export function AssetDetailPage() {
             <table className="asset-detail__table">
               <thead>
                 <tr>
+                  <th>MÃ CÁ THỂ</th>
                   <th>NGÀY THỰC HIỆN</th>
                   <th>NỘI DUNG CÔNG VIỆC</th>
                   <th>CHI PHÍ</th>
@@ -440,6 +369,7 @@ export function AssetDetailPage() {
                 {maintenanceRecords.length > 0 ? (
                   maintenanceRecords.map((record) => (
                     <tr key={record.recordId}>
+                      <td>{record.instanceCode ?? '—'}</td>
                       <td>{formatDate(record.executionDate)}</td>
                       <td>{record.workPerformed || '—'}</td>
                       <td>
@@ -464,7 +394,7 @@ export function AssetDetailPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={8} className="asset-detail__empty">
+                    <td colSpan={9} className="asset-detail__empty">
                       Chưa có lịch sử bảo trì/bảo dưỡng cho tài sản này.
                     </td>
                   </tr>
@@ -515,34 +445,31 @@ export function AssetDetailPage() {
               </thead>
               <tbody>
                 {instances.length > 0 ? (
-                  instances.map((row) => {
-                    const detailPath = `/asset-instances/${row.assetInstanceId}`;
-                    return (
-                      <tr key={row.assetInstanceId}>
-                        <td>
-                          <Link className="asset-detail__table-link" to={detailPath}>
-                            {row.instanceCode}
-                          </Link>
-                        </td>
-                        <td>{row.serialNumber?.trim() || '—'}</td>
-                        <td>{getStatusLabel(row.statusName)}</td>
-                        <td>{row.warehouseName?.trim() || '—'}</td>
-                        <td>{formatInstanceCurrentLocation(row)}</td>
-                        <td>{formatVnd(row.currentValue)}</td>
-                        <td>{formatDate(row.purchaseDate)}</td>
-                        <td>
-                          <Link
-                            className="asset-detail__icon-btn asset-detail__icon-btn--link"
-                            to={detailPath}
-                            title="Xem chi tiết cá thể"
-                            aria-label="Xem chi tiết cá thể"
-                          >
-                            👁️
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })
+                  instances.map((row) => (
+                    <tr key={row.assetInstanceId}>
+                      <td>{row.instanceCode}</td>
+                      <td>{row.serialNumber?.trim() || '—'}</td>
+                      <td>{getStatusLabel(row.statusName)}</td>
+                      <td>{row.warehouseName?.trim() || '—'}</td>
+                      <td>{formatInstanceCurrentLocation(row)}</td>
+                      <td>{formatVnd(row.currentValue)}</td>
+                      <td>{formatDate(row.purchaseDate)}</td>
+                      <td>
+                        <Link
+                          className="asset-detail__icon-btn asset-detail__icon-btn--link"
+                          to={`/asset-instances/${row.assetInstanceId}`}
+                          state={{
+                            backToPath: `/assets/${asset.assetId}`,
+                            backLabel: '← Quay lại chi tiết tài sản',
+                          }}
+                          title="Xem chi tiết cá thể"
+                          aria-label="Xem chi tiết cá thể"
+                        >
+                          👁️
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
                 ) : (
                   <tr>
                     <td colSpan={8} className="asset-detail__empty">
@@ -611,13 +538,21 @@ export function AssetDetailPage() {
                     </div>
                     <div className="asset-detail__record-info-row">
                       <div className="asset-detail__record-info-item">
+                        <label>Mã cá thể</label>
+                        <div className="asset-detail__record-info-value">
+                          {selectedMaintenanceRecord.instanceCode ?? '—'}
+                        </div>
+                      </div>
+                      <div className="asset-detail__record-info-item">
                         <label>Loại tài sản</label>
                         <div className="asset-detail__record-info-value">
                           {asset.assetTypeName ?? '—'}
                         </div>
                       </div>
+                    </div>
+                    <div className="asset-detail__record-info-row asset-detail__record-info-row--single">
                       <div className="asset-detail__record-info-item">
-                        <label>Phòng ban sử dụng</label>
+                        <label>Phòng ban sử dụng (tham chiếu)</label>
                         <div className="asset-detail__record-info-value">
                           {primary?.currentDepartmentName ?? '—'}
                         </div>
