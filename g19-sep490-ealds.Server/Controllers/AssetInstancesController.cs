@@ -699,7 +699,16 @@ public class AssetInstancesController : ControllerBase
                 .Where(u => u.IsCurrent)
                 .Select(u => u.Employee != null ? (int?)u.Employee.UserId : null)
                 .FirstOrDefault(),
-            DepreciationPolicyId = i.DepreciationPolicyId
+            DepreciationPolicyId = i.DepreciationPolicyId,
+            Guarantees = i.Guarantees?.Select(g => new GuaranteeDTO
+            {
+                GuaranteeId = g.GuaranteeId,
+                WarrantyPeriodValue = g.WarrantyPeriodValue,
+                WarrantyPeriodUnit = g.WarrantyPeriodUnit,
+                WarrantyConditions = g.WarrantyConditions,
+                StartDate = g.StartDate,
+                WarrantyEndDate = g.WarrantyEndDate
+            }).ToList()
         };
 
         if (latestDep != null)

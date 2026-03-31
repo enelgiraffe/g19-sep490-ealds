@@ -31,5 +31,9 @@ public class TransferRequestListItemDTO
     public string StatusName { get; set; } = null!;
 
     public string? Reason { get; set; }
+
+    public bool IsSenderConfirmed { get; set; }
+
+    public bool IsReceiverConfirmed { get; set; }
 }
 
