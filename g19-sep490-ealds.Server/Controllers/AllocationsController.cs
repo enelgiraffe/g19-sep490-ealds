@@ -12,27 +12,27 @@ using g19_sep490_ealds.Server.Models.DTOs;
 namespace g19_sep490_ealds.Server.Controllers;
 
 [ApiController]
-[Route("api/Budget")]
-public class BudgetController : ControllerBase
+[Route("api/Allocations")]
+public class AllocationsController : ControllerBase
 {
     private readonly EaldsDbContext _db;
-    private const int BudgetAllocationTypeId = 100;
-    private const int BudgetRevocationTypeId = 101;
+    private const int AllocationTypeId = 100;
+    private const int RevocationTypeId = 101;
 
-    public BudgetController(EaldsDbContext db)
+    public AllocationsController(EaldsDbContext db)
     {
         _db = db;
     }
 
     [HttpGet("summary")]
-    public async Task<ActionResult<BudgetSummaryDTO>> GetSummary()
+    public async Task<ActionResult<AllocationSummaryDTO>> GetSummary()
     {
         var departments = await _db.Departments.AsNoTracking().ToListAsync();
-        var totalBudget = departments.Sum(d => d.TotalBudget);
+        decimal totalBudget = 0; // Bỏ qua budget cứng từ database theo yêu cầu
 
-        var budgetRequests = await _db.AssetRequests
+        var allocationRequests = await _db.AssetRequests
             .AsNoTracking()
-            .Where(r => r.RequestTypeId == BudgetAllocationTypeId || r.RequestTypeId == BudgetRevocationTypeId)
+            .Where(r => r.RequestTypeId == AllocationTypeId || r.RequestTypeId == RevocationTypeId)
             .ToListAsync();
 
         decimal allocatedAmount = 0;
@@ -41,7 +41,7 @@ public class BudgetController : ControllerBase
         decimal pendingAmount = 0;
         int pendingCount = 0;
 
-        foreach (var req in budgetRequests)
+        foreach (var req in allocationRequests)
         {
             if (string.IsNullOrEmpty(req.ProposedData)) continue;
             
@@ -61,11 +61,11 @@ public class BudgetController : ControllerBase
                 }
                 else // Status 4 or higher indicates approved
                 {
-                    if (req.RequestTypeId == BudgetAllocationTypeId)
+                    if (req.RequestTypeId == AllocationTypeId)
                     {
                         allocatedAmount += amount;
                     }
-                    else if (req.RequestTypeId == BudgetRevocationTypeId)
+                    else if (req.RequestTypeId == RevocationTypeId)
                     {
                         revokedAmount += amount;
                         revokedCount++;
@@ -81,7 +81,7 @@ public class BudgetController : ControllerBase
             pct = (double)(allocatedAmount / totalBudget) * 100;
         }
 
-        return Ok(new BudgetSummaryDTO
+        return Ok(new AllocationSummaryDTO
         {
             TotalBudget = totalBudget,
             AllocatedAmount = allocatedAmount,
@@ -94,20 +94,20 @@ public class BudgetController : ControllerBase
     }
 
     [HttpGet("transactions")]
-    public async Task<ActionResult<IEnumerable<BudgetTransactionDTO>>> GetTransactions()
+    public async Task<ActionResult<IEnumerable<AllocationTransactionDTO>>> GetTransactions()
     {
-        var budgetRequests = await _db.AssetRequests
+        var allocationRequests = await _db.AssetRequests
             .AsNoTracking()
-            .Where(r => r.RequestTypeId == BudgetAllocationTypeId || r.RequestTypeId == BudgetRevocationTypeId)
+            .Where(r => r.RequestTypeId == AllocationTypeId || r.RequestTypeId == RevocationTypeId)
             .OrderByDescending(r => r.CreateDate)
             .ToListAsync();
 
         var departments = await _db.Departments.AsNoTracking().ToDictionaryAsync(d => d.DepartmentId, d => d.Code);
 
-        var results = new List<BudgetTransactionDTO>();
-        foreach (var req in budgetRequests)
+        var results = new List<AllocationTransactionDTO>();
+        foreach (var req in allocationRequests)
         {
-            var dto = new BudgetTransactionDTO
+            var dto = new AllocationTransactionDTO
             {
                 Id = "TX" + req.AssetRequestId.ToString().PadLeft(3, '0'),
                 Name = req.Title,
@@ -116,9 +116,9 @@ public class BudgetController : ControllerBase
 
             if (req.Status < 4)
                 dto.Status = "pending";
-            else if (req.RequestTypeId == BudgetAllocationTypeId)
+            else if (req.RequestTypeId == AllocationTypeId)
                 dto.Status = "allocated";
-            else if (req.RequestTypeId == BudgetRevocationTypeId)
+            else if (req.RequestTypeId == RevocationTypeId)
                 dto.Status = "recalled";
 
             if (!string.IsNullOrEmpty(req.ProposedData))
@@ -148,18 +148,18 @@ public class BudgetController : ControllerBase
 
     [HttpPost("allocate")]
     // [Authorize] -> enable later if needed
-    public async Task<IActionResult> Allocate([FromBody] CreateBudgetAllocationDTO dto)
+    public async Task<IActionResult> Allocate([FromBody] CreateAllocationRequestDTO dto)
     {
-        return await CreateBudgetRequest(dto, BudgetAllocationTypeId);
+        return await CreateAllocationRequest(dto, AllocationTypeId);
     }
 
     [HttpPost("recall")]
-    public async Task<IActionResult> Recall([FromBody] CreateBudgetAllocationDTO dto)
+    public async Task<IActionResult> Recall([FromBody] CreateAllocationRequestDTO dto)
     {
-        return await CreateBudgetRequest(dto, BudgetRevocationTypeId);
+        return await CreateAllocationRequest(dto, RevocationTypeId);
     }
 
-    private async Task<IActionResult> CreateBudgetRequest(CreateBudgetAllocationDTO dto, int typeId)
+    private async Task<IActionResult> CreateAllocationRequest(CreateAllocationRequestDTO dto, int typeId)
     {
         if (dto.Amount <= 0) return BadRequest("Số tiền không hợp lệ.");
 
@@ -219,3 +219,4 @@ public class BudgetController : ControllerBase
         return Ok(new { status = "success" });
     }
 }
+

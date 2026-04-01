@@ -13,8 +13,6 @@ public partial class Department
 
     public int Status { get; set; }
 
-    public decimal TotalBudget { get; set; }
-
     public DateTime CreateDate { get; set; }
 
     public DateTime? UpdateDate { get; set; }

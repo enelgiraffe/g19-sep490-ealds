@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace g19_sep490_ealds.Server.Models.DTOs;
 
-public class BudgetSummaryDTO
+public class AllocationSummaryDTO
 {
     public decimal TotalBudget { get; set; }
     public decimal AllocatedAmount { get; set; }
@@ -14,7 +14,7 @@ public class BudgetSummaryDTO
     public int PendingCount { get; set; }
 }
 
-public class BudgetTransactionDTO
+public class AllocationTransactionDTO
 {
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
@@ -28,7 +28,7 @@ public class BudgetTransactionDTO
     public string Approver { get; set; } = string.Empty;
 }
 
-public class CreateBudgetAllocationDTO
+public class CreateAllocationRequestDTO
 {
     public int DepartmentId { get; set; }
     public string Name { get; set; } = string.Empty;
@@ -38,3 +38,4 @@ public class CreateBudgetAllocationDTO
     public string Approver { get; set; } = string.Empty;
     public string Note { get; set; } = string.Empty;
 }
+
