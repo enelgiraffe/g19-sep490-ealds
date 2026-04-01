@@ -41,6 +41,8 @@ public partial class EaldsDbContext : DbContext
 
     public virtual DbSet<Department> Departments { get; set; }
 
+    public virtual DbSet<BudgetAllocation> BudgetAllocations { get; set; }
+
     public virtual DbSet<DepreciationPolicy> DepreciationPolicies { get; set; }
 
     public virtual DbSet<DepreciationRecord> DepreciationRecords { get; set; }
@@ -437,6 +439,42 @@ public partial class EaldsDbContext : DbContext
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.DepartmentUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK__Departmen__Updat__44FF419A");
+        });
+
+        modelBuilder.Entity<BudgetAllocation>(entity =>
+        {
+            entity.HasKey(e => e.BudgetAllocationId);
+
+            entity.ToTable("BudgetAllocation");
+
+            entity.Property(e => e.TransactionDate).HasColumnType("date");
+            entity.Property(e => e.Status).HasConversion<byte>();
+            entity.Property(e => e.SubmittedByDisplayName).HasMaxLength(255);
+            entity.Property(e => e.Note).HasMaxLength(4000);
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getutcdate())")
+                .HasColumnType("datetime2");
+
+            entity.HasIndex(e => e.DepartmentId);
+            entity.HasIndex(e => e.AssetInstanceId);
+            entity.HasIndex(e => e.AssetCategoryId);
+            entity.HasIndex(e => e.SubmittedByUserId);
+
+            entity.HasOne(d => d.Department).WithMany(p => p.BudgetAllocations)
+                .HasForeignKey(d => d.DepartmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(d => d.AssetInstance).WithMany(p => p.BudgetAllocations)
+                .HasForeignKey(d => d.AssetInstanceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(d => d.AssetCategory).WithMany(p => p.BudgetAllocations)
+                .HasForeignKey(d => d.AssetCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(d => d.SubmittedByUser).WithMany(p => p.BudgetAllocationsSubmitted)
+                .HasForeignKey(d => d.SubmittedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<DepreciationPolicy>(entity =>

@@ -37,6 +37,8 @@ public partial class AssetInstance
 
     public virtual Asset Asset { get; set; } = null!;
 
+    public virtual ICollection<BudgetAllocation> BudgetAllocations { get; set; } = new List<BudgetAllocation>();
+
     public virtual ICollection<AssetCapitalization> AssetCapitalizations { get; set; } = new List<AssetCapitalization>();
 
     public virtual ICollection<AssetLifeCycle> AssetLifeCycles { get; set; } = new List<AssetLifeCycle>();

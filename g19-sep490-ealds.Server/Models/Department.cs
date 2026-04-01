@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace g19_sep490_ealds.Server.Models;
@@ -28,6 +28,8 @@ public partial class Department
     public virtual ICollection<Employee> Employees { get; set; } = new List<Employee>();
 
     public virtual ICollection<InventorySession> InventorySessions { get; set; } = new List<InventorySession>();
+
+    public virtual ICollection<BudgetAllocation> BudgetAllocations { get; set; } = new List<BudgetAllocation>();
 
     public virtual User? UpdatedByNavigation { get; set; }
 }
