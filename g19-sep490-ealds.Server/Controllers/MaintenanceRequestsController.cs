@@ -514,24 +514,13 @@ public class MaintenanceRequestsController : ControllerBase
         var conditionBefore = dto.ConditionBefore ?? string.Empty;
         var conditionAfter = dto.DetailedDescription ?? dto.ConditionAfter ?? string.Empty;
 
-        var noteParts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(dto.ReportNumber))
-            noteParts.Add($"ReportNumber: {dto.ReportNumber}");
-        if (dto.ReturnToUseDate.HasValue)
-            noteParts.Add($"ReturnToUseDate: {dto.ReturnToUseDate.Value:O}");
-        if (!string.IsNullOrWhiteSpace(dto.TechnicalNote))
-            noteParts.Add(dto.TechnicalNote);
-        var technicalNote = noteParts.Count > 0 ? string.Join("\n", noteParts) : null;
-
         var mr = new MaintenanceRecord
         {
             TaskId = task.TaskId,
             AssetInstanceId = task.AssetInstanceId,
             ExecutionDate = executionDate,
             TotalCost = totalCost,
-            WorkPerformed = string.IsNullOrEmpty(technicalNote)
-                ? workPerformed
-                : (workPerformed + (string.IsNullOrEmpty(workPerformed) ? "" : "\n") + technicalNote),
+            WorkPerformed = workPerformed,
             ConditionBefore = conditionBefore,
             ConditionAfter = conditionAfter,
             Status = 1

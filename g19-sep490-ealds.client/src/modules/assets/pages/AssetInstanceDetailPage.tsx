@@ -76,6 +76,31 @@ function getWarrantyPeriodLabel(value?: number | null, unit?: string | null): st
   return `${value} ${unit}`;
 }
 
+function getScheduleContentLabel(row: {
+  content?: string | null;
+  templateName?: string | null;
+  templateId?: number | null;
+}): string {
+  if (row.content?.trim()) return row.content.trim();
+  if (row.templateName?.trim()) return row.templateName.trim();
+  if (row.templateId) return `Mẫu quy định #${row.templateId}`;
+  return '—';
+}
+
+function getCleanWorkPerformedText(value?: string | null): string {
+  if (!value?.trim()) return '—';
+  const workLines = value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(
+      (line) =>
+        line.length > 0 &&
+        !line.toLowerCase().startsWith('reportnumber:') &&
+        !line.toLowerCase().startsWith('returntousedate:')
+    );
+  return workLines.length > 0 ? workLines.join('\n') : '—';
+}
+
 export function AssetInstanceDetailPage() {
   const location = useLocation();
   const params = useParams<{ instanceId: string }>();
@@ -281,80 +306,85 @@ export function AssetInstanceDetailPage() {
         </div>
 
         <div className="asset-detail__section">
-          <h2 className="asset-detail__section-title">Thông tin bảo hành</h2>
-          <div className="asset-detail__info-row">
-            <span className="label">Mã bảo hành</span>
-            <span className="value">
-              {displayGuaranteeId != null ? `BH-${displayGuaranteeId}` : '—'}
-            </span>
-          </div>
-          <div className="asset-detail__info-row">
-            <span className="label">Thời hạn bảo hành</span>
-            <span className="value">
-              {getWarrantyPeriodLabel(displayWarrantyPeriodValue, displayWarrantyPeriodUnit)}
-            </span>
-          </div>
-          <div className="asset-detail__info-row">
-            <span className="label">Ngày bắt đầu</span>
-            <span className="value">{formatDate(displayWarrantyStartDate)}</span>
-          </div>
-          <div className="asset-detail__info-row">
-            <span className="label">Ngày kết thúc</span>
-            <span className="value">{formatDate(displayWarrantyEndDate)}</span>
-          </div>
-          <div className="asset-detail__info-row asset-detail__info-row--multiline">
-            <span className="label">Điều kiện bảo hành</span>
-            <span className="value">{displayWarrantyConditions?.trim() || '—'}</span>
-          </div>
-        </div>
+          <h2 className="asset-detail__section-title">Bảo hành và khấu hao</h2>
+          <div className="asset-detail__info-grid">
+            <div className="asset-detail__info-col">
+              <h3 className="asset-detail__subsection-title">Thông tin bảo hành</h3>
+              <div className="asset-detail__info-row">
+                <span className="label">Mã bảo hành</span>
+                <span className="value">
+                  {displayGuaranteeId != null ? `BH-${displayGuaranteeId}` : '—'}
+                </span>
+              </div>
+              <div className="asset-detail__info-row">
+                <span className="label">Thời hạn bảo hành</span>
+                <span className="value">
+                  {getWarrantyPeriodLabel(displayWarrantyPeriodValue, displayWarrantyPeriodUnit)}
+                </span>
+              </div>
+              <div className="asset-detail__info-row">
+                <span className="label">Ngày bắt đầu</span>
+                <span className="value">{formatDate(displayWarrantyStartDate)}</span>
+              </div>
+              <div className="asset-detail__info-row">
+                <span className="label">Ngày kết thúc</span>
+                <span className="value">{formatDate(displayWarrantyEndDate)}</span>
+              </div>
+              <div className="asset-detail__info-row asset-detail__info-row--multiline">
+                <span className="label">Điều kiện bảo hành</span>
+                <span className="value">{displayWarrantyConditions?.trim() || '—'}</span>
+              </div>
+            </div>
 
-        <div className="asset-detail__section">
-          <h2 className="asset-detail__section-title">Thông tin khấu hao</h2>
-          <div className="asset-detail__info-row">
-            <span className="label">Chính sách</span>
-            <span className="value">{instance.depreciationPolicyName ?? '—'}</span>
-          </div>
-          <div className="asset-detail__info-row">
-            <span className="label">Thời gian hữu ích (tháng)</span>
-            <span className="value">
-              {instance.depreciationUsefulLifeMonths != null
-                ? String(instance.depreciationUsefulLifeMonths)
-                : '—'}
-            </span>
-          </div>
-          <div className="asset-detail__info-row">
-            <span className="label">Giá trị thu hồi ước tính</span>
-            <span className="value">
-              {instance.depreciationSalvageValue != null
-                ? formatVnd(instance.depreciationSalvageValue)
-                : '—'}
-            </span>
-          </div>
-          <div className="asset-detail__info-row">
-            <span className="label">Kỳ khấu hao gần nhất</span>
-            <span className="value">
-              {instance.depreciationPeriod ? formatDate(instance.depreciationPeriod) : '—'}
-            </span>
-          </div>
-          <div className="asset-detail__info-row">
-            <span className="label">Mức khấu hao kỳ gần nhất</span>
-            <span className="value">
-              {instance.depreciationAmount != null ? formatVnd(instance.depreciationAmount) : '—'}
-            </span>
-          </div>
-          <div className="asset-detail__info-row">
-            <span className="label">Lũy kế</span>
-            <span className="value">
-              {instance.accumulatedDepreciation != null
-                ? formatVnd(instance.accumulatedDepreciation)
-                : '—'}
-            </span>
-          </div>
-          <div className="asset-detail__info-row">
-            <span className="label">Giá trị còn lại (KH)</span>
-            <span className="value">
-              {instance.remainingValue != null ? formatVnd(instance.remainingValue) : '—'}
-            </span>
+            <div className="asset-detail__info-col">
+              <h3 className="asset-detail__subsection-title">Thông tin khấu hao</h3>
+              <div className="asset-detail__info-row">
+                <span className="label">Chính sách</span>
+                <span className="value">{instance.depreciationPolicyName ?? '—'}</span>
+              </div>
+              <div className="asset-detail__info-row">
+                <span className="label">Thời gian hữu ích (tháng)</span>
+                <span className="value">
+                  {instance.depreciationUsefulLifeMonths != null
+                    ? String(instance.depreciationUsefulLifeMonths)
+                    : '—'}
+                </span>
+              </div>
+              <div className="asset-detail__info-row">
+                <span className="label">Giá trị thu hồi ước tính</span>
+                <span className="value">
+                  {instance.depreciationSalvageValue != null
+                    ? formatVnd(instance.depreciationSalvageValue)
+                    : '—'}
+                </span>
+              </div>
+              <div className="asset-detail__info-row">
+                <span className="label">Kỳ khấu hao gần nhất</span>
+                <span className="value">
+                  {instance.depreciationPeriod ? formatDate(instance.depreciationPeriod) : '—'}
+                </span>
+              </div>
+              <div className="asset-detail__info-row">
+                <span className="label">Mức khấu hao kỳ gần nhất</span>
+                <span className="value">
+                  {instance.depreciationAmount != null ? formatVnd(instance.depreciationAmount) : '—'}
+                </span>
+              </div>
+              <div className="asset-detail__info-row">
+                <span className="label">Lũy kế</span>
+                <span className="value">
+                  {instance.accumulatedDepreciation != null
+                    ? formatVnd(instance.accumulatedDepreciation)
+                    : '—'}
+                </span>
+              </div>
+              <div className="asset-detail__info-row">
+                <span className="label">Giá trị còn lại (KH)</span>
+                <span className="value">
+                  {instance.remainingValue != null ? formatVnd(instance.remainingValue) : '—'}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -376,10 +406,7 @@ export function AssetInstanceDetailPage() {
                   maintenanceSchedules.map((schedule) => (
                     <tr key={schedule.scheduleId}>
                       <td>{scheduleScopeLabel(schedule)}</td>
-                      <td>
-                        {schedule.content?.trim() ||
-                          (schedule.templateId ? `Mẫu quy định #${schedule.templateId}` : '—')}
-                      </td>
+                      <td>{getScheduleContentLabel(schedule)}</td>
                       <td>{formatDate(schedule.startDate)}</td>
                       <td>{getScheduleTypeLabel(schedule.scheduleType)}</td>
                       <td>
@@ -447,7 +474,7 @@ export function AssetInstanceDetailPage() {
                   maintenanceRecords.map((record) => (
                     <tr key={record.recordId}>
                       <td>{formatDate(record.executionDate)}</td>
-                      <td>{record.workPerformed || '—'}</td>
+                      <td>{getCleanWorkPerformedText(record.workPerformed)}</td>
                       <td>
                         {record.totalCost != null ? formatVnd(record.totalCost) : '—'}
                       </td>
@@ -594,7 +621,7 @@ export function AssetInstanceDetailPage() {
                       <div className="asset-detail__record-info-item">
                         <label>Nội dung công việc đã thực hiện</label>
                         <div className="asset-detail__record-info-value">
-                          {selectedMaintenanceRecord.workPerformed || '—'}
+                          {getCleanWorkPerformedText(selectedMaintenanceRecord.workPerformed)}
                         </div>
                       </div>
                     </div>

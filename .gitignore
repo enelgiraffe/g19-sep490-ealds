@@ -164,6 +164,19 @@ bin/
 obj/
 .buildtmp/
 .build-temp/
+
+# Ad-hoc build / EF output folders (tên hay lệch: temp vs tmp, có/không dấu chấm đầu)
+.build_out_tmp/
+.build_out_temp/
+build_out_tmp/
+build_out_temp/
+**/build_out_tmp/
+**/build_out_temp/
+
+# Output from `dotnet ef` / one-off publish into a custom folder (not normal bin/obj)
+build_ef_out/
+**/build_ef_out/
+
 g19-sep490-ealds.Server/Mappers/IAssetTypeMapper.cs
 /_build_verify2
 /_agent_build_verify

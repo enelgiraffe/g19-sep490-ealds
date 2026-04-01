@@ -65,6 +65,31 @@ function getRepeatUnitLabel(value?: number | string | null): string {
   return '—';
 }
 
+function getScheduleContentLabel(row: {
+  content?: string | null;
+  templateName?: string | null;
+  templateId?: number | null;
+}): string {
+  if (row.content?.trim()) return row.content.trim();
+  if (row.templateName?.trim()) return row.templateName.trim();
+  if (row.templateId) return `Mẫu quy định #${row.templateId}`;
+  return '—';
+}
+
+function getCleanWorkPerformedText(value?: string | null): string {
+  if (!value?.trim()) return '—';
+  const workLines = value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(
+      (line) =>
+        line.length > 0 &&
+        !line.toLowerCase().startsWith('reportnumber:') &&
+        !line.toLowerCase().startsWith('returntousedate:')
+    );
+  return workLines.length > 0 ? workLines.join('\n') : '—';
+}
+
 /** Vị trí hiện tại từ bảng AssetLocation (phòng ban + ghi chú vị trí). */
 function formatInstanceCurrentLocation(row: AssetInstanceResponse): string {
   const dept = row.currentDepartmentName?.trim();
@@ -276,6 +301,61 @@ export function AssetDetailPage() {
         </div>
 
         <div className="asset-detail__section">
+          <h2 className="asset-detail__section-title">Danh sách cá thể</h2>
+          <div className="asset-detail__table-wrapper">
+            <table className="asset-detail__table">
+              <thead>
+                <tr>
+                  <th>MÃ CÁ THỂ</th>
+                  <th>SỐ SERI</th>
+                  <th>TRẠNG THÁI</th>
+                  <th>KHO</th>
+                  <th>VỊ TRÍ TÀI SẢN</th>
+                  <th>GIÁ TRỊ HIỆN TẠI</th>
+                  <th>NGÀY MUA</th>
+                  <th className="asset-detail__th-narrow">CHI TIẾT</th>
+                </tr>
+              </thead>
+              <tbody>
+                {instances.length > 0 ? (
+                  instances.map((row) => (
+                    <tr key={row.assetInstanceId}>
+                      <td>{row.instanceCode}</td>
+                      <td>{row.serialNumber?.trim() || '—'}</td>
+                      <td>{getStatusLabel(row.statusName)}</td>
+                      <td>{row.warehouseName?.trim() || '—'}</td>
+                      <td>{formatInstanceCurrentLocation(row)}</td>
+                      <td>{formatVnd(row.currentValue)}</td>
+                      <td>{formatDate(row.purchaseDate)}</td>
+                      <td>
+                        <Link
+                          className="asset-detail__icon-btn asset-detail__icon-btn--link"
+                          to={`/asset-instances/${row.assetInstanceId}`}
+                          state={{
+                            backToPath: `/assets/${asset.assetId}`,
+                            backLabel: '← Quay lại chi tiết tài sản',
+                          }}
+                          title="Xem chi tiết cá thể"
+                          aria-label="Xem chi tiết cá thể"
+                        >
+                          👁️
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={8} className="asset-detail__empty">
+                      Chưa có cá thể nào cho tài sản này.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="asset-detail__section">
           <h2 className="asset-detail__section-title">Quy định bảo dưỡng</h2>
           <div className="asset-detail__table-wrapper">
             <table className="asset-detail__table">
@@ -293,12 +373,7 @@ export function AssetDetailPage() {
                   maintenanceSchedules.map((schedule) => (
                     <tr key={schedule.scheduleId}>
                       <td>{scheduleInstanceLabel(schedule)}</td>
-                      <td>
-                        {schedule.content?.trim() ||
-                          (schedule.templateId
-                            ? `Mẫu quy định #${schedule.templateId}`
-                            : '—')}
-                      </td>
+                      <td>{getScheduleContentLabel(schedule)}</td>
                       <td>{formatDate(schedule.startDate)}</td>
                       <td>{getScheduleTypeLabel(schedule.scheduleType)}</td>
                       <td>
@@ -371,7 +446,7 @@ export function AssetDetailPage() {
                     <tr key={record.recordId}>
                       <td>{record.instanceCode ?? '—'}</td>
                       <td>{formatDate(record.executionDate)}</td>
-                      <td>{record.workPerformed || '—'}</td>
+                      <td>{getCleanWorkPerformedText(record.workPerformed)}</td>
                       <td>
                         {record.totalCost != null ? formatVnd(record.totalCost) : '—'}
                       </td>
@@ -427,60 +502,6 @@ export function AssetDetailPage() {
           </div>
         </div>
 
-        <div className="asset-detail__section">
-          <h2 className="asset-detail__section-title">Danh sách cá thể</h2>
-          <div className="asset-detail__table-wrapper">
-            <table className="asset-detail__table">
-              <thead>
-                <tr>
-                  <th>MÃ CÁ THỂ</th>
-                  <th>SỐ SERI</th>
-                  <th>TRẠNG THÁI</th>
-                  <th>KHO</th>
-                  <th>VỊ TRÍ TÀI SẢN</th>
-                  <th>GIÁ TRỊ HIỆN TẠI</th>
-                  <th>NGÀY MUA</th>
-                  <th className="asset-detail__th-narrow">CHI TIẾT</th>
-                </tr>
-              </thead>
-              <tbody>
-                {instances.length > 0 ? (
-                  instances.map((row) => (
-                    <tr key={row.assetInstanceId}>
-                      <td>{row.instanceCode}</td>
-                      <td>{row.serialNumber?.trim() || '—'}</td>
-                      <td>{getStatusLabel(row.statusName)}</td>
-                      <td>{row.warehouseName?.trim() || '—'}</td>
-                      <td>{formatInstanceCurrentLocation(row)}</td>
-                      <td>{formatVnd(row.currentValue)}</td>
-                      <td>{formatDate(row.purchaseDate)}</td>
-                      <td>
-                        <Link
-                          className="asset-detail__icon-btn asset-detail__icon-btn--link"
-                          to={`/asset-instances/${row.assetInstanceId}`}
-                          state={{
-                            backToPath: `/assets/${asset.assetId}`,
-                            backLabel: '← Quay lại chi tiết tài sản',
-                          }}
-                          title="Xem chi tiết cá thể"
-                          aria-label="Xem chi tiết cá thể"
-                        >
-                          👁️
-                        </Link>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={8} className="asset-detail__empty">
-                      Chưa có cá thể nào cho tài sản này.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
 
       {selectedMaintenanceRecord && (
@@ -600,7 +621,7 @@ export function AssetDetailPage() {
                       <div className="asset-detail__record-info-item">
                         <label>Nội dung công việc đã thực hiện</label>
                         <div className="asset-detail__record-info-value">
-                          {selectedMaintenanceRecord.workPerformed || '—'}
+                          {getCleanWorkPerformedText(selectedMaintenanceRecord.workPerformed)}
                         </div>
                       </div>
                     </div>

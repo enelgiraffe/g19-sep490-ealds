@@ -306,13 +306,19 @@ public class RepairRequestsController : ControllerBase
 
     private async Task<bool> IsFinalApprovedByWorkflowAsync(AssetRequest ar)
     {
+        // If request is already in approved/in-progress state, allow start.
+        // Approval.StepId can be stale in legacy flows, causing false negatives
+        // when checking strictly by final workflow step.
+        if (ar.Status == 2 || ar.Status == 4)
+            return true;
+
         var workflowId = await _db.RequestTypes.AsNoTracking()
             .Where(rt => rt.RequestTypeId == ar.RequestTypeId)
             .Select(rt => (int?)rt.WorkflowId)
             .FirstOrDefaultAsync();
 
         if (!workflowId.HasValue || workflowId.Value == 0)
-            return ar.Status == 2 || ar.Status == 4;
+            return false;
 
         var finalStepId = await _db.WorkflowSteps.AsNoTracking()
             .Where(ws => ws.WorkflowId == workflowId.Value)
@@ -321,7 +327,7 @@ public class RepairRequestsController : ControllerBase
             .LastOrDefaultAsync();
 
         if (!finalStepId.HasValue)
-            return ar.Status == 2 || ar.Status == 4;
+            return false;
 
         return await _db.Approvals.AsNoTracking().AnyAsync(a =>
             a.AssetRequestId == ar.AssetRequestId
@@ -351,23 +357,16 @@ public class RepairRequestsController : ControllerBase
 
         var repairDate = dto.CompletionDate ?? dto.RepairDate ?? DateTime.UtcNow;
 
-        var resultLines = new List<string>();
-        if (!string.IsNullOrWhiteSpace(dto.ReportNumber))
-            resultLines.Add($"ReportNumber: {dto.ReportNumber}");
-        if (dto.ReturnToUseDate.HasValue)
-            resultLines.Add($"ReturnToUseDate: {dto.ReturnToUseDate.Value:O}");
-        if (!string.IsNullOrWhiteSpace(dto.Result))
-            resultLines.Add(dto.Result);
-        if (!string.IsNullOrWhiteSpace(dto.DetailedDescription))
-            resultLines.Add(dto.DetailedDescription);
-        var resultText = resultLines.Count > 0 ? string.Join("\n", resultLines) : string.Empty;
-
         var rr = new RepairRecord
         {
             TaskId = task.TaskId,
             ActualCost = dto.ActualCost,
             RepairDate = repairDate,
-            Result = resultText,
+            Result = dto.Result?.Trim() ?? string.Empty,
+            DetailedDescription = string.IsNullOrWhiteSpace(dto.DetailedDescription)
+                ? null
+                : dto.DetailedDescription.Trim(),
+            ReturnToUseDate = dto.ReturnToUseDate,
             SupplierId = dto.SupplierId,
             DamageDate = dto.DamageDate,
             DamageCondition = dto.DamageCondition

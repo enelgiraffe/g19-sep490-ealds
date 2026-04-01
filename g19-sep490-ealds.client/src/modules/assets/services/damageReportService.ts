@@ -42,10 +42,13 @@ export interface AssetRequestListItem {
   userId: number;
   userEmail?: string | null;
   assetId: number;
+  assetInstanceId?: number | null;
   assetCode?: string | null;
+  assetInstanceCode?: string | null;
   assetName?: string | null;
   assetQuantity?: number | null;
   currentDepartmentName?: string | null;
+  currentLocation?: string | null;
   requestTypeId: number;
 }
 

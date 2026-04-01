@@ -32,10 +32,14 @@ public class DirectorViewController : ControllerBase
         var query = _db.AssetRequests
             .AsNoTracking()
             .Include(x => x.Asset)
-                .ThenInclude(a => a.AssetInstances)
+                .ThenInclude(a => a!.AssetInstances)
                     .ThenInclude(ai => ai.AssetLocations)
                         .ThenInclude(al => al.Department)
+            .Include(x => x.AssetInstance)
+                .ThenInclude(ai => ai!.AssetLocations)
+                    .ThenInclude(al => al.Department)
             .Include(x => x.User)
+                .ThenInclude(u => u.EmployeeUsers)
             .AsQueryable();
 
         if (status.HasValue)
@@ -74,16 +78,28 @@ public class DirectorViewController : ControllerBase
                 ar.ProposedData,
                 AssetId = ar.AssetId,
                 AssetCode = ar.Asset != null ? ar.Asset.Code : null,
+                AssetInstanceCode = ar.AssetInstance != null ? ar.AssetInstance.InstanceCode : null,
                 AssetName = ar.Asset != null ? ar.Asset.Name : null,
                 AssetQuantity = ar.Asset != null ? (int?)ar.Asset.Quantity : null,
-                CurrentDepartmentName = ar.Asset != null
-                    ? ar.Asset.AssetInstances
-                        .SelectMany(ai => ai.AssetLocations)
+                CurrentDepartmentName = ar.AssetInstance != null
+                    ? ar.AssetInstance.AssetLocations
                         .Where(al => al.IsCurrent)
                         .Select(al => al.Department != null ? al.Department.Name : null)
                         .FirstOrDefault()
-                    : null,
-                CreatorEmail = ar.User != null ? ar.User.Email : null
+                    : ar.Asset != null
+                        ? ar.Asset.AssetInstances
+                            .SelectMany(ai => ai.AssetLocations)
+                            .Where(al => al.IsCurrent)
+                            .Select(al => al.Department != null ? al.Department.Name : null)
+                            .FirstOrDefault()
+                        : null,
+                CreatorEmail = ar.User != null ? ar.User.Email : null,
+                CreatorName = ar.User != null
+                    ? ar.User.EmployeeUsers
+                        .OrderBy(e => e.EmployeeId)
+                        .Select(e => e.Name)
+                        .FirstOrDefault()
+                    : null
             })
             .ToListAsync();
 

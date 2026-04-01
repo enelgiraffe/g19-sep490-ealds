@@ -107,6 +107,25 @@ function formatDate(iso: string): string {
   }
 }
 
+/** Cùng format mô tả báo hỏng: dòng Ngày hỏng / Tình trạng. */
+function parseDamageDescription(description?: string | null): {
+  damageDate?: string | null;
+  condition: string;
+} {
+  if (!description) return { condition: '' };
+  const lines = description
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const damageDateLine = lines.find((line) => /^Ngày hỏng:\s*/i.test(line));
+  const conditionLine = lines.find((line) => /^Tình trạng:\s*/i.test(line));
+  const fallbackCondition = lines.join(' ').trim();
+  return {
+    damageDate: damageDateLine?.replace(/^Ngày hỏng:\s*/i, '').trim() || null,
+    condition: conditionLine?.replace(/^Tình trạng:\s*/i, '').trim() || fallbackCondition,
+  };
+}
+
 function toPurchaseTableRow(item: AccountantRequestListItem, index: number): PurchaseTableRow {
   return {
     key: String(item.assetRequestId),
@@ -270,6 +289,7 @@ export function RequestsPage() {
       activeTab === 'liquidation');
 
   const directorRequestTypeId = shouldUseDirectorView ? REQUEST_TYPE_IDS[activeTab] : null;
+  const isDirectorRepairTable = shouldUseDirectorView && activeTab === 'repair';
 
   // Ensure director sees only requests already passed accountant step (per workflow)
   // - Purchase: accountant approves 0->1, director decides at status=1
@@ -745,12 +765,25 @@ export function RequestsPage() {
             <table className="asset-table requests-table">
               <thead>
                 <tr>
-                  <th>MÃ YÊU CẦU</th>
-                  <th>PHÒNG BAN ĐỀ XUẤT</th>
-                  <th>NGÀY GỬI</th>
-                  <th>MÃ TÀI SẢN</th>
-                  <th>TÊN TÀI SẢN</th>
-                  <th>TRẠNG THÁI</th>
+                  {isDirectorRepairTable ? (
+                    <>
+                      <th>MÃ YÊU CẦU</th>
+                      <th>MÃ CÁ THỂ</th>
+                      <th>TÊN TÀI SẢN</th>
+                      <th>PHÒNG BAN ĐỀ XUẤT</th>
+                      <th>NGÀY GỬI</th>
+                      <th>TRẠNG THÁI</th>
+                    </>
+                  ) : (
+                    <>
+                      <th>MÃ YÊU CẦU</th>
+                      <th>PHÒNG BAN ĐỀ XUẤT</th>
+                      <th>NGÀY GỬI</th>
+                      <th>MÃ TÀI SẢN</th>
+                      <th>TÊN TÀI SẢN</th>
+                      <th>TRẠNG THÁI</th>
+                    </>
+                  )}
                   <th className="asset-table__cell asset-table__cell--actions" />
                 </tr>
               </thead>
@@ -767,6 +800,8 @@ export function RequestsPage() {
                     const fallback =
                       map === MAINT_REPAIR_STATUS_MAP ? MAINT_REPAIR_STATUS_MAP[0] : DIRECTOR_STATUS_MAP[0];
                     const config = map[row.status] ?? fallback;
+                    const instanceCode = row.assetInstanceCode ?? row.assetCode ?? '—';
+                    const assetTitle = row.assetName ?? row.title ?? '—';
                     return (
                       <tr key={row.assetRequestId} className="asset-row">
                         <td>
@@ -783,10 +818,21 @@ export function RequestsPage() {
                             YC-{row.assetRequestId}
                           </button>
                         </td>
-                        <td>{row.currentDepartmentName ?? row.creatorEmail ?? '—'}</td>
-                        <td>{formatDate(row.createDate)}</td>
-                        <td>{row.assetCode ?? '—'}</td>
-                        <td>{row.assetName ?? row.title ?? '—'}</td>
+                        {isDirectorRepairTable ? (
+                          <>
+                            <td>{instanceCode}</td>
+                            <td>{assetTitle}</td>
+                            <td>{row.currentDepartmentName ?? row.creatorEmail ?? '—'}</td>
+                            <td>{formatDate(row.createDate)}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td>{row.currentDepartmentName ?? row.creatorEmail ?? '—'}</td>
+                            <td>{formatDate(row.createDate)}</td>
+                            <td>{row.assetCode ?? '—'}</td>
+                            <td>{row.assetName ?? row.title ?? '—'}</td>
+                          </>
+                        )}
                         <td>
                           <span
                             className={
@@ -1291,68 +1337,106 @@ export function RequestsPage() {
 
                   <div className="acct-transfer-modal__body">
                     <div className="acct-transfer-modal__content">
-                      <div className="acct-transfer-form__row">
-                        <div className="acct-transfer-form__field">
-                          <label>Mã yêu cầu</label>
-                          <div className="acct-transfer-form__value">
-                            YC-{selectedDirectorItem.assetRequestId}
-                          </div>
-                        </div>
-                        <div className="acct-transfer-form__field">
-                          <label>Ngày gửi</label>
-                          <div className="acct-transfer-form__value">
-                            {formatDate(selectedDirectorItem.createDate)}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="acct-transfer-form__row">
-                        <div className="acct-transfer-form__field">
-                          <label>Phòng ban đề xuất</label>
-                          <div className="acct-transfer-form__value">
-                            {selectedDirectorItem.currentDepartmentName ?? '—'}
-                          </div>
-                        </div>
-                        <div className="acct-transfer-form__field">
-                          <label>Người tạo</label>
-                          <div className="acct-transfer-form__value">
-                            {selectedDirectorItem.creatorEmail ?? '—'}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="acct-transfer-form__section">
-                        <h3 className="acct-transfer-form__section-title">Nội dung yêu cầu</h3>
-                        <div className="acct-transfer-form__value">
-                          {selectedDirectorItem.title ?? '—'}
-                        </div>
-                      </div>
-
-                      {(selectedDirectorItem.assetCode || selectedDirectorItem.assetName) && (
-                        <div className="acct-transfer-form__row">
-                          <div className="acct-transfer-form__field">
-                            <label>Mã tài sản</label>
-                            <div className="acct-transfer-form__value">
-                              {selectedDirectorItem.assetCode ?? '—'}
+                      {(() => {
+                        const parsed =
+                          selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.repair
+                            ? parseDamageDescription(selectedDirectorItem.description)
+                            : { damageDate: null as string | null, condition: '' };
+                        const creatorDisplay =
+                          (selectedDirectorItem.creatorName?.trim() &&
+                            selectedDirectorItem.creatorName.trim()) ||
+                          selectedDirectorItem.creatorEmail ||
+                          '—';
+                        const instanceCode =
+                          selectedDirectorItem.assetInstanceCode ??
+                          selectedDirectorItem.assetCode ??
+                          null;
+                        return (
+                          <>
+                            <div className="acct-transfer-form__row">
+                              <div className="acct-transfer-form__field">
+                                <label>Mã yêu cầu</label>
+                                <div className="acct-transfer-form__value">
+                                  YC-{selectedDirectorItem.assetRequestId}
+                                </div>
+                              </div>
+                              <div className="acct-transfer-form__field">
+                                <label>Ngày gửi</label>
+                                <div className="acct-transfer-form__value">
+                                  {formatDate(selectedDirectorItem.createDate)}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                          <div className="acct-transfer-form__field">
-                            <label>Tên tài sản</label>
-                            <div className="acct-transfer-form__value">
-                              {selectedDirectorItem.assetName ?? '—'}
-                            </div>
-                          </div>
-                        </div>
-                      )}
 
-                      {selectedDirectorItem.description && (
-                        <div className="acct-transfer-form__section">
-                          <h3 className="acct-transfer-form__section-title">Mô tả</h3>
-                          <div className="acct-transfer-form__value">
-                            {selectedDirectorItem.description}
-                          </div>
-                        </div>
-                      )}
+                            <div className="acct-transfer-form__row">
+                              <div className="acct-transfer-form__field">
+                                <label>Phòng ban đề xuất</label>
+                                <div className="acct-transfer-form__value">
+                                  {selectedDirectorItem.currentDepartmentName ?? '—'}
+                                </div>
+                              </div>
+                              <div className="acct-transfer-form__field">
+                                <label>Người tạo</label>
+                                <div className="acct-transfer-form__value">{creatorDisplay}</div>
+                              </div>
+                            </div>
+
+                            {(instanceCode || selectedDirectorItem.assetName) && (
+                              <div className="acct-transfer-form__row">
+                                <div className="acct-transfer-form__field">
+                                  <label>Mã cá thể</label>
+                                  <div className="acct-transfer-form__value">
+                                    {instanceCode ?? '—'}
+                                  </div>
+                                </div>
+                                <div className="acct-transfer-form__field">
+                                  <label>Tên tài sản</label>
+                                  <div className="acct-transfer-form__value">
+                                    {selectedDirectorItem.assetName ?? '—'}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {selectedDirectorItem.requestTypeId !== REQUEST_TYPE_IDS.repair ? (
+                              <div className="acct-transfer-form__section">
+                                <h3 className="acct-transfer-form__section-title">Nội dung yêu cầu</h3>
+                                <div className="acct-transfer-form__value">
+                                  {selectedDirectorItem.title ?? '—'}
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.repair &&
+                            parsed.damageDate ? (
+                              <div className="acct-transfer-form__row">
+                                <div className="acct-transfer-form__field">
+                                  <label>Ngày hỏng (ghi nhận)</label>
+                                  <div className="acct-transfer-form__value">
+                                    {formatDate(parsed.damageDate)}
+                                  </div>
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.repair &&
+                            parsed.condition ? (
+                              <div className="acct-transfer-form__section">
+                                <h3 className="acct-transfer-form__section-title">Mô tả / Tình trạng</h3>
+                                <div className="acct-transfer-form__value">{parsed.condition}</div>
+                              </div>
+                            ) : selectedDirectorItem.requestTypeId !== REQUEST_TYPE_IDS.repair &&
+                              selectedDirectorItem.description ? (
+                              <div className="acct-transfer-form__section">
+                                <h3 className="acct-transfer-form__section-title">Mô tả</h3>
+                                <div className="acct-transfer-form__value">
+                                  {selectedDirectorItem.description}
+                                </div>
+                              </div>
+                            ) : null}
+                          </>
+                        );
+                      })()}
 
                       {selectedDirectorItem.proposedData && (
                         <div className="acct-transfer-form__section">

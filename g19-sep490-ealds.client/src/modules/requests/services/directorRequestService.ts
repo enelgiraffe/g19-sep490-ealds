@@ -38,9 +38,13 @@ export interface DirectorRequestListItem {
   proposedData?: string | null;
   assetId?: number | null;
   assetCode?: string | null;
+  /** Mã cá thể khi yêu cầu gắn AssetInstanceId. */
+  assetInstanceCode?: string | null;
   assetName?: string | null;
   assetQuantity?: number | null;
   currentDepartmentName?: string | null;
+  /** Tên nhân viên (Employee.Name). */
+  creatorName?: string | null;
   creatorEmail?: string | null;
 }
 

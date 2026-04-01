@@ -16,6 +16,8 @@ public class MaintenanceScheduleResponseDTO
 
     public string? Content { get; set; }
 
+    public string? TemplateName { get; set; }
+
     public ScheduleType ScheduleType { get; set; }
 
     public MaintenanceRepeatIntervalUnit? IntervalUnit { get; set; }

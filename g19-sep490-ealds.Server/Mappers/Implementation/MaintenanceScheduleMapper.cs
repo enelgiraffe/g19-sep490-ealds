@@ -69,6 +69,7 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
         response.InstanceCode = entity.AssetInstance?.InstanceCode;
         response.TemplateId = entity.TemplateId;
         response.Content = entity.Content;
+        response.TemplateName = entity.Template?.Name;
         response.ScheduleType = (ScheduleType)entity.ScheduleType;
         var (iv, iu) = ReadRepeatIntervalFromEntity(entity);
         response.IntervalValue = iv;

@@ -349,9 +349,23 @@ public class AssetRequestsController : ControllerBase
                 userId = ar.UserId,
                 userEmail = ar.User != null ? ar.User.Email : null,
                 assetId = ar.AssetId,
+                assetInstanceId = ar.AssetInstanceId,
                 assetCode = ar.Asset != null ? ar.Asset.Code : null,
+                assetInstanceCode = ar.AssetInstance != null ? ar.AssetInstance.InstanceCode : null,
                 assetName = ar.Asset != null ? ar.Asset.Name : null,
                 assetQuantity = ar.Asset != null ? (int?)ar.Asset.Quantity : null,
+                currentDepartmentName = ar.AssetInstance != null
+                    ? ar.AssetInstance.AssetLocations
+                        .Where(al => al.IsCurrent)
+                        .Select(al => al.Department != null ? al.Department.Name : null)
+                        .FirstOrDefault()
+                    : null,
+                currentLocation = ar.AssetInstance != null
+                    ? ar.AssetInstance.AssetLocations
+                        .Where(al => al.IsCurrent)
+                        .Select(al => al.Note)
+                        .FirstOrDefault() ?? (ar.AssetInstance.Warehouse != null ? ar.AssetInstance.Warehouse.Name : null)
+                    : null,
                 requestTypeId = ar.RequestTypeId
             })
             .ToListAsync();

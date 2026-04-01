@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace g19_sep490_ealds.Server.Models;
@@ -14,6 +14,12 @@ public partial class RepairRecord
     public DateTime RepairDate { get; set; }
 
     public string Result { get; set; } = null!;
+
+    /// <summary>Mô tả chi tiết khi hoàn thành sửa chữa (khớp form / DTO DetailedDescription).</summary>
+    public string? DetailedDescription { get; set; }
+
+    /// <summary>Ngày đưa vào sử dụng lại (khớp form / DTO ReturnToUseDate).</summary>
+    public DateTime? ReturnToUseDate { get; set; }
 
     public int? SupplierId { get; set; }
 

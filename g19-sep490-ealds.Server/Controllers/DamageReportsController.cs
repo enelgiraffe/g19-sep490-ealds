@@ -14,6 +14,7 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class DamageReportsController : ControllerBase
 {
     private readonly EaldsDbContext _db;
+    private const int DamageRequestTypeId = 4;
     private const string DamageReportTitlePrefix = "Damage report -";
 
     public DamageReportsController(EaldsDbContext db)
@@ -115,8 +116,10 @@ public class DamageReportsController : ControllerBase
         if (ar == null)
             return NotFound();
 
-        // Only allow deleting damage-report requests created by this controller
-        if (string.IsNullOrWhiteSpace(ar.Title) || !ar.Title.StartsWith(DamageReportTitlePrefix))
+        // Accept both legacy title-based rows and request-type-based rows.
+        var isDamageByTitle = !string.IsNullOrWhiteSpace(ar.Title) && ar.Title.StartsWith(DamageReportTitlePrefix, StringComparison.OrdinalIgnoreCase);
+        var isDamageByType = ar.RequestTypeId == DamageRequestTypeId;
+        if (!isDamageByTitle && !isDamageByType)
             return BadRequest("Only damage report requests can be deleted via this endpoint.");
 
         // Remove children first because FK delete behavior is ClientSetNull (no cascade)

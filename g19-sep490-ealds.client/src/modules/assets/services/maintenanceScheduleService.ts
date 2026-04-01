@@ -25,6 +25,7 @@ export interface MaintenanceScheduleResponse {
   instanceCode?: string | null;
   templateId?: number | null;
   content?: string | null;
+  templateName?: string | null;
   scheduleType: number | string;
   intervalUnit?: number | string | null;
   intervalValue?: number | null;

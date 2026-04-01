@@ -836,6 +836,7 @@ public partial class EaldsDbContext : DbContext
             entity.Property(e => e.ActualCost).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.DamageDate).HasColumnType("datetime");
             entity.Property(e => e.RepairDate).HasColumnType("datetime");
+            entity.Property(e => e.ReturnToUseDate).HasColumnType("datetime2");
 
             entity.HasOne(d => d.Supplier).WithMany(p => p.RepairRecords)
                 .HasForeignKey(d => d.SupplierId)

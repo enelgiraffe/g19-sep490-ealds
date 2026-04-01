@@ -312,7 +312,7 @@ export function AssetListPage() {
         setIsTransferModalOpen(true);
       } else if (actionKey === 'mark-broken') {
         setSelectedAssetInfo(assetInfo);
-        setMarkDamagedAssetId(raw.assetId);
+        setMarkDamagedAssetId(raw.assetInstanceId);
         setIsMarkDamagedModalOpen(true);
       } else if (actionKey === 'liquidate') {
         setSelectedAssetInfo(assetInfo);
