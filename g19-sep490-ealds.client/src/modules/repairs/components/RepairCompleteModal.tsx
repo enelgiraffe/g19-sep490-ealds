@@ -11,8 +11,6 @@ interface RepairCompleteRow {
   department: string;
 }
 
-type RepairCompleteAttachmentRow = { key: string; name: string };
-
 export interface RepairCompleteFormValues {
   reportNumber: string;
   completionDate: string;
@@ -20,7 +18,6 @@ export interface RepairCompleteFormValues {
   actualCost: number;
   result: string;
   detail: string;
-  attachmentUrls: string[];
 }
 
 interface RepairCompleteModalProps {
@@ -70,11 +67,9 @@ function RepairCompleteModalInner({
   const [reportNumber, setReportNumber] = useState('');
   const [completionDate, setCompletionDate] = useState('');
   const [returnDate, setReturnDate] = useState('');
-  const [actualCostInput, setActualCostInput] = useState('');
+  const [actualCost, setActualCost] = useState<number | null>(null);
   const [result, setResult] = useState('');
   const [detail, setDetail] = useState('');
-  const [attachments, setAttachments] = useState<RepairCompleteAttachmentRow[]>([]);
-  const [editingAttachKey, setEditingAttachKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open || !row) return;
@@ -82,25 +77,36 @@ function RepairCompleteModalInner({
     setReportNumber(defaultReportNumber ?? '');
     setCompletionDate(today);
     setReturnDate(today);
-    setActualCostInput('');
+    setActualCost(null);
     setResult('');
     setDetail(row.condition || '');
-    setAttachments([]);
-    setEditingAttachKey(null);
   }, [open, row, defaultReportNumber]);
 
   const assetInfo = useMemo(() => {
-    const primary = asset?.instances?.[0];
+    const instances = asset?.instances ?? [];
+    const primary =
+      instances.find((i) => i.instanceCode === row?.assetCode || i.assetCode === row?.assetCode) ??
+      instances[0];
+    const fallbackWithWarranty = instances.find(
+      (i) => i.warrantyEndDate || i.guarantees?.some((g) => !!g.warrantyEndDate),
+    );
+    const warrantyEndDate =
+      primary?.warrantyEndDate ??
+      primary?.guarantees?.[0]?.warrantyEndDate ??
+      fallbackWithWarranty?.warrantyEndDate ??
+      fallbackWithWarranty?.guarantees?.[0]?.warrantyEndDate;
     return {
-      code: asset?.code ?? row?.assetCode ?? '-',
+      code: row?.assetCode ?? asset?.code ?? '-',
       name: asset?.name ?? row?.assetName ?? '-',
       type: asset?.assetTypeName ?? '-',
-      specification: asset
-        ? [asset.unit ? `Đơn vị: ${asset.unit}` : null, `SL: ${asset.quantity}`]
-            .filter(Boolean)
-            .join(' · ')
-        : '-',
-      warrantyExpiry: '-',
+      specification:
+        primary?.specification?.trim() ||
+        asset?.specification?.trim() ||
+        [asset?.unit ? `Đơn vị: ${asset.unit}` : null, asset?.quantity != null ? `SL: ${asset.quantity}` : null]
+          .filter(Boolean)
+          .join(' · ') ||
+        '-',
+      warrantyExpiry: toDisplayDate(warrantyEndDate),
       currentValue: formatVndValue(primary?.originalPrice),
       remainingValue:
         primary?.remainingValue != null
@@ -110,7 +116,7 @@ function RepairCompleteModalInner({
             : '-',
       location:
         primary?.warehouseName || primary?.currentDepartmentName || row?.location || '-',
-      status: primary?.statusName ?? asset?.statusName ?? '-',
+      status: 'Đang sửa chữa',
       department: primary?.currentDepartmentName ?? row?.department ?? '-',
     };
   }, [asset, row]);
@@ -118,16 +124,14 @@ function RepairCompleteModalInner({
   if (!open) return null;
 
   const handleSubmit = () => {
-    const cost = parseNumberInput(actualCostInput);
-    if (!completionDate || !returnDate || cost == null) return;
+    if (!completionDate || !returnDate || actualCost == null) return;
     onSubmit({
       reportNumber: reportNumber.trim(),
       completionDate: toIsoDate(completionDate),
       returnToUseDate: toIsoDate(returnDate),
-      actualCost: cost,
+      actualCost,
       result: result.trim(),
       detail: detail.trim(),
-      attachmentUrls: attachments.map((a) => a.name.trim()).filter(Boolean),
     });
   };
 
@@ -154,8 +158,7 @@ function RepairCompleteModalInner({
                   type="text"
                   className="repair-complete-input"
                   value={reportNumber}
-                  onChange={(e) => setReportNumber(e.target.value)}
-                  placeholder="VD: BA001"
+                  readOnly
                 />
               </div>
 
@@ -164,7 +167,7 @@ function RepairCompleteModalInner({
                 <div className="repair-complete-info-grid">
                   <div className="repair-complete-info-row">
                     <div className="repair-complete-info-item">
-                      <label>Mã tài sản</label>
+                      <label>Mã cá thể</label>
                       <div className="repair-complete-info-value">{assetInfo.code}</div>
                     </div>
                     <div className="repair-complete-info-item">
@@ -247,14 +250,18 @@ function RepairCompleteModalInner({
                       <label htmlFor="repair-complete-actual-cost">
                         Chi phí thực tế<span className="repair-complete-required">*</span>
                       </label>
-                      <input
-                        id="repair-complete-actual-cost"
-                        type="text"
-                        className="repair-complete-input"
-                        value={actualCostInput}
-                        onChange={(e) => setActualCostInput(e.target.value)}
-                        placeholder="VD: 1000000"
-                      />
+                      <div className="repair-complete-money-input">
+                        <input
+                          id="repair-complete-actual-cost"
+                          type="text"
+                          className="repair-complete-input"
+                          inputMode="numeric"
+                          value={actualCost != null ? actualCost.toLocaleString('en-US') : ''}
+                          onChange={(e) => setActualCost(parseNumberInput(e.target.value) ?? null)}
+                          placeholder="Nhập chi phí"
+                        />
+                        <span className="repair-complete-money-suffix">đ</span>
+                      </div>
                     </div>
                   </div>
                   <div>
@@ -282,62 +289,6 @@ function RepairCompleteModalInner({
                   </div>
                 </div>
 
-                <div className="repair-complete-attachments-section">
-                  <h4 className="repair-complete-attachments-title">Tài liệu đính kèm</h4>
-                  <div className="repair-complete-attachments-list">
-                    {attachments.map((att) => (
-                      <div key={att.key} className="repair-complete-attachment-item">
-                        {editingAttachKey === att.key ? (
-                          <input
-                            className="repair-complete-input"
-                            defaultValue={att.name}
-                            onBlur={(e) => {
-                              const v = e.target.value.trim() || att.name;
-                              setAttachments((prev) =>
-                                prev.map((x) => (x.key === att.key ? { ...x, name: v } : x))
-                              );
-                              setEditingAttachKey(null);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                            }}
-                            autoFocus
-                          />
-                        ) : (
-                          <span className="repair-complete-attachment-name">{att.name}</span>
-                        )}
-                        <div className="repair-complete-attachment-actions">
-                          <button
-                            type="button"
-                            className="repair-complete-attachment-btn"
-                            onClick={() => setEditingAttachKey(editingAttachKey === att.key ? null : att.key)}
-                          >
-                            Sửa
-                          </button>
-                          <button
-                            type="button"
-                            className="repair-complete-attachment-btn repair-complete-attachment-btn--danger"
-                            onClick={() => setAttachments((prev) => prev.filter((x) => x.key !== att.key))}
-                          >
-                            Xóa
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    className="repair-complete-btn-upload"
-                    onClick={() =>
-                      setAttachments((prev) => [
-                        ...prev,
-                        { key: `att-${Date.now()}`, name: `Tài liệu ${prev.length + 1}` },
-                      ])
-                    }
-                  >
-                    Thêm file đính kèm
-                  </button>
-                </div>
               </div>
             </div>
           )}

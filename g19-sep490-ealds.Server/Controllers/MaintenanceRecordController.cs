@@ -1,4 +1,4 @@
-﻿using g19_sep490_ealds.Server.Services.Interface;
+using g19_sep490_ealds.Server.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -19,6 +19,13 @@ public class MaintenanceRecordController : ControllerBase
     public async Task<IActionResult> GetByAsset(int assetId)
     {
         var result = await _service.GetRecordsByAssetAsync(assetId);
+        return Ok(result);
+    }
+
+    [HttpGet("instance/{instanceId}")]
+    public async Task<IActionResult> GetByInstance(int instanceId)
+    {
+        var result = await _service.GetRecordsByInstanceAsync(instanceId);
         return Ok(result);
     }
 }

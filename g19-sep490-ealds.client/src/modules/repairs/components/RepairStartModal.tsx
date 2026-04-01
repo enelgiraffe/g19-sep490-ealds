@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
-import type { AssetDetailResponse } from '../../assets/services/assetService';
+import type { AssetDetailResponse, AssetInstanceResponse } from '../../assets/services/assetService';
+import { getStatusLabel } from '../../assets/services/assetService';
 import './RepairStartModal.css';
 
 interface RepairStartRow {
@@ -17,7 +18,6 @@ export interface RepairStartFormValues {
   damageCondition: string;
   repairDate: string;
   expectedCompletionDate?: string;
-  estimatedCost?: number;
   repairProgressStatus: string;
 }
 
@@ -43,21 +43,21 @@ function formatVndValue(value?: number | null): string {
   return `${value.toLocaleString('vi-VN')} ₫`;
 }
 
-function toInputDate(value?: string | null): string {
-  if (!value) return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '';
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+function toDisplayStatus(value?: string | null): string {
+  if (!value) return '-';
+  if (value.toLowerCase() === 'damaged') return 'Đã hỏng';
+  return getStatusLabel(value);
 }
 
-function parseNumberInput(value: string): number | undefined {
-  const normalized = value.replace(/[^\d]/g, '');
-  if (!normalized) return undefined;
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : undefined;
+function pickLatestWarrantyEndDate(instance?: AssetInstanceResponse): string | null {
+  if (!instance) return null;
+  if (instance.warrantyEndDate) return instance.warrantyEndDate;
+  const latestGuarantee = instance.guarantees && instance.guarantees.length > 0
+    ? [...instance.guarantees].sort((a, b) =>
+        String(a.warrantyEndDate ?? '').localeCompare(String(b.warrantyEndDate ?? '')),
+      )[instance.guarantees.length - 1]
+    : null;
+  return latestGuarantee?.warrantyEndDate ?? null;
 }
 
 function toIsoDateOrUndefined(value: string): string | undefined {
@@ -78,39 +78,54 @@ function RepairStartModalInner({
   onClose,
   onSubmit,
 }: RepairStartModalProps) {
-  const [reportNumber, setReportNumber] = useState('');
   const [damageDate, setDamageDate] = useState('');
   const [damageCondition, setDamageCondition] = useState('');
   const [repairDate, setRepairDate] = useState('');
   const [expectedCompletionDate, setExpectedCompletionDate] = useState('');
-  const [estimatedCostInput, setEstimatedCostInput] = useState('');
   const [repairProgressStatus, setRepairProgressStatus] = useState('');
+  const reportNumber = useMemo(() => {
+    if (!open || !row) return '';
+    return `BBSC-${dayjs().format('YYYYMMDD-HHmmss')}`;
+  }, [open, row]);
 
   useEffect(() => {
     if (!open || !row) return;
     const today = dayjs().format('YYYY-MM-DD');
-    setReportNumber('');
-    setDamageDate(today);
-    setDamageCondition(row.condition || '');
-    setRepairDate(today);
-    setExpectedCompletionDate('');
-    setEstimatedCostInput('');
-    setRepairProgressStatus('');
+    const timer = window.setTimeout(() => {
+      setDamageDate(today);
+      setDamageCondition(row.condition || '');
+      setRepairDate(today);
+      setExpectedCompletionDate('');
+      setRepairProgressStatus('');
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [open, row]);
 
   const assetInfo = useMemo(() => {
-    const primary = asset?.instances?.[0];
+    const instances = asset?.instances ?? [];
+    const primary =
+      instances.find((i) => i.instanceCode === row?.assetCode || i.assetCode === row?.assetCode) ??
+      instances[0];
+    const fallbackWithWarranty = instances.find(
+      (i) => i.warrantyEndDate || i.guarantees?.some((g) => !!g.warrantyEndDate),
+    );
+    const warrantyEndDate =
+      pickLatestWarrantyEndDate(primary) ??
+      pickLatestWarrantyEndDate(fallbackWithWarranty) ??
+      null;
     return {
-      code: asset?.code ?? row?.assetCode ?? '-',
+      code: row?.assetCode ?? asset?.code ?? '-',
       name: asset?.name ?? row?.assetName ?? '-',
       type: asset?.assetTypeName ?? '-',
-      specification: asset
-        ? [asset.unit ? `Đơn vị: ${asset.unit}` : null, `SL: ${asset.quantity}`]
-            .filter(Boolean)
-            .join(' · ')
-        : '-',
+      specification:
+        primary?.specification?.trim() ||
+        asset?.specification?.trim() ||
+        [asset?.unit ? `Đơn vị: ${asset.unit}` : null, asset?.quantity != null ? `SL: ${asset.quantity}` : null]
+          .filter(Boolean)
+          .join(' · ') ||
+        '-',
       purchaseDate: toDisplayDate(primary?.purchaseDate),
-      warrantyExpiry: '-',
+      warrantyExpiry: toDisplayDate(warrantyEndDate),
       currentValue: formatVndValue(primary?.originalPrice),
       remainingValue:
         primary?.remainingValue != null
@@ -120,7 +135,7 @@ function RepairStartModalInner({
             : '-',
       location:
         primary?.warehouseName || primary?.currentDepartmentName || row?.location || '-',
-      status: primary?.statusName ?? asset?.statusName ?? '-',
+      status: toDisplayStatus(primary?.statusName ?? asset?.statusName),
       admissionDate: toDisplayDate(primary?.inUseDate ?? asset?.inUseDate),
       department: primary?.currentDepartmentName ?? row?.department ?? '-',
     };
@@ -136,7 +151,6 @@ function RepairStartModalInner({
       damageCondition: damageCondition.trim(),
       repairDate: toIsoDate(repairDate),
       expectedCompletionDate: toIsoDateOrUndefined(expectedCompletionDate),
-      estimatedCost: parseNumberInput(estimatedCostInput),
       repairProgressStatus: repairProgressStatus.trim(),
     });
   };
@@ -164,8 +178,7 @@ function RepairStartModalInner({
                   type="text"
                   className="repair-start-input"
                   value={reportNumber}
-                  onChange={(e) => setReportNumber(e.target.value)}
-                  placeholder="VD: BA001"
+                  readOnly
                 />
               </div>
 
@@ -174,7 +187,7 @@ function RepairStartModalInner({
                 <div className="repair-start-info-grid">
                   <div className="repair-start-info-row">
                     <div className="repair-start-info-item">
-                      <label>Mã tài sản</label>
+                      <label>Mã cá thể</label>
                       <div className="repair-start-info-value">{assetInfo.code}</div>
                     </div>
                     <div className="repair-start-info-item">
@@ -290,17 +303,6 @@ function RepairStartModalInner({
                         onChange={(e) => setExpectedCompletionDate(e.target.value)}
                       />
                     </div>
-                    <div className="repair-start-form__item">
-                      <label htmlFor="repair-start-estimated-cost">Chi phí dự kiến</label>
-                      <input
-                        id="repair-start-estimated-cost"
-                        type="text"
-                        className="repair-start-input"
-                        value={estimatedCostInput}
-                        onChange={(e) => setEstimatedCostInput(e.target.value)}
-                        placeholder="VD: 1000000"
-                      />
-                    </div>
                   </div>
                   <div className="repair-start-form__item">
                     <label htmlFor="repair-start-progress-status">
@@ -328,7 +330,7 @@ function RepairStartModalInner({
             className="repair-start-btn-submit"
             disabled={submitting || loading}
           >
-            {submitting ? 'Đang gửi...' : 'Gửi yêu cầu'}
+            {submitting ? 'Đang gửi...' : 'Bắt đầu'}
           </button>
           <button type="button" onClick={onClose} className="repair-start-btn-cancel" disabled={submitting}>
             Hủy

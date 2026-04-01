@@ -1,0 +1,210 @@
+.transfer-detail-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+}
+
+.transfer-detail-modal {
+  position: relative;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 85vh;
+  width: 900px;
+  display: flex;
+  flex-direction: column;
+}
+
+.transfer-detail-modal__body {
+  padding: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.transfer-detail-modal__close-btn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.transfer-detail-modal__close {
+  font-size: 24px;
+  color: #fe3720;
+  font-weight: 300;
+}
+
+.transfer-detail-modal__header {
+  background: #ffe5e0;
+  padding: 16px 24px;
+  border-bottom: 1px solid #ffd4cc;
+}
+
+.transfer-detail-section-title {
+  margin: 0 0 16px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.transfer-detail-modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #fe3720;
+}
+
+.transfer-detail-modal__content {
+  padding: 24px;
+}
+
+.transfer-detail-form__section {
+  margin-bottom: 24px;
+}
+
+.transfer-detail-form__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.transfer-detail-form__item--full {
+  margin-top: 16px;
+}
+
+.transfer-detail-form__item label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.transfer-detail-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.transfer-detail-info-value {
+  font-size: 14px;
+  color: #111827;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+}
+
+.transfer-detail-info-value--multiline {
+  align-items: flex-start;
+  white-space: pre-wrap;
+}
+
+.transfer-detail-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.transfer-detail-status--success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.transfer-detail-status--processing {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.transfer-detail-status--warning {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.transfer-detail-status--danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.transfer-detail-status--default {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.transfer-detail-modal__footer {
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  justify-content: flex-end;
+}
+
+.transfer-detail-btn-close {
+  background: #6b7280;
+  border: 1px solid #6b7280;
+  color: #fff;
+  height: 40px;
+  padding: 0 32px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.transfer-detail-btn-close:hover {
+  background: #4b5563;
+  border-color: #4b5563;
+  color: #fff;
+}
+
+.transfer-detail-btn-primary {
+  background: #fe3720;
+  border: 1px solid #fe3720;
+  color: #fff;
+  height: 40px;
+  padding: 0 32px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.transfer-detail-btn-primary:hover {
+  background: #e5321c;
+  border-color: #e5321c;
+  color: #fff;
+}
+
+.transfer-detail-modal__body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.transfer-detail-modal__body::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.transfer-detail-modal__body::-webkit-scrollbar-thumb {
+  background: #919eab;
+  border-radius: 3px;
+}
+
+.transfer-detail-modal__body::-webkit-scrollbar-thumb:hover {
+  background: #7a8693;
+}
+
+@media (max-width: 920px) {
+  .transfer-detail-modal {
+    width: calc(100vw - 24px);
+  }
+
+  .transfer-detail-form__row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}

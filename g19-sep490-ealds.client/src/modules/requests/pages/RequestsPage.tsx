@@ -108,7 +108,97 @@ function formatDate(iso: string): string {
   }
 }
 
+function parseCurrencyToNumber(value: unknown): number {
+  const raw = String(value ?? '').trim();
+  if (!raw) return 0;
+  const cleaned = raw.replace(/[^\d,.-]/g, '');
+  if (!cleaned) return 0;
+  const normalized = cleaned.includes(',') && !cleaned.includes('.')
+    ? cleaned.replace(/,/g, '.')
+    : cleaned.replace(/,/g, '');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/** Cùng format mô tả báo hỏng: dòng Ngày hỏng / Tình trạng. */
+function parseDamageDescription(description?: string | null): {
+  damageDate?: string | null;
+  condition: string;
+} {
+  if (!description) return { condition: '' };
+  const lines = description
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const damageDateLine = lines.find((line) => /^Ngày hỏng:\s*/i.test(line));
+  const conditionLine = lines.find((line) => /^Tình trạng:\s*/i.test(line));
+  const fallbackCondition = lines.join(' ').trim();
+  return {
+    damageDate: damageDateLine?.replace(/^Ngày hỏng:\s*/i, '').trim() || null,
+    condition: conditionLine?.replace(/^Tình trạng:\s*/i, '').trim() || fallbackCondition,
+  };
+}
+
+function extractDescriptionField(description: string | null | undefined, label: string): string | null {
+  const text = String(description ?? '');
+  const marker = `${label}:`;
+  const idx = text.indexOf(marker);
+  if (idx < 0) return null;
+  const line = text.slice(idx + marker.length).split('\n')[0].trim();
+  return line || null;
+}
+
+function getPurchaseAssetDisplay(row: DirectorRequestListItem): string {
+  if (row.assetName?.trim()) return row.assetName.trim();
+  try {
+    const parsed = row.proposedData
+      ? (JSON.parse(row.proposedData) as {
+          equipment?: { name?: string }[];
+        })
+      : null;
+    const names = Array.isArray(parsed?.equipment)
+      ? parsed.equipment
+          .map((item) => String(item?.name ?? '').trim())
+          .filter(Boolean)
+      : [];
+    if (names.length === 1) return names[0];
+    if (names.length > 1) return `${names.length} vật tư (${names[0]}...)`;
+  } catch {
+    // ignore invalid proposedData
+  }
+  return '—';
+}
+
 function toPurchaseTableRow(item: AccountantRequestListItem, index: number): PurchaseTableRow {
+  let quantity = 1;
+  let estimatedPrice = '—';
+  try {
+    if (item.proposedData) {
+      const parsed = JSON.parse(item.proposedData) as {
+        equipment?: { quantity?: number | string; estimatedPrice?: string }[];
+        totalPrice?: string;
+      };
+      if (Array.isArray(parsed.equipment) && parsed.equipment.length > 0) {
+        quantity = parsed.equipment.reduce((sum, line) => {
+          const q = Number(line?.quantity);
+          return sum + (Number.isFinite(q) && q > 0 ? q : 1);
+        }, 0);
+      }
+      if (parsed.totalPrice && String(parsed.totalPrice).trim()) {
+        estimatedPrice = String(parsed.totalPrice);
+      } else if (Array.isArray(parsed.equipment) && parsed.equipment.length > 0) {
+        const total = parsed.equipment.reduce((sum, line) => {
+          const q = Number(line?.quantity);
+          const unitPrice = parseCurrencyToNumber(line?.estimatedPrice);
+          return sum + (Number.isFinite(q) && q > 0 ? q : 1) * unitPrice;
+        }, 0);
+        estimatedPrice = total > 0 ? `${total.toLocaleString('vi-VN')}đ` : '—';
+      }
+    }
+  } catch {
+    // fallback to defaults when proposedData is invalid JSON
+  }
+
   return {
     key: String(item.assetRequestId),
     stt: index + 1,
@@ -118,8 +208,8 @@ function toPurchaseTableRow(item: AccountantRequestListItem, index: number): Pur
     code: `YC-${item.assetRequestId}`,
     requestDate: formatDate(item.createDate),
     equipment: item.title,
-    quantity: 1,
-    estimatedPrice: '—',
+    quantity,
+    estimatedPrice,
   };
 }
 
@@ -301,18 +391,18 @@ export function RequestsPage() {
       activeTab === 'liquidation');
 
   const directorRequestTypeId = shouldUseDirectorView ? REQUEST_TYPE_IDS[activeTab] : null;
+  const isDirectorRepairTable = shouldUseDirectorView && activeTab === 'repair';
 
   // Ensure director sees only requests already passed accountant step (per workflow)
   // - Purchase: accountant approves 0->1, director decides at status=1
   // - Transfer: accountant approves 1->2, director decides at status=2
-  const enforcedDirectorStatus: number | undefined =
-    isDirectorRole && activeTab === 'purchase'
-      ? 1
-      : isDirectorRole && activeTab === 'transfer'
-        ? 2
-        : isDirectorRole && activeTab === 'liquidation'
-          ? 1
-        : undefined;
+  const enforcedDirectorStatuses = useMemo<number[] | undefined>(() => {
+    if (!isDirectorRole) return undefined;
+    if (activeTab === 'purchase') return [1, 2];
+    if (activeTab === 'transfer') return [2];
+    if (activeTab === 'liquidation') return [1];
+    return undefined;
+  }, [activeTab, isDirectorRole]);
 
   const canDirectorApprove =
     !!userProfile?.id &&
@@ -340,15 +430,21 @@ export function RequestsPage() {
     directorRequestService
       .getView({
         requestTypeId: directorRequestTypeId,
+        statuses: enforcedDirectorStatuses,
         status:
-          enforcedDirectorStatus ?? (statusFilter === 'all' ? undefined : statusFilter),
+          !enforcedDirectorStatuses || enforcedDirectorStatuses.length === 0
+            ? (statusFilter === 'all' ? undefined : statusFilter)
+            : undefined,
         page: effectiveDirectorPage,
         pageSize,
       })
       .then((res) => {
         if (!cancelled) {
-          setDirectorRows(res.items as DirectorRequestListItem[]);
-          setDirectorTotal(res.total);
+          const rows = (res.items as DirectorRequestListItem[]).filter((item) =>
+            activeTab === 'transfer' ? item.status === 2 : true,
+          );
+          setDirectorRows(rows);
+          setDirectorTotal(activeTab === 'transfer' ? rows.length : res.total);
         }
       })
       .catch(() => {
@@ -365,9 +461,10 @@ export function RequestsPage() {
       cancelled = true;
     };
   }, [
+    activeTab,
     shouldUseDirectorView,
     directorRequestTypeId,
-    enforcedDirectorStatus,
+    enforcedDirectorStatuses,
     statusFilter,
     effectiveDirectorPage,
     pageSize,
@@ -376,6 +473,14 @@ export function RequestsPage() {
   useEffect(() => {
     setPage(1);
   }, [activeTab, statusFilter, searchText, departmentFilter, sentDateFilter]);
+
+  // Accountant transfer list must always include requests already approved by director.
+  // Reset status filter to "all" when switching to transfer tab to avoid hiding approved rows.
+  useEffect(() => {
+    if (isAccountantRole && activeTab === 'transfer') {
+      setStatusFilter('all');
+    }
+  }, [activeTab, isAccountantRole]);
 
   useEffect(() => {
     if (!shouldUseDirectorView) return;
@@ -536,7 +641,7 @@ export function RequestsPage() {
   const parseToFormValues = (detail: PurchaseOrderDetail) => {
     const values: Record<string, unknown> = {
       title: detail.title ?? '',
-      equipment: [{ name: '', quantity: 1, machineCode: '', unit: 'Cái', estimatedPrice: '' }],
+      equipment: [{ name: '', quantity: 1, modelCode: '', unit: 'Cái', estimatedPrice: '' }],
     };
     try {
       const lines = (detail.description ?? '')
@@ -563,6 +668,7 @@ export function RequestsPage() {
           equipment?: {
             name?: string;
             quantity?: number;
+            modelCode?: string;
             machineCode?: string;
             unit?: string;
             estimatedPrice?: string;
@@ -572,7 +678,7 @@ export function RequestsPage() {
           values.equipment = parsed.equipment.map((e) => ({
             name: e.name ?? '',
             quantity: e.quantity ?? 1,
-            machineCode: e.machineCode ?? '',
+            modelCode: e.modelCode ?? e.machineCode ?? '',
             unit: e.unit ?? 'Cái',
             estimatedPrice: e.estimatedPrice ?? '',
           }));
@@ -734,9 +840,14 @@ export function RequestsPage() {
             </>
           )}
           {shouldUseDirectorView &&
-            (enforcedDirectorStatus != null ? (
+            (enforcedDirectorStatuses != null ? (
               <div style={{ color: '#6b7280', fontSize: 13 }}>
-                Chỉ hiển thị: <strong>Chờ phê duyệt</strong>
+                Chỉ hiển thị:{' '}
+                <strong>
+                  {activeTab === 'purchase'
+                    ? 'Chờ phê duyệt, Phê duyệt'
+                    : 'Chờ phê duyệt'}
+                </strong>
               </div>
             ) : (
               <Select
@@ -776,12 +887,25 @@ export function RequestsPage() {
             <table className="asset-table requests-table">
               <thead>
                 <tr>
-                  <th>MÃ YÊU CẦU</th>
-                  <th>PHÒNG BAN ĐỀ XUẤT</th>
-                  <th>NGÀY GỬI</th>
-                  <th>MÃ TÀI SẢN</th>
-                  <th>TÊN TÀI SẢN</th>
-                  <th>TRẠNG THÁI</th>
+                  {isDirectorRepairTable ? (
+                    <>
+                      <th>MÃ YÊU CẦU</th>
+                      <th>MÃ CÁ THỂ</th>
+                      <th>TÊN TÀI SẢN</th>
+                      <th>PHÒNG BAN ĐỀ XUẤT</th>
+                      <th>NGÀY GỬI</th>
+                      <th>TRẠNG THÁI</th>
+                    </>
+                  ) : (
+                    <>
+                      <th>MÃ YÊU CẦU</th>
+                      <th>PHÒNG BAN ĐỀ XUẤT</th>
+                      <th>NGÀY GỬI</th>
+                      <th>MÃ TÀI SẢN</th>
+                      <th>TÊN TÀI SẢN</th>
+                      <th>TRẠNG THÁI</th>
+                    </>
+                  )}
                   <th className="asset-table__cell asset-table__cell--actions" />
                 </tr>
               </thead>
@@ -798,6 +922,11 @@ export function RequestsPage() {
                     const fallback =
                       map === MAINT_REPAIR_STATUS_MAP ? MAINT_REPAIR_STATUS_MAP[0] : DIRECTOR_STATUS_MAP[0];
                     const config = map[row.status] ?? fallback;
+                    const instanceCode = row.assetInstanceCode ?? row.assetCode ?? '—';
+                    const assetTitle =
+                      row.requestTypeId === REQUEST_TYPE_IDS.purchase
+                        ? getPurchaseAssetDisplay(row)
+                        : row.assetName ?? '—';
                     return (
                       <tr key={row.assetRequestId} className="asset-row">
                         <td>
@@ -814,10 +943,25 @@ export function RequestsPage() {
                             YC-{row.assetRequestId}
                           </button>
                         </td>
-                        <td>{row.currentDepartmentName ?? row.creatorEmail ?? '—'}</td>
-                        <td>{formatDate(row.createDate)}</td>
-                        <td>{row.assetCode ?? '—'}</td>
-                        <td>{row.assetName ?? row.title ?? '—'}</td>
+                        {isDirectorRepairTable ? (
+                          <>
+                            <td>{instanceCode}</td>
+                            <td>{assetTitle}</td>
+                            <td>{row.creatorDepartmentName ?? row.currentDepartmentName ?? '—'}</td>
+                            <td>{formatDate(row.createDate)}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td>{row.creatorDepartmentName ?? row.currentDepartmentName ?? '—'}</td>
+                            <td>{formatDate(row.createDate)}</td>
+                            <td>{row.assetCode ?? '—'}</td>
+                            <td>
+                              {row.requestTypeId === REQUEST_TYPE_IDS.purchase
+                                ? getPurchaseAssetDisplay(row)
+                                : row.assetName ?? '—'}
+                            </td>
+                          </>
+                        )}
                         <td>
                           <span
                             className={
@@ -1322,70 +1466,256 @@ export function RequestsPage() {
 
                   <div className="acct-transfer-modal__body">
                     <div className="acct-transfer-modal__content">
-                      <div className="acct-transfer-form__row">
-                        <div className="acct-transfer-form__field">
-                          <label>Mã yêu cầu</label>
-                          <div className="acct-transfer-form__value">
-                            YC-{selectedDirectorItem.assetRequestId}
-                          </div>
-                        </div>
-                        <div className="acct-transfer-form__field">
-                          <label>Ngày gửi</label>
-                          <div className="acct-transfer-form__value">
-                            {formatDate(selectedDirectorItem.createDate)}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="acct-transfer-form__row">
-                        <div className="acct-transfer-form__field">
-                          <label>Phòng ban đề xuất</label>
-                          <div className="acct-transfer-form__value">
-                            {selectedDirectorItem.currentDepartmentName ?? '—'}
-                          </div>
-                        </div>
-                        <div className="acct-transfer-form__field">
-                          <label>Người tạo</label>
-                          <div className="acct-transfer-form__value">
-                            {selectedDirectorItem.creatorEmail ?? '—'}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="acct-transfer-form__section">
-                        <h3 className="acct-transfer-form__section-title">Nội dung yêu cầu</h3>
-                        <div className="acct-transfer-form__value">
-                          {selectedDirectorItem.title ?? '—'}
-                        </div>
-                      </div>
-
-                      {(selectedDirectorItem.assetCode || selectedDirectorItem.assetName) && (
-                        <div className="acct-transfer-form__row">
-                          <div className="acct-transfer-form__field">
-                            <label>Mã tài sản</label>
-                            <div className="acct-transfer-form__value">
-                              {selectedDirectorItem.assetCode ?? '—'}
+                      {(() => {
+                        const parsed =
+                          selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.repair
+                            ? parseDamageDescription(selectedDirectorItem.description)
+                            : { damageDate: null as string | null, condition: '' };
+                        const creatorDisplay =
+                          (selectedDirectorItem.creatorName?.trim() &&
+                            selectedDirectorItem.creatorName.trim()) ||
+                          selectedDirectorItem.creatorEmail ||
+                          '—';
+                        const instanceCode =
+                          selectedDirectorItem.assetInstanceCode ??
+                          selectedDirectorItem.assetCode ??
+                          null;
+                        let purchaseEquipment: {
+                          stt: number;
+                          name: string;
+                          quantity: number;
+                          modelCode?: string;
+                          unit?: string;
+                          estimatedPrice?: string;
+                        }[] = [];
+                        let purchaseTotalPrice = '—';
+                        if (selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.purchase) {
+                          try {
+                            const parsedProposed = selectedDirectorItem.proposedData
+                              ? (JSON.parse(selectedDirectorItem.proposedData) as {
+                                  equipment?: {
+                                    name?: string;
+                                    quantity?: number;
+                                    modelCode?: string;
+                                    machineCode?: string;
+                                    unit?: string;
+                                    estimatedPrice?: string;
+                                  }[];
+                                  totalPrice?: string;
+                                })
+                              : null;
+                            if (Array.isArray(parsedProposed?.equipment)) {
+                              purchaseEquipment = parsedProposed.equipment.map((line, idx) => ({
+                                stt: idx + 1,
+                                name: line.name ?? '—',
+                                quantity: line.quantity ?? 1,
+                                modelCode: line.modelCode ?? line.machineCode,
+                                unit: line.unit,
+                                estimatedPrice: line.estimatedPrice,
+                              }));
+                            }
+                            if (parsedProposed?.totalPrice) {
+                              purchaseTotalPrice = parsedProposed.totalPrice;
+                            }
+                          } catch {
+                            purchaseEquipment = [];
+                          }
+                        }
+                        return (
+                          <>
+                            <div className="acct-transfer-form__row">
+                              <div className="acct-transfer-form__field">
+                                <label>Mã yêu cầu</label>
+                                <div className="acct-transfer-form__value">
+                                  YC-{selectedDirectorItem.assetRequestId}
+                                </div>
+                              </div>
+                              <div className="acct-transfer-form__field">
+                                <label>Ngày gửi</label>
+                                <div className="acct-transfer-form__value">
+                                  {formatDate(selectedDirectorItem.createDate)}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                          <div className="acct-transfer-form__field">
-                            <label>Tên tài sản</label>
-                            <div className="acct-transfer-form__value">
-                              {selectedDirectorItem.assetName ?? '—'}
+
+                            <div className="acct-transfer-form__row">
+                              <div className="acct-transfer-form__field">
+                                <label>Phòng ban đề xuất</label>
+                                <div className="acct-transfer-form__value">
+                                  {selectedDirectorItem.creatorDepartmentName ??
+                                    selectedDirectorItem.currentDepartmentName ??
+                                    '—'}
+                                </div>
+                              </div>
+                              <div className="acct-transfer-form__field">
+                                <label>Người tạo</label>
+                                <div className="acct-transfer-form__value">{creatorDisplay}</div>
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      )}
 
-                      {selectedDirectorItem.description && (
-                        <div className="acct-transfer-form__section">
-                          <h3 className="acct-transfer-form__section-title">Mô tả</h3>
-                          <div className="acct-transfer-form__value">
-                            {selectedDirectorItem.description}
-                          </div>
-                        </div>
-                      )}
+                            {(instanceCode || selectedDirectorItem.assetName) && (
+                              <div className="acct-transfer-form__row">
+                                <div className="acct-transfer-form__field">
+                                  <label>Mã cá thể</label>
+                                  <div className="acct-transfer-form__value">
+                                    {instanceCode ?? '—'}
+                                  </div>
+                                </div>
+                                <div className="acct-transfer-form__field">
+                                  <label>Tên tài sản</label>
+                                  <div className="acct-transfer-form__value">
+                                    {selectedDirectorItem.assetName ?? '—'}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
 
-                      {selectedDirectorItem.proposedData && (
+                            {selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.purchase ? (
+                              <>
+                                <div className="acct-transfer-form__row">
+                                  <div className="acct-transfer-form__field">
+                                    <label>Lý do đề nghị </label>
+                                    <div className="acct-transfer-form__value">
+                                      {selectedDirectorItem.title ?? '—'}
+                                    </div>
+                                  </div>
+                                  <div className="acct-transfer-form__field">
+                                    <label>Thời gian cần vật tư</label>
+                                    <div className="acct-transfer-form__value">
+                                      {extractDescriptionField(
+                                        selectedDirectorItem.description,
+                                        'Thời gian cần',
+                                      ) ?? '—'}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="acct-transfer-form__row">
+                                  <div className="acct-transfer-form__field">
+                                    <label>Nhà cung cấp đề xuất</label>
+                                    <div className="acct-transfer-form__value">
+                                      {extractDescriptionField(
+                                        selectedDirectorItem.description,
+                                        'Nhà cung cấp đề xuất',
+                                      ) ?? '—'}
+                                    </div>
+                                  </div>
+                                  <div className="acct-transfer-form__field">
+                                    <label>Loại tài sản</label>
+                                    <div className="acct-transfer-form__value">
+                                      {extractDescriptionField(
+                                        selectedDirectorItem.description,
+                                        'Loại tài sản',
+                                      ) ?? '—'}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="acct-transfer-form__section">
+                                  <h3 className="acct-transfer-form__section-title">Mục đích sử dụng</h3>
+                                  <div className="acct-transfer-form__value">
+                                    {extractDescriptionField(selectedDirectorItem.description, 'Mục đích') ?? '—'}
+                                  </div>
+                                </div>
+
+                                {purchaseEquipment.length > 0 ? (
+                                  <div className="acct-transfer-form__section">
+                                    <h3 className="acct-transfer-form__section-title">Danh mục vật tư</h3>
+                                    <table className="view-purchase-equipment-table">
+                                      <thead>
+                                        <tr>
+                                          <th>STT</th>
+                                          <th>Tên vật tư</th>
+                                          <th>Số lượng</th>
+                                          <th>Mã model</th>
+                                          <th>Đơn vị tính</th>
+                                          <th>Đơn giá dự tính</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {purchaseEquipment.map((line) => (
+                                          <tr key={line.stt}>
+                                            <td>{line.stt}</td>
+                                            <td>{line.name}</td>
+                                            <td>{line.quantity}</td>
+                                            <td>{line.modelCode ?? '—'}</td>
+                                            <td>{line.unit ?? '—'}</td>
+                                            <td className="view-purchase-equipment-price">
+                                              {line.estimatedPrice ?? '—'}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                        <tr className="view-purchase-equipment-total">
+                                          <td colSpan={5}>Thành tiền</td>
+                                          <td className="view-purchase-equipment-price">
+                                            {purchaseTotalPrice}
+                                          </td>
+                                        </tr>
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                ) : selectedDirectorItem.proposedData ? (
+                                  <div className="acct-transfer-form__section">
+                                    <h3 className="acct-transfer-form__section-title">Dữ liệu đề xuất</h3>
+                                    <pre
+                                      className="acct-transfer-form__value"
+                                      style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                                    >
+                                      {selectedDirectorItem.proposedData}
+                                    </pre>
+                                  </div>
+                                ) : null}
+
+                                <div className="acct-transfer-form__section">
+                                  <h3 className="acct-transfer-form__section-title">Ý kiến kế toán</h3>
+                                  <div className="acct-transfer-form__value">
+                                    {selectedDirectorItem.accountantComment?.trim() || '—'}
+                                  </div>
+                                </div>
+                                <div className="acct-transfer-form__section">
+                                  <h3 className="acct-transfer-form__section-title">Ý kiến giám đốc</h3>
+                                  <div className="acct-transfer-form__value">
+                                    {selectedDirectorItem.directorComment?.trim() || '—'}
+                                  </div>
+                                </div>
+                              </>
+                            ) : selectedDirectorItem.requestTypeId !== REQUEST_TYPE_IDS.repair ? (
+                              <>
+                                <div className="acct-transfer-form__section">
+                                  <h3 className="acct-transfer-form__section-title">Nội dung yêu cầu</h3>
+                                  <div className="acct-transfer-form__value">
+                                    {selectedDirectorItem.title ?? '—'}
+                                  </div>
+                                </div>
+                                {selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.transfer && (
+                                  <div className="acct-transfer-form__section">
+                                    <h3 className="acct-transfer-form__section-title">Ý kiến kế toán</h3>
+                                    <div className="acct-transfer-form__value">
+                                      {selectedDirectorItem.accountantComment?.trim() || '—'}
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            ) : null}
+
+                            {selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.repair &&
+                            parsed.damageDate ? (
+                              <div className="acct-transfer-form__row">
+                                <div className="acct-transfer-form__field">
+                                  <label>Ngày hỏng (ghi nhận)</label>
+                                  <div className="acct-transfer-form__value">
+                                    {formatDate(parsed.damageDate)}
+                                  </div>
+                                </div>
+                              </div>
+                            ) : null}
+
+                          </>
+                        );
+                      })()}
+
+                      {selectedDirectorItem.proposedData &&
+                        selectedDirectorItem.requestTypeId !== REQUEST_TYPE_IDS.purchase && (
                         <div className="acct-transfer-form__section">
                           <h3 className="acct-transfer-form__section-title">Dữ liệu đề xuất</h3>
                           <pre
@@ -1505,13 +1835,20 @@ export function RequestsPage() {
                     setDirectorLoading(true);
                     const res = await directorRequestService.getView({
                       requestTypeId: selectedDirectorItem.requestTypeId,
-                      status: enforcedDirectorStatus ?? (statusFilter === 'all' ? undefined : statusFilter),
+                      statuses: enforcedDirectorStatuses,
+                      status:
+                        !enforcedDirectorStatuses || enforcedDirectorStatuses.length === 0
+                          ? (statusFilter === 'all' ? undefined : statusFilter)
+                          : undefined,
                       page: 1,
                       pageSize,
                     });
                     setPage(1);
-                    setDirectorRows(res.items as DirectorRequestListItem[]);
-                    setDirectorTotal(res.total);
+                    const rows = (res.items as DirectorRequestListItem[]).filter((item) =>
+                      activeTab === 'transfer' ? item.status === 2 : true,
+                    );
+                    setDirectorRows(rows);
+                    setDirectorTotal(activeTab === 'transfer' ? rows.length : res.total);
                   } catch (e: unknown) {
                     const err = e as { response?: { data?: string } };
                     message.error(err?.response?.data ?? 'Thao tác phê duyệt thất bại.');

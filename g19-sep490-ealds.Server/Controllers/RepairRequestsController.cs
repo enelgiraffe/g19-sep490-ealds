@@ -32,6 +32,62 @@ public class RepairRequestsController : ControllerBase
         _repairRequestTypeId = configuration.GetValue<int>("App:RepairRequestTypeId", 4);
     }
 
+    /// <summary>
+    /// GET /api/Assets/Requests/repair - Danh sách yêu cầu sửa chữa.
+    /// </summary>
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<TransferRequestListItemDTO>>> GetList()
+    {
+        var list = await _db.RepairTasks
+            .AsNoTracking()
+            .Include(t => t.AssetInstance)
+                .ThenInclude(ai => ai.Asset)
+            .Include(t => t.AssetInstance)
+                .ThenInclude(ai => ai.AssetLocations)
+                    .ThenInclude(al => al.Department)
+            .Include(t => t.AssetRequest)
+            .Where(t => t.AssetRequest != null && t.AssetRequest.RequestTypeId == _repairRequestTypeId)
+            .OrderByDescending(t => t.AssetRequest!.CreateDate)
+            .Select(t => new TransferRequestListItemDTO
+            {
+                RecordId = t.TaskId,
+                AssetRequestId = t.AssetRequestId,
+                Code = "SCC" + t.TaskId,
+                TransferDate = t.AssetRequest!.CreateDate,
+                AssetCode = t.AssetInstance.Asset != null ? t.AssetInstance.Asset.Code : string.Empty,
+                AssetName = t.AssetInstance.Asset != null ? t.AssetInstance.Asset.Name : string.Empty,
+                AssetInstanceId = t.AssetInstanceId,
+                InstanceCode = t.AssetInstance.InstanceCode,
+                FromDepartment = t.AssetInstance.AssetLocations
+                    .Where(al => al.IsCurrent)
+                    .Select(al => al.Department != null ? al.Department.Name : string.Empty)
+                    .FirstOrDefault() ?? string.Empty,
+                ToDepartment = string.Empty,
+                Quantity = 1,
+                Status = t.AssetRequest.Status,
+                StatusName =
+                    t.AssetRequest.Status == 0 ? "Đã nộp" :
+                    t.AssetRequest.Status == 1 ? "Chờ phê duyệt" :
+                    t.AssetRequest.Status == 2 ? "Đã duyệt" :
+                    t.AssetRequest.Status == 3 ? "Từ chối" :
+                    t.AssetRequest.Status == 4 ? "Đang sửa chữa" :
+                    t.AssetRequest.Status == 5 ? "Hoàn thành" :
+                    "Không xác định",
+                Reason = t.Reason,
+                FromDepartmentId = t.AssetInstance.AssetLocations
+                    .Where(al => al.IsCurrent)
+                    .Select(al => al.DepartmentId)
+                    .FirstOrDefault(),
+                ToDepartmentId = 0,
+                CreatedBy = t.AssetRequest.CreatedBy,
+                IsSenderConfirmed = false,
+                IsReceiverConfirmed = false
+            })
+            .ToListAsync();
+
+        return Ok(list);
+    }
+
     [HttpPost]
     public async Task<IActionResult> CreateRepairRequest([FromBody] RepairRequestDTO dto)
     {
@@ -50,12 +106,22 @@ public class RepairRequestsController : ControllerBase
             return NotFound($"AssetInstanceId {dto.AssetInstanceId} not found.");
 
         var title = dto.Title ?? $"Repair request for instance {dto.AssetInstanceId}";
+        var initialStepId = await _db.RequestTypes
+            .AsNoTracking()
+            .Where(rt => rt.RequestTypeId == _repairRequestTypeId)
+            .SelectMany(rt => _db.WorkflowSteps.Where(ws => ws.WorkflowId == rt.WorkflowId))
+            .OrderBy(ws => ws.StepOrder)
+            .Select(ws => (int?)ws.StepId)
+            .FirstOrDefaultAsync();
+        if (!initialStepId.HasValue)
+            return BadRequest($"No workflow step configured for RequestTypeId '{_repairRequestTypeId}'.");
 
         var assetRequest = new AssetRequest
         {
             UserId = dto.CreatedBy,
             RequestTypeId = _repairRequestTypeId,
             AssetId = instance.AssetId,
+            AssetInstanceId = dto.AssetInstanceId,
             Title = title,
             Description = dto.Description ?? dto.Reason,
             ProposedData = null,
@@ -64,7 +130,7 @@ public class RepairRequestsController : ControllerBase
             Status = 1,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow,
-            StepId = 0
+            StepId = initialStepId.Value
         };
 
         _db.AssetRequests.Add(assetRequest);
@@ -256,13 +322,19 @@ public class RepairRequestsController : ControllerBase
 
     private async Task<bool> IsFinalApprovedByWorkflowAsync(AssetRequest ar)
     {
+        // If request is already in approved/in-progress state, allow start.
+        // Approval.StepId can be stale in legacy flows, causing false negatives
+        // when checking strictly by final workflow step.
+        if (ar.Status == 2 || ar.Status == 4)
+            return true;
+
         var workflowId = await _db.RequestTypes.AsNoTracking()
             .Where(rt => rt.RequestTypeId == ar.RequestTypeId)
             .Select(rt => (int?)rt.WorkflowId)
             .FirstOrDefaultAsync();
 
         if (!workflowId.HasValue || workflowId.Value == 0)
-            return ar.Status == 2 || ar.Status == 4;
+            return false;
 
         var finalStepId = await _db.WorkflowSteps.AsNoTracking()
             .Where(ws => ws.WorkflowId == workflowId.Value)
@@ -271,7 +343,7 @@ public class RepairRequestsController : ControllerBase
             .LastOrDefaultAsync();
 
         if (!finalStepId.HasValue)
-            return ar.Status == 2 || ar.Status == 4;
+            return false;
 
         return await _db.Approvals.AsNoTracking().AnyAsync(a =>
             a.AssetRequestId == ar.AssetRequestId
@@ -301,23 +373,16 @@ public class RepairRequestsController : ControllerBase
 
         var repairDate = dto.CompletionDate ?? dto.RepairDate ?? DateTime.UtcNow;
 
-        var resultLines = new List<string>();
-        if (!string.IsNullOrWhiteSpace(dto.ReportNumber))
-            resultLines.Add($"ReportNumber: {dto.ReportNumber}");
-        if (dto.ReturnToUseDate.HasValue)
-            resultLines.Add($"ReturnToUseDate: {dto.ReturnToUseDate.Value:O}");
-        if (!string.IsNullOrWhiteSpace(dto.Result))
-            resultLines.Add(dto.Result);
-        if (!string.IsNullOrWhiteSpace(dto.DetailedDescription))
-            resultLines.Add(dto.DetailedDescription);
-        var resultText = resultLines.Count > 0 ? string.Join("\n", resultLines) : string.Empty;
-
         var rr = new RepairRecord
         {
             TaskId = task.TaskId,
             ActualCost = dto.ActualCost,
             RepairDate = repairDate,
-            Result = resultText,
+            Result = dto.Result?.Trim() ?? string.Empty,
+            DetailedDescription = string.IsNullOrWhiteSpace(dto.DetailedDescription)
+                ? null
+                : dto.DetailedDescription.Trim(),
+            ReturnToUseDate = dto.ReturnToUseDate,
             SupplierId = dto.SupplierId,
             DamageDate = dto.DamageDate,
             DamageCondition = dto.DamageCondition

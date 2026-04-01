@@ -16,7 +16,12 @@ import {
 import './RepairsPage.css';
 import { damageReportService } from '../../assets/services/damageReportService';
 import { assetRequestService } from '../../assets/services/assetRequestService';
-import { assetService, formatVnd, type AssetDetailResponse } from '../../assets/services/assetService';
+import {
+  assetInstanceService,
+  assetService,
+  formatVnd,
+  type AssetDetailResponse,
+} from '../../assets/services/assetService';
 import {
   repairRequestService,
   type RepairStartPayload,
@@ -40,6 +45,7 @@ export interface RepairRow {
   id: string;
   assetRequestId: number;
   assetId: number;
+  assetInstanceId: number | null;
   assetCode: string;
   assetName: string;
   condition: string;
@@ -56,6 +62,24 @@ function formatDate(value?: string | null): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleDateString('vi-VN');
+}
+
+function parseDamageDescription(description?: string | null): {
+  damageDate?: string | null;
+  condition: string;
+} {
+  if (!description) return { condition: '' };
+  const lines = description
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const damageDateLine = lines.find((line) => /^Ngày hỏng:\s*/i.test(line));
+  const conditionLine = lines.find((line) => /^Tình trạng:\s*/i.test(line));
+  const fallbackCondition = lines.join(' ').trim();
+  return {
+    damageDate: damageDateLine?.replace(/^Ngày hỏng:\s*/i, '').trim() || null,
+    condition: conditionLine?.replace(/^Tình trạng:\s*/i, '').trim() || fallbackCondition,
+  };
 }
 
 function mapStatus(status: number): RepairStatus {
@@ -132,23 +156,26 @@ export function RepairsPage() {
         });
 
         const mapped: RepairRow[] = (res.items ?? []).map((it) => {
-          const assetCode = it.assetCode ?? '';
+          const assetCode = it.assetInstanceCode ?? it.assetCode ?? '';
           const assetName = it.assetName ?? '';
+          const parsed = parseDamageDescription(it.description);
+          const brokenDateSource = parsed.damageDate || it.createDate;
 
           return {
             id: String(it.id),
             assetRequestId: it.id,
             assetId: it.assetId,
-            assetCode: assetCode || String(it.assetId ?? ''),
+            assetInstanceId: it.assetInstanceId ?? null,
+            assetCode: assetCode || String(it.assetInstanceId ?? it.assetId ?? ''),
             assetName:
               assetName ||
               (it.title
                 ? it.title.replace(/^Báo hỏng tài sản\s*/i, '').trim() || it.title
                 : '(Không có tên)'),
-            condition: it.description ?? '',
-            brokenDate: formatDate(it.createDate),
+            condition: parsed.condition,
+            brokenDate: formatDate(brokenDateSource),
             quantity: it.assetQuantity && it.assetQuantity > 0 ? it.assetQuantity : 1,
-            location: it.currentDepartmentName ?? '',
+            location: it.currentLocation ?? it.currentDepartmentName ?? '',
             department: it.currentDepartmentName ?? '',
             status: mapStatus(it.status),
             rawStatus: it.status,
@@ -195,16 +222,17 @@ export function RepairsPage() {
         id: String(it.id),
         assetRequestId: it.id,
         assetId: it.assetId,
-        assetCode: (it.assetCode ?? '') || String(it.assetId ?? ''),
+        assetInstanceId: it.assetInstanceId ?? null,
+        assetCode: (it.assetInstanceCode ?? it.assetCode ?? '') || String(it.assetInstanceId ?? it.assetId ?? ''),
         assetName:
           (it.assetName ?? '') ||
           (it.title
             ? it.title.replace(/^Báo hỏng tài sản\s*/i, '').trim() || it.title
             : '(Không có tên)'),
-        condition: it.description ?? '',
-        brokenDate: formatDate(it.createDate),
+        condition: parseDamageDescription(it.description).condition,
+        brokenDate: formatDate(parseDamageDescription(it.description).damageDate || it.createDate),
         quantity: it.assetQuantity && it.assetQuantity > 0 ? it.assetQuantity : 1,
-        location: it.currentDepartmentName ?? '',
+        location: it.currentLocation ?? it.currentDepartmentName ?? '',
         department: it.currentDepartmentName ?? '',
         status: mapStatus(it.status),
         rawStatus: it.status,
@@ -216,6 +244,11 @@ export function RepairsPage() {
   };
 
   const openRepairStart = async (row: RepairRow) => {
+    // Backend only allows start when request is approved at final workflow step.
+    if (row.rawStatus !== 2) {
+      message.warning('Chỉ có thể bắt đầu sửa chữa khi yêu cầu đã được duyệt ở bước cuối.');
+      return;
+    }
     setRepairStartRow(row);
     setRepairStartLoading(true);
     setRepairStartOpen(true);
@@ -224,7 +257,24 @@ export function RepairsPage() {
       const aid = det.asset?.assetId ?? row.assetId;
       if (aid) {
         const asset = await assetService.getById(aid);
-        setRepairAsset(asset);
+        if (row.assetInstanceId) {
+          try {
+            const instanceDetail = await assetInstanceService.getById(row.assetInstanceId);
+            const existing = asset.instances ?? [];
+            const mergedInstances = [
+              instanceDetail,
+              ...existing.filter((i) => i.assetInstanceId !== instanceDetail.assetInstanceId),
+            ];
+            setRepairAsset({
+              ...asset,
+              instances: mergedInstances,
+            });
+          } catch {
+            setRepairAsset(asset);
+          }
+        } else {
+          setRepairAsset(asset);
+        }
       } else {
         setRepairAsset(null);
       }
@@ -263,7 +313,6 @@ export function RepairsPage() {
         expectedCompletionDate: values.expectedCompletionDate,
         expectedCompletionFrom: undefined,
         expectedCompletionTo: undefined,
-        estimatedCost: values.estimatedCost ?? undefined,
         repairProgressStatus: values.repairProgressStatus.trim(),
         comment: null,
       };
@@ -306,7 +355,24 @@ export function RepairsPage() {
       const aid = det.asset?.assetId ?? row.assetId;
       if (aid) {
         const asset = await assetService.getById(aid);
-        setRepairCompleteAsset(asset);
+        if (row.assetInstanceId) {
+          try {
+            const instanceDetail = await assetInstanceService.getById(row.assetInstanceId);
+            const existing = asset.instances ?? [];
+            const mergedInstances = [
+              instanceDetail,
+              ...existing.filter((i) => i.assetInstanceId !== instanceDetail.assetInstanceId),
+            ];
+            setRepairCompleteAsset({
+              ...asset,
+              instances: mergedInstances,
+            });
+          } catch {
+            setRepairCompleteAsset(asset);
+          }
+        } else {
+          setRepairCompleteAsset(asset);
+        }
       } else {
         setRepairCompleteAsset(null);
       }
@@ -357,7 +423,7 @@ export function RepairsPage() {
         actualCost: values.actualCost,
         result: values.result || undefined,
         detailedDescription: values.detail || null,
-        attachmentUrls: values.attachmentUrls.length > 0 ? values.attachmentUrls : null,
+        attachmentUrls: null,
       };
 
       await repairRequestService.complete(repairCompleteTaskId, payload);
@@ -497,10 +563,7 @@ export function RepairsPage() {
           <table className="asset-table repairs-table">
             <thead>
               <tr>
-                <th className="asset-table__cell asset-table__cell--checkbox">
-                  <input type="checkbox" />
-                </th>
-                <th>MÃ TÀI SẢN</th>
+                <th>MÃ CÁ THỂ</th>
                 <th>TÊN TÀI SẢN</th>
                 <th>TÌNH TRẠNG</th>
                 <th>NGÀY HỎNG</th>
@@ -514,22 +577,19 @@ export function RepairsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="repairs-table-empty">
+                  <td colSpan={9} className="repairs-table-empty">
                     Đang tải dữ liệu...
                   </td>
                 </tr>
               ) : filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="repairs-table-empty">
+                  <td colSpan={9} className="repairs-table-empty">
                     Không có dữ liệu.
                   </td>
                 </tr>
               ) : (
                 filteredData.map((row) => (
                   <tr key={row.id} className="asset-row">
-                    <td className="asset-table__cell asset-table__cell--checkbox">
-                      <input type="checkbox" />
-                    </td>
                     <td>
                       <button type="button" className="asset-code asset-code--link">
                         {row.assetCode}
@@ -604,60 +664,114 @@ export function RepairsPage() {
         </div>
       </div>
 
-      <Modal
-        open={detailOpen}
-        title={selected ? `Chi tiết yêu cầu SC - YC-${selected.assetRequestId}` : 'Chi tiết yêu cầu sửa chữa'}
-        onCancel={() => {
-          setDetailOpen(false);
-          setSelected(null);
-        }}
-        footer={[
-          <Button
-            key="close"
-            onClick={() => {
-              setDetailOpen(false);
-              setSelected(null);
-            }}
-          >
-            Đóng
-          </Button>,
-          canDirectorApprove ? (
-            <Button
-              key="approve"
-              type="primary"
+      {detailOpen ? (
+        <div className="repair-detail-modal-overlay" role="dialog" aria-modal="true">
+          <div className="repair-detail-modal">
+            <button
+              type="button"
+              className="repair-detail-modal__close-btn"
               onClick={() => {
-                setDecision('approved');
-                setComment('');
-                setApproveOpen(true);
+                setDetailOpen(false);
+                setSelected(null);
               }}
+              aria-label="Đóng"
             >
-              Phê duyệt
-            </Button>
-          ) : null,
-        ]}
-      >
-        {!selected ? (
-          <div>Không có dữ liệu.</div>
-        ) : (
-          <div style={{ display: 'grid', gap: 8 }}>
-            <div>
-              <b>Tài sản:</b> {[selected.assetCode, selected.assetName].filter(Boolean).join(' - ') || '—'}
+              <span className="repair-detail-modal__close">×</span>
+            </button>
+
+            <div className="repair-detail-modal__header">
+              <div className="repair-detail-modal__header-row">
+                <h2 className="repair-detail-modal__title">
+                  {selected
+                    ? `Chi tiết yêu cầu SC - YC-${selected.assetRequestId}`
+                    : 'Chi tiết yêu cầu sửa chữa'}
+                </h2>
+                {selected ? (
+                  <span className={getStatusClass(selected.status)}>
+                    {getStatusLabel(selected.status)}
+                  </span>
+                ) : null}
+              </div>
             </div>
-            <div>
-              <b>Tình trạng:</b> {selected.condition || '—'}
+
+            <div className="repair-detail-modal__body">
+              {!selected ? (
+                <div className="repair-detail-modal__empty">Không có dữ liệu.</div>
+              ) : (
+                <div className="repair-detail-modal__content">
+                  <div className="repair-detail-info-section">
+                    <h3 className="repair-detail-section-title">Thông tin yêu cầu sửa chữa</h3>
+                    <div className="repair-detail-info-grid">
+                      <div className="repair-detail-info-row">
+                        <div className="repair-detail-info-item">
+                          <label>Mã cá thể</label>
+                          <div className="repair-detail-info-value">{selected.assetCode || '—'}</div>
+                        </div>
+                        <div className="repair-detail-info-item">
+                          <label>Tên tài sản</label>
+                          <div className="repair-detail-info-value">{selected.assetName || '—'}</div>
+                        </div>
+                      </div>
+                      <div className="repair-detail-info-row">
+                        <div className="repair-detail-info-item">
+                          <label>Tình trạng</label>
+                          <div className="repair-detail-info-value">{selected.condition || '—'}</div>
+                        </div>
+                        <div className="repair-detail-info-item">
+                          <label>Ngày hỏng</label>
+                          <div className="repair-detail-info-value">{selected.brokenDate || '—'}</div>
+                        </div>
+                      </div>
+                      <div className="repair-detail-info-row">
+                        <div className="repair-detail-info-item">
+                          <label>Vị trí tài sản</label>
+                          <div className="repair-detail-info-value">{selected.location || '—'}</div>
+                        </div>
+                        <div className="repair-detail-info-item">
+                          <label>Phòng ban quản lý</label>
+                          <div className="repair-detail-info-value">{selected.department || '—'}</div>
+                        </div>
+                      </div>
+                      <div className="repair-detail-info-row">
+                        <div className="repair-detail-info-item repair-detail-info-item--full">
+                          <label>Số lượng</label>
+                          <div className="repair-detail-info-value">{selected.quantity}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-            <div>
-              <b>Ngày hỏng:</b> {selected.brokenDate || '—'}
-            </div>
-            <div>
-              <b>Phòng ban:</b> {selected.department || '—'}
-            </div>
-            <div>
-              <b>Trạng thái:</b> {getStatusLabel(selected.status)}
+
+            <div className="repair-detail-modal__footer">
+              {canDirectorApprove ? (
+                <button
+                  type="button"
+                  className="repair-detail-btn-approve"
+                  onClick={() => {
+                    setDecision('approved');
+                    setComment('');
+                    setApproveOpen(true);
+                  }}
+                >
+                  Phê duyệt
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="repair-detail-btn-close"
+                onClick={() => {
+                  setDetailOpen(false);
+                  setSelected(null);
+                }}
+              >
+                Đóng
+              </button>
             </div>
           </div>
-        )}
-      </Modal>
+        </div>
+      ) : null}
 
       <RepairStartModal
         open={repairStartOpen}

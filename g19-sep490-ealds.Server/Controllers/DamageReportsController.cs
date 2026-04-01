@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,7 @@ public class DamageReportsController : ControllerBase
 {
     private readonly EaldsDbContext _db;
     private readonly IAssetRequestNotificationService _requestNotifications;
+    private const int DamageRequestTypeId = 4;
     private const string DamageReportTitlePrefix = "Damage report -";
 
     public DamageReportsController(EaldsDbContext db, IAssetRequestNotificationService requestNotifications)
@@ -29,21 +31,34 @@ public class DamageReportsController : ControllerBase
         if (dto == null)
             return BadRequest("Request body is required.");
 
-        if (dto.AssetId <= 0 || dto.ReportedBy <= 0)
-            return BadRequest("AssetId and ReportedBy are required.");
+        if (dto.AssetInstanceId <= 0 || dto.ReportedBy <= 0)
+            return BadRequest("AssetInstanceId and ReportedBy are required.");
 
         if (dto.ReportDate == default)
             return BadRequest("ReportDate is required.");
 
-        var asset = await _db.Assets.FindAsync(dto.AssetId);
-        if (asset == null)
-            return NotFound("Asset not found.");
+        var instance = await _db.AssetInstances.FindAsync(dto.AssetInstanceId);
+        if (instance == null)
+            return NotFound("Asset instance not found.");
+        if (!dto.RequestTypeId.HasValue || dto.RequestTypeId.Value <= 0)
+            return BadRequest("RequestTypeId is required.");
+
+        var initialStepId = await _db.RequestTypes
+            .AsNoTracking()
+            .Where(rt => rt.RequestTypeId == dto.RequestTypeId.Value)
+            .SelectMany(rt => _db.WorkflowSteps.Where(ws => ws.WorkflowId == rt.WorkflowId))
+            .OrderBy(ws => ws.StepOrder)
+            .Select(ws => (int?)ws.StepId)
+            .FirstOrDefaultAsync();
+        if (!initialStepId.HasValue)
+            return BadRequest($"No workflow step configured for RequestTypeId '{dto.RequestTypeId.Value}'.");
 
         var assetRequest = new AssetRequest
         {
             UserId = dto.ReportedBy,
-            RequestTypeId = dto.RequestTypeId ?? 0,
-            AssetId = dto.AssetId,
+            RequestTypeId = dto.RequestTypeId.Value,
+            AssetId = instance.AssetId,
+            AssetInstanceId = instance.AssetInstanceId,
             // store a short title using the report date
             Title = $"Damage report - {dto.ReportDate:yyyy-MM-dd}",
             Description = dto.Description,
@@ -53,13 +68,13 @@ public class DamageReportsController : ControllerBase
             Status = 1,
             CreatedBy = dto.ReportedBy,
             CreateDate = DateTime.UtcNow,
-            StepId = 0
+            StepId = initialStepId.Value
         };
 
         _db.AssetRequests.Add(assetRequest);
 
-        // Mark asset as damaged immediately after reporting
-        asset.Status = (int)AssetStatus.Damaged;
+        // Mark physical instance as damaged immediately after reporting
+        instance.Status = (int)AssetStatus.Damaged;
 
         await _db.SaveChangesAsync();
 
@@ -106,8 +121,10 @@ public class DamageReportsController : ControllerBase
         if (ar == null)
             return NotFound();
 
-        // Only allow deleting damage-report requests created by this controller
-        if (string.IsNullOrWhiteSpace(ar.Title) || !ar.Title.StartsWith(DamageReportTitlePrefix))
+        // Accept both legacy title-based rows and request-type-based rows.
+        var isDamageByTitle = !string.IsNullOrWhiteSpace(ar.Title) && ar.Title.StartsWith(DamageReportTitlePrefix, StringComparison.OrdinalIgnoreCase);
+        var isDamageByType = ar.RequestTypeId == DamageRequestTypeId;
+        if (!isDamageByTitle && !isDamageByType)
             return BadRequest("Only damage report requests can be deleted via this endpoint.");
 
         // Remove children first because FK delete behavior is ClientSetNull (no cascade)

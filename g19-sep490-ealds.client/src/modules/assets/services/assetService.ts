@@ -33,6 +33,9 @@ export type AssetStatus =
 
 export interface MaintenanceSchedule {
   scheduleId: number;
+  /** Có giá trị khi quy định chỉ áp dụng cho một cá thể. */
+  assetInstanceId?: number | null;
+  instanceCode?: string | null;
   templateId?: number | null;
   content?: string | null;
   templateName?: string | null;
@@ -52,6 +55,15 @@ export interface AssetDocumentItem {
   documentType: number;
   fileUrl: string;
   uploadedDate: string;
+}
+
+export interface GuaranteeItem {
+  guaranteeId: number;
+  warrantyPeriodValue: number;
+  warrantyPeriodUnit: string;
+  warrantyConditions?: string | null;
+  startDate: string;
+  warrantyEndDate: string;
 }
 
 /** Catalog row from GET /api/assets */
@@ -78,6 +90,7 @@ export interface AssetInstanceResponse {
   assetTypeId: number;
   assetCode?: string | null;
   assetName?: string | null;
+  specification?: string | null;
   instanceCode: string;
   serialNumber?: string | null;
   warehouseId: number;
@@ -95,6 +108,8 @@ export interface AssetInstanceResponse {
   currentLocationId?: number | null;
   currentDepartmentId?: number | null;
   currentDepartmentName?: string | null;
+  /** Ghi chú trên bản ghi AssetLocation hiện tại (IsCurrent). */
+  currentLocationNote?: string | null;
   currentResponsibleEmployeeId?: number | null;
   currentResponsibleEmployeeName?: string | null;
   currentResponsibleUserId?: number | null;
@@ -106,6 +121,13 @@ export interface AssetInstanceResponse {
   depreciationAmount?: number | null;
   accumulatedDepreciation?: number | null;
   remainingValue?: number | null;
+  guaranteeId?: number | null;
+  warrantyPeriodValue?: number | null;
+  warrantyPeriodUnit?: string | null;
+  warrantyConditions?: string | null;
+  warrantyStartDate?: string | null;
+  warrantyEndDate?: string | null;
+  guarantees?: GuaranteeItem[] | null;
 }
 
 /** GET /api/assets/{id} — catalog + instances + maintenance + documents */
@@ -253,6 +275,15 @@ export interface UpdateAssetInstancePayload {
   contractNo?: string | null;
   condition?: string | null;
   note?: string | null;
+  warrantyPeriodValue?: number | null;
+  warrantyPeriodUnit?: string | null;
+  warrantyConditions?: string | null;
+  warrantyStartDate?: string | null;
+  warrantyEndDate?: string | null;
+  depreciationPeriod?: string | null;
+  depreciationAmount?: number | null;
+  accumulatedDepreciation?: number | null;
+  remainingValue?: number | null;
   assignedDepartmentId?: number | null;
   responsibleEmployeeId?: number | null;
   assignmentEffectiveDate?: string | null;

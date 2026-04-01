@@ -56,10 +56,15 @@ public class MaintenanceRequestsController : ControllerBase
                 {
                     RecordId = t.TaskId,
                     AssetRequestId = t.AssetRequestId ?? 0,
-                    Code = "SBB" + t.TaskId,
+                    Code = "SBD" + t.TaskId,
                     TransferDate = t.PlannedDate,
-                    AssetCode = t.AssetInstance.Asset.Code,
+                    AssetCode = t.AssetInstance.InstanceCode,
                     AssetName = t.AssetInstance.Asset.Name,
+                    AssetTypeName = t.AssetInstance.Asset.AssetType != null
+                        ? t.AssetInstance.Asset.AssetType.Name
+                        : null,
+                    AssetInstanceId = t.AssetInstanceId,
+                    InstanceCode = t.AssetInstance.InstanceCode,
                     FromDepartment = t.AssetInstance.AssetLocations
                         .Where(al => al.IsCurrent)
                         .Select(al => al.Department.Name)
@@ -76,9 +81,20 @@ public class MaintenanceRequestsController : ControllerBase
                         t.AssetRequest.Status == 1 ? "Chờ phê duyệt" :
                         t.AssetRequest.Status == 2 ? "Phê duyệt" :
                         t.AssetRequest.Status == 3 ? "Từ chối" :
-                        t.AssetRequest.Status == 4 ? "Phê duyệt" :
+                        t.AssetRequest.Status == 4 ? "Đang thực hiện" :
                         "Không xác định",
-                    Reason = t.AssetRequest.Description
+                    Reason = t.AssetRequest.Description,
+                    FromDepartmentId = t.AssetInstance.AssetLocations
+                        .Where(al => al.IsCurrent)
+                        .Select(al => al.DepartmentId)
+                        .FirstOrDefault(),
+                    ToDepartmentId = t.AssetInstance.AssetLocations
+                        .Where(al => al.IsCurrent)
+                        .Select(al => al.DepartmentId)
+                        .FirstOrDefault(),
+                    CreatedBy = t.AssetRequest.CreatedBy,
+                    IsSenderConfirmed = false,
+                    IsReceiverConfirmed = false
                 })
                 .ToListAsync();
 
@@ -102,12 +118,22 @@ public class MaintenanceRequestsController : ControllerBase
             : null;
 
         var title = dto.Title ?? $"Maintenance request for instance {dto.AssetInstanceId}";
+        var initialStepId = await _db.RequestTypes
+            .AsNoTracking()
+            .Where(rt => rt.RequestTypeId == _maintenanceRequestTypeId)
+            .SelectMany(rt => _db.WorkflowSteps.Where(ws => ws.WorkflowId == rt.WorkflowId))
+            .OrderBy(ws => ws.StepOrder)
+            .Select(ws => (int?)ws.StepId)
+            .FirstOrDefaultAsync();
+        if (!initialStepId.HasValue)
+            return BadRequest($"No workflow step configured for RequestTypeId '{_maintenanceRequestTypeId}'.");
 
         var assetRequest = new AssetRequest
         {
             UserId = dto.CreatedBy,
             RequestTypeId = _maintenanceRequestTypeId,
             AssetId = assetInstance.AssetId,
+            AssetInstanceId = dto.AssetInstanceId,
             Title = title,
             Description = dto.Description,
             ProposedData = null,
@@ -115,7 +141,7 @@ public class MaintenanceRequestsController : ControllerBase
             Status = 1,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow,
-            StepId = 0
+            StepId = initialStepId.Value
         };
 
         _db.AssetRequests.Add(assetRequest);
@@ -248,6 +274,8 @@ public class MaintenanceRequestsController : ControllerBase
         if (!isFinalApproved)
             return BadRequest("Only requests approved at final workflow step can be started.");
 
+        var task = await _db.MaintenanceTasks.FirstOrDefaultAsync(t => t.AssetRequestId == ar.AssetRequestId);
+
         var hasAllowedRoleFromToken =
             User.IsInRole("DIRECTOR") ||
             User.IsInRole("DepartmentManager") ||
@@ -291,7 +319,7 @@ public class MaintenanceRequestsController : ControllerBase
             .Select(r => r.RoleId)
             .ToListAsync();
 
-        var allowed = hasAllowedRoleFromToken || userRoles.Any(ur =>
+        var allowedByRole = hasAllowedRoleFromToken || userRoles.Any(ur =>
             allowedRoleIds.Contains(ur.RoleId) ||
             (ur.Role?.Code != null &&
                 (
@@ -313,6 +341,12 @@ public class MaintenanceRequestsController : ControllerBase
                     ur.Role.Name.ToUpper().Contains("TRUONG PHONG")
                 ))
         );
+        var allowedByOwnership =
+            ar.CreatedBy == actorUserId ||
+            task?.CreateBy == actorUserId ||
+            task?.AssignTo == actorUserId ||
+            task?.PerformerUserId == actorUserId;
+        var allowed = allowedByRole || allowedByOwnership;
 
         if (!allowed)
         {
@@ -330,7 +364,6 @@ public class MaintenanceRequestsController : ControllerBase
         ar.Status = 4;
 
         // mark related maintenance task as in-progress and persist start fields
-        var task = await _db.MaintenanceTasks.FirstOrDefaultAsync(t => t.AssetRequestId == ar.AssetRequestId);
         if (task != null)
         {
             if (dto.MaintenanceDate.HasValue)
@@ -418,6 +451,11 @@ public class MaintenanceRequestsController : ControllerBase
 
     private async Task<bool> IsFinalApprovedByWorkflowAsync(AssetRequest ar)
     {
+        // Backward-compatible: many existing flows mark "approved" directly on AssetRequest.Status
+        // without persisting final-step approval rows.
+        if (ar.Status == 2 || ar.Status == 4)
+            return true;
+
         var workflowId = await _db.RequestTypes.AsNoTracking()
             .Where(rt => rt.RequestTypeId == ar.RequestTypeId)
             .Select(rt => (int?)rt.WorkflowId)
@@ -495,24 +533,13 @@ public class MaintenanceRequestsController : ControllerBase
         var conditionBefore = dto.ConditionBefore ?? string.Empty;
         var conditionAfter = dto.DetailedDescription ?? dto.ConditionAfter ?? string.Empty;
 
-        var noteParts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(dto.ReportNumber))
-            noteParts.Add($"ReportNumber: {dto.ReportNumber}");
-        if (dto.ReturnToUseDate.HasValue)
-            noteParts.Add($"ReturnToUseDate: {dto.ReturnToUseDate.Value:O}");
-        if (!string.IsNullOrWhiteSpace(dto.TechnicalNote))
-            noteParts.Add(dto.TechnicalNote);
-        var technicalNote = noteParts.Count > 0 ? string.Join("\n", noteParts) : null;
-
         var mr = new MaintenanceRecord
         {
             TaskId = task.TaskId,
             AssetInstanceId = task.AssetInstanceId,
             ExecutionDate = executionDate,
             TotalCost = totalCost,
-            WorkPerformed = string.IsNullOrEmpty(technicalNote)
-                ? workPerformed
-                : (workPerformed + (string.IsNullOrEmpty(workPerformed) ? "" : "\n") + technicalNote),
+            WorkPerformed = workPerformed,
             ConditionBefore = conditionBefore,
             ConditionAfter = conditionAfter,
             Status = 1

@@ -33,9 +33,34 @@ export interface PurchaseOrderListItem {
   creatorDepartmentName?: string | null;
   assetCode?: string | null;
   assetName?: string | null;
+  accountantComment?: string | null;
+  directorComment?: string | null;
 }
 
-export interface PurchaseOrderDetail extends PurchaseOrderListItem {}
+export interface PurchaseOrderApprovalItem {
+  approvalId: number;
+  decisionDate: string;
+  comment: string | null;
+  roleCode: string | null;
+}
+
+export interface PurchaseOrderDetail extends PurchaseOrderListItem {
+  approvals?: PurchaseOrderApprovalItem[];
+}
+
+export interface PurchaseOrderLineItem {
+  lineId: number;
+  lineIndex: number;
+  itemName: string | null;
+  quantity: number;
+  unit: string | null;
+  modelCode: string | null;
+  estimatedPrice: string | null;
+  assetId: number | null;
+  assetCode: string | null;
+  assetName: string | null;
+  capitalizedAt: string | null;
+}
 
 export interface CreatePurchaseOrderPayload {
   userId: number;
@@ -61,6 +86,13 @@ export const purchaseOrderService = {
   async getById(id: number): Promise<PurchaseOrderDetail> {
     const response = await purchaseApi.get<PurchaseOrderDetail>(
       `/api/Assets/Requests/purchase/${id}`
+    );
+    return response.data;
+  },
+
+  async getPurchaseLines(id: number): Promise<PurchaseOrderLineItem[]> {
+    const response = await purchaseApi.get<PurchaseOrderLineItem[]>(
+      `/api/Assets/Requests/purchase/${id}/lines`
     );
     return response.data;
   },

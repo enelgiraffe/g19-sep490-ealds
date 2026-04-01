@@ -21,8 +21,11 @@ maintenanceScheduleApi.interceptors.request.use((config) => {
 export interface MaintenanceScheduleResponse {
   scheduleId: number;
   assetId: number;
+  assetInstanceId?: number | null;
+  instanceCode?: string | null;
   templateId?: number | null;
   content?: string | null;
+  templateName?: string | null;
   scheduleType: number | string;
   intervalUnit?: number | string | null;
   intervalValue?: number | null;
@@ -62,6 +65,13 @@ export const maintenanceScheduleService = {
   async findByAssetId(assetId: number): Promise<MaintenanceScheduleResponse[]> {
     const response = await maintenanceScheduleApi.get<MaintenanceScheduleResponse[]>(
       `/api/MaintenanceSchedule/find-by/${assetId}`
+    );
+    return response.data;
+  },
+
+  async findByInstanceId(instanceId: number): Promise<MaintenanceScheduleResponse[]> {
+    const response = await maintenanceScheduleApi.get<MaintenanceScheduleResponse[]>(
+      `/api/MaintenanceSchedule/find-by-instance/${instanceId}`
     );
     return response.data;
   },

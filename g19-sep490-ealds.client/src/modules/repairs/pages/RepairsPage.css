@@ -163,6 +163,169 @@
   cursor: default;
 }
 
+.repair-detail-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.repair-detail-modal {
+  position: relative;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  width: 900px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.repair-detail-modal__close-btn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.repair-detail-modal__close {
+  font-size: 24px;
+  color: #fe3720;
+  font-weight: 300;
+}
+
+.repair-detail-modal__header {
+  background: #ffe5e0;
+  padding: 16px 24px;
+  border-bottom: 1px solid #ffd4cc;
+}
+
+.repair-detail-modal__header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding-right: 40px;
+}
+
+.repair-detail-modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #fe3720;
+  flex: 1;
+  min-width: 0;
+}
+
+.repair-detail-modal__body {
+  padding: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.repair-detail-modal__content {
+  padding: 24px;
+}
+
+.repair-detail-modal__empty {
+  padding: 24px;
+  color: #6b7280;
+}
+
+.repair-detail-info-section {
+  margin-bottom: 8px;
+}
+
+.repair-detail-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 16px;
+}
+
+.repair-detail-info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.repair-detail-info-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.repair-detail-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.repair-detail-info-item--full {
+  grid-column: 1 / -1;
+}
+
+.repair-detail-info-item label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.repair-detail-info-value {
+  font-size: 14px;
+  color: #111827;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+}
+
+.repair-detail-modal__footer {
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  justify-content: flex-end;
+}
+
+.repair-detail-btn-approve {
+  background: #fe3720;
+  border: 1px solid #fe3720;
+  color: #fff;
+  height: 40px;
+  padding: 0 24px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.repair-detail-btn-approve:hover {
+  background: #e5321c;
+  border-color: #e5321c;
+}
+
+.repair-detail-btn-close {
+  background: #6b7280;
+  border: 1px solid #6b7280;
+  color: #fff;
+  height: 40px;
+  padding: 0 24px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.repair-detail-btn-close:hover {
+  background: #4b5563;
+  border-color: #4b5563;
+}
+
 /* Modal "Sửa chữa tài sản" — header đỏ, nội dung form */
 .repair-form-modal .ant-modal-content {
   padding: 0;

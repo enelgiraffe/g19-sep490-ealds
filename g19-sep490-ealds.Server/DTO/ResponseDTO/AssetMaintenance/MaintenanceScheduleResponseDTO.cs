@@ -8,9 +8,15 @@ public class MaintenanceScheduleResponseDTO
 
     public int AssetId { get; set; }
 
+    public int? AssetInstanceId { get; set; }
+
+    public string? InstanceCode { get; set; }
+
     public int? TemplateId { get; set; }
 
     public string? Content { get; set; }
+
+    public string? TemplateName { get; set; }
 
     public ScheduleType ScheduleType { get; set; }
 

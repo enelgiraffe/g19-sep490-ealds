@@ -31,36 +31,36 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
             case MaintenanceFrequencyType.OneTime:
 
                 if (create.RepeatIntervalValue != 0)
-                    throw new Exception("B?o tr� m?t l?n kh�ng du?c c� gi� tr? kho?ng th?i gian l?p l?i");
+                    throw new Exception("Bảo trì một lần không được có giá trị khoảng thời gian lặp lại");
 
                 if (create.RepeatIntervalUnit != 0)
-                    throw new Exception("B?o tr� m?t l?n kh�ng du?c c� don v? kho?ng th?i gian");
+                    throw new Exception("Bảo trì một lần không được có đơn vị khoảng thời gian");
 
                 break;
             //validate loaoij d?nh k?
             case MaintenanceFrequencyType.Periodic:
 
                 if (create.RepeatIntervalValue <= 0)
-                    throw new Exception("B?o tr� d?nh k? ph?i c� gi� tr? kho?ng th?i gian > 0");
+                    throw new Exception("Bảo trì định kỳ phải có giá trị khoảng thời gian > 0");
 
                 if (!Enum.IsDefined(typeof(MaintenanceRepeatIntervalUnit), create.RepeatIntervalUnit))
-                    throw new Exception("�on v? kho?ng th?i gian kh�ng h?p l?");
+                    throw new Exception("Đơn vị khoảng thời gian không hợp lệ");
 
                 var unit = create.RepeatIntervalUnit;
                 //business rule th�m cho t?ng laoij don v? 
                 switch (unit)
                 {
                     case MaintenanceRepeatIntervalUnit.Day when create.RepeatIntervalValue < 7:
-                        throw new Exception("B?o tr� theo ng�y ph?i >= 7 ng�y");
+                        throw new Exception("Bảo trì theo ngày phải >= 7 ngày");
 
                     case MaintenanceRepeatIntervalUnit.Week when create.RepeatIntervalValue < 2:
-                        throw new Exception("B?o tr� theo tu?n ph?i >= 2 tu?n");
+                        throw new Exception("Bảo trì theo tuần phải >= 2 tuần");
                 }
 
                 break;
 
             default:
-                throw new Exception("Lo?i b?o tr� kh�ng h?p l?");
+                throw new Exception("Loại bảo trì không hợp lệ");
         }
     }
     public async Task<MaintenanceTemplateResponseDTO> CreateTemplateAsync(TemplateCreateDTO create)
@@ -70,14 +70,14 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
             //ki?m tra AssetType c� t?n t?i kh�ng
             var type = await _context.AssetTypes.AnyAsync(x => x.AssetTypeId == create.AssetTypeId);
             if (!type)
-                throw new Exception("Kh�ng c� lo?i t�i s?n n�o");
+                throw new Exception("Không có loại tài sản nào");
 
             ValidateFrequency(create);
 
             var existTemplate = await _context.MaintenanceTemplates.AnyAsync(x => x.AssetTypeId == create.AssetTypeId
                                                                                   && x.Name == create.Name && x.IsActive == true);
             if (existTemplate)
-                throw new Exception("L?ch b?o tr� chung n�y d� t?n t?i cho lo?i t�i s?n n�y");
+                throw new Exception("Lịch bảo trì chung này đã tồn tại cho loại tài sản này");
 
             MaintenanceTemplate entity = _mapper.CreateToEntity(create);
             await _context.MaintenanceTemplates.AddAsync(entity);
@@ -86,7 +86,7 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "L?i khi t?o m?u b?o tr�");
+            _logger.LogError(ex, "Lỗi khi tạo mẫu bảo trì");
             throw;
         }
     }
@@ -94,7 +94,7 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
     public async Task<MaintenanceTemplateResponseDTO> FindTemplateByIdAsync(int id)
     {
         var template = await _context.MaintenanceTemplates.FindAsync(id)
-            ?? throw new KeyNotFoundException($"Kh�ng c� Id {id} t?n t?i");
+            ?? throw new KeyNotFoundException($"Không có Id {id} tồn tại");
 
         return _mapper.EntityToResponse(template);
     }
@@ -103,7 +103,7 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
     {
         var template = await _context.MaintenanceTemplates.ToListAsync();
         if (template == null)
-            throw new Exception("Kh�ng c� b?n ghi n�o");
+            throw new Exception("Không có bản ghi nào");
         
         return _mapper.ListEntityToResponse(template);
     }
@@ -111,7 +111,7 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
     public async Task<bool> HardDeleteTemplateAsync(int id)
     {
         var template = await _context.MaintenanceTemplates.FindAsync(id)
-            ?? throw new KeyNotFoundException($"Kh�ng c� Id {id} t?n t?i");
+            ?? throw new KeyNotFoundException($"Không có Id {id} tồn tại");
 
         _context.MaintenanceTemplates.Remove(template);
         await _context.SaveChangesAsync();
@@ -126,7 +126,7 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
     public async Task<MaintenanceTemplateResponseDTO> ToggleTemplateStatusAsync(int id)
     {
         var template = await _context.MaintenanceTemplates.FindAsync(id)
-            ?? throw new KeyNotFoundException($"Kh�ng c� Id {id} t?n t?i");
+            ?? throw new KeyNotFoundException($"Không có Id {id} tồn tại");
 
         template.IsActive = !template.IsActive;
 
@@ -137,18 +137,41 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
     public async Task<MaintenanceTemplateResponseDTO> UpdatTemplateAsync(int id, TemplateUpdateDTO update)
     {
         var template = await _context.MaintenanceTemplates.FindAsync(id)
-            ?? throw new KeyNotFoundException($"Kh�ng c� Id {id} t?n t?i");
-        if (await _context.MaintenanceTemplates.AnyAsync(x => x.Name == update.Name))
+            ?? throw new KeyNotFoundException($"Không có Id {id} tồn tại");
+
+        var normalizedName = (update.Name ?? string.Empty).Trim();
+        var isSameCurrentTemplate = template.AssetTypeId == update.AssetTypeId &&
+                                    string.Equals((template.Name ?? string.Empty).Trim(), normalizedName,
+                                        StringComparison.OrdinalIgnoreCase);
+
+        if (!isSameCurrentTemplate && await _context.MaintenanceTemplates.AnyAsync(x =>
+                x.TemplateId != id &&
+                x.AssetTypeId == update.AssetTypeId &&
+                x.IsActive &&
+                x.Name.ToLower() == normalizedName.ToLower()))
         {
-            throw new Exception("T�n d� du?c s? d?ng");
+            throw new Exception("Tên đã được sử dụng");
         }
+
+        ValidateFrequency(new TemplateCreateDTO
+        {
+            AssetTypeId = update.AssetTypeId,
+            Name = update.Name,
+            Content = update.Content,
+            FrequencyType = update.FrequencyType,
+            RepeatIntervalValue = update.RepeatIntervalValue,
+            RepeatIntervalUnit = update.RepeatIntervalUnit,
+            IsActive = template.IsActive
+        });
+
         var result = _mapper.UpdateToEntity(update);
         template.AssetTypeId = result.AssetTypeId;
-        template.Name = result.Name;
+        template.Name = normalizedName;
         template.Content = result.Content;
         template.FrequencyType = result.FrequencyType;
         template.RepeatIntervalValue = result.RepeatIntervalValue;
         template.RepeatIntervalUnit = result.RepeatIntervalUnit;
+        await _context.SaveChangesAsync();
 
         return _mapper.EntityToResponse(template);
     }

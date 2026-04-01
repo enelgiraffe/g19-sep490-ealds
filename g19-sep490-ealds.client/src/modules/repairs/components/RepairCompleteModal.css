@@ -87,6 +87,23 @@
   min-height: 96px;
 }
 
+.repair-complete-money-input {
+  position: relative;
+}
+
+.repair-complete-money-input .repair-complete-input {
+  padding-right: 34px;
+}
+
+.repair-complete-money-suffix {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280;
+  font-size: 13px;
+}
+
 .repair-complete-required {
   color: #ef4444;
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import './App.css';
+import './modules/assets/pages/AssetListPage.css';
 
 const MOCK_ASSETS = [
   {
@@ -113,9 +114,7 @@ function App() {
           <table className="asset-table">
             <thead>
               <tr>
-                <th className="asset-table__cell asset-table__cell--checkbox">
-                  <input type="checkbox" />
-                </th>
+                <th className="asset-table__cell asset-table__cell--stt">STT</th>
                 <th>MÃ TÀI SẢN</th>
                 <th>TÊN TÀI SẢN</th>
                 <th>LOẠI TÀI SẢN</th>
@@ -127,11 +126,9 @@ function App() {
               </tr>
             </thead>
             <tbody>
-              {assets.map((asset) => (
+              {assets.map((asset, index) => (
                 <tr key={asset.id} className="asset-row">
-                  <td className="asset-table__cell asset-table__cell--checkbox">
-                    <input type="checkbox" />
-                  </td>
+                  <td className="asset-table__cell asset-table__cell--stt">{index + 1}</td>
                   <td className="asset-code asset-code--link">{asset.code}</td>
                   <td>{asset.name}</td>
                   <td>{asset.type}</td>

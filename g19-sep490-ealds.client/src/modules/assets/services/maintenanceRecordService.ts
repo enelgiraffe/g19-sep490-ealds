@@ -21,6 +21,8 @@ maintenanceRecordApi.interceptors.request.use((config) => {
 export interface MaintenanceRecordResponse {
   recordId: number;
   taskId: number;
+  assetInstanceId: number;
+  instanceCode: string;
   executionDate: string;
   totalCost: number;
   workPerformed: string;
@@ -28,6 +30,12 @@ export interface MaintenanceRecordResponse {
   conditionAfter: string;
   technicalNote?: string | null;
   status: number;
+  /** maintenance | repair — từ API; mặc định coi là bảo dưỡng nếu thiếu */
+  recordSource?: string | null;
+}
+
+export function isRepairMaintenanceRecord(record: MaintenanceRecordResponse): boolean {
+  return String(record.recordSource ?? '').toLowerCase() === 'repair';
 }
 
 export function getMaintenanceRecordStatusLabel(status: number): string {
@@ -47,6 +55,13 @@ export const maintenanceRecordService = {
   async getByAssetId(assetId: number): Promise<MaintenanceRecordResponse[]> {
     const response = await maintenanceRecordApi.get<MaintenanceRecordResponse[]>(
       `/api/MaintenanceRecord/asset/${assetId}`
+    );
+    return response.data;
+  },
+
+  async getByInstanceId(instanceId: number): Promise<MaintenanceRecordResponse[]> {
+    const response = await maintenanceRecordApi.get<MaintenanceRecordResponse[]>(
+      `/api/MaintenanceRecord/instance/${instanceId}`
     );
     return response.data;
   },

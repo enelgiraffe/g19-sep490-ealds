@@ -129,6 +129,7 @@ public class AssetsController : ControllerBase
         var asset = await _context.Assets
             .Include(a => a.AssetType)
             .Include(a => a.MaintenanceSchedules).ThenInclude(s => s.Template)
+            .Include(a => a.AssetInstances).ThenInclude(i => i.MaintenanceSchedules).ThenInclude(s => s.Template)
             .Include(a => a.AssetInstances).ThenInclude(i => i.Warehouse)
             .Include(a => a.AssetInstances).ThenInclude(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(a => a.AssetInstances).ThenInclude(i => i.AssetUsages).ThenInclude(u => u.Employee)
@@ -163,7 +164,18 @@ public class AssetsController : ControllerBase
             .ToListAsync();
 
         var schedules = asset.MaintenanceSchedules
+            .Where(s => s.IsActive)
             .Select(ToMaintenanceScheduleDto)
+            .Concat(
+                asset.AssetInstances.SelectMany(inst =>
+                    inst.MaintenanceSchedules.Where(s => s.IsActive).Select(s =>
+                    {
+                        var dto = ToMaintenanceScheduleDto(s);
+                        dto.AssetInstanceId = inst.AssetInstanceId;
+                        dto.InstanceCode = inst.InstanceCode;
+                        return dto;
+                    })))
+            .OrderBy(s => s.ScheduleId)
             .ToList();
 
         var baseDto = ToAssetResponseDTO(asset,
@@ -825,6 +837,10 @@ public class AssetsController : ControllerBase
                 .Where(al => al.IsCurrent)
                 .Select(al => al.Department != null ? al.Department.Name : null)
                 .FirstOrDefault(),
+            CurrentLocationNote = i.AssetLocations
+                .Where(al => al.IsCurrent)
+                .Select(al => al.Note)
+                .FirstOrDefault(),
             CurrentResponsibleEmployeeId = i.AssetUsages
                 .Where(u => u.IsCurrent)
                 .Select(u => (int?)u.EmployeeId)
@@ -865,6 +881,8 @@ public class AssetsController : ControllerBase
         return new MaintenanceScheduleDTO
         {
             ScheduleId = s.ScheduleId,
+            AssetInstanceId = s.AssetInstanceId,
+            InstanceCode = s.AssetInstance?.InstanceCode,
             TemplateId = s.TemplateId,
             Content = s.Content,
             TemplateName = s.Template?.Name,

@@ -1681,7 +1681,8 @@ public class InventoryController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(code)) return false;
         var c = code.Trim().ToLowerInvariant().Replace(' ', '_');
-        return c is "department_head" or "departmenthead" or "trưởng_phòng" or "truong_phong";
+        return c is "department_head" or "departmenthead" or "dept_head"
+            or "trưởng_phòng" or "truong_phong";
     }
 
     private static bool IsGlobalInventoryRole(string? code)

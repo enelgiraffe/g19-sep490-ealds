@@ -51,6 +51,7 @@ public class ProfileController : ControllerBase
             Gender = employee?.Gender,
             ImageUrl = employee?.ImageUrl,
             DepartmentName = employee?.Department?.Name,
+            DepartmentId = employee?.DepartmentId,
             Role = roles.FirstOrDefault() ?? string.Empty
         };
 
@@ -103,6 +104,7 @@ public class ProfileController : ControllerBase
             Gender = employee.Gender,
             ImageUrl = employee.ImageUrl,
             DepartmentName = employee.Department?.Name,
+            DepartmentId = employee.DepartmentId,
             Role = role ?? string.Empty
         };
 

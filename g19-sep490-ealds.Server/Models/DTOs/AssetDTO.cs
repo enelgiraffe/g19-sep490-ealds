@@ -112,6 +112,15 @@ public class UpdateAssetInstanceDTO
     public string? ContractNo { get; set; }
     public string? Condition { get; set; }
     public string? Note { get; set; }
+    public int? WarrantyPeriodValue { get; set; }
+    public string? WarrantyPeriodUnit { get; set; }
+    public string? WarrantyConditions { get; set; }
+    public DateOnly? WarrantyStartDate { get; set; }
+    public DateOnly? WarrantyEndDate { get; set; }
+    public DateOnly? DepreciationPeriod { get; set; }
+    public decimal? DepreciationAmount { get; set; }
+    public decimal? AccumulatedDepreciation { get; set; }
+    public decimal? RemainingValue { get; set; }
 
     public int? AssignedDepartmentId { get; set; }
     public int? ResponsibleEmployeeId { get; set; }
@@ -141,6 +150,9 @@ public class DeleteAssetInstanceDTO
 public class MaintenanceScheduleDTO
 {
     public int ScheduleId { get; set; }
+    /// <summary>Null = quy định áp dụng chung cho toàn bộ cá thể của tài sản.</summary>
+    public int? AssetInstanceId { get; set; }
+    public string? InstanceCode { get; set; }
     public int? TemplateId { get; set; }
     public string? Content { get; set; }
     public string? TemplateName { get; set; }
@@ -203,6 +215,7 @@ public class AssetInstanceResponseDTO
     public int AssetTypeId { get; set; }
     public string? AssetCode { get; set; }
     public string? AssetName { get; set; }
+    public string? Specification { get; set; }
     public string InstanceCode { get; set; } = null!;
     public string? SerialNumber { get; set; }
     public int WarehouseId { get; set; }
@@ -221,6 +234,8 @@ public class AssetInstanceResponseDTO
     public int? CurrentLocationId { get; set; }
     public int? CurrentDepartmentId { get; set; }
     public string? CurrentDepartmentName { get; set; }
+    /// <summary>Note on the current <see cref="AssetLocation"/> row (IsCurrent).</summary>
+    public string? CurrentLocationNote { get; set; }
     public int? CurrentResponsibleEmployeeId { get; set; }
     public string? CurrentResponsibleEmployeeName { get; set; }
     public int? CurrentResponsibleUserId { get; set; }
@@ -233,4 +248,15 @@ public class AssetInstanceResponseDTO
     public decimal? DepreciationAmount { get; set; }
     public decimal? AccumulatedDepreciation { get; set; }
     public decimal? RemainingValue { get; set; }
+    public List<GuaranteeDTO>? Guarantees { get; set; }
+}
+
+public class GuaranteeDTO
+{
+    public int GuaranteeId { get; set; }
+    public int WarrantyPeriodValue { get; set; }
+    public string WarrantyPeriodUnit { get; set; } = null!;
+    public string? WarrantyConditions { get; set; }
+    public DateOnly StartDate { get; set; }
+    public DateOnly WarrantyEndDate { get; set; }
 }

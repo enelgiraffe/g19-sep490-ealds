@@ -65,8 +65,11 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
         MaintenanceScheduleResponseDTO response = new MaintenanceScheduleResponseDTO();
         response.ScheduleId = entity.ScheduleId;
         response.AssetId = entity.AssetId ?? 0;
+        response.AssetInstanceId = entity.AssetInstanceId;
+        response.InstanceCode = entity.AssetInstance?.InstanceCode;
         response.TemplateId = entity.TemplateId;
         response.Content = entity.Content;
+        response.TemplateName = entity.Template?.Name;
         response.ScheduleType = (ScheduleType)entity.ScheduleType;
         var (iv, iu) = ReadRepeatIntervalFromEntity(entity);
         response.IntervalValue = iv;
@@ -76,7 +79,7 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
         response.NextDueDate = entity.NextDueDate;
         response.IsActive = entity.IsActive;
         response.CreateBy = entity.CreateBy;
-        response.CreateDate = DateTime.UtcNow.AddHours(7);
+        response.CreateDate = entity.CreateDate;
         return response;
     }
 

@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button, Modal, message } from 'antd';
-import { DownloadOutlined, PlusOutlined } from '@ant-design/icons';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Button, message } from 'antd';
+import { DownloadOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   assetInstanceService,
-  formatVnd,
   getStatusLabel,
   type AssetInstanceResponse,
   type GetAssetInstancesParams,
@@ -12,49 +11,57 @@ import {
 import '../../assets/pages/AssetListPage.css';
 import './AccountantAssetListPage.css';
 
-interface AccountantAssetRow {
-  key: string;
+interface AccountantAssetItem {
   id: number;
-  /** Catalog Asset id for /assets/:id */
-  catalogAssetId: number;
   code: string;
   name: string;
   type: string;
-  location: string;
   quantity: number;
-  price: string;
-  status: 'in-use' | 'pending-use';
-  statusLabel: string;
-  depreciation: string;
 }
 
-function mapAssetToRow(a: AssetInstanceResponse): AccountantAssetRow {
-  const isInUse = a.status === 1; // InUse
-  const depValue = Math.max(0, a.originalPrice - a.currentValue);
+interface AccountantInstanceItem {
+  assetInstanceId: number;
+  instanceCode: string;
+  serialNumber: string;
+  status: string;
+  originalPrice: string;
+  currentValue: string;
+  statusColor: 'green' | 'gray';
+}
+
+function formatVnd(value: number): string {
+  return (
+    new Intl.NumberFormat('vi-VN', {
+      style: 'decimal',
+      minimumFractionDigits: 0,
+    }).format(value) + ' đ'
+  );
+}
+
+function mapInstanceToItem(a: AssetInstanceResponse): AccountantInstanceItem {
+  const statusName = a.statusName ?? 'Available';
+  const activeStatuses = ['Available', 'InUse', 'InMaintenance', 'Reserved'];
+  const statusColor: 'green' | 'gray' =
+    activeStatuses.includes(statusName) ? 'green' : 'gray';
   return {
-    key: String(a.assetInstanceId),
-    id: a.assetInstanceId,
-    catalogAssetId: a.assetId,
-    code: a.instanceCode,
-    name: a.assetName ?? a.assetCode ?? a.instanceCode,
-    type: '—',
-    location: a.warehouseName ?? '—',
-    quantity: 1,
-    price: formatVnd(a.currentValue),
-    status: isInUse ? 'in-use' : 'pending-use',
-    statusLabel: getStatusLabel(a.statusName),
-    depreciation: formatVnd(depValue),
+    assetInstanceId: a.assetInstanceId,
+    instanceCode: a.instanceCode,
+    serialNumber: a.serialNumber ?? '—',
+    status: getStatusLabel(statusName),
+    originalPrice: formatVnd(a.originalPrice),
+    currentValue: formatVnd(a.currentValue),
+    statusColor,
   };
 }
 
 export function AccountantAssetListPage() {
-  const [data, setData] = useState<AccountantAssetRow[]>([]);
+  const [allInstances, setAllInstances] = useState<AssetInstanceResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState('');
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
   const [assetTypeFilter, setAssetTypeFilter] = useState<number | undefined>(undefined);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [expandedAssetId, setExpandedAssetId] = useState<number | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -73,12 +80,12 @@ export function AccountantAssetListPage() {
     assetInstanceService
       .getAll(params)
       .then((list) => {
-        if (!cancelled) setData(list.map(mapAssetToRow));
+        if (!cancelled) setAllInstances(list);
       })
       .catch(() => {
         if (!cancelled) {
           message.error('Không tải được danh sách tài sản.');
-          setData([]);
+          setAllInstances([]);
         }
       })
       .finally(() => {
@@ -87,31 +94,42 @@ export function AccountantAssetListPage() {
     return () => {
       cancelled = true;
     };
-  }, [keyword, statusFilter, assetTypeFilter, refreshKey]);
+  }, [keyword, statusFilter, assetTypeFilter]);
 
-  const handleDeleteAsset = (asset: AccountantAssetRow) => {
-    Modal.confirm({
-      title: 'Xóa tài sản',
-      content: `Bạn có chắc muốn xóa tài sản "${asset.name}" (${asset.code})?`,
-      okText: 'Xóa',
-      okType: 'danger',
-      cancelText: 'Hủy',
-      async onOk() {
-        try {
-          await assetInstanceService.softDelete(asset.id, { status: 4, reason: null });
-          message.success('Đã gửi yêu cầu xóa (Disposed) lên hệ thống.');
-          setRefreshKey((k) => k + 1);
-        } catch {
-          message.error('Xóa tài sản thất bại. Vui lòng thử lại.');
-        }
-      },
-    });
+  const assets: AccountantAssetItem[] = useMemo(() => {
+    const grouped = new Map<number, AccountantAssetItem>();
+    for (const item of allInstances) {
+      const current = grouped.get(item.assetId);
+      if (current) {
+        current.quantity += 1;
+      } else {
+        grouped.set(item.assetId, {
+          id: item.assetId,
+          code: item.assetCode ?? item.instanceCode,
+          name: item.assetName ?? item.assetCode ?? item.instanceCode,
+          type: '—',
+          quantity: 1,
+        });
+      }
+    }
+    return Array.from(grouped.values());
+  }, [allInstances]);
+
+  const instancesMap = useMemo(() => {
+    const grouped: Record<number, AccountantInstanceItem[]> = {};
+    for (const item of allInstances) {
+      const key = item.assetId;
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(mapInstanceToItem(item));
+    }
+    return grouped;
+  }, [allInstances]);
+
+  const handleAssetCodeClick = (assetId: number) => {
+    setExpandedAssetId((prev) => (prev === assetId ? null : assetId));
   };
-
-  const statusPillClass = (row: AccountantAssetRow) =>
-    row.status === 'in-use'
-      ? 'asset-status-pill asset-status-pill--active'
-      : 'asset-status-pill asset-status-pill--inactive';
+  const selectedListAsset =
+    expandedAssetId != null ? assets.find((a) => a.id === expandedAssetId) : undefined;
 
   return (
     <div className="asset-page">
@@ -189,73 +207,153 @@ export function AccountantAssetListPage() {
           </div>
         </div>
 
-        <div className="asset-table-wrapper">
-          <table className="asset-table">
-            <thead>
-              <tr>
-                <th className="asset-table__cell asset-table__cell--checkbox">
-                  <input type="checkbox" />
-                </th>
-                <th>MÃ TÀI SẢN</th>
-                <th>TÊN TÀI SẢN</th>
-                <th>LOẠI TÀI SẢN</th>
-                <th>VỊ TRÍ TÀI SẢN</th>
-                <th>SỐ LƯỢNG</th>
-                <th>GIÁ</th>
-                <th>TRẠNG THÁI</th>
-                <th>GIÁ TRỊ KHẤU HAO</th>
-                <th className="asset-table__cell asset-table__cell--actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {data.length === 0 ? (
-                <tr>
-                  <td colSpan={10} style={{ textAlign: 'center', padding: '16px' }}>
-                    Không có dữ liệu.
-                  </td>
-                </tr>
-              ) : (
-                data.map((row) => (
-                  <tr key={row.key} className="asset-row">
-                    <td className="asset-table__cell asset-table__cell--checkbox">
-                      <input type="checkbox" />
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="asset-code asset-code--link"
-                        onClick={() => navigate(`/assets/${row.catalogAssetId}`)}
-                      >
-                        {row.code}
-                      </button>
-                    </td>
-                    <td>{row.name}</td>
-                    <td>{row.type}</td>
-                    <td>{row.location}</td>
-                    <td className="asset-align-right">{row.quantity}</td>
-                    <td className="asset-align-right">{row.price}</td>
-                    <td>
-                      <span className={statusPillClass(row)}>{row.statusLabel}</span>
-                    </td>
-                    <td className="asset-align-right">{row.depreciation}</td>
-                    <td className="asset-table__cell asset-table__cell--actions">
-                      <button
-                        type="button"
-                        className="asset-row__more-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteAsset(row);
-                        }}
-                        title="Xóa"
-                      >
-                        🗑
-                      </button>
-                    </td>
+        <div
+          className={
+            expandedAssetId != null
+              ? 'asset-list-split asset-list-split--with-panel'
+              : 'asset-list-split'
+          }
+        >
+          <div className="asset-list-split__top">
+            <div className="asset-table-wrapper">
+              <table className="asset-table asset-table--compact">
+                <thead>
+                  <tr>
+                    <th className="asset-table__cell asset-table__cell--stt">STT</th>
+                    <th>MÃ TÀI SẢN</th>
+                    <th>TÊN TÀI SẢN</th>
+                    <th>LOẠI TÀI SẢN</th>
+                    <th>SỐ LƯỢNG</th>
+                    <th className="asset-table__cell asset-table__cell--actions" />
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {assets.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '16px' }}>
+                        Không có dữ liệu.
+                      </td>
+                    </tr>
+                  ) : (
+                    assets.map((asset, index) => (
+                      <tr
+                        key={asset.id}
+                        className={
+                          expandedAssetId === asset.id
+                            ? 'asset-row asset-row--selected'
+                            : 'asset-row'
+                        }
+                      >
+                        <td className="asset-table__cell asset-table__cell--stt">{index + 1}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="asset-code asset-code--link"
+                            onClick={() => handleAssetCodeClick(asset.id)}
+                          >
+                            {expandedAssetId === asset.id ? '▼ ' : '▶ '}
+                            {asset.code}
+                          </button>
+                        </td>
+                        <td>{asset.name}</td>
+                        <td>{asset.type}</td>
+                        <td className="asset-align-right">{asset.quantity}</td>
+                        <td className="asset-table__cell asset-table__cell--actions">
+                          <div className="asset-row__more">
+                            <button
+                              type="button"
+                              className="asset-row__more-btn asset-row__more-btn--icon"
+                              aria-label="Xem chi tiết"
+                              onClick={() => navigate(`/assets/${asset.id}`)}
+                            >
+                              <EyeOutlined />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {expandedAssetId != null && (
+            <div className="asset-list-split__bottom">
+              <div className="asset-instances-panel">
+                <div className="asset-instances-panel__header">
+                  Cá thể tài sản: <strong>{selectedListAsset?.code ?? expandedAssetId}</strong>
+                  {selectedListAsset?.name ? ` — ${selectedListAsset.name}` : null}
+                </div>
+                <div className="asset-instances-panel__body">
+                  {instancesMap[expandedAssetId]?.length ? (
+                    <div className="asset-table-wrapper asset-table-wrapper--panel">
+                      <table className="asset-table asset-table--panel">
+                        <thead>
+                          <tr>
+                            <th className="asset-table__cell asset-table__cell--stt">STT</th>
+                            <th>MÃ CÁ THỂ</th>
+                            <th>SERIAL NUMBER</th>
+                            <th>TRẠNG THÁI</th>
+                            <th>GIÁ GỐC</th>
+                            <th>GIÁ TRỊ HIỆN TẠI</th>
+                            <th className="asset-table__cell asset-table__cell--actions" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {instancesMap[expandedAssetId].map((instance, index) => (
+                            <tr key={instance.assetInstanceId} className="asset-instance-row">
+                              <td className="asset-table__cell asset-table__cell--stt">{index + 1}</td>
+                              <td>
+                                <Link
+                                  className="asset-code asset-code--link"
+                                  to={`/asset-instances/${instance.assetInstanceId}`}
+                                  state={{
+                                    backToPath: '/accountant-assets',
+                                    backLabel: '← Quay lại danh sách tài sản',
+                                  }}
+                                >
+                                  {instance.instanceCode}
+                                </Link>
+                              </td>
+                              <td>{instance.serialNumber}</td>
+                              <td>
+                                <span
+                                  className={
+                                    instance.statusColor === 'green'
+                                      ? 'asset-status-pill asset-status-pill--active'
+                                      : 'asset-status-pill asset-status-pill--inactive'
+                                  }
+                                >
+                                  {instance.status}
+                                </span>
+                              </td>
+                              <td className="asset-align-right">{instance.originalPrice}</td>
+                              <td className="asset-align-right">{instance.currentValue}</td>
+                              <td className="asset-table__cell asset-table__cell--actions">
+                                <button
+                                  type="button"
+                                  className="asset-row__more-btn asset-row__more-btn--icon"
+                                  aria-label="Sửa thông tin cá thể"
+                                  title="Sửa thông tin cá thể"
+                                  onClick={() =>
+                                    navigate(`/asset-instances/${instance.assetInstanceId}/edit`)
+                                  }
+                                >
+                                  <EditOutlined />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="asset-instances-panel__empty">Không có cá thể nào.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="asset-card__footer">
@@ -268,7 +366,7 @@ export function AccountantAssetListPage() {
               <option value={100}>100</option>
             </select>
           </div>
-          <div className="asset-footer__center">1-25 trên {data.length}</div>
+          <div className="asset-footer__center">1-25 trên {assets.length}</div>
           <div className="asset-footer__right">
             <button className="asset-footer__pager" disabled type="button">
               ⟨

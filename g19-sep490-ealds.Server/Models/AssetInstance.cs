@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace g19_sep490_ealds.Server.Models;
@@ -72,4 +72,6 @@ public partial class AssetInstance
     public virtual ICollection<TransferRecord> TransferRecords { get; set; } = new List<TransferRecord>();
 
     public virtual Warehouse Warehouse { get; set; } = null!;
+
+    public virtual ICollection<AssetRequest> AssetRequests { get; set; } = new List<AssetRequest>();
 }

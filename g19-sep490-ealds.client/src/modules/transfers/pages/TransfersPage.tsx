@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Input, Select, message, Tabs, Popconfirm } from 'antd';
 import {
   SearchOutlined,
@@ -7,11 +7,16 @@ import {
   EyeOutlined,
   DeleteOutlined,
 } from '@ant-design/icons';
-import { transferRequestService, type TransferRequestListItem } from '../../assets/services/transferRequestService';
+import {
+  transferRequestService,
+  TRANSFER_REQUEST_TYPE_ID,
+  type TransferRequestListItem,
+} from '../../assets/services/transferRequestService';
 import { TransferAssetModal } from '../../assets/components/TransferAssetModal';
 import { TransferRequestDetailModal } from '../components/TransferRequestDetailModal';
 import { profileService, type UserProfile } from '../../profile/services/profileService';
 import './TransfersPage.css';
+import '../../assets/components/MarkDamagedAssetModal.css';
 
 const { Option } = Select;
 
@@ -25,7 +30,6 @@ const STATUS_MAP: Record<number, { label: string; color: string }> = {
 
 interface TableRow extends TransferRequestListItem {
   key: string;
-  stt: number;
   transferDateText: string;
 }
 
@@ -38,15 +42,28 @@ function formatDate(iso: string): string {
   }
 }
 
+function formatDateTime(iso?: string | null): string {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString('vi-VN');
+  } catch {
+    return iso;
+  }
+}
+
 export function TransfersPage() {
   const [data, setData] = useState<TableRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<number | 'all'>('all');
   const [searchText, setSearchText] = useState('');
-  const [activeTab, setActiveTab] = useState<'location' | 'department'>('location');
+  const [activeTab, setActiveTab] = useState<'outgoing' | 'incoming'>('outgoing');
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<TableRow | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{ type: 'send' | 'receive'; row: TableRow } | null>(
+    null,
+  );
+  const [confirmSubmitting, setConfirmSubmitting] = useState(false);
   const tableHostRef = useRef<HTMLDivElement | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -63,10 +80,9 @@ export function TransfersPage() {
     setLoading(true);
     try {
       const list = await transferRequestService.getList();
-      const rows: TableRow[] = list.map((item, index) => ({
+      const rows: TableRow[] = list.map((item) => ({
         ...item,
         key: String(item.recordId),
-        stt: index + 1,
         transferDateText: formatDate(item.transferDate),
       }));
       setData(rows);
@@ -82,16 +98,33 @@ export function TransfersPage() {
     loadList();
   }, []);
 
-  const filteredData = data.filter((row) => {
-    const matchStatus = statusFilter === 'all' || row.status === statusFilter;
-    const kw = searchText.trim().toLowerCase();
-    const matchSearch =
-      !kw ||
-      row.code.toLowerCase().includes(kw) ||
-      row.assetCode.toLowerCase().includes(kw) ||
-      row.assetName.toLowerCase().includes(kw);
-    return matchStatus && matchSearch;
-  });
+  const isAccountant = (profile?.role ?? '').toUpperCase() === 'ACCOUNTANT';
+
+  const filteredData = useMemo(() => {
+    return data.filter((row) => {
+      if (activeTab === 'outgoing') {
+        if (!isAccountant) {
+          const fromMyDept =
+            profile?.departmentId != null && row.fromDepartmentId === profile.departmentId;
+          if (!fromMyDept) return false;
+        }
+      } else if (!isAccountant) {
+        const toMyDept =
+          profile?.departmentId != null && row.toDepartmentId === profile.departmentId;
+        if (!toMyDept) return false;
+      }
+
+      const matchStatus = statusFilter === 'all' || row.status === statusFilter;
+      const kw = searchText.trim().toLowerCase();
+      const matchSearch =
+        !kw ||
+        row.code.toLowerCase().includes(kw) ||
+        (row.instanceCode ?? '').toLowerCase().includes(kw) ||
+        row.assetCode.toLowerCase().includes(kw) ||
+        row.assetName.toLowerCase().includes(kw);
+      return matchStatus && matchSearch;
+    });
+  }, [data, activeTab, isAccountant, profile?.departmentId, profile?.id, statusFilter, searchText]);
 
   useEffect(() => {
     // Reset to first page when filters change
@@ -122,11 +155,11 @@ export function TransfersPage() {
       <div className="transfers-card">
         <Tabs
           activeKey={activeTab}
-          onChange={(key) => setActiveTab(key as 'location' | 'department')}
+          onChange={(key) => setActiveTab(key as 'outgoing' | 'incoming')}
           className="transfers-tabs"
           items={[
-            { key: 'location', label: 'Vị trí tài sản' },
-            { key: 'department', label: 'Phòng ban sử dụng' },
+            { key: 'outgoing', label: 'Đơn đi' },
+            { key: 'incoming', label: 'Đơn đến' },
           ]}
         />
 
@@ -173,22 +206,24 @@ export function TransfersPage() {
                   <th>SỐ LƯỢNG</th>
                   <th>TRẠNG THÁI</th>
                   <th>LÝ DO ĐIỀU CHUYỂN</th>
+                  <th>BÀN GIAO</th>
                   <th className="asset-table__cell asset-table__cell--actions" />
                 </tr>
               </thead>
               <tbody>
                 {pagedData.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="transfers-table-empty">
+                    <td colSpan={10} className="transfers-table-empty">
                       Không có dữ liệu.
                     </td>
                   </tr>
                 ) : (
-                  pagedData.map((row) => {
+                  pagedData.map((row, idx) => {
+                    const stt = (safePage - 1) * pageSize + idx + 1;
                     const config = STATUS_MAP[row.status] ?? STATUS_MAP[0];
                     return (
                       <tr key={row.key} className="asset-row">
-                        <td className="asset-align-right">{row.stt}</td>
+                        <td className="asset-align-right">{stt}</td>
                         <td>
                           <button
                             type="button"
@@ -225,6 +260,35 @@ export function TransfersPage() {
                           </span>
                         </td>
                         <td>{row.reason}</td>
+                        <td>
+                          {activeTab === 'outgoing' ? (
+                            row.status === 4 ? (
+                              row.isSenderConfirmed ? (
+                                <span className="transfers-handover-tag transfers-handover-tag--done">Đã gửi</span>
+                              ) : (
+                                <Button type="link" size="small" onClick={() => setConfirmModal({ type: 'send', row })}>
+                                  Xác nhận đã gửi
+                                </Button>
+                              )
+                            ) : (
+                              '—'
+                            )
+                          ) : row.status === 4 ? (
+                            row.isReceiverConfirmed ? (
+                              <span className="transfers-handover-tag transfers-handover-tag--done">Đã nhận</span>
+                            ) : !row.isSenderConfirmed ? (
+                              <span className="transfers-handover-tag transfers-handover-tag--waiting">
+                                Chờ bên gửi xác nhận
+                              </span>
+                            ) : (
+                              <Button type="link" size="small" onClick={() => setConfirmModal({ type: 'receive', row })}>
+                                Xác nhận đã nhận
+                              </Button>
+                            )
+                          ) : (
+                            '—'
+                          )}
+                        </td>
                         <td className="asset-table__cell asset-table__cell--actions">
                           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
                             <Button
@@ -235,7 +299,9 @@ export function TransfersPage() {
                                 setIsDetailModalOpen(true);
                               }}
                             />
-                            {(row.status === 0 || row.status === 1) && (
+                            {(row.status === 0 || row.status === 1) &&
+                              profile?.id != null &&
+                              row.createdBy === profile.id && (
                               <Popconfirm
                                 title="Xóa yêu cầu điều chuyển?"
                                 description="Thao tác này sẽ xóa yêu cầu và hoàn tác phòng ban/vị trí hiện tại theo dữ liệu điều chuyển."
@@ -317,7 +383,7 @@ export function TransfersPage() {
       <TransferAssetModal
         open={isTransferModalOpen}
         onClose={() => setIsTransferModalOpen(false)}
-        mode={activeTab}
+        mode="department"
         onSubmit={async (values: any) => {
           if (!profile) {
             message.error('Không lấy được thông tin người dùng. Vui lòng đăng nhập lại.');
@@ -349,7 +415,7 @@ export function TransfersPage() {
             for (const assetInstanceId of assetIds) {
               await transferRequestService.create({
                 assetInstanceId,
-                requestTypeId: 1,
+                requestTypeId: TRANSFER_REQUEST_TYPE_ID,
                 fromLocationId,
                 toLocationId,
                 fromUserId: profile.id,
@@ -380,6 +446,165 @@ export function TransfersPage() {
         }}
         request={selectedRequest}
       />
+
+      {confirmModal && (
+        <div className="mark-damaged-modal-overlay" role="dialog" aria-modal="true">
+          <div className="mark-damaged-modal">
+            <button
+              type="button"
+              className="mark-damaged-modal__close-btn"
+              onClick={() => !confirmSubmitting && setConfirmModal(null)}
+              aria-label="Đóng"
+            >
+              <span className="mark-damaged-modal__close">×</span>
+            </button>
+
+            <div className="mark-damaged-modal__header">
+              <h2 className="mark-damaged-modal__title">
+                {confirmModal.type === 'send' ? 'Xác nhận bàn giao tài sản' : 'Xác nhận tiếp nhận tài sản'}
+              </h2>
+            </div>
+
+            <div className="mark-damaged-modal__body">
+              <div className="mark-damaged-modal__content">
+                <div className="mark-damaged-form__item">
+                  <label>Số biên bản</label>
+                  <input
+                    type="text"
+                    value={confirmModal.row.code || `YC-${confirmModal.row.assetRequestId}`}
+                    readOnly
+                    className="mark-damaged-input--disabled"
+                  />
+                </div>
+
+                <div className="mark-damaged-info-section">
+                  <h3 className="mark-damaged-section-title">Thông tin yêu cầu điều chuyển</h3>
+                  <div className="mark-damaged-info-grid">
+                    <div className="mark-damaged-info-row">
+                      <div className="mark-damaged-info-item">
+                        <label>Mã yêu cầu</label>
+                        <div className="mark-damaged-info-value">YC-{confirmModal.row.assetRequestId}</div>
+                      </div>
+                      <div className="mark-damaged-info-item">
+                        <label>Ngày điều chuyển</label>
+                        <div className="mark-damaged-info-value">{formatDate(confirmModal.row.transferDate)}</div>
+                      </div>
+                    </div>
+
+                    <div className="mark-damaged-info-row">
+                      <div className="mark-damaged-info-item">
+                        <label>Điều chuyển từ</label>
+                        <div className="mark-damaged-info-value">{confirmModal.row.fromDepartment}</div>
+                      </div>
+                      <div className="mark-damaged-info-item">
+                        <label>Điều chuyển đến</label>
+                        <div className="mark-damaged-info-value">{confirmModal.row.toDepartment}</div>
+                      </div>
+                    </div>
+
+                    <div className="mark-damaged-info-row">
+                      <div className="mark-damaged-info-item">
+                        <label>Mã cá thể / mã tài sản</label>
+                        <div className="mark-damaged-info-value">
+                          {confirmModal.row.instanceCode || confirmModal.row.assetCode}
+                        </div>
+                      </div>
+                      <div className="mark-damaged-info-item">
+                        <label>Tên tài sản</label>
+                        <div className="mark-damaged-info-value">{confirmModal.row.assetName}</div>
+                      </div>
+                    </div>
+
+                    <div className="mark-damaged-info-row">
+                      <div className="mark-damaged-info-item">
+                        <label>Trạng thái xác nhận bên gửi</label>
+                        <div className="mark-damaged-info-value">
+                          {confirmModal.row.isSenderConfirmed ? 'Đã xác nhận' : 'Chưa xác nhận'}
+                        </div>
+                      </div>
+                      <div className="mark-damaged-info-item">
+                        <label>Trạng thái xác nhận bên nhận</label>
+                        <div className="mark-damaged-info-value">
+                          {confirmModal.row.isReceiverConfirmed ? 'Đã xác nhận' : 'Chưa xác nhận'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mark-damaged-form-section">
+                  <h3 className="mark-damaged-section-title">
+                    {confirmModal.type === 'send' ? 'Nội dung xác nhận bàn giao' : 'Nội dung xác nhận tiếp nhận'}
+                  </h3>
+                  <div className="mark-damaged-info-value">
+                    {confirmModal.type === 'send'
+                      ? `Xác nhận bên gửi đã bàn giao tài sản ${confirmModal.row.instanceCode || confirmModal.row.assetCode} — ${confirmModal.row.assetName} từ ${confirmModal.row.fromDepartment} đến ${confirmModal.row.toDepartment}.`
+                      : `Xác nhận bên nhận đã tiếp nhận tài sản ${confirmModal.row.instanceCode || confirmModal.row.assetCode} — ${confirmModal.row.assetName} tại ${confirmModal.row.toDepartment}.`}
+                  </div>
+                  <div className="mark-damaged-info-value" style={{ marginTop: 12 }}>
+                    Thời điểm xác nhận: {formatDateTime(new Date().toISOString())}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mark-damaged-modal__footer">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!confirmModal) return;
+                  if (confirmModal.type === 'receive' && !confirmModal.row.isSenderConfirmed) {
+                    message.warning('Bên gửi chưa xác nhận bàn giao, chưa thể xác nhận đã nhận.');
+                    return;
+                  }
+                  setConfirmSubmitting(true);
+                  try {
+                    if (confirmModal.type === 'send') {
+                      const res = await transferRequestService.confirmSend(confirmModal.row.assetRequestId);
+                      message.success(res.message);
+                      if (res.isReady) {
+                        message.info('Đã hoàn tất bàn giao: vị trí tài sản đã được cập nhật.');
+                      }
+                    } else {
+                      const res = await transferRequestService.confirmReceive(confirmModal.row.assetRequestId);
+                      message.success(res.message);
+                      if (res.isReady) {
+                        message.info('Đã hoàn tất bàn giao: vị trí tài sản đã được cập nhật.');
+                      }
+                    }
+                    setConfirmModal(null);
+                    await loadList();
+                  } catch (e: any) {
+                    const data = e?.response?.data;
+                    const msg =
+                      typeof data === 'string'
+                        ? data
+                        : data?.message ??
+                          (confirmModal.type === 'send'
+                            ? 'Xác nhận gửi thất bại.'
+                            : 'Xác nhận nhận thất bại.');
+                    message.error(msg);
+                  } finally {
+                    setConfirmSubmitting(false);
+                  }
+                }}
+                className="mark-damaged-btn-submit"
+                disabled={confirmSubmitting}
+              >
+                {confirmSubmitting ? 'Đang xử lý...' : 'Xác nhận'}
+              </button>
+              <button
+                type="button"
+                onClick={() => !confirmSubmitting && setConfirmModal(null)}
+                className="mark-damaged-btn-draft"
+                disabled={confirmSubmitting}
+              >
+                Quay lại
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

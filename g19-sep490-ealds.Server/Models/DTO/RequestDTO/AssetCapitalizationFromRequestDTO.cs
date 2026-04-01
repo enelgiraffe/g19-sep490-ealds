@@ -19,6 +19,8 @@ public class AssetCapitalizationFromRequestDTO
     public string Unit { get; set; } = string.Empty;
     public int Quantity { get; set; }
     public int WarehouseId { get; set; }
+    public string? AssetSpecification { get; set; }
+    public string? AssetNote { get; set; }
 
     public List<CapitalizationDocumentInputDTO>? Documents { get; set; }
 }

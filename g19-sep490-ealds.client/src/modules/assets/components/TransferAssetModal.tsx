@@ -41,6 +41,7 @@ export function TransferAssetModal({
   const [locations, setLocations] = useState<AssetLocationOption[]>([]);
   const [locationsLoading, setLocationsLoading] = useState(false);
   const [transferDate, setTransferDate] = useState<string>('');
+  const [recordNumber, setRecordNumber] = useState<string>('');
   const [reason, setReason] = useState<string>('');
   const [fromLocationId, setFromLocationId] = useState<string>('');
   const [toLocationId, setToLocationId] = useState<string>('');
@@ -64,6 +65,9 @@ export function TransferAssetModal({
   useEffect(() => {
     if (open) {
       const today = new Date().toISOString().slice(0, 10);
+      const datePart = today.replace(/-/g, '');
+      const randomPart = Math.floor(Math.random() * 900 + 100);
+      setRecordNumber(`BB-DC-${datePart}-${randomPart}`);
       setTransferDate(today);
       setReason('');
       setDateError(null);
@@ -155,8 +159,8 @@ export function TransferAssetModal({
                 <input
                   id="transfer-record-number"
                   type="text"
-                  value="-"
-                  disabled
+                  value={recordNumber}
+                  readOnly
                   className="transfer-input transfer-input--disabled"
                 />
               </div>
@@ -253,14 +257,14 @@ export function TransferAssetModal({
           </div>
 
           <div className="transfer-form__section">
-            <h3 className="transfer-section-title">Tài sản được chuyển</h3>
+            <h3 className="transfer-section-title">Cá thể được chuyển</h3>
             <div className="transfer-asset-actions">
               <button
                 type="button"
                 className="transfer-btn-pick-asset"
                 onClick={() => setIsSelectAssetsOpen(true)}
               >
-                Chọn tài sản
+                Chọn cá thể
               </button>
             </div>
             {selectedAssets.length > 0 ? (
@@ -269,9 +273,9 @@ export function TransferAssetModal({
                   <thead>
                     <tr>
                       <th>STT</th>
-                      <th>Mã tài sản</th>
+                      <th>Mã cá thể</th>
                       <th>Tài sản</th>
-                      <th>Vị trí tài sản</th>
+                      <th>Vị trí cá thể</th>
                       <th>Tình trạng</th>
                       <th>Số lượng</th>
                       <th>Phòng ban sử dụng</th>
@@ -294,24 +298,11 @@ export function TransferAssetModal({
               </div>
             ) : (
               <p className="transfer-asset-placeholder">
-                Vui lòng chọn tài sản từ danh sách tài sản để hiển thị thông tin chi tiết.
+                Vui lòng chọn cá thể từ danh sách cá thể để hiển thị thông tin chi tiết.
               </p>
             )}
           </div>
 
-          <div className="transfer-form__section">
-            <h3 className="transfer-section-title">Tài liệu đính kèm</h3>
-            <div className="transfer-attachments">
-              <div className="transfer-attachment-item">
-                <span>#1</span>
-                <span>Thông tin máy</span>
-              </div>
-              <div className="transfer-attachment-item">
-                <span>#2</span>
-                <span>Thông tin nhà cung cấp</span>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="transfer-modal__footer">

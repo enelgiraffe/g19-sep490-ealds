@@ -63,14 +63,57 @@ public class MaintenanceScheduleService : IMaintenanceScheduleService
 
     public async Task<IEnumerable<MaintenanceScheduleResponseDTO>> GetScheduleByAssetAsync(int assetId)
     {
-        var schedules = await _context.MaintenanceSchedules
-                        .Where(x => x.AssetId == assetId && x.IsActive == true)
-                        .ToListAsync();
+        var instanceIds = await _context.AssetInstances
+            .AsNoTracking()
+            .Where(ai => ai.AssetId == assetId)
+            .Select(ai => ai.AssetInstanceId)
+            .ToListAsync();
 
-        if (!schedules.Any())
-            throw new KeyNotFoundException($"Tài sản {assetId} chưa có lịch bảo trì");
+        var schedules = await _context.MaintenanceSchedules
+            .AsNoTracking()
+            .Include(s => s.Template)
+            .Include(s => s.AssetInstance)
+            .Where(s =>
+                s.IsActive &&
+                ((s.AssetId == assetId && s.AssetInstanceId == null) ||
+                 (s.AssetInstanceId != null && instanceIds.Contains(s.AssetInstanceId.Value))))
+            .OrderBy(s => s.ScheduleId)
+            .ToListAsync();
 
         return _mapper.ListEntityToResponse(schedules);
+    }
+
+    public async Task<IEnumerable<MaintenanceScheduleResponseDTO>> GetScheduleByInstanceAsync(int assetInstanceId)
+    {
+        var inst = await _context.AssetInstances
+            .AsNoTracking()
+            .FirstOrDefaultAsync(ai => ai.AssetInstanceId == assetInstanceId);
+        if (inst == null)
+            return Enumerable.Empty<MaintenanceScheduleResponseDTO>();
+
+        var catalogSchedules = await _context.MaintenanceSchedules
+            .AsNoTracking()
+            .Include(s => s.Template)
+            .Include(s => s.AssetInstance)
+            .Where(s =>
+                s.IsActive &&
+                s.AssetId == inst.AssetId &&
+                s.AssetInstanceId == null)
+            .ToListAsync();
+
+        var ownSchedules = await _context.MaintenanceSchedules
+            .AsNoTracking()
+            .Include(s => s.Template)
+            .Include(s => s.AssetInstance)
+            .Where(s => s.IsActive && s.AssetInstanceId == assetInstanceId)
+            .ToListAsync();
+
+        var merged = catalogSchedules
+            .Concat(ownSchedules)
+            .OrderBy(s => s.ScheduleId)
+            .ToList();
+
+        return _mapper.ListEntityToResponse(merged);
     }
 
     public async Task<bool> ToggleScheduleAsync(int scheduleId)

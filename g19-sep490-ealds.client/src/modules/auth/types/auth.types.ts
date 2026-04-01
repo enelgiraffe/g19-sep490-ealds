@@ -29,6 +29,7 @@ export function mapBackendRoleToAppRole(role: string | undefined | null): AppRol
   if (r === 'admin') return 'admin';
   if (r === 'director' || r === 'giám_đốc') return 'director';
   if (r === 'accountant' || r === 'kế_toán') return 'accountant';
-  if (r === 'department_head' || r === 'departmenthead' || r === 'trưởng_phòng') return 'department_head';
+  if (r === 'department_head' || r === 'departmenthead' || r === 'dept_head' || r === 'trưởng_phòng')
+    return 'department_head';
   return 'department_head';
 }

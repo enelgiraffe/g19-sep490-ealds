@@ -39,12 +39,20 @@ export interface MaintenanceRequestResponse {
 export interface MaintenanceRequestListItemDTO {
   recordId: number;
   assetRequestId: number;
+  assetInstanceId?: number | null;
+  instanceCode?: string | null;
   code: string;
   transferDate: string;
   assetCode: string;
   assetName: string;
+  assetTypeName?: string | null;
   fromDepartment: string;
   toDepartment: string;
+  fromDepartmentId?: number;
+  toDepartmentId?: number;
+  createdBy?: number;
+  isSenderConfirmed?: boolean;
+  isReceiverConfirmed?: boolean;
   quantity: number;
   status: number;
   statusName: string;
@@ -61,7 +69,7 @@ export const maintenanceRequestService = {
    */
   async create(payload: MaintenanceRequestPayload): Promise<MaintenanceRequestResponse> {
     const body = {
-      assetId: payload.assetId,
+      assetInstanceId: payload.assetInstanceId,
       requestTypeId: payload.requestTypeId ?? MAINTENANCE_REQUEST_TYPE_ID,
       createdBy: payload.createdBy,
       title: payload.title ?? null,

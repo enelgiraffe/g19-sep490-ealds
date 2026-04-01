@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
 using g19_sep490_ealds.Server.Services.Interface;
+using g19_sep490_ealds.Server.Utils;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -35,6 +36,8 @@ public class AssetRequestsController : ControllerBase
         var typeId = requestTypeId ?? _purchaseRequestTypeId;
         var list = await _db.AssetRequests
             .AsNoTracking()
+            .Include(r => r.Asset)
+            .Include(r => r.User)
             .Where(r => r.RequestTypeId == typeId)
             .OrderByDescending(r => r.CreateDate)
             .Select(r => new AssetRequestListItemDTO
@@ -48,12 +51,17 @@ public class AssetRequestsController : ControllerBase
                 CreateDate = r.CreateDate,
                 UserId = r.UserId,
                 CreatedBy = r.CreatedBy,
-                CreatorName = r.User != null ? r.User.Email : null,
+                CreatorName = r.User != null
+                    ? r.User.EmployeeUsers
+                        .Select(e => e.Name)
+                        .FirstOrDefault() ?? r.User.Email
+                    : null,
                 CreatorDepartmentName = r.User != null
                     ? r.User.EmployeeUsers.Select(e => e.Department != null ? e.Department.Name : null).FirstOrDefault()
                     : null,
                 AssetCode = r.Asset != null ? r.Asset.Code : null,
-                AssetName = r.Asset != null ? r.Asset.Name : null
+                AssetName = r.Asset != null ? r.Asset.Name : null,
+                AssetQuantity = r.Asset != null ? (int?)r.Asset.Quantity : null
             })
             .ToListAsync();
         return Ok(list);
@@ -76,17 +84,76 @@ public class AssetRequestsController : ControllerBase
                 r.CreateDate,
                 r.UserId,
                 r.CreatedBy,
-                CreatorName = r.User != null ? r.User.Email : null,
+                CreatorName = r.User != null
+                    ? r.User.EmployeeUsers
+                        .Select(e => e.Name)
+                        .FirstOrDefault() ?? r.User.Email
+                    : null,
                 CreatorDepartmentName = r.User != null
                     ? r.User.EmployeeUsers.Select(e => e.Department != null ? e.Department.Name : null).FirstOrDefault()
                     : null,
                 AssetCode = r.Asset != null ? r.Asset.Code : null,
-                AssetName = r.Asset != null ? r.Asset.Name : null
+                AssetName = r.Asset != null ? r.Asset.Name : null,
+                AccountantComment = r.Approvals
+                    .Where(a => a.ApprovedRole != null && a.ApprovedRole.Code == "ACCOUNTANT")
+                    .OrderByDescending(a => a.DecisionDate)
+                    .Select(a => a.Comment)
+                    .FirstOrDefault(),
+                DirectorComment = r.Approvals
+                    .Where(a => a.ApprovedRole != null && a.ApprovedRole.Code == "DIRECTOR")
+                    .OrderByDescending(a => a.DecisionDate)
+                    .Select(a => a.Comment)
+                    .FirstOrDefault(),
+                Approvals = r.Approvals
+                    .OrderByDescending(a => a.DecisionDate)
+                    .Select(a => new
+                    {
+                        a.ApprovalId,
+                        a.DecisionDate,
+                        a.Comment,
+                        RoleCode = a.ApprovedRole != null ? a.ApprovedRole.Code : null
+                    })
             })
             .FirstOrDefaultAsync();
         if (request == null)
             return NotFound();
         return Ok(request);
+    }
+
+    /// <summary>
+    /// Ensures purchase lines exist from ProposedData.equipment and returns them (for multi-line capitalization).
+    /// </summary>
+    [HttpGet("{id:int}/lines")]
+    public async Task<IActionResult> GetPurchaseLines(int id)
+    {
+        var ar = await _db.AssetRequests
+            .FirstOrDefaultAsync(r => r.AssetRequestId == id && r.RequestTypeId == _purchaseRequestTypeId);
+        if (ar == null)
+            return NotFound();
+
+        await PurchaseRequestLineHelper.EnsureLinesAsync(_db, ar);
+
+        var rows = await _db.AssetRequestPurchaseLines
+            .AsNoTracking()
+            .Where(l => l.AssetRequestId == id)
+            .OrderBy(l => l.LineIndex)
+            .Select(l => new AssetRequestPurchaseLineResponseDTO
+            {
+                LineId = l.LineId,
+                LineIndex = l.LineIndex,
+                ItemName = l.ItemName,
+                Quantity = l.Quantity,
+                Unit = l.Unit,
+                ModelCode = l.ModelCode,
+                EstimatedPrice = l.EstimatedPrice,
+                AssetId = l.AssetId,
+                CapitalizedAt = l.CapitalizedAt,
+                AssetCode = l.Asset != null ? l.Asset.Code : null,
+                AssetName = l.Asset != null ? l.Asset.Name : null,
+            })
+            .ToListAsync();
+
+        return Ok(rows);
     }
 
     [HttpPost]
@@ -109,19 +176,29 @@ public class AssetRequestsController : ControllerBase
         {
             return BadRequest($"Configured purchase RequestTypeId '{_purchaseRequestTypeId}' does not exist in RequestType table.");
         }
+        var initialStepId = await _db.RequestTypes
+            .AsNoTracking()
+            .Where(rt => rt.RequestTypeId == _purchaseRequestTypeId)
+            .SelectMany(rt => _db.WorkflowSteps.Where(ws => ws.WorkflowId == rt.WorkflowId))
+            .OrderBy(ws => ws.StepOrder)
+            .Select(ws => (int?)ws.StepId)
+            .FirstOrDefaultAsync();
+        if (!initialStepId.HasValue)
+            return BadRequest($"No workflow step configured for RequestTypeId '{_purchaseRequestTypeId}'.");
 
         var assetRequest = new AssetRequest
         {
             UserId = dto.UserId,
             RequestTypeId = _purchaseRequestTypeId,
             AssetId = dto.AssetId,
+            AssetInstanceId = dto.AssetInstanceId,
             Title = dto.Title,
             Description = dto.Description,
             ProposedData = dto.ProposedData,
             Status = desiredStatus,
             CreatedBy = dto.CreatedBy,
             CreateDate = DateTime.UtcNow,
-            StepId = 0
+            StepId = initialStepId.Value
         };
 
         _db.AssetRequests.Add(assetRequest);
@@ -175,22 +252,22 @@ public class AssetRequestsController : ControllerBase
 
         // Editable cases:
         // - Draft (-1): creator can edit and keep Draft or submit (0)
-        // - Accountant-approved (1): accountant can edit info/attachments but must keep status=1
+        // - Director-approved (2): accountant can edit info/attachments and must keep status=2
         if (ar.Status == -1)
         {
             if (desiredStatus != -1 && desiredStatus != 0)
                 return BadRequest("Invalid status. Allowed: -1 (Draft), 0 (Sent).");
         }
-        else if (ar.Status == 1)
+        else if (ar.Status == 2)
         {
             if (!isAccountantActor)
-                return BadRequest("Only accountant can edit requests after accountant approval.");
-            if (desiredStatus != 1)
-                return BadRequest("Invalid status. Allowed: 1 (Waiting director approval).");
+                return BadRequest("Only accountant can edit requests after director approval.");
+            if (desiredStatus != 2)
+                return BadRequest("Invalid status. Allowed: 2.");
         }
         else
         {
-            return BadRequest("Only draft requests (status=-1) or accountant-approved requests (status=1) can be edited.");
+            return BadRequest("Only draft requests (status=-1) or director-approved requests (status=2) can be edited.");
         }
 
         var fromStatus = ar.Status;
@@ -241,8 +318,14 @@ public class AssetRequestsController : ControllerBase
             .Include(x => x.Approvals)
             .Include(x => x.AssetRequestRecords)
             .Include(x => x.MaintenanceTasks)
+                .ThenInclude(t => t.AssetInstance)
+                    .ThenInclude(ai => ai.Asset)
             .Include(x => x.RepairTasks)
+                .ThenInclude(t => t.AssetInstance)
+                    .ThenInclude(ai => ai.Asset)
             .Include(x => x.TransferRecords)
+                .ThenInclude(tr => tr.AssetInstance)
+                    .ThenInclude(ai => ai.Asset)
             .Include(x => x.Procurements)
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.AssetRequestId == id);
@@ -260,14 +343,45 @@ public class AssetRequestsController : ControllerBase
             createDate = ar.CreateDate,
             approveDate = ar.ApproveDate,
             stepId = ar.StepId,
+            requestTypeId = ar.RequestTypeId,
             user = ar.User == null ? null : new { ar.User.UserId, ar.User.Email },
             requestType = ar.RequestType == null ? null : new { ar.RequestType.RequestTypeId, ar.RequestType.WorkflowId },
-            asset = ar.Asset == null ? null : new { ar.Asset.AssetId, ar.Asset.Name, ar.Asset.Code },
+            // Catalog asset (for purchase / damage-report requests)
+            asset = ar.Asset == null ? null : new { ar.Asset.AssetId, ar.Asset.Name, ar.Asset.Code, ar.Asset.Quantity },
             approvals = ar.Approvals.Select(a => new { a.ApprovalId, a.DecisionDate, a.ApprovedUserId, a.ApprovedRoleId, a.StepId }),
             records = ar.AssetRequestRecords.Select(r => new { r.RecordId, r.FromStatus, r.ToStatus, r.Action, r.ActionByUserId, r.ActionRoleId, r.Comment, r.OccurredAt }),
-            maintenanceTasks = ar.MaintenanceTasks.Select(t => new { t.TaskId, t.PlannedDate, t.Status, t.AssignTo }),
-            repairTasks = ar.RepairTasks.Select(t => new { t.TaskId, t.EstimatedCost, t.Reason, t.Status }),
-            transferRecords = ar.TransferRecords.Select(tr => new { tr.TransferId, tr.AssetRequestId, tr.FromLocationId, tr.ToLocationId, tr.TransferDate }),
+            // Child tasks — each stores the specific instance via AssetInstanceId
+            maintenanceTasks = ar.MaintenanceTasks.Select(t => new
+            {
+                t.TaskId,
+                t.PlannedDate,
+                t.Status,
+                t.AssignTo,
+                t.AssetInstanceId,
+                InstanceCode = t.AssetInstance != null ? t.AssetInstance.InstanceCode : null,
+                AssetName = t.AssetInstance != null && t.AssetInstance.Asset != null ? t.AssetInstance.Asset.Name : null
+            }),
+            repairTasks = ar.RepairTasks.Select(t => new
+            {
+                t.TaskId,
+                t.EstimatedCost,
+                t.Reason,
+                t.Status,
+                t.AssetInstanceId,
+                InstanceCode = t.AssetInstance != null ? t.AssetInstance.InstanceCode : null,
+                AssetName = t.AssetInstance != null && t.AssetInstance.Asset != null ? t.AssetInstance.Asset.Name : null
+            }),
+            transferRecords = ar.TransferRecords.Select(tr => new
+            {
+                tr.TransferId,
+                tr.AssetRequestId,
+                tr.AssetInstanceId,
+                tr.FromLocationId,
+                tr.ToLocationId,
+                tr.TransferDate,
+                InstanceCode = tr.AssetInstance != null ? tr.AssetInstance.InstanceCode : null,
+                AssetName = tr.AssetInstance != null && tr.AssetInstance.Asset != null ? tr.AssetInstance.Asset.Name : null
+            }),
             procurements = ar.Procurements.Select(p => new { p.ProcurementId })
         };
 
@@ -284,9 +398,6 @@ public class AssetRequestsController : ControllerBase
         var query = _db.AssetRequests
             .AsNoTracking()
             .Include(x => x.Asset)
-                .ThenInclude(a => a.AssetInstances)
-                    .ThenInclude(ai => ai.AssetLocations)
-                        .ThenInclude(al => al.Department)
             .Include(x => x.User)
             .AsQueryable();
 
@@ -315,29 +426,27 @@ public class AssetRequestsController : ControllerBase
                 userId = ar.UserId,
                 userEmail = ar.User != null ? ar.User.Email : null,
                 assetId = ar.AssetId,
+                assetInstanceId = ar.AssetInstanceId,
                 assetCode = ar.Asset != null ? ar.Asset.Code : null,
+                assetInstanceCode = ar.AssetInstance != null ? ar.AssetInstance.InstanceCode : null,
                 assetName = ar.Asset != null ? ar.Asset.Name : null,
                 assetQuantity = ar.Asset != null ? (int?)ar.Asset.Quantity : null,
-                currentDepartmentName = ar.Asset != null
-                    ? ar.Asset.AssetInstances
-                        .SelectMany(ai => ai.AssetLocations)
+                currentDepartmentName = ar.AssetInstance != null
+                    ? ar.AssetInstance.AssetLocations
                         .Where(al => al.IsCurrent)
                         .Select(al => al.Department != null ? al.Department.Name : null)
                         .FirstOrDefault()
+                    : null,
+                currentLocation = ar.AssetInstance != null
+                    ? ar.AssetInstance.AssetLocations
+                        .Where(al => al.IsCurrent)
+                        .Select(al => al.Note)
+                        .FirstOrDefault() ?? (ar.AssetInstance.Warehouse != null ? ar.AssetInstance.Warehouse.Name : null)
                     : null,
                 requestTypeId = ar.RequestTypeId
             })
             .ToListAsync();
 
-        var result = new
-        {
-            items,
-            total,
-            page,
-            pageSize,
-            totalPages = (int)Math.Ceiling(total / (double)pageSize)
-        };
-
-        return Ok(result);
+        return Ok(new { items, total, page, pageSize, totalPages = (int)Math.Ceiling(total / (double)pageSize) });
     }
 }

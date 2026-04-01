@@ -120,7 +120,7 @@ export function SelectAssetsModal({
         </button>
 
         <div className="select-assets__header">
-          <h2 className="select-assets__title">Danh sách tài sản</h2>
+          <h2 className="select-assets__title">Danh sách cá thể</h2>
         </div>
 
         <div className="select-assets__body">
@@ -129,7 +129,7 @@ export function SelectAssetsModal({
               <span className="select-assets__search-icon">🔍</span>
               <input
                 type="text"
-                placeholder="Nhập tên, mã tài sản để tìm kiếm"
+                placeholder="Nhập tên, mã cá thể để tìm kiếm"
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
               />
@@ -147,7 +147,7 @@ export function SelectAssetsModal({
               <thead>
                 <tr>
                   <th className="select-assets__cell select-assets__cell--checkbox" />
-                  <th>Mã tài sản</th>
+                  <th>Mã cá thể</th>
                   <th>Tài sản</th>
                   <th>Vị trí tài sản</th>
                   <th>Tình trạng</th>
@@ -189,7 +189,7 @@ export function SelectAssetsModal({
                             disabled={disabled}
                             onChange={() => {
                               if (disabled) {
-                                message.warning('Chỉ được chọn các tài sản cùng phòng ban/vị trí nguồn.');
+                                message.warning('Chỉ đượn các cá thể cùng phòng ban/vị trí nguồn.');
                                 return;
                               }
                               setSelectedIds((prev) => {
@@ -220,7 +220,7 @@ export function SelectAssetsModal({
 
         <div className="select-assets__footer">
           <div className="select-assets__selected">
-            Đã chọn <strong>{selectedIds.size}</strong>/{rows.length} tài sản
+            Đã chọn <strong>{selectedIds.size}</strong>/{rows.length} cá thể
           </div>
           <div className="select-assets__actions">
             <button type="button" className="select-assets__btn select-assets__btn--ghost" onClick={onClose}>

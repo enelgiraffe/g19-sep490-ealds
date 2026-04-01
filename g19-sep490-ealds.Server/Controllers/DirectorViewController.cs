@@ -21,6 +21,7 @@ public class DirectorViewController : ControllerBase
     [HttpGet("view")]
     public async Task<IActionResult> Get(
         [FromQuery] int? status,
+        [FromQuery] string? statuses,
         [FromQuery] int? requestTypeId,
         [FromQuery] int? userId,
         [FromQuery] int page = 1,
@@ -32,13 +33,34 @@ public class DirectorViewController : ControllerBase
         var query = _db.AssetRequests
             .AsNoTracking()
             .Include(x => x.Asset)
-                .ThenInclude(a => a.AssetInstances)
+                .ThenInclude(a => a!.AssetInstances)
                     .ThenInclude(ai => ai.AssetLocations)
                         .ThenInclude(al => al.Department)
+            .Include(x => x.AssetInstance)
+                .ThenInclude(ai => ai!.AssetLocations)
+                    .ThenInclude(al => al.Department)
             .Include(x => x.User)
+                .ThenInclude(u => u.EmployeeUsers)
             .AsQueryable();
 
-        if (status.HasValue)
+        var statusIds = !string.IsNullOrWhiteSpace(statuses)
+            ? statuses.Split(',')
+                .Select(s =>
+                {
+                    var ok = int.TryParse(s.Trim(), out var v);
+                    return new { ok, v };
+                })
+                .Where(x => x.ok)
+                .Select(x => x.v)
+                .Distinct()
+                .ToArray()
+            : Array.Empty<int>();
+
+        if (statusIds.Length > 0)
+        {
+            query = query.Where(x => statusIds.Contains(x.Status));
+        }
+        else if (status.HasValue)
         {
             query = query.Where(x => x.Status == status.Value);
         }
@@ -74,16 +96,54 @@ public class DirectorViewController : ControllerBase
                 ar.ProposedData,
                 AssetId = ar.AssetId,
                 AssetCode = ar.Asset != null ? ar.Asset.Code : null,
+                AssetInstanceCode = ar.AssetInstance != null ? ar.AssetInstance.InstanceCode : null,
                 AssetName = ar.Asset != null ? ar.Asset.Name : null,
                 AssetQuantity = ar.Asset != null ? (int?)ar.Asset.Quantity : null,
-                CurrentDepartmentName = ar.Asset != null
-                    ? ar.Asset.AssetInstances
-                        .SelectMany(ai => ai.AssetLocations)
+                CurrentDepartmentName = ar.AssetInstance != null
+                    ? ar.AssetInstance.AssetLocations
                         .Where(al => al.IsCurrent)
                         .Select(al => al.Department != null ? al.Department.Name : null)
                         .FirstOrDefault()
+                    : ar.Asset != null
+                        ? ar.Asset.AssetInstances
+                            .SelectMany(ai => ai.AssetLocations)
+                            .Where(al => al.IsCurrent)
+                            .Select(al => al.Department != null ? al.Department.Name : null)
+                            .FirstOrDefault()
+                        : null,
+                CreatorEmail = ar.User != null ? ar.User.Email : null,
+                CreatorName = ar.User != null
+                    ? ar.User.EmployeeUsers
+                        .OrderBy(e => e.EmployeeId)
+                        .Select(e => e.Name)
+                        .FirstOrDefault()
                     : null,
-                CreatorEmail = ar.User != null ? ar.User.Email : null
+                CreatorDepartmentName = ar.User != null
+                    ? ar.User.EmployeeUsers
+                        .OrderBy(e => e.EmployeeId)
+                        .Select(e => e.Department != null ? e.Department.Name : null)
+                        .FirstOrDefault()
+                    : null,
+                AccountantComment = ar.Approvals
+                    .Where(a => a.ApprovedRole != null && a.ApprovedRole.Code == "ACCOUNTANT")
+                    .OrderByDescending(a => a.DecisionDate)
+                    .Select(a => a.Comment)
+                    .FirstOrDefault(),
+                AccountantDecisionDate = ar.Approvals
+                    .Where(a => a.ApprovedRole != null && a.ApprovedRole.Code == "ACCOUNTANT")
+                    .OrderByDescending(a => a.DecisionDate)
+                    .Select(a => (DateTime?)a.DecisionDate)
+                    .FirstOrDefault(),
+                DirectorComment = ar.Approvals
+                    .Where(a => a.ApprovedRole != null && a.ApprovedRole.Code == "DIRECTOR")
+                    .OrderByDescending(a => a.DecisionDate)
+                    .Select(a => a.Comment)
+                    .FirstOrDefault(),
+                DirectorDecisionDate = ar.Approvals
+                    .Where(a => a.ApprovedRole != null && a.ApprovedRole.Code == "DIRECTOR")
+                    .OrderByDescending(a => a.DecisionDate)
+                    .Select(a => (DateTime?)a.DecisionDate)
+                    .FirstOrDefault()
             })
             .ToListAsync();
 

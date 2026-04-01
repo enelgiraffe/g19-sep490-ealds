@@ -29,6 +29,7 @@ export interface AccountantRequestListItem {
   requestTypeId: number;
   userId: number;
   createDate: string;
+  proposedData?: string | null;
 }
 
 interface ApprovalActionPayload {

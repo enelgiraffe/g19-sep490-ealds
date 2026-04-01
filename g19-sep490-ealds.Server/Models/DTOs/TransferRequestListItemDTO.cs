@@ -16,9 +16,23 @@ public class TransferRequestListItemDTO
 
     public string AssetName { get; set; } = null!;
 
+    public string? AssetTypeName { get; set; }
+
+    public int? AssetInstanceId { get; set; }
+
+    public string? InstanceCode { get; set; }
+
     public string FromDepartment { get; set; } = null!;
 
     public string ToDepartment { get; set; } = null!;
+
+    public int FromDepartmentId { get; set; }
+
+    public int ToDepartmentId { get; set; }
+
+    public int CreatedBy { get; set; }
+
+    public string? CreatedByName { get; set; }
 
     public int Quantity { get; set; }
 
@@ -27,5 +41,9 @@ public class TransferRequestListItemDTO
     public string StatusName { get; set; } = null!;
 
     public string? Reason { get; set; }
+
+    public bool IsSenderConfirmed { get; set; }
+
+    public bool IsReceiverConfirmed { get; set; }
 }
 

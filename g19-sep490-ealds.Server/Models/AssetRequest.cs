@@ -11,6 +11,8 @@ public partial class AssetRequest
 
     public int? AssetId { get; set; }
 
+    public int? AssetInstanceId { get; set; }
+
     public int RequestTypeId { get; set; }
 
     public string Title { get; set; } = null!;
@@ -33,6 +35,8 @@ public partial class AssetRequest
 
     public virtual Asset? Asset { get; set; }
 
+    public virtual AssetInstance? AssetInstance { get; set; }
+
     public virtual ICollection<AssetRequestRecord> AssetRequestRecords { get; set; } = new List<AssetRequestRecord>();
 
     public virtual User CreatedByNavigation { get; set; } = null!;
@@ -46,6 +50,8 @@ public partial class AssetRequest
     public virtual ICollection<RepairTask> RepairTasks { get; set; } = new List<RepairTask>();
 
     public virtual ICollection<TransferRecord> TransferRecords { get; set; } = new List<TransferRecord>();
+
+    public virtual ICollection<AssetRequestPurchaseLine> PurchaseLines { get; set; } = new List<AssetRequestPurchaseLine>();
 
     public virtual RequestType RequestType { get; set; } = null!;
 

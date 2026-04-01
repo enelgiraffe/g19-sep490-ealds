@@ -27,6 +27,22 @@ export interface AssetCapitalizationPayload {
   documents?: { name?: string; url: string }[] | null;
 }
 
+export interface CapitalizePurchaseRequestLinesPayload {
+  assetRequestId: number;
+  warehouseId: number;
+  assetTypeId: number;
+  purchaseDate?: string | null;
+  assetSpecification?: string | null;
+  assetNote?: string | null;
+  note?: string | null;
+  documents?: { name?: string; url: string }[] | null;
+  lines: {
+    lineId: number;
+    assetCatalogPrefix: string;
+    instanceCodePrefix?: string | null;
+  }[];
+}
+
 export interface CapitalizePurchaseRequestPayload {
   assetRequestId: number;
   note?: string | null;
@@ -40,11 +56,27 @@ export interface CapitalizePurchaseRequestPayload {
   unit: string;
   quantity: number;
   warehouseId: number;
+  assetSpecification?: string | null;
+  assetNote?: string | null;
+}
+
+export interface AssetCapitalizationResult {
+  assetInstanceId: number;
+  assetId: number;
+  capitalizedDate: string;
+  capitalizedBy?: number | null;
+  note?: string | null;
+}
+
+export interface CapitalizePurchaseRequestLinesResult {
+  assetRequestId: number;
+  status: number;
+  capitalizedInstances: AssetCapitalizationResult[];
 }
 
 export const assetCapitalizationService = {
   async changeStatus(payload: AssetCapitalizationPayload) {
-    const response = await capitalizationApi.put('/api/AssetCapitalization/change-status', {
+    const response = await capitalizationApi.put<AssetCapitalizationResult>('/api/AssetCapitalization/change-status', {
       assetId: payload.assetId ?? null,
       assetInstanceId: payload.assetInstanceId ?? null,
       assetRequestId: payload.assetRequestId ?? null,
@@ -54,8 +86,27 @@ export const assetCapitalizationService = {
     return response.data;
   },
 
+  async capitalizePurchaseRequestLines(payload: CapitalizePurchaseRequestLinesPayload) {
+    const response = await capitalizationApi.put<CapitalizePurchaseRequestLinesResult>('/api/AssetCapitalization/capitalize-purchase-request-lines', {
+      assetRequestId: payload.assetRequestId,
+      warehouseId: payload.warehouseId,
+      assetTypeId: payload.assetTypeId,
+      purchaseDate: payload.purchaseDate ?? null,
+      assetSpecification: payload.assetSpecification ?? null,
+      assetNote: payload.assetNote ?? null,
+      note: payload.note ?? null,
+      documents: payload.documents ?? null,
+      lines: payload.lines.map((l) => ({
+        lineId: l.lineId,
+        assetCatalogPrefix: l.assetCatalogPrefix,
+        instanceCodePrefix: l.instanceCodePrefix ?? null,
+      })),
+    });
+    return response.data;
+  },
+
   async capitalizePurchaseRequest(payload: CapitalizePurchaseRequestPayload) {
-    const response = await capitalizationApi.put('/api/AssetCapitalization/capitalize-purchase-request', {
+    const response = await capitalizationApi.put<AssetCapitalizationResult>('/api/AssetCapitalization/capitalize-purchase-request', {
       assetRequestId: payload.assetRequestId,
       note: payload.note ?? null,
       documents: payload.documents ?? null,
@@ -68,6 +119,8 @@ export const assetCapitalizationService = {
       unit: payload.unit,
       quantity: payload.quantity,
       warehouseId: payload.warehouseId,
+      assetSpecification: payload.assetSpecification ?? null,
+      assetNote: payload.assetNote ?? null,
     });
     return response.data;
   },

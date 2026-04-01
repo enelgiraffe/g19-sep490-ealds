@@ -10,6 +10,8 @@ public class AssetRequestDTO
 
     public int? AssetId { get; set; }
 
+    public int? AssetInstanceId { get; set; }
+
     public string Title { get; set; } = null!;
 
     public string? Description { get; set; }
