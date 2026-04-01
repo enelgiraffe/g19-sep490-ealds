@@ -87,6 +87,32 @@ public class AssetsController : ControllerBase
     }
 
     /// <summary>
+    /// GET /api/assets/code-prefixes — Distinct catalog code prefixes (trailing digits stripped) for datalist / suggestions.
+    /// </summary>
+    [HttpGet("code-prefixes")]
+    public async Task<ActionResult<IEnumerable<string>>> GetAssetCodePrefixes()
+    {
+        var codes = await _context.Assets
+            .AsNoTracking()
+            .Where(a => a.Code != null && a.Code != string.Empty)
+            .Select(a => a.Code!)
+            .ToListAsync();
+
+        var prefixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var code in codes)
+        {
+            var trimmed = code.Trim();
+            if (!EndsWithDigit(trimmed))
+                continue;
+            var p = StripTrailingDigitsPrefix(trimmed);
+            if (!string.IsNullOrWhiteSpace(p))
+                prefixes.Add(p);
+        }
+
+        return Ok(prefixes.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList());
+    }
+
+    /// <summary>
     /// GET /api/assets/{id} — Catalog detail, maintenance schedules, documents, and all instances.
     /// </summary>
     [HttpGet("{id:int}")]
@@ -306,12 +332,31 @@ public class AssetsController : ControllerBase
             }
         }
 
-        if (await _context.Assets.AnyAsync(a => a.Code == dto.Code))
-            return BadRequest(new { message = "Asset code already exists." });
+        string catalogCode;
+        if (!string.IsNullOrWhiteSpace(dto.AssetCodePrefix))
+        {
+            var prefix = dto.AssetCodePrefix.Trim();
+            if (!IsValidInstanceCodePrefix(prefix))
+                return BadRequest(new { message = "Invalid asset code prefix (letters/digits only, 1–32 characters)." });
+
+            var generated = await GenerateAssetCatalogCodesForPrefixAsync(prefix, 1);
+            catalogCode = generated[0];
+            if (await _context.Assets.AnyAsync(a => a.Code == catalogCode))
+                return BadRequest(new { message = $"Asset code {catalogCode} already exists." });
+        }
+        else
+        {
+            catalogCode = (dto.Code ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(catalogCode))
+                return BadRequest(new { message = "Asset code or asset code prefix is required." });
+
+            if (await _context.Assets.AnyAsync(a => a.Code == catalogCode))
+                return BadRequest(new { message = "Asset code already exists." });
+        }
 
         var asset = new Asset
         {
-            Code = dto.Code,
+            Code = catalogCode,
             Name = dto.Name,
             AssetTypeId = dto.AssetTypeId,
             Status = (int)AssetStatus.Available,
@@ -329,59 +374,91 @@ public class AssetsController : ControllerBase
         if (dto.InitialInstance != null)
         {
             var init = dto.InitialInstance;
-            if (await _context.AssetInstances.AnyAsync(i => i.InstanceCode == init.InstanceCode))
-            {
-                return BadRequest(new { message = "Instance code already exists." });
-            }
+            var qty = dto.Quantity ?? 1;
+            if (qty < 1)
+                return BadRequest(new { message = "Quantity must be at least 1." });
 
             if (!await _context.Warehouses.AnyAsync(w => w.WarehouseId == init.WarehouseId))
                 return BadRequest(new { message = $"WarehouseId {init.WarehouseId} does not exist." });
 
-            var instance = new AssetInstance
+            List<string> instanceCodes;
+            if (!string.IsNullOrWhiteSpace(dto.InstanceCodePrefix))
             {
-                AssetId = asset.AssetId,
-                WarehouseId = init.WarehouseId,
-                DepreciationPolicyId = init.DepreciationPolicyId,
-                InstanceCode = init.InstanceCode,
-                SerialNumber = init.SerialNumber,
-                Status = (int)AssetStatus.Available,
-                InUseDate = init.InUseDate,
-                PurchaseDate = init.PurchaseDate,
-                OriginalPrice = init.OriginalPrice,
-                CurrentValue = init.CurrentValue,
-                SupplierId = init.SupplierId,
-                ContractNo = init.ContractNo,
-                Condition = init.Condition,
-                Note = init.Note
-            };
-            _context.AssetInstances.Add(instance);
-            await _context.SaveChangesAsync();
+                var prefix = dto.InstanceCodePrefix.Trim();
+                if (!IsValidInstanceCodePrefix(prefix))
+                    return BadRequest(new { message = "Invalid instance code prefix (letters/digits only, 1–32 characters)." });
 
-            if (init.DepreciationPolicyId.HasValue)
-            {
-                var policy = await _context.DepreciationPolicies.FindAsync(init.DepreciationPolicyId.Value);
-                if (policy != null)
+                instanceCodes = await GenerateInstanceCodesForPrefixAsync(prefix, qty);
+                foreach (var code in instanceCodes)
                 {
-                    var firstPeriod = new DateOnly(init.PurchaseDate.Year, init.PurchaseDate.Month, 1);
-                    _context.DepreciationRecords.Add(new DepreciationRecord
-                    {
-                        AssetInstanceId = instance.AssetInstanceId,
-                        PolicyId = policy.PolicyId,
-                        Period = firstPeriod,
-                        DepreciationAmount = 0,
-                        AccumulatedDepreciation = 0,
-                        OriginalValue = init.CurrentValue,
-                        RemainingValue = init.CurrentValue,
-                        CreateDate = DateTime.UtcNow,
-                        IsPosted = false
-                    });
-                    await _context.SaveChangesAsync();
+                    if (await _context.AssetInstances.AnyAsync(i => i.InstanceCode == code))
+                        return BadRequest(new { message = $"Instance code {code} already exists." });
                 }
             }
+            else
+            {
+                if (qty > 1)
+                    return BadRequest(new { message = "Instance code prefix is required when quantity is greater than 1." });
 
-            await ApplyCreateInstanceAssignmentAsync(instance.AssetInstanceId, init);
-            if (InstanceCreateHasAssignment(init))
+                if (await _context.AssetInstances.AnyAsync(i => i.InstanceCode == init.InstanceCode))
+                    return BadRequest(new { message = "Instance code already exists." });
+
+                instanceCodes = new List<string> { init.InstanceCode };
+            }
+
+            var (originals, currents) = SplitValueAcrossInstances(init.OriginalPrice, init.CurrentValue, qty);
+
+            for (var index = 0; index < qty; index++)
+            {
+                var code = instanceCodes[index];
+                var serial = qty == 1 ? init.SerialNumber : null;
+
+                var instance = new AssetInstance
+                {
+                    AssetId = asset.AssetId,
+                    WarehouseId = init.WarehouseId,
+                    DepreciationPolicyId = init.DepreciationPolicyId,
+                    InstanceCode = code,
+                    SerialNumber = serial,
+                    Status = (int)AssetStatus.Available,
+                    InUseDate = init.InUseDate,
+                    PurchaseDate = init.PurchaseDate,
+                    OriginalPrice = originals[index],
+                    CurrentValue = currents[index],
+                    SupplierId = init.SupplierId,
+                    ContractNo = init.ContractNo,
+                    Condition = init.Condition,
+                    Note = init.Note
+                };
+                _context.AssetInstances.Add(instance);
                 await _context.SaveChangesAsync();
+
+                if (init.DepreciationPolicyId.HasValue)
+                {
+                    var policy = await _context.DepreciationPolicies.FindAsync(init.DepreciationPolicyId.Value);
+                    if (policy != null)
+                    {
+                        var firstPeriod = new DateOnly(init.PurchaseDate.Year, init.PurchaseDate.Month, 1);
+                        _context.DepreciationRecords.Add(new DepreciationRecord
+                        {
+                            AssetInstanceId = instance.AssetInstanceId,
+                            PolicyId = policy.PolicyId,
+                            Period = firstPeriod,
+                            DepreciationAmount = 0,
+                            AccumulatedDepreciation = 0,
+                            OriginalValue = currents[index],
+                            RemainingValue = currents[index],
+                            CreateDate = DateTime.UtcNow,
+                            IsPosted = false
+                        });
+                        await _context.SaveChangesAsync();
+                    }
+                }
+
+                await ApplyCreateInstanceAssignmentAsync(instance.AssetInstanceId, init);
+                if (InstanceCreateHasAssignment(init))
+                    await _context.SaveChangesAsync();
+            }
         }
 
         var created = await BuildAssetDetailAsync(asset.AssetId);
@@ -607,6 +684,97 @@ public class AssetsController : ControllerBase
             current.IsCurrent = false;
             current.EndDate = newStartDate.AddDays(-1);
         }
+    }
+
+    private static bool IsValidInstanceCodePrefix(string prefix) =>
+        prefix.Length is >= 1 and <= 32 && prefix.All(char.IsLetterOrDigit);
+
+    private async Task<List<string>> GenerateInstanceCodesForPrefixAsync(string prefix, int count)
+    {
+        var codes = await _context.AssetInstances
+            .AsNoTracking()
+            .Select(i => i.InstanceCode)
+            .ToListAsync();
+
+        return GenerateSequentialCodesForPrefix(prefix, count, codes);
+    }
+
+    private async Task<List<string>> GenerateAssetCatalogCodesForPrefixAsync(string prefix, int count)
+    {
+        var codes = await _context.Assets
+            .AsNoTracking()
+            .Select(a => a.Code)
+            .ToListAsync();
+
+        return GenerateSequentialCodesForPrefix(prefix, count, codes);
+    }
+
+    private static List<string> GenerateSequentialCodesForPrefix(string prefix, int count, List<string> existingCodes)
+    {
+        var maxSuffix = 0;
+        foreach (var code in existingCodes)
+        {
+            if (code.Length <= prefix.Length)
+                continue;
+            if (!code.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                continue;
+            var suffix = code[prefix.Length..];
+            if (suffix.Length == 0 || !suffix.All(char.IsDigit))
+                continue;
+            if (int.TryParse(suffix, System.Globalization.NumberStyles.Integer, null, out var n))
+                maxSuffix = Math.Max(maxSuffix, n);
+        }
+
+        var endNumber = maxSuffix + count;
+        var width = Math.Max(2, endNumber.ToString().Length);
+        var list = new List<string>(count);
+        for (var i = 0; i < count; i++)
+        {
+            var num = maxSuffix + 1 + i;
+            list.Add(prefix + num.ToString().PadLeft(width, '0'));
+        }
+
+        return list;
+    }
+
+    private static bool EndsWithDigit(string code) =>
+        code.Length > 0 && char.IsDigit(code[^1]);
+
+    private static string StripTrailingDigitsPrefix(string code)
+    {
+        if (string.IsNullOrEmpty(code))
+            return string.Empty;
+        var i = code.Length - 1;
+        while (i >= 0 && char.IsDigit(code[i]))
+            i--;
+        return i < 0 ? string.Empty : code[..(i + 1)];
+    }
+
+    private static (decimal[] Originals, decimal[] Currents) SplitValueAcrossInstances(
+        decimal originalPrice,
+        decimal currentValue,
+        int qty)
+    {
+        var o = new decimal[qty];
+        var c = new decimal[qty];
+        if (qty == 1)
+        {
+            o[0] = originalPrice;
+            c[0] = currentValue;
+            return (o, c);
+        }
+
+        var oEach = Math.Round(originalPrice / qty, 2, MidpointRounding.AwayFromZero);
+        var cEach = Math.Round(currentValue / qty, 2, MidpointRounding.AwayFromZero);
+        for (var i = 0; i < qty - 1; i++)
+        {
+            o[i] = oEach;
+            c[i] = cEach;
+        }
+
+        o[qty - 1] = originalPrice - oEach * (qty - 1);
+        c[qty - 1] = currentValue - cEach * (qty - 1);
+        return (o, c);
     }
 
     private static AssetResponseDTO ToAssetResponseDTO(Asset a, AssetStatus? forcedStatus = null)

@@ -1,5 +1,6 @@
 using g19_sep490_ealds.Server.DTOs.AssetLocation;
 using g19_sep490_ealds.Server.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -32,6 +33,34 @@ public class AssetLocationsController : ControllerBase
                 displayName = d.Name
             })
             .ToListAsync();
+        return Ok(list);
+    }
+
+    /// <summary>
+    /// GET /api/AssetLocations/departments/{departmentId}/employees — Staff in a department (custodian dropdown).
+    /// </summary>
+    [HttpGet("departments/{departmentId:int}/employees")]
+    [Authorize]
+    public async Task<IActionResult> GetEmployeesForDepartment(int departmentId)
+    {
+        if (!await _db.Departments.AnyAsync(d => d.DepartmentId == departmentId))
+            return NotFound(new { message = $"Department {departmentId} not found." });
+
+        var list = await _db.Employees
+            .AsNoTracking()
+            .Where(e => e.DepartmentId == departmentId)
+            .OrderBy(e => e.UserId == null)
+            .ThenBy(e => e.UserId)
+            .ThenBy(e => e.EmployeeId)
+            .Select(e => new
+            {
+                employeeId = e.EmployeeId,
+                name = e.Name,
+                code = e.Code,
+                userId = e.UserId
+            })
+            .ToListAsync();
+
         return Ok(list);
     }
 

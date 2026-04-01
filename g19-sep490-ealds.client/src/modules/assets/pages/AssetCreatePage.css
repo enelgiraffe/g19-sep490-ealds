@@ -132,6 +132,20 @@
   align-items: center;
 }
 
+.asset-create__field--quantity-unit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.asset-create__quantity-unit-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
 .asset-create__label {
   font-size: 13px;
   color: #374151;
@@ -140,6 +154,12 @@
 .asset-create__required {
   color: #ef4444;
   margin-left: 4px;
+}
+
+.asset-create__hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #6b7280;
 }
 
 .asset-create__input,

@@ -193,7 +193,10 @@ export interface CreateAssetInstancePayload {
 }
 
 export interface CreateAssetPayload {
-  code: string;
+  /** Catalog mã tài sản; ignored when assetCodePrefix is set (server generates). */
+  code?: string;
+  /** Prefix for generated catalog code (mã tài sản), same numbering rules as instance prefix. */
+  assetCodePrefix?: string | null;
   name: string;
   assetTypeId: number;
   unit: string;
@@ -202,8 +205,48 @@ export interface CreateAssetPayload {
   inUseDate?: string | null;
   specification?: string | null;
   note?: string | null;
+  /** Prefix for generated instance codes (required when quantity is greater than 1). */
+  instanceCodePrefix?: string | null;
   /** Optional first physical row (same request as catalog create) */
   initialInstance?: CreateAssetInstancePayload;
+}
+
+/** Đơn vị tính options for asset create/edit forms. */
+export const ASSET_MEASUREMENT_UNITS = [
+  'Bộ',
+  'Cái',
+  'Chiếc',
+  'Máy',
+  'Đôi',
+  'Bình',
+  'Chai',
+  'Cuốn',
+  'Tập',
+  'Mét',
+  'Kiện',
+  'Thùng',
+  'Quyển',
+  'Hộp',
+  'Gói',
+] as const;
+
+export interface SupplierListItem {
+  supplierId: number;
+  code: string;
+  name: string;
+  taxCode?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  status: number;
+  createDate: string;
+}
+
+export interface DepartmentEmployeeOption {
+  employeeId: number;
+  name: string;
+  code: string;
+  userId?: number | null;
 }
 
 export interface UpdateAssetPayload {
@@ -329,6 +372,11 @@ export const assetService = {
     return response.data;
   },
 
+  async getAssetCodePrefixes(): Promise<string[]> {
+    const response = await assetApi.get<string[]>('/api/assets/code-prefixes');
+    return response.data;
+  },
+
   async getById(id: number): Promise<AssetDetailResponse> {
     const response = await assetApi.get<AssetDetailResponse>(`/api/assets/${id}`);
     return response.data;
@@ -365,6 +413,25 @@ export const assetService = {
 
   async getWarehouses(): Promise<WarehouseItem[]> {
     const response = await assetApi.get<WarehouseItem[]>('/api/warehouseassets');
+    return response.data;
+  },
+
+  async getInstanceCodePrefixes(): Promise<string[]> {
+    const response = await assetApi.get<string[]>('/api/assetinstances/instance-code-prefixes');
+    return response.data;
+  },
+
+  async getEmployeesByDepartment(departmentId: number): Promise<DepartmentEmployeeOption[]> {
+    const response = await assetApi.get<DepartmentEmployeeOption[]>(
+      `/api/AssetLocations/departments/${departmentId}/employees`
+    );
+    return response.data;
+  },
+
+  async getSuppliers(keyword?: string): Promise<SupplierListItem[]> {
+    const response = await assetApi.get<SupplierListItem[]>('/api/Suppliers', {
+      params: keyword ? { keyword } : undefined,
+    });
     return response.data;
   },
 };
