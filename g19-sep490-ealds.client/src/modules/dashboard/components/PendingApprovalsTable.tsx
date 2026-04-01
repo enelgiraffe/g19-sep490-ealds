@@ -5,9 +5,11 @@ import type { PendingApprovalRow } from '../types/dashboard.types';
 
 interface PendingApprovalsTableProps {
   dataSource: PendingApprovalRow[];
+  /** Server returns at most this many rows; shown in the section title. */
+  maxRows?: number;
 }
 
-export function PendingApprovalsTable({ dataSource }: PendingApprovalsTableProps) {
+export function PendingApprovalsTable({ dataSource, maxRows = 6 }: PendingApprovalsTableProps) {
   const navigate = useNavigate();
 
   const columns: ColumnsType<PendingApprovalRow> = [
@@ -16,12 +18,12 @@ export function PendingApprovalsTable({ dataSource }: PendingApprovalsTableProps
     { title: 'Ngày', dataIndex: 'date', key: 'date', width: 100 },
     { title: 'Trạng thái', dataIndex: 'status', key: 'status', width: 100 },
     {
-      title: 'Action',
+      title: 'Thao tác',
       key: 'action',
       width: 100,
       render: (_, record) => (
         <Button type="link" size="small" onClick={() => navigate(`/approval-detail/${record.id}`)}>
-          View
+          Xem
         </Button>
       ),
     },
@@ -29,7 +31,9 @@ export function PendingApprovalsTable({ dataSource }: PendingApprovalsTableProps
 
   return (
     <div style={{ marginBottom: 24 }}>
-      <h3 style={{ marginBottom: 12, fontSize: 16 }}>Yêu cầu chờ phê duyệt (Pending Approvals)</h3>
+      <h3 style={{ marginBottom: 12, fontSize: 16 }}>
+        Yêu cầu chờ phê duyệt
+      </h3>
       <Table
         dataSource={dataSource}
         columns={columns}

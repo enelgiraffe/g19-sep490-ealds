@@ -13,6 +13,13 @@ const cards = [
   { key: 'assetsDueMaintenance', title: 'Tài sản sắp bảo trì / kiểm kê', valueKey: 'assetsDueMaintenance' as const, suffix: '' },
 ];
 
+function formatCardValue(valueKey: keyof KPISummary, raw: number): string {
+  if (valueKey === 'totalAssetValue') {
+    return raw.toLocaleString('vi-VN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+  return Math.round(raw).toLocaleString('vi-VN');
+}
+
 export function KPICards({ data }: KPICardsProps) {
   return (
     <div className="kpi-cards">
@@ -20,7 +27,7 @@ export function KPICards({ data }: KPICardsProps) {
         <Card key={key} className="kpi-cards__card" size="small">
           <div className="kpi-cards__title">{title}</div>
           <div className="kpi-cards__value">
-            {data[valueKey]}
+            {formatCardValue(valueKey, data[valueKey])}
             {suffix}
           </div>
         </Card>
