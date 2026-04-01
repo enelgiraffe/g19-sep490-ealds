@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Services.Interface;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -13,11 +14,17 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class DirectorApproveController : ControllerBase
 {
     private readonly EaldsDbContext _db;
+    private readonly IAssetRequestNotificationService _requestNotifications;
     private readonly int _transferRequestTypeId;
     private readonly int _purchaseRequestTypeId;
-    public DirectorApproveController(EaldsDbContext db, IConfiguration configuration)
+
+    public DirectorApproveController(
+        EaldsDbContext db,
+        IConfiguration configuration,
+        IAssetRequestNotificationService requestNotifications)
     {
         _db = db;
+        _requestNotifications = requestNotifications;
         _transferRequestTypeId = configuration.GetValue<int>("App:TransferRequestTypeId", 3);
         _purchaseRequestTypeId = configuration.GetValue<int>("App:PurchaseRequestTypeId", 1);
     }
@@ -142,6 +149,9 @@ public class DirectorApproveController : ControllerBase
         }
 
         await _db.SaveChangesAsync();
+
+        await _requestNotifications.NotifySenderDecisionAsync(ar.AssetRequestId, true, dto.ApprovedBy);
+
         return Ok(new { assetRequestId = ar.AssetRequestId, status = ar.Status });
     }
 }

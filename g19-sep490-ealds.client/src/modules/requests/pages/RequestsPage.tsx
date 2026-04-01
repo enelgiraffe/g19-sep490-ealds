@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Button, DatePicker, Select, Tabs, message, Input } from 'antd';
 import { EyeOutlined, EditOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -221,9 +222,26 @@ function toTransferTableRow(item: TransferRequestListItem, index: number): Trans
   };
 }
 
+const REQUESTS_TAB_KEYS: ActiveTabKeyAll[] = [
+  'purchase',
+  'transfer',
+  'liquidation',
+  'maintenance',
+  'repair',
+];
+
 export function RequestsPage() {
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<ActiveTabKeyAll>('purchase');
   const didInitDirectorDefaultTabRef = useRef(false);
+
+  // Deep link from notifications: /requests?tab=transfer
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && (REQUESTS_TAB_KEYS as string[]).includes(tab)) {
+      setActiveTab(tab as ActiveTabKeyAll);
+    }
+  }, [searchParams]);
 
   const [purchaseRows, setPurchaseRows] = useState<PurchaseTableRow[]>([]);
   const [purchaseLoading, setPurchaseLoading] = useState(false);
@@ -325,15 +343,28 @@ export function RequestsPage() {
     loadProfile();
   }, []);
 
-  // Director module: default landing should expose director tabs (maintenance/repair/liquidation)
+  // Director has all tabs; accountant / trưởng phòng only purchase, transfer, liquidation
+  useEffect(() => {
+    if (!userProfile?.role) return;
+    const r = String(userProfile.role).toUpperCase();
+    const limited: ActiveTabKeyAll[] = ['purchase', 'transfer', 'liquidation'];
+    const allowed: ActiveTabKeyAll[] = r === 'DIRECTOR' ? REQUESTS_TAB_KEYS : limited;
+    if (!allowed.includes(activeTab)) {
+      setActiveTab('purchase');
+    }
+  }, [userProfile, activeTab]);
+
+  // Director module: default tab purchase unless URL already specifies ?tab= (e.g. from notification link)
   useEffect(() => {
     if (didInitDirectorDefaultTabRef.current) return;
     if (!userProfile?.role) return;
     didInitDirectorDefaultTabRef.current = true;
+    const tab = searchParams.get('tab');
+    if (tab && (REQUESTS_TAB_KEYS as string[]).includes(tab)) return;
     if (String(userProfile.role).toUpperCase() === 'DIRECTOR') {
       setActiveTab('purchase');
     }
-  }, [userProfile]);
+  }, [userProfile, searchParams]);
 
   const reloadPurchaseList = async () => {
     setPurchaseLoading(true);

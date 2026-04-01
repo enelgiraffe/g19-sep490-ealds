@@ -76,11 +76,32 @@ export function mapApiToNotificationItem(n: ApiNotification): NotificationItem {
     description: n.content ?? '',
     time: formatSentDate(n.sentDate),
     read,
-    link: inferNotificationLink(n.title, n.refId),
+    link: inferNotificationLink(n.title, n.content, n.refId),
   };
 }
 
-function inferNotificationLink(title: string, refId: number | null): string {
+/** Matches backend RequestTypeId → tab key on <RequestsPage /> */
+const REQUEST_TAB_BY_TYPE_ID: Record<number, string> = {
+  1: 'purchase',
+  2: 'maintenance',
+  3: 'transfer',
+  4: 'repair',
+  5: 'liquidation',
+};
+
+function inferNotificationLink(title: string, content: string | null, refId: number | null): string {
+  // Asset-request workflow (title contains "YC #123") — opens request list tab, not detail.
+  const ycMatch = title.match(/YC\s*#\s*(\d+)/i);
+  if (ycMatch) {
+    const typeMatch = content?.match(/Loại\s*#\s*(\d+)/i);
+    const typeId = typeMatch ? parseInt(typeMatch[1], 10) : NaN;
+    const tab =
+      Number.isFinite(typeId) && REQUEST_TAB_BY_TYPE_ID[typeId]
+        ? REQUEST_TAB_BY_TYPE_ID[typeId]
+        : 'purchase';
+    return `/requests?tab=${tab}`;
+  }
+
   if (refId == null) return '/notifications';
   const t = title.toLowerCase();
   if (t.includes('chờ xác nhận') || t.includes('cho xac nhan')) return `/inventory-review/${refId}`;

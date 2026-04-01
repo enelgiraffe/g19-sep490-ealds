@@ -69,6 +69,25 @@
   flex: 1;
 }
 
+.sidebar__notifications-badge {
+  flex-shrink: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #fe3720;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.sidebar__link--active .sidebar__notifications-badge {
+  background: #fff;
+  color: #fe3720;
+}
+
 .sidebar__link:hover {
   background: #e8e8e8;
   color: #333;

@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Dropdown, Spin, message } from 'antd';
-import type { MenuProps } from 'antd';
+import { Card, Spin, message } from 'antd';
 import { NotificationRow } from '../../../shared/components/NotificationRow';
 import { NOTIFICATION_CATEGORY_TABS } from '../../../shared/data/notificationsMockData';
 import {
@@ -69,10 +68,6 @@ export function NotificationsPage() {
     void load();
   };
 
-  const markReadItems: MenuProps['items'] = [
-    { key: 'all', label: 'Đánh dấu tất cả đã đọc', onClick: markAllRead },
-  ];
-
   return (
     <div className="notifications-page">
       <header className="notifications-page__header">
@@ -126,11 +121,14 @@ export function NotificationsPage() {
                 Chưa đọc
               </button>
             </div>
-            <Dropdown menu={{ items: markReadItems }} trigger={['click']} placement="bottomRight">
-              <button type="button" className="notifications-page__mark-read">
-                Đánh dấu đã đọc <span className="notifications-page__chevron">▼</span>
-              </button>
-            </Dropdown>
+            <button
+              type="button"
+              className="notifications-page__mark-read"
+              onClick={markAllRead}
+              disabled={unreadCount === 0}
+            >
+              Đánh dấu đã đọc
+            </button>
           </div>
         </div>
       </header>

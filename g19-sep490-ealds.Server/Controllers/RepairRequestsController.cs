@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Services.Interface;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
 namespace g19_sep490_ealds.Server.Controllers;
@@ -18,11 +19,16 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class RepairRequestsController : ControllerBase
 {
     private readonly EaldsDbContext _db;
+    private readonly IAssetRequestNotificationService _requestNotifications;
     private readonly int _repairRequestTypeId;
 
-    public RepairRequestsController(EaldsDbContext db, IConfiguration configuration)
+    public RepairRequestsController(
+        EaldsDbContext db,
+        IConfiguration configuration,
+        IAssetRequestNotificationService requestNotifications)
     {
         _db = db;
+        _requestNotifications = requestNotifications;
         _repairRequestTypeId = configuration.GetValue<int>("App:RepairRequestTypeId", 4);
     }
 
@@ -159,6 +165,8 @@ public class RepairRequestsController : ControllerBase
         _db.AssetRequestRecords.Add(record);
 
         await _db.SaveChangesAsync();
+
+        await _requestNotifications.NotifyFirstApproversAsync(assetRequest.AssetRequestId);
 
         return Ok(new { assetRequestId = assetRequest.AssetRequestId, taskId = repairTask.TaskId });
     }
