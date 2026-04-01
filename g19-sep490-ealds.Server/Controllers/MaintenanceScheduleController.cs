@@ -1,8 +1,6 @@
 using g19_sep490_ealds.Server.DTO.RequestDTO.AssetMaintenance.MaintenanceSchedule;
-using g19_sep490_ealds.Server.DTO.RequestDTO.AssetMaintenance.MaintenanceTemplate;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Net;
 
@@ -35,14 +33,14 @@ public class MaintenanceScheduleController : ControllerBase
         }
     }
 
-    [HttpGet("find-by/{assetId}")]
+    [HttpGet("find-by/{AssetInstanceId}")]
     [ProducesResponseType(typeof(IEnumerable<MaintenanceSchedule>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(string), (int)HttpStatusCode.BadRequest)]
-    public async Task<IActionResult> GetScheduleByAsset(int assetId)
+    public async Task<IActionResult> GetScheduleByAsset(int AssetInstanceId)
     {
         try
         {
-            var response = await _service.GetScheduleByAssetAsync(assetId);
+            var response = await _service.GetScheduleByAssetAsync(AssetInstanceId);
             return Ok(response);
         }
         catch (Exception ex)

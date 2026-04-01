@@ -1,5 +1,5 @@
-using System;
-using System.Collections.Generic;
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace g19_sep490_ealds.Server.Models;
 
@@ -74,4 +74,10 @@ public partial class AssetInstance
     public virtual Warehouse Warehouse { get; set; } = null!;
 
     public virtual ICollection<AssetRequest> AssetRequests { get; set; } = new List<AssetRequest>();
+    [NotMapped]
+    public AssetStatus StatusEnum
+    {
+        get => (AssetStatus)Status;
+        set => Status = (int)value;
+    }
 }

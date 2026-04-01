@@ -128,6 +128,18 @@ builder.Services.AddQuartz(q =>
         .WithIdentity("InventoryScheduledCheckNotificationJob-trigger")
         .WithCronSchedule("0 0 * * * ?")); // mỗi giờ — gửi TB khi đến khung lịch kiểm kê
 });
+
+builder.Services.AddQuartz(q =>
+{
+    var jobKey = new JobKey("DepreciationJob");
+
+    q.AddJob<DepreciationJobs>(opts => opts.WithIdentity(jobKey));
+
+    q.AddTrigger(opts => opts
+        .ForJob(jobKey)
+        .WithIdentity("DepreciationJob-trigger")
+        .WithCronSchedule("0 5 0 * * ?")); // 00:05 mỗi ngày
+});
 //dky host service cho Quarzt
 builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 

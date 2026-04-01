@@ -3,4 +3,5 @@
 public interface IAssetDepreciationService
 {
     Task RunMonthlyDepreciation();
+    Task UpdateDepreciation(int recordId, decimal newAmount);
 }

@@ -1,4 +1,4 @@
-using g19_sep490_ealds.Server.Models;
+﻿using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
 using g19_sep490_ealds.Server.Utils;
 using Microsoft.EntityFrameworkCore;
@@ -19,12 +19,14 @@ public class AssetDepreciationService : IAssetDepreciationService
         var now = DateTime.UtcNow.AddHours(7);
         var period = new DateOnly(now.Year, now.Month, 1);
 
-        var instances = await _context.AssetInstances
-            .Where(ai => ai.InUseDate != null)
-            .Where(ai => _context.DepreciationRecords.Any(r => r.AssetInstanceId == ai.AssetInstanceId))
-            .ToListAsync();
+        var assets = await _context.AssetInstances
+                .Include(a => a.DepreciationRecords)
+                .Include(a => a.DepreciationPolicy)
+                .Include(a => a.AssetCapitalizations)
+                .Where(a => a.DepreciationPolicyId != null && a.InUseDate != null)
+                .ToListAsync();
 
-        foreach (var instance in instances)
+        foreach (var instance in assets)
         {
             await ProcessInstance(instance, period);
         }
@@ -32,24 +34,30 @@ public class AssetDepreciationService : IAssetDepreciationService
         await _context.SaveChangesAsync();
     }
 
-    private async Task ProcessInstance(AssetInstance instance, DateOnly period)
+    private async Task ProcessInstance(AssetInstance assetInstance, DateOnly period)
     {
+        // chưa capitalize 
+        if (assetInstance.AssetCapitalizations == null || !assetInstance.AssetCapitalizations.Any())
+            return;
+
         var now = DateTime.UtcNow.AddHours(7);
 
-        if (instance.InUseDate == null) return;
+        // chưa có ngày sử dụng
+        if (assetInstance.InUseDate == null) return;
 
-        var inUseDate = instance.InUseDate.Value.ToDateTime(TimeOnly.MinValue);
+        var inUseDate = assetInstance.InUseDate.Value.ToDateTime(TimeOnly.MinValue);
 
         if (now < inUseDate) return;
 
+        // kiểm tra đã có record tháng này chưa
         var exists = await _context.DepreciationRecords
-            .AnyAsync(x => x.AssetInstanceId == instance.AssetInstanceId && x.Period == period);
+            .AnyAsync(x => x.AssetInstanceId == assetInstance.AssetInstanceId && x.Period == period);
 
         if (exists) return;
 
         var last = await _context.DepreciationRecords
             .Include(x => x.Policy)
-            .Where(x => x.AssetInstanceId == instance.AssetInstanceId)
+            .Where(x => x.AssetInstanceId == assetInstance.AssetInstanceId)
             .OrderByDescending(x => x.Period)
             .ThenByDescending(x => x.CreateDate)
             .FirstOrDefaultAsync();
@@ -58,10 +66,10 @@ public class AssetDepreciationService : IAssetDepreciationService
 
         if (policy == null) return;
 
-        decimal baseValue = instance.OriginalPrice;
+        decimal baseValue = assetInstance.OriginalPrice;
 
         var monthly = DepreciationFormula.CalculateStraightLine(
-            instance.OriginalPrice,
+            assetInstance.OriginalPrice,
             policy.SalvageValue,
             policy.UsefullLifeMonths);
 
@@ -75,16 +83,29 @@ public class AssetDepreciationService : IAssetDepreciationService
 
         _context.DepreciationRecords.Add(new DepreciationRecord
         {
-            AssetInstanceId = instance.AssetInstanceId,
+            AssetInstanceId = assetInstance.AssetInstanceId,
             PolicyId = policy.PolicyId,
             Period = period,
             DepreciationAmount = monthly,
             OriginalValue = baseValue,
             AccumulatedDepreciation = newAccumulated,
-            RemainingValue = instance.OriginalPrice - newAccumulated,
+            RemainingValue = assetInstance.OriginalPrice - newAccumulated,
             CreateDate = DateTime.UtcNow.AddHours(7)
         });
 
-        instance.CurrentValue = remaining;
+        assetInstance.CurrentValue = remaining;
+    }
+
+    public async Task UpdateDepreciation(int recordId, decimal newAmount)
+    {
+        var record = await _context.DepreciationRecords.FindAsync(recordId)
+            ?? throw new Exception("Record not found");
+
+        if (record.IsPosted)
+            throw new Exception("Cannot modify posted record");
+
+        record.DepreciationAmount = newAmount;
+
+        await _context.SaveChangesAsync();
     }
 }

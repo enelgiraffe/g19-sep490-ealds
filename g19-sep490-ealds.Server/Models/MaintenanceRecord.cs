@@ -1,5 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using g19_sep490_ealds.Server.Utils.EnumsStatus;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace g19_sep490_ealds.Server.Models;
 
@@ -28,4 +28,11 @@ public partial class MaintenanceRecord
     public virtual AssetInstance AssetInstance { get; set; } = null!;
 
     public virtual MaintenanceTask Task { get; set; } = null!;
+
+    [NotMapped]
+    public MaintenanceRecordStatus StatusEnum
+    {
+        get => (MaintenanceRecordStatus)Status;
+        set => Status = (int)value;
+    }
 }

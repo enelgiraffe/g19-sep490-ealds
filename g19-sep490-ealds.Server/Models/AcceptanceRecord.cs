@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace g19_sep490_ealds.Server.Models;
-
+﻿namespace g19_sep490_ealds.Server.Models;
 public partial class AcceptanceRecord
 {
     public int AcceptanceId { get; set; }

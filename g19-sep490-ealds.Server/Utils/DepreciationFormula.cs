@@ -10,6 +10,6 @@ public static class DepreciationFormula
     {
         if (usefulLifeMonths <= 0) return 0;
 
-        return (cost - salvage) / usefulLifeMonths;
+        return Math.Round( (cost - salvage) / usefulLifeMonths, 0, MidpointRounding.AwayFromZero);
     }
 }
