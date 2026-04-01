@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Services.Interface;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
 namespace g19_sep490_ealds.Server.Controllers;
@@ -19,11 +20,16 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class MaintenanceRequestsController : ControllerBase
 {
     private readonly EaldsDbContext _db;
+    private readonly IAssetRequestNotificationService _requestNotifications;
     private readonly int _maintenanceRequestTypeId;
 
-    public MaintenanceRequestsController(EaldsDbContext db, IConfiguration configuration)
+    public MaintenanceRequestsController(
+        EaldsDbContext db,
+        IConfiguration configuration,
+        IAssetRequestNotificationService requestNotifications)
     {
         _db = db;
+        _requestNotifications = requestNotifications;
         _maintenanceRequestTypeId = configuration.GetValue<int>("App:MaintenanceRequestTypeId", 2);
     }
 
@@ -173,6 +179,8 @@ public class MaintenanceRequestsController : ControllerBase
         }
 
         await _db.SaveChangesAsync();
+
+        await _requestNotifications.NotifyFirstApproversAsync(assetRequest.AssetRequestId);
 
         return Ok(new { assetRequestId = assetRequest.AssetRequestId, taskId = task.TaskId });
     }

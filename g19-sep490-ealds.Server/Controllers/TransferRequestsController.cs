@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Services.Interface;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -18,11 +19,16 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class TransferRequestsController : ControllerBase
 {
     private readonly EaldsDbContext _db;
+    private readonly IAssetRequestNotificationService _requestNotifications;
     private readonly int _transferRequestTypeId;
 
-    public TransferRequestsController(EaldsDbContext db, IConfiguration configuration)
+    public TransferRequestsController(
+        EaldsDbContext db,
+        IConfiguration configuration,
+        IAssetRequestNotificationService requestNotifications)
     {
         _db = db;
+        _requestNotifications = requestNotifications;
         _transferRequestTypeId = configuration.GetValue<int>("App:TransferRequestTypeId", 3);
     }
 
@@ -188,6 +194,8 @@ public class TransferRequestsController : ControllerBase
         _db.AssetRequestRecords.Add(record);
 
         await _db.SaveChangesAsync();
+
+        await _requestNotifications.NotifyFirstApproversAsync(assetRequest.AssetRequestId);
 
         return Ok(new { assetRequestId = assetRequest.AssetRequestId, recordId = transfer.TransferId });
     }

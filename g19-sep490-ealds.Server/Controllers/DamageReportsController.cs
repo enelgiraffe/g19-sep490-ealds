@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Services.Interface;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
 namespace g19_sep490_ealds.Server.Controllers;
@@ -13,11 +14,13 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class DamageReportsController : ControllerBase
 {
     private readonly EaldsDbContext _db;
+    private readonly IAssetRequestNotificationService _requestNotifications;
     private const string DamageReportTitlePrefix = "Damage report -";
 
-    public DamageReportsController(EaldsDbContext db)
+    public DamageReportsController(EaldsDbContext db, IAssetRequestNotificationService requestNotifications)
     {
         _db = db;
+        _requestNotifications = requestNotifications;
     }
 
     [HttpPost]
@@ -77,6 +80,8 @@ public class DamageReportsController : ControllerBase
 
         _db.AssetRequestRecords.Add(record);
         await _db.SaveChangesAsync();
+
+        await _requestNotifications.NotifyFirstApproversAsync(assetRequest.AssetRequestId);
 
         // If a DocumentId was provided, validate it exists and optionally link/downloadable info
         if (dto.DocumentId.HasValue)

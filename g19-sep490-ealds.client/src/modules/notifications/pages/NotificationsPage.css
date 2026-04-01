@@ -135,12 +135,13 @@
   cursor: pointer;
 }
 
-.notifications-page__mark-read:hover {
+.notifications-page__mark-read:hover:not(:disabled) {
   color: #4096ff;
 }
 
-.notifications-page__chevron {
-  font-size: 10px;
+.notifications-page__mark-read:disabled {
+  color: #bfbfbf;
+  cursor: not-allowed;
 }
 
 .notifications-page__card {

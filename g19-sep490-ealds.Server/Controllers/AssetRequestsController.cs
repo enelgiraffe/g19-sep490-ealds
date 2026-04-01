@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Services.Interface;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -15,11 +16,16 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class AssetRequestsController : ControllerBase
 {
     private readonly EaldsDbContext _db;
+    private readonly IAssetRequestNotificationService _requestNotifications;
     private readonly int _purchaseRequestTypeId;
 
-    public AssetRequestsController(EaldsDbContext db, IConfiguration configuration)
+    public AssetRequestsController(
+        EaldsDbContext db,
+        IConfiguration configuration,
+        IAssetRequestNotificationService requestNotifications)
     {
         _db = db;
+        _requestNotifications = requestNotifications;
         _purchaseRequestTypeId = configuration.GetValue<int>("App:PurchaseRequestTypeId", 1);
     }
 
@@ -139,6 +145,9 @@ public class AssetRequestsController : ControllerBase
         _db.AssetRequestRecords.Add(record);
         await _db.SaveChangesAsync();
 
+        if (desiredStatus == 0)
+            await _requestNotifications.NotifyFirstApproversAsync(assetRequest.AssetRequestId);
+
         return Ok(new { assetRequestId = assetRequest.AssetRequestId });
     }
 
@@ -214,6 +223,10 @@ public class AssetRequestsController : ControllerBase
         _db.AssetRequestRecords.Add(record);
 
         await _db.SaveChangesAsync();
+
+        if (fromStatus == -1 && desiredStatus == 0)
+            await _requestNotifications.NotifyFirstApproversAsync(ar.AssetRequestId);
+
         return Ok(new { assetRequestId = ar.AssetRequestId });
     }
 
