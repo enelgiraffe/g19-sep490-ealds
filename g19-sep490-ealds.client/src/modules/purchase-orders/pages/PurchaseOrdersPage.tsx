@@ -41,15 +41,42 @@ function formatDate(iso: string): string {
   }
 }
 
+function parseCurrencyToNumber(value: unknown): number {
+  const raw = String(value ?? '').trim();
+  if (!raw) return 0;
+  const cleaned = raw.replace(/[^\d,.-]/g, '');
+  if (!cleaned) return 0;
+  const normalized = cleaned.includes(',') && !cleaned.includes('.')
+    ? cleaned.replace(/,/g, '.')
+    : cleaned.replace(/,/g, '');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function toTableRow(item: PurchaseOrderListItem, index: number): TableRow {
   let quantity = 1;
   let estimatedPrice = '—';
   try {
     if (item.proposedData) {
-      const parsed = JSON.parse(item.proposedData) as { equipment?: { quantity?: number; estimatedPrice?: string }[]; totalPrice?: string };
+      const parsed = JSON.parse(item.proposedData) as {
+        equipment?: { quantity?: number | string; estimatedPrice?: string }[];
+        totalPrice?: string;
+      };
       if (Array.isArray(parsed.equipment) && parsed.equipment.length > 0) {
-        quantity = parsed.equipment.reduce((s, e) => s + (e.quantity ?? 1), 0);
-        estimatedPrice = parsed.totalPrice ?? parsed.equipment[0]?.estimatedPrice ?? '—';
+        quantity = parsed.equipment.reduce((sum, line) => {
+          const q = Number(line?.quantity);
+          return sum + (Number.isFinite(q) && q > 0 ? q : 1);
+        }, 0);
+        if (parsed.totalPrice && String(parsed.totalPrice).trim()) {
+          estimatedPrice = String(parsed.totalPrice);
+        } else {
+          const total = parsed.equipment.reduce((sum, line) => {
+            const q = Number(line?.quantity);
+            const unitPrice = parseCurrencyToNumber(line?.estimatedPrice);
+            return sum + (Number.isFinite(q) && q > 0 ? q : 1) * unitPrice;
+          }, 0);
+          estimatedPrice = total > 0 ? `${total.toLocaleString('vi-VN')}đ` : '—';
+        }
       }
     }
   } catch {
@@ -183,7 +210,7 @@ export function PurchaseOrdersPage() {
   const parseToFormValues = (detail: PurchaseOrderDetail) => {
     const values: any = {
       title: detail.title ?? '',
-      equipment: [{ name: '', quantity: 1, machineCode: '', unit: 'Cái', estimatedPrice: '' }],
+      equipment: [{ name: '', quantity: 1, modelCode: '', unit: 'Cái', estimatedPrice: '' }],
     };
     try {
       const desc = (detail.description ?? '').split('\n').map((s) => s.trim()).filter(Boolean);
@@ -211,7 +238,7 @@ export function PurchaseOrdersPage() {
           values.equipment = parsed.equipment.map((e) => ({
             name: e.name ?? '',
             quantity: e.quantity ?? 1,
-            machineCode: e.machineCode ?? '',
+            modelCode: e.modelCode ?? e.machineCode ?? '',
             unit: e.unit ?? 'Cái',
             estimatedPrice: e.estimatedPrice ?? '',
           }));

@@ -21,6 +21,7 @@ public class DirectorViewController : ControllerBase
     [HttpGet("view")]
     public async Task<IActionResult> Get(
         [FromQuery] int? status,
+        [FromQuery] string? statuses,
         [FromQuery] int? requestTypeId,
         [FromQuery] int? userId,
         [FromQuery] int page = 1,
@@ -42,7 +43,24 @@ public class DirectorViewController : ControllerBase
                 .ThenInclude(u => u.EmployeeUsers)
             .AsQueryable();
 
-        if (status.HasValue)
+        var statusIds = !string.IsNullOrWhiteSpace(statuses)
+            ? statuses.Split(',')
+                .Select(s =>
+                {
+                    var ok = int.TryParse(s.Trim(), out var v);
+                    return new { ok, v };
+                })
+                .Where(x => x.ok)
+                .Select(x => x.v)
+                .Distinct()
+                .ToArray()
+            : Array.Empty<int>();
+
+        if (statusIds.Length > 0)
+        {
+            query = query.Where(x => statusIds.Contains(x.Status));
+        }
+        else if (status.HasValue)
         {
             query = query.Where(x => x.Status == status.Value);
         }
@@ -99,7 +117,33 @@ public class DirectorViewController : ControllerBase
                         .OrderBy(e => e.EmployeeId)
                         .Select(e => e.Name)
                         .FirstOrDefault()
-                    : null
+                    : null,
+                CreatorDepartmentName = ar.User != null
+                    ? ar.User.EmployeeUsers
+                        .OrderBy(e => e.EmployeeId)
+                        .Select(e => e.Department != null ? e.Department.Name : null)
+                        .FirstOrDefault()
+                    : null,
+                AccountantComment = ar.Approvals
+                    .Where(a => a.ApprovedRole != null && a.ApprovedRole.Code == "ACCOUNTANT")
+                    .OrderByDescending(a => a.DecisionDate)
+                    .Select(a => a.Comment)
+                    .FirstOrDefault(),
+                AccountantDecisionDate = ar.Approvals
+                    .Where(a => a.ApprovedRole != null && a.ApprovedRole.Code == "ACCOUNTANT")
+                    .OrderByDescending(a => a.DecisionDate)
+                    .Select(a => (DateTime?)a.DecisionDate)
+                    .FirstOrDefault(),
+                DirectorComment = ar.Approvals
+                    .Where(a => a.ApprovedRole != null && a.ApprovedRole.Code == "DIRECTOR")
+                    .OrderByDescending(a => a.DecisionDate)
+                    .Select(a => a.Comment)
+                    .FirstOrDefault(),
+                DirectorDecisionDate = ar.Approvals
+                    .Where(a => a.ApprovedRole != null && a.ApprovedRole.Code == "DIRECTOR")
+                    .OrderByDescending(a => a.DecisionDate)
+                    .Select(a => (DateTime?)a.DecisionDate)
+                    .FirstOrDefault()
             })
             .ToListAsync();
 

@@ -37,6 +37,10 @@ public class TransferRequestsController : ControllerBase
             return Unauthorized();
 
         var isAccountant = User.IsInRole("ACCOUNTANT");
+        var userDeptId = await _db.Employees.AsNoTracking()
+            .Where(e => e.UserId == userId)
+            .Select(e => (int?)e.DepartmentId)
+            .FirstOrDefaultAsync();
 
         var query = _db.TransferRecords
             .AsNoTracking()
@@ -45,7 +49,11 @@ public class TransferRequestsController : ControllerBase
             .Include(tr => tr.AssetRequest)
             .Include(tr => tr.FromLocation).ThenInclude(fl => fl.Department)
             .Include(tr => tr.ToLocation).ThenInclude(tl => tl.Department)
-            .Where(tr => isAccountant || tr.AssetRequest.CreatedBy == userId)
+            .Where(tr =>
+                isAccountant
+                || tr.AssetRequest.CreatedBy == userId
+                || (userDeptId.HasValue && tr.FromLocation.DepartmentId == userDeptId.Value)
+                || (userDeptId.HasValue && tr.ToLocation.DepartmentId == userDeptId.Value))
             .OrderByDescending(tr => tr.TransferDate);
 
         var list = await query
@@ -61,6 +69,13 @@ public class TransferRequestsController : ControllerBase
                 InstanceCode = tr.AssetInstance.InstanceCode,
                 FromDepartment = tr.FromLocation.Department.Name,
                 ToDepartment = tr.ToLocation.Department.Name,
+                FromDepartmentId = tr.FromLocation.DepartmentId,
+                ToDepartmentId = tr.ToLocation.DepartmentId,
+                CreatedBy = tr.AssetRequest.CreatedBy,
+                CreatedByName = _db.Employees
+                    .Where(e => e.UserId == tr.AssetRequest.CreatedBy)
+                    .Select(e => e.Name)
+                    .FirstOrDefault(),
                 Quantity = 1,
                 Status = tr.AssetRequest.Status,
                 StatusName =
@@ -71,8 +86,8 @@ public class TransferRequestsController : ControllerBase
                     tr.AssetRequest.Status == 4 ? "Phê duyệt" :
                     "Không xác định",
                 Reason = tr.AssetRequest.Description,
-                IsSenderConfirmed = false,
-                IsReceiverConfirmed = false
+                IsSenderConfirmed = tr.IsSenderConfirmed,
+                IsReceiverConfirmed = tr.IsReceiverConfirmed
             })
             .ToListAsync();
 
@@ -172,7 +187,9 @@ public class TransferRequestsController : ControllerBase
             FromUserId = dto.FromUserId ?? userId,
             ToUserId = dto.ToUserId,
             TransferDate = now,
-            ExecutedBy = dto.ExecuteBy == 0 ? userId : dto.ExecuteBy
+            ExecutedBy = dto.ExecuteBy == 0 ? userId : dto.ExecuteBy,
+            IsSenderConfirmed = false,
+            IsReceiverConfirmed = false
         };
 
         _db.TransferRecords.Add(transfer);
@@ -262,25 +279,46 @@ public class TransferRequestsController : ControllerBase
     [HttpPost("{id:int}/confirm-send")]
     public async Task<IActionResult> ConfirmSend(int id)
     {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            return Unauthorized();
+
         var ar = await _db.AssetRequests.FindAsync(id);
         if (ar == null || ar.RequestTypeId != _transferRequestTypeId) return NotFound("Transfer request not found");
         if (ar.Status != 4) return BadRequest("Chỉ được xác nhận gửi khi yêu cầu đã được Giám đốc phê duyệt (Status = 4).");
 
-        var transfer = await _db.TransferRecords.FirstOrDefaultAsync(t => t.AssetRequestId == id);
+        var transfer = await _db.TransferRecords
+            .Include(t => t.FromLocation)
+            .Include(t => t.ToLocation)
+            .FirstOrDefaultAsync(t => t.AssetRequestId == id);
         if (transfer == null) return NotFound("Transfer record not found");
 
         if (transfer.IsSenderConfirmed) return BadRequest("Bên gửi đã xác nhận rồi.");
 
+        var userDeptId = await _db.Employees.AsNoTracking()
+            .Where(e => e.UserId == userId)
+            .Select(e => (int?)e.DepartmentId)
+            .FirstOrDefaultAsync();
+        var isAccountant = User.IsInRole("ACCOUNTANT");
+        var canSend = isAccountant
+            || ar.CreatedBy == userId
+            || transfer.FromUserId == userId
+            || (userDeptId.HasValue && transfer.FromLocation.DepartmentId == userDeptId.Value);
+        if (!canSend) return Forbid();
+
         transfer.IsSenderConfirmed = true;
         transfer.SenderConfirmedAt = DateTime.UtcNow;
+        var senderUserRole = await _db.UserRoles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(ur => ur.UserId == userId);
+        var senderActionRoleId = senderUserRole?.RoleId ?? 1;
 
         var rec = new AssetRequestRecord
         {
             AssetRequestId = id,
             FromStatus = 4, ToStatus = 4,
             Action = 1,
-            ActionByUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0"),
-            ActionRoleId = 0,
+            ActionByUserId = userId,
+            ActionRoleId = senderActionRoleId,
             Comment = "Bên gửi đã xác nhận chuyển",
             OccurredAt = DateTime.UtcNow
         };
@@ -294,25 +332,47 @@ public class TransferRequestsController : ControllerBase
     [HttpPost("{id:int}/confirm-receive")]
     public async Task<IActionResult> ConfirmReceive(int id)
     {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            return Unauthorized();
+
         var ar = await _db.AssetRequests.FindAsync(id);
         if (ar == null || ar.RequestTypeId != _transferRequestTypeId) return NotFound("Transfer request not found");
         if (ar.Status != 4) return BadRequest("Chỉ được xác nhận nhận khi yêu cầu đã được Giám đốc phê duyệt (Status = 4).");
 
-        var transfer = await _db.TransferRecords.FirstOrDefaultAsync(t => t.AssetRequestId == id);
+        var transfer = await _db.TransferRecords
+            .Include(t => t.FromLocation)
+            .Include(t => t.ToLocation)
+            .FirstOrDefaultAsync(t => t.AssetRequestId == id);
         if (transfer == null) return NotFound("Transfer record not found");
 
         if (transfer.IsReceiverConfirmed) return BadRequest("Bên nhận đã xác nhận rồi.");
+        if (!transfer.IsSenderConfirmed)
+            return BadRequest("Bên gửi chưa xác nhận bàn giao. Bên nhận chưa thể xác nhận đã nhận.");
+
+        var userDeptId = await _db.Employees.AsNoTracking()
+            .Where(e => e.UserId == userId)
+            .Select(e => (int?)e.DepartmentId)
+            .FirstOrDefaultAsync();
+        var isAccountant = User.IsInRole("ACCOUNTANT");
+        var canReceive = isAccountant
+            || transfer.ToUserId == userId
+            || (userDeptId.HasValue && transfer.ToLocation.DepartmentId == userDeptId.Value);
+        if (!canReceive) return Forbid();
 
         transfer.IsReceiverConfirmed = true;
         transfer.ReceiverConfirmedAt = DateTime.UtcNow;
+        var receiverUserRole = await _db.UserRoles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(ur => ur.UserId == userId);
+        var receiverActionRoleId = receiverUserRole?.RoleId ?? 1;
 
         var rec = new AssetRequestRecord
         {
             AssetRequestId = id,
             FromStatus = 4, ToStatus = 4,
             Action = 1,
-            ActionByUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0"),
-            ActionRoleId = 0,
+            ActionByUserId = userId,
+            ActionRoleId = receiverActionRoleId,
             Comment = "Bên nhận đã xác nhận nhận",
             OccurredAt = DateTime.UtcNow
         };

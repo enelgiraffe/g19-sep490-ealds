@@ -12,7 +12,7 @@ import {
   type GetAssetCatalogParams,
   type AssetTypeItem,
 } from '../services/assetService';
-import { transferRequestService } from '../services/transferRequestService';
+import { transferRequestService, TRANSFER_REQUEST_TYPE_ID } from '../services/transferRequestService';
 import { maintenanceRequestService } from '../services/maintenanceRequestService';
 import { damageReportService } from '../services/damageReportService';
 import { disposalRequestService } from '../services/disposalRequestService';
@@ -543,7 +543,7 @@ export function AssetListPage() {
       for (const assetInstanceId of assetIds) {
         await transferRequestService.create({
           assetInstanceId,
-          requestTypeId: 1, // TODO: Align with backend request type config if needed
+          requestTypeId: TRANSFER_REQUEST_TYPE_ID,
           fromLocationId,
           toLocationId,
           fromUserId: profile.id,

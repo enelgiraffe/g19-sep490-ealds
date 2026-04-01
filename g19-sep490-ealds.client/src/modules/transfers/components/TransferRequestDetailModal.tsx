@@ -1,4 +1,4 @@
-import { Modal, Descriptions, Tag } from 'antd';
+import './TransferRequestDetailModal.css';
 import type { TransferRequestListItem } from '../../assets/services/transferRequestService';
 
 const STATUS_MAP: Record<
@@ -36,67 +36,119 @@ export function TransferRequestDetailModal({
   onClose,
   request,
 }: TransferRequestDetailModalProps) {
+  if (!open || !request) return null;
+
   const statusConfig =
     request && STATUS_MAP[request.status] ? STATUS_MAP[request.status] : undefined;
+  const statusClass =
+    statusConfig?.color === 'success'
+      ? 'transfer-detail-status transfer-detail-status--success'
+      : statusConfig?.color === 'processing'
+        ? 'transfer-detail-status transfer-detail-status--processing'
+        : statusConfig?.color === 'warning'
+          ? 'transfer-detail-status transfer-detail-status--warning'
+          : statusConfig?.color === 'error'
+            ? 'transfer-detail-status transfer-detail-status--danger'
+            : 'transfer-detail-status transfer-detail-status--default';
+  const displayInstanceCode = request.instanceCode || request.assetCode || '—';
 
   return (
-    <Modal
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={700}
-      title="Chi tiết yêu cầu điều chuyển"
-      destroyOnClose
-    >
-      {!request ? (
-        <p>Không tìm thấy dữ liệu yêu cầu điều chuyển.</p>
-      ) : (
-        <>
-          <Descriptions
-            bordered
-            column={2}
-            size="middle"
-          >
-            <Descriptions.Item label="Số biên bản">
-              {request.code || '—'}
-            </Descriptions.Item>
-            <Descriptions.Item label="Ngày điều chuyển">
-              {formatDate(request.transferDate)}
-            </Descriptions.Item>
-            <Descriptions.Item label="Trạng thái">
-              {statusConfig ? (
-                <Tag color={statusConfig.color}>{statusConfig.label}</Tag>
-              ) : (
-                request.statusName || '—'
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="Số lượng">
-              {request.quantity}
-            </Descriptions.Item>
-          </Descriptions>
+    <div className="transfer-detail-modal-overlay" role="dialog" aria-modal="true">
+      <div className="transfer-detail-modal">
+        <button
+          type="button"
+          className="transfer-detail-modal__close-btn"
+          onClick={onClose}
+          aria-label="Đóng"
+        >
+          <span className="transfer-detail-modal__close">×</span>
+        </button>
 
-          <Descriptions
-            bordered
-            column={1}
-            size="middle"
-            style={{ marginTop: 16 }}
-          >
-            <Descriptions.Item label="Tài sản">
-              {request.assetCode} - {request.assetName}
-            </Descriptions.Item>
-            <Descriptions.Item label="Điều chuyển từ">
-              {request.fromDepartment}
-            </Descriptions.Item>
-            <Descriptions.Item label="Điều chuyển đến">
-              {request.toDepartment}
-            </Descriptions.Item>
-            <Descriptions.Item label="Lý do điều chuyển">
-              {request.reason || '—'}
-            </Descriptions.Item>
-          </Descriptions>
-        </>
-      )}
-    </Modal>
+        <div className="transfer-detail-modal__header">
+          <h2 className="transfer-detail-modal__title">Chi tiết yêu cầu điều chuyển</h2>
+        </div>
+
+        <div className="transfer-detail-modal__body">
+          <div className="transfer-detail-modal__content">
+            <div className="transfer-detail-form__section">
+              <h3 className="transfer-detail-section-title">Thông tin chung</h3>
+              <div className="transfer-detail-form__row">
+                <div className="transfer-detail-form__item">
+                  <label>Số biên bản</label>
+                  <div className="transfer-detail-info-value">{request.code || '—'}</div>
+                </div>
+                <div className="transfer-detail-form__item">
+                  <label>Ngày điều chuyển</label>
+                  <div className="transfer-detail-info-value">{formatDate(request.transferDate)}</div>
+                </div>
+              </div>
+              <div className="transfer-detail-form__row">
+                <div className="transfer-detail-form__item">
+                  <label>Trạng thái</label>
+                  <div className="transfer-detail-info-value">
+                    <span className={statusClass}>{statusConfig?.label ?? request.statusName ?? '—'}</span>
+                  </div>
+                </div>
+                <div className="transfer-detail-form__item">
+                  <label>Số lượng</label>
+                  <div className="transfer-detail-info-value">{request.quantity}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="transfer-detail-form__section">
+              <h3 className="transfer-detail-section-title">Thông tin cá thể và điều chuyển</h3>
+              <div className="transfer-detail-form__row">
+                <div className="transfer-detail-form__item">
+                  <label>Mã cá thể</label>
+                  <div className="transfer-detail-info-value">{displayInstanceCode}</div>
+                </div>
+                <div className="transfer-detail-form__item">
+                  <label>Tên tài sản</label>
+                  <div className="transfer-detail-info-value">{request.assetName || '—'}</div>
+                </div>
+              </div>
+              <div className="transfer-detail-form__row">
+                <div className="transfer-detail-form__item">
+                  <label>Điều chuyển từ</label>
+                  <div className="transfer-detail-info-value">{request.fromDepartment || '—'}</div>
+                </div>
+                <div className="transfer-detail-form__item">
+                  <label>Điều chuyển đến</label>
+                  <div className="transfer-detail-info-value">{request.toDepartment || '—'}</div>
+                </div>
+              </div>
+              <div className="transfer-detail-form__item transfer-detail-form__item--full">
+                <label>Lý do điều chuyển</label>
+                <div className="transfer-detail-info-value transfer-detail-info-value--multiline">
+                  {request.reason || '—'}
+                </div>
+              </div>
+              <div className="transfer-detail-form__row">
+                <div className="transfer-detail-form__item">
+                  <label>Xác nhận bên gửi</label>
+                  <div className="transfer-detail-info-value">
+                    {request.isSenderConfirmed ? 'Đã xác nhận đã gửi' : 'Chưa xác nhận'}
+                  </div>
+                </div>
+                <div className="transfer-detail-form__item">
+                  <label>Xác nhận bên nhận</label>
+                  <div className="transfer-detail-info-value">
+                    {request.isReceiverConfirmed ? 'Đã xác nhận đã nhận' : 'Chưa xác nhận'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="transfer-detail-modal__footer">
+          <button type="button" className="transfer-detail-btn-close" onClick={onClose}>
+            Đóng
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

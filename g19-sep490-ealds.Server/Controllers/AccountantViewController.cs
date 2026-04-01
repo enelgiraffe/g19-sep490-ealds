@@ -30,7 +30,16 @@ public class AccountantViewController : ControllerBase
 
         var total = await query.CountAsync();
         var items = await query.OrderByDescending(x=>x.CreateDate).Skip((page-1)*pageSize).Take(pageSize)
-            .Select(ar => new { ar.AssetRequestId, ar.Title, ar.Status, ar.RequestTypeId, ar.UserId, ar.CreateDate })
+            .Select(ar => new
+            {
+                ar.AssetRequestId,
+                ar.Title,
+                ar.Status,
+                ar.RequestTypeId,
+                ar.UserId,
+                ar.CreateDate,
+                ar.ProposedData
+            })
             .ToListAsync();
 
         return Ok(new { items, total, page, pageSize, totalPages = (int)Math.Ceiling(total/(double)pageSize) });

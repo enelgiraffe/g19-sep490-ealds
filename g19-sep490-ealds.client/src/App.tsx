@@ -13,6 +13,7 @@ import { ProtectedRoute } from './modules/auth/components/ProtectedRoute';
 import { AssetListPage } from './modules/assets/pages/AssetListPage';
 import { AssetDetailPage } from './modules/assets/pages/AssetDetailPage';
 import { AssetInstanceDetailPage } from './modules/assets/pages/AssetInstanceDetailPage';
+import { AssetInstanceEditPage } from './modules/assets/pages/AssetInstanceEditPage';
 import { AssetCreatePage } from './modules/assets/pages/AssetCreatePage';
 import { AssetEditPage } from './modules/assets/pages/AssetEditPage';
 import { ProfilePage } from './modules/profile/pages/ProfilePage';
@@ -42,6 +43,14 @@ function App() {
         {/* Asset detail – full page, không dùng AppLayout */}
         <Route path="/assets/:id" element={<AssetDetailPage />} />
         <Route path="/asset-instances/:instanceId" element={<AssetInstanceDetailPage />} />
+        <Route
+          path="/asset-instances/:instanceId/edit"
+          element={
+            <ProtectedRoute>
+              <AssetInstanceEditPage />
+            </ProtectedRoute>
+          }
+        />
         {/* Asset create – full page, không dùng AppLayout */}
         <Route
           path="/assets/new"

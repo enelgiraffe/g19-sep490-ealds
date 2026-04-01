@@ -67,7 +67,15 @@ public class RepairRequestsController : ControllerBase
                     t.AssetRequest.Status == 4 ? "Đang sửa chữa" :
                     t.AssetRequest.Status == 5 ? "Hoàn thành" :
                     "Không xác định",
-                Reason = t.Reason
+                Reason = t.Reason,
+                FromDepartmentId = t.AssetInstance.AssetLocations
+                    .Where(al => al.IsCurrent)
+                    .Select(al => al.DepartmentId)
+                    .FirstOrDefault(),
+                ToDepartmentId = 0,
+                CreatedBy = t.AssetRequest.CreatedBy,
+                IsSenderConfirmed = false,
+                IsReceiverConfirmed = false
             })
             .ToListAsync();
 

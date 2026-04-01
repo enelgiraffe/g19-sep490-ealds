@@ -120,11 +120,16 @@ public class DirectorApproveController : ControllerBase
                 .AnyAsync(p => p.AssetRequestId == ar.AssetRequestId);
             if (!alreadyHasProcurement)
             {
+                var procurementTitle = !string.IsNullOrWhiteSpace(ar.Title)
+                    ? ar.Title.Trim()
+                    : $"Procurement for request #{ar.AssetRequestId}";
+
                 var procurement = new Procurement
                 {
                     AssetRequestId = ar.AssetRequestId,
                     ContractNo = string.Empty,      // To be filled by accountant later
                     ContractDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    Title = procurementTitle,
                     TotalAmount = 0,
                     AdvanceAmount = 0,
                     RemainingAmount = 0,

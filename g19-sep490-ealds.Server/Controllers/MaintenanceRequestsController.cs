@@ -77,7 +77,18 @@ public class MaintenanceRequestsController : ControllerBase
                         t.AssetRequest.Status == 3 ? "Từ chối" :
                         t.AssetRequest.Status == 4 ? "Đang thực hiện" :
                         "Không xác định",
-                    Reason = t.AssetRequest.Description
+                    Reason = t.AssetRequest.Description,
+                    FromDepartmentId = t.AssetInstance.AssetLocations
+                        .Where(al => al.IsCurrent)
+                        .Select(al => al.DepartmentId)
+                        .FirstOrDefault(),
+                    ToDepartmentId = t.AssetInstance.AssetLocations
+                        .Where(al => al.IsCurrent)
+                        .Select(al => al.DepartmentId)
+                        .FirstOrDefault(),
+                    CreatedBy = t.AssetRequest.CreatedBy,
+                    IsSenderConfirmed = false,
+                    IsReceiverConfirmed = false
                 })
                 .ToListAsync();
 

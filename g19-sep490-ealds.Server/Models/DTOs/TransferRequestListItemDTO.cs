@@ -26,6 +26,14 @@ public class TransferRequestListItemDTO
 
     public string ToDepartment { get; set; } = null!;
 
+    public int FromDepartmentId { get; set; }
+
+    public int ToDepartmentId { get; set; }
+
+    public int CreatedBy { get; set; }
+
+    public string? CreatedByName { get; set; }
+
     public int Quantity { get; set; }
 
     public int Status { get; set; }

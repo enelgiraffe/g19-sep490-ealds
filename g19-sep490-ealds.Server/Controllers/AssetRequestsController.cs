@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Utils;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -44,7 +45,11 @@ public class AssetRequestsController : ControllerBase
                 CreateDate = r.CreateDate,
                 UserId = r.UserId,
                 CreatedBy = r.CreatedBy,
-                CreatorName = r.User != null ? r.User.Email : null,
+                CreatorName = r.User != null
+                    ? r.User.EmployeeUsers
+                        .Select(e => e.Name)
+                        .FirstOrDefault() ?? r.User.Email
+                    : null,
                 CreatorDepartmentName = r.User != null
                     ? r.User.EmployeeUsers.Select(e => e.Department != null ? e.Department.Name : null).FirstOrDefault()
                     : null,
@@ -73,17 +78,76 @@ public class AssetRequestsController : ControllerBase
                 r.CreateDate,
                 r.UserId,
                 r.CreatedBy,
-                CreatorName = r.User != null ? r.User.Email : null,
+                CreatorName = r.User != null
+                    ? r.User.EmployeeUsers
+                        .Select(e => e.Name)
+                        .FirstOrDefault() ?? r.User.Email
+                    : null,
                 CreatorDepartmentName = r.User != null
                     ? r.User.EmployeeUsers.Select(e => e.Department != null ? e.Department.Name : null).FirstOrDefault()
                     : null,
                 AssetCode = r.Asset != null ? r.Asset.Code : null,
-                AssetName = r.Asset != null ? r.Asset.Name : null
+                AssetName = r.Asset != null ? r.Asset.Name : null,
+                AccountantComment = r.Approvals
+                    .Where(a => a.ApprovedRole != null && a.ApprovedRole.Code == "ACCOUNTANT")
+                    .OrderByDescending(a => a.DecisionDate)
+                    .Select(a => a.Comment)
+                    .FirstOrDefault(),
+                DirectorComment = r.Approvals
+                    .Where(a => a.ApprovedRole != null && a.ApprovedRole.Code == "DIRECTOR")
+                    .OrderByDescending(a => a.DecisionDate)
+                    .Select(a => a.Comment)
+                    .FirstOrDefault(),
+                Approvals = r.Approvals
+                    .OrderByDescending(a => a.DecisionDate)
+                    .Select(a => new
+                    {
+                        a.ApprovalId,
+                        a.DecisionDate,
+                        a.Comment,
+                        RoleCode = a.ApprovedRole != null ? a.ApprovedRole.Code : null
+                    })
             })
             .FirstOrDefaultAsync();
         if (request == null)
             return NotFound();
         return Ok(request);
+    }
+
+    /// <summary>
+    /// Ensures purchase lines exist from ProposedData.equipment and returns them (for multi-line capitalization).
+    /// </summary>
+    [HttpGet("{id:int}/lines")]
+    public async Task<IActionResult> GetPurchaseLines(int id)
+    {
+        var ar = await _db.AssetRequests
+            .FirstOrDefaultAsync(r => r.AssetRequestId == id && r.RequestTypeId == _purchaseRequestTypeId);
+        if (ar == null)
+            return NotFound();
+
+        await PurchaseRequestLineHelper.EnsureLinesAsync(_db, ar);
+
+        var rows = await _db.AssetRequestPurchaseLines
+            .AsNoTracking()
+            .Where(l => l.AssetRequestId == id)
+            .OrderBy(l => l.LineIndex)
+            .Select(l => new AssetRequestPurchaseLineResponseDTO
+            {
+                LineId = l.LineId,
+                LineIndex = l.LineIndex,
+                ItemName = l.ItemName,
+                Quantity = l.Quantity,
+                Unit = l.Unit,
+                ModelCode = l.ModelCode,
+                EstimatedPrice = l.EstimatedPrice,
+                AssetId = l.AssetId,
+                CapitalizedAt = l.CapitalizedAt,
+                AssetCode = l.Asset != null ? l.Asset.Code : null,
+                AssetName = l.Asset != null ? l.Asset.Name : null,
+            })
+            .ToListAsync();
+
+        return Ok(rows);
     }
 
     [HttpPost]
@@ -179,22 +243,22 @@ public class AssetRequestsController : ControllerBase
 
         // Editable cases:
         // - Draft (-1): creator can edit and keep Draft or submit (0)
-        // - Accountant-approved (1): accountant can edit info/attachments but must keep status=1
+        // - Director-approved (2): accountant can edit info/attachments and must keep status=2
         if (ar.Status == -1)
         {
             if (desiredStatus != -1 && desiredStatus != 0)
                 return BadRequest("Invalid status. Allowed: -1 (Draft), 0 (Sent).");
         }
-        else if (ar.Status == 1)
+        else if (ar.Status == 2)
         {
             if (!isAccountantActor)
-                return BadRequest("Only accountant can edit requests after accountant approval.");
-            if (desiredStatus != 1)
-                return BadRequest("Invalid status. Allowed: 1 (Waiting director approval).");
+                return BadRequest("Only accountant can edit requests after director approval.");
+            if (desiredStatus != 2)
+                return BadRequest("Invalid status. Allowed: 2.");
         }
         else
         {
-            return BadRequest("Only draft requests (status=-1) or accountant-approved requests (status=1) can be edited.");
+            return BadRequest("Only draft requests (status=-1) or director-approved requests (status=2) can be edited.");
         }
 
         var fromStatus = ar.Status;

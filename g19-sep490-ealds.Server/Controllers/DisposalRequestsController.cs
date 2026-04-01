@@ -65,7 +65,15 @@ public class DisposalRequestsController : ControllerBase
                     d.AssetRequest.Status == 4 ? "Đang thực hiện" :
                     d.AssetRequest.Status == 5 ? "Hoàn thành" :
                     "Không xác định",
-                Reason = d.Reason
+                Reason = d.Reason,
+                FromDepartmentId = d.AssetInstance.AssetLocations
+                    .Where(al => al.IsCurrent)
+                    .Select(al => al.DepartmentId)
+                    .FirstOrDefault(),
+                ToDepartmentId = 0,
+                CreatedBy = d.AssetRequest.CreatedBy,
+                IsSenderConfirmed = false,
+                IsReceiverConfirmed = false
             })
             .ToListAsync();
 

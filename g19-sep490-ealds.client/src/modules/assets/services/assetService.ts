@@ -275,6 +275,15 @@ export interface UpdateAssetInstancePayload {
   contractNo?: string | null;
   condition?: string | null;
   note?: string | null;
+  warrantyPeriodValue?: number | null;
+  warrantyPeriodUnit?: string | null;
+  warrantyConditions?: string | null;
+  warrantyStartDate?: string | null;
+  warrantyEndDate?: string | null;
+  depreciationPeriod?: string | null;
+  depreciationAmount?: number | null;
+  accumulatedDepreciation?: number | null;
+  remainingValue?: number | null;
   assignedDepartmentId?: number | null;
   responsibleEmployeeId?: number | null;
   assignmentEffectiveDate?: string | null;

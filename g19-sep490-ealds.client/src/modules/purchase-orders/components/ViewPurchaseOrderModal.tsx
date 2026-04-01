@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { message } from 'antd';
-import { purchaseOrderService, type PurchaseOrderDetail } from '../services/purchaseOrderService';
+import { useNavigate } from 'react-router-dom';
+import {
+  purchaseOrderService,
+  type PurchaseOrderDetail,
+  type PurchaseOrderLineItem,
+} from '../services/purchaseOrderService';
 import { assetCapitalizationService } from '../../assets/services/assetCapitalizationService';
 import { assetService, type AssetTypeItem, type WarehouseItem } from '../../assets/services/assetService';
 import { purchaseOrderFileService } from '../services/purchaseOrderFileService';
@@ -24,6 +29,22 @@ function formatDate(iso: string): string {
   }
 }
 
+function formatDateOnly(value: string): string {
+  try {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString('vi-VN');
+  } catch {
+    return value;
+  }
+}
+
+function normalizeDateInput(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
+}
+
 interface ViewPurchaseOrderModalProps {
   open: boolean;
   onClose: () => void;
@@ -41,8 +62,7 @@ export function ViewPurchaseOrderModal({
   currentUserRole,
   onActionCompleted,
 }: ViewPurchaseOrderModalProps) {
-  if (!open || !data) return null;
-
+  const navigate = useNavigate();
   const [isApproveOpen, setIsApproveOpen] = useState(false);
   const [decision, setDecision] = useState<'approved' | 'rejected'>('approved');
   const [comment, setComment] = useState('');
@@ -50,8 +70,9 @@ export function ViewPurchaseOrderModal({
   const [capitalizeNote, setCapitalizeNote] = useState('');
   const [capitalizing, setCapitalizing] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState(data.title ?? '');
-  const [editDescription, setEditDescription] = useState(data.description ?? '');
+  const [editTitle, setEditTitle] = useState(data?.title ?? '');
+  const [editDescription, setEditDescription] = useState(data?.description ?? '');
+  const [editNeedDate, setEditNeedDate] = useState('');
   const [editDocuments, setEditDocuments] = useState<{ name: string; url: string }[]>([]);
   const [docName, setDocName] = useState('');
   const [docUploading, setDocUploading] = useState(false);
@@ -63,6 +84,16 @@ export function ViewPurchaseOrderModal({
   const [capitalizationDocuments, setCapitalizationDocuments] = useState<{ id: string; name: string; file: File }[]>(
     [],
   );
+  const [assetSpecificationInput, setAssetSpecificationInput] = useState('');
+  const [assetNoteInput, setAssetNoteInput] = useState('');
+  const [capitalizedInstanceIds, setCapitalizedInstanceIds] = useState<number[]>([]);
+
+  const [purchaseLines, setPurchaseLines] = useState<PurchaseOrderLineItem[]>([]);
+  const [purchaseLinesLoading, setPurchaseLinesLoading] = useState(false);
+  /** lineId -> prefixes for pending lines */
+  const [lineCapitalizeInputs, setLineCapitalizeInputs] = useState<
+    Record<number, { assetCatalogPrefix: string; instanceCodePrefix: string }>
+  >({});
 
   const normalizedRole = String(currentUserRole ?? '').toUpperCase();
   const isAccountantRole = normalizedRole === 'ACCOUNTANT';
@@ -71,26 +102,66 @@ export function ViewPurchaseOrderModal({
   // - status=0: accountant approves/rejects (forward to director / return to draft)
   // - status=2: director approved => accountant can update info/attachments
   // - status=2: accountant can capitalize asset (with or without AssetId)
-  const canAccountantApprove = isAccountantRole && !!currentUserId && data.status === 0;
-  const canRecordCapitalization = isAccountantRole && !!currentUserId && data.status === 2 && !!data.assetId;
-  const canEditAfterAccountantApprove = isAccountantRole && !!currentUserId && data.status === 2;
+  const canAccountantApprove = isAccountantRole && !!currentUserId && data?.status === 0;
+  const canRecordCapitalization =
+    isAccountantRole &&
+    !!currentUserId &&
+    data?.status === 2 &&
+    !!data?.assetId &&
+    purchaseLines.length === 0;
+  const canEditAfterAccountantApprove = isAccountantRole && !!currentUserId && data?.status === 2;
+  const hasStructuredPurchaseLines = purchaseLines.length > 0;
+
   const canCapitalizeWithoutAsset =
-    isAccountantRole && !!currentUserId && data.status === 2 && !data.assetId;
+    isAccountantRole &&
+    !!currentUserId &&
+    data?.status === 2 &&
+    !data?.assetId &&
+    !hasStructuredPurchaseLines;
+
+  const canCapitalizeMultiLines =
+    isAccountantRole &&
+    !!currentUserId &&
+    data?.status === 2 &&
+    hasStructuredPurchaseLines &&
+    purchaseLines.some((l) => l.assetId == null);
+  const capitalizationMode: 'multi-lines' | 'create-new-asset' | 'direct-linked-asset' | 'none' =
+    canCapitalizeMultiLines
+      ? 'multi-lines'
+      : canCapitalizeWithoutAsset
+        ? 'create-new-asset'
+        : canRecordCapitalization
+          ? 'direct-linked-asset'
+          : 'none';
 
   const parsedProposedData = useMemo(() => {
     try {
-      if (!data.proposedData) return null;
+      if (!data?.proposedData) return null;
       return JSON.parse(data.proposedData) as any;
     } catch {
       return null;
     }
-  }, [data.proposedData]);
+  }, [data?.proposedData]);
 
   // Init editable fields/docs when opening or data changes (best-effort)
   useEffect(() => {
     if (!open || !data) return;
+    const descriptionText = String(data.description ?? '');
+    const purposeLine = (() => {
+      const marker = 'Mục đích:';
+      const idx = descriptionText.indexOf(marker);
+      if (idx < 0) return '';
+      return descriptionText.slice(idx + marker.length).split('\n')[0].trim();
+    })();
+    const needDateLine = (() => {
+      const marker = 'Thời gian cần:';
+      const idx = descriptionText.indexOf(marker);
+      if (idx < 0) return '';
+      return descriptionText.slice(idx + marker.length).split('\n')[0].trim();
+    })();
     setEditTitle(data.title ?? '');
-    setEditDescription(data.description ?? '');
+    setEditDescription(purposeLine);
+    setEditNeedDate(normalizeDateInput(needDateLine || data.createDate));
     if (parsedProposedData && Array.isArray((parsedProposedData as any).documents)) {
       const docs = (parsedProposedData as any).documents
         .filter((d: any) => d && (d.url || d.fileUrl))
@@ -124,7 +195,43 @@ export function ViewPurchaseOrderModal({
     setNewAssetWarehouseId('');
     setFallbackAssetTypeId('');
     setCapitalizationDocuments([]);
-  }, [open, data]);
+    setPurchaseLines([]);
+    setLineCapitalizeInputs({});
+    setAssetSpecificationInput('');
+    setAssetNoteInput('');
+  }, [open, data?.assetRequestId]);
+
+  useEffect(() => {
+    if (!open || !data?.assetRequestId) return;
+    let cancelled = false;
+    setPurchaseLinesLoading(true);
+    purchaseOrderService
+      .getPurchaseLines(data.assetRequestId)
+      .then((rows) => {
+        if (!cancelled) {
+          setPurchaseLines(rows);
+          const pending = rows.filter((r) => r.assetId == null);
+          const next: Record<number, { assetCatalogPrefix: string; instanceCodePrefix: string }> = {};
+          pending.forEach((row, idx) => {
+            const safe = (row.itemName ?? `L${idx + 1}`).replace(/\s+/g, '').slice(0, 6) || `L${idx + 1}`;
+            next[row.lineId] = {
+              assetCatalogPrefix: 'TS',
+              instanceCodePrefix: safe.toUpperCase().replace(/[^A-Z0-9]/gi, '') || `L${idx + 1}`,
+            };
+          });
+          setLineCapitalizeInputs(next);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setPurchaseLines([]);
+      })
+      .finally(() => {
+        if (!cancelled) setPurchaseLinesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, data?.assetRequestId]);
 
   const uploadCapitalizationDocuments = async (): Promise<{ name: string; url: string }[]> => {
     if (capitalizationDocuments.length === 0) return [];
@@ -138,26 +245,27 @@ export function ViewPurchaseOrderModal({
   };
 
   const handleSubmitApproval = async () => {
-    if (!currentUserId) {
+    if (!currentUserId || !data) {
       message.error('Không lấy được thông tin người dùng.');
       return;
     }
     setSubmitting(true);
     try {
       if (decision === 'approved') {
-        await purchaseOrderService.approveAsAccountant(data.assetRequestId, {
+        const res = await purchaseOrderService.approveAsAccountant(data.assetRequestId, {
           approvedBy: currentUserId,
           comment: comment.trim() || null,
         });
         message.success('Đã chuyển yêu cầu sang giám đốc (Chờ duyệt).');
+        await onActionCompleted?.(data.assetRequestId, res.status);
       } else {
-        await purchaseOrderService.rejectAsAccountant(data.assetRequestId, {
+        const res = await purchaseOrderService.rejectAsAccountant(data.assetRequestId, {
           approvedBy: currentUserId,
           comment: comment.trim() || null,
         });
         message.success('Đã trả yêu cầu về Nháp.');
+        await onActionCompleted?.(data.assetRequestId, res.status);
       }
-      await onActionCompleted?.(data.assetRequestId, 5);
       setIsApproveOpen(false);
     } catch (e: unknown) {
       const err = e as { response?: { data?: string } };
@@ -168,7 +276,7 @@ export function ViewPurchaseOrderModal({
   };
 
   const handleRecordCapitalization = async () => {
-    if (!currentUserId) {
+    if (!currentUserId || !data) {
       message.error('Không lấy được thông tin người dùng.');
       return;
     }
@@ -185,8 +293,9 @@ export function ViewPurchaseOrderModal({
         note: capitalizeNote.trim() || null,
         documents: uploadedDocs,
       });
+      setCapitalizedInstanceIds([]);
       message.success('Đã biến đơn mua thành tài sản cố định (ghi tăng).');
-      await onActionCompleted?.(data.assetRequestId);
+      await onActionCompleted?.(data.assetRequestId, 5);
     } catch (e: unknown) {
       const err = e as { response?: { data?: any } };
       const msg = err?.response?.data?.message ?? err?.response?.data ?? 'Ghi tăng tài sản thất bại.';
@@ -197,7 +306,7 @@ export function ViewPurchaseOrderModal({
   };
 
   const handleSaveEdit = async () => {
-    if (!currentUserId) {
+    if (!currentUserId || !data) {
       message.error('Không lấy được thông tin người dùng.');
       return;
     }
@@ -207,6 +316,22 @@ export function ViewPurchaseOrderModal({
     }
     setSavingEdit(true);
     try {
+      const originalLines = String(data.description ?? '')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const setOrAppendLine = (prefix: string, value: string) => {
+        const idx = originalLines.findIndex((line) => line.startsWith(prefix));
+        const next = `${prefix} ${value}`.trim();
+        if (idx >= 0) originalLines[idx] = next;
+        else originalLines.push(next);
+      };
+      if (editNeedDate) {
+        setOrAppendLine('Thời gian cần:', new Date(editNeedDate).toLocaleDateString('vi-VN'));
+      }
+      setOrAppendLine('Mục đích:', editDescription.trim() || '—');
+      const rebuiltDescription = originalLines.join('\n');
+
       const nextProposed = {
         ...(parsedProposedData && typeof parsedProposedData === 'object' ? parsedProposedData : {}),
         documents: editDocuments.map((d) => ({ name: d.name, url: d.url })),
@@ -215,10 +340,10 @@ export function ViewPurchaseOrderModal({
         userId: data.userId,
         assetId: data.assetId ?? null,
         title: editTitle.trim(),
-        description: editDescription.trim() || null,
+        description: rebuiltDescription || null,
         proposedData: JSON.stringify(nextProposed),
         createdBy: currentUserId,
-        status: 2,
+        status: data.status,
       });
       message.success('Đã cập nhật đơn mua sau khi giám đốc phê duyệt.');
       setIsEditing(false);
@@ -232,7 +357,7 @@ export function ViewPurchaseOrderModal({
   };
 
   const handleCapitalizeFromRequest = async () => {
-    if (!currentUserId) {
+    if (!currentUserId || !data) {
       message.error('Không lấy được thông tin người dùng.');
       return;
     }
@@ -251,7 +376,7 @@ export function ViewPurchaseOrderModal({
     setCapitalizing(true);
     try {
       const uploadedDocs = await uploadCapitalizationDocuments();
-      await assetCapitalizationService.capitalizePurchaseRequest({
+      const result = await assetCapitalizationService.capitalizePurchaseRequest({
         assetRequestId: data.assetRequestId,
         note: capitalizeNote.trim() || null,
         documents: uploadedDocs,
@@ -264,9 +389,12 @@ export function ViewPurchaseOrderModal({
         unit: inferredUnit,
         quantity: inferredQuantity,
         warehouseId: warehouseIdNum,
+        assetSpecification: assetSpecificationInput.trim() || null,
+        assetNote: assetNoteInput.trim() || null,
       });
+      setCapitalizedInstanceIds(result.assetInstanceId ? [result.assetInstanceId] : []);
       message.success('Đã tạo tài sản và ghi tăng (biến đơn mua thành TSCĐ).');
-      await onActionCompleted?.(data.assetRequestId);
+      await onActionCompleted?.(data.assetRequestId, 5);
     } catch (e: unknown) {
       const err = e as { response?: { data?: any } };
       const msg = err?.response?.data?.message ?? err?.response?.data ?? 'Ghi tăng tài sản thất bại.';
@@ -276,13 +404,15 @@ export function ViewPurchaseOrderModal({
     }
   };
 
+  if (!open || !data) return null;
+
   const statusConfig = STATUS_MAP[data.status] ?? STATUS_MAP[0];
-  let equipment: { stt: number; name: string; quantity: number; machineCode?: string; unit?: string; estimatedPrice?: string }[] = [];
+  let equipment: { stt: number; name: string; quantity: number; modelCode?: string; unit?: string; estimatedPrice?: string }[] = [];
   let totalPrice = '—';
   try {
     if (data.proposedData) {
       const parsed = JSON.parse(data.proposedData) as {
-        equipment?: { name?: string; quantity?: number; machineCode?: string; unit?: string; estimatedPrice?: string }[];
+        equipment?: { name?: string; quantity?: number; modelCode?: string; machineCode?: string; unit?: string; estimatedPrice?: string }[];
         totalPrice?: string;
       };
       if (Array.isArray(parsed.equipment)) {
@@ -290,7 +420,7 @@ export function ViewPurchaseOrderModal({
           stt: i + 1,
           name: e.name ?? '—',
           quantity: e.quantity ?? 1,
-          machineCode: e.machineCode,
+          modelCode: e.modelCode ?? e.machineCode,
           unit: e.unit,
           estimatedPrice: e.estimatedPrice,
         }));
@@ -331,6 +461,35 @@ export function ViewPurchaseOrderModal({
     if (idx < 0) return null;
     const line = descriptionText.slice(idx + marker.length).split('\n')[0].trim();
     return line || null;
+  })();
+  const extractedPurpose = (() => {
+    const descriptionText = String(data.description ?? '');
+    const marker = 'Mục đích:';
+    const idx = descriptionText.indexOf(marker);
+    if (idx < 0) return null;
+    const line = descriptionText.slice(idx + marker.length).split('\n')[0].trim();
+    return line || null;
+  })();
+  const extractedNeedDate = (() => {
+    const descriptionText = String(data.description ?? '');
+    const marker = 'Thời gian cần:';
+    const idx = descriptionText.indexOf(marker);
+    if (idx < 0) return null;
+    const line = descriptionText.slice(idx + marker.length).split('\n')[0].trim();
+    return line || null;
+  })();
+  const displayCreatorName = (() => {
+    const raw = String(data.creatorName ?? '').trim();
+    if (!raw) return '—';
+    if (!raw.includes('@')) return raw;
+    const localPart = raw.split('@')[0]?.trim() ?? '';
+    if (!localPart) return raw;
+    const normalized = localPart.replace(/[._-]+/g, ' ').trim();
+    if (!normalized) return raw;
+    return normalized
+      .split(/\s+/)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   })();
   const requestAssetDisplay = (() => {
     if (data.assetCode || data.assetName) {
@@ -374,6 +533,109 @@ export function ViewPurchaseOrderModal({
     );
     return fuzzy?.assetTypeId ?? null;
   })();
+  const capitalizationModeLabel =
+    capitalizationMode === 'multi-lines'
+      ? 'Ghi tăng theo từng dòng vật tư'
+      : capitalizationMode === 'create-new-asset'
+        ? 'Tạo mới tài sản rồi ghi tăng'
+        : capitalizationMode === 'direct-linked-asset'
+          ? 'Ghi tăng trên tài sản đã liên kết'
+          : null;
+  const capitalizeActionLabel =
+    capitalizationMode === 'multi-lines'
+      ? 'Ghi tăng theo từng dòng vật tư'
+      : 'Biến thành tài sản cố định';
+  const latestAccountantCommentFromApproval =
+    data.approvals
+      ?.find((a) => String(a.roleCode ?? '').toUpperCase() === 'ACCOUNTANT')
+      ?.comment?.trim() ?? '';
+  const latestDirectorCommentFromApproval =
+    data.approvals
+      ?.find((a) => String(a.roleCode ?? '').toUpperCase() === 'DIRECTOR')
+      ?.comment?.trim() ?? '';
+  const accountantCommentDisplay = latestAccountantCommentFromApproval || data.accountantComment?.trim() || '—';
+  const directorCommentDisplay = latestDirectorCommentFromApproval || data.directorComment?.trim() || '—';
+  const firstCapitalizedInstanceId = capitalizedInstanceIds[0] ?? null;
+
+  const handleCapitalizeMultiLines = async () => {
+    if (capitalizing) return;
+    if (!currentUserId) {
+      message.error('Không lấy được thông tin người dùng.');
+      return;
+    }
+    const warehouseIdNum = Number(newAssetWarehouseId);
+    if (!warehouseIdNum || Number.isNaN(warehouseIdNum)) {
+      message.error('Vui lòng chọn kho lưu tài sản.');
+      return;
+    }
+    const inferredAssetTypeId =
+      inferredAssetTypeIdFromText ?? (fallbackAssetTypeId ? Number(fallbackAssetTypeId) : null);
+    if (!inferredAssetTypeId) {
+      message.error('Không xác định được loại tài sản từ dữ liệu đơn mua. Vui lòng chọn loại tài sản.');
+      return;
+    }
+    const pending = purchaseLines.filter((l) => l.assetId == null).sort((a, b) => a.lineIndex - b.lineIndex);
+    if (pending.length === 0) {
+      message.warning('Không còn dòng vật tư cần ghi tăng.');
+      return;
+    }
+    let linesPayload: {
+      lineId: number;
+      assetCatalogPrefix: string;
+      instanceCodePrefix: string | null;
+    }[];
+    try {
+      linesPayload = pending.map((row) => {
+        const inp = lineCapitalizeInputs[row.lineId];
+        const cat = (inp?.assetCatalogPrefix ?? '').trim();
+        const inst = (inp?.instanceCodePrefix ?? '').trim();
+        if (!cat) {
+          throw new Error(`Dòng "${row.itemName ?? String(row.lineIndex + 1)}": nhập tiền tố mã tài sản.`);
+        }
+        if (row.quantity > 1 && !inst) {
+          throw new Error(
+            `Dòng "${row.itemName ?? String(row.lineIndex + 1)}": số lượng > 1 cần tiền tố mã cá thể.`,
+          );
+        }
+        return {
+          lineId: row.lineId,
+          assetCatalogPrefix: cat,
+          instanceCodePrefix: row.quantity > 1 ? inst : null,
+        };
+      });
+    } catch (e: unknown) {
+      message.error(e instanceof Error ? e.message : 'Dữ liệu không hợp lệ.');
+      return;
+    }
+
+    setCapitalizing(true);
+    try {
+      const uploadedDocs = await uploadCapitalizationDocuments();
+      const result = await assetCapitalizationService.capitalizePurchaseRequestLines({
+        assetRequestId: data.assetRequestId,
+        warehouseId: warehouseIdNum,
+        assetTypeId: inferredAssetTypeId,
+        purchaseDate: inferredPurchaseDate,
+        assetSpecification: assetSpecificationInput.trim() || null,
+        assetNote: assetNoteInput.trim() || null,
+        note: capitalizeNote.trim() || null,
+        documents: uploadedDocs,
+        lines: linesPayload,
+      });
+      const nextInstanceIds = Array.from(
+        new Set(result.capitalizedInstances.map((row) => row.assetInstanceId).filter((id) => id > 0)),
+      );
+      setCapitalizedInstanceIds(nextInstanceIds);
+      message.success('Đã tạo tài sản theo từng dòng vật tư và ghi tăng.');
+      await onActionCompleted?.(data.assetRequestId, 5);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      const msg = err?.response?.data?.message ?? 'Ghi tăng tài sản thất bại.';
+      message.error(typeof msg === 'string' ? msg : 'Ghi tăng tài sản thất bại.');
+    } finally {
+      setCapitalizing(false);
+    }
+  };
 
   const statusClassName =
     statusConfig.color === 'success'
@@ -395,12 +657,15 @@ export function ViewPurchaseOrderModal({
         <div className="view-purchase-modal__body">
           <div className="view-purchase-modal__content">
             <div className="view-purchase-form">
-              {/* Thông tin chung */}
-              <div className="view-purchase-form__row">
+              <div className="view-purchase-form__row view-purchase-form__row--meta">
+                <div className="view-purchase-form__field">
+                  <label>Mã yêu cầu</label>
+                  <div className="view-purchase-form__value">YC-{data.assetRequestId}</div>
+                </div>
                 <div className="view-purchase-form__field">
                   <label>Người gửi</label>
                   <div className="view-purchase-form__value">
-                    {data.creatorName ?? data.createdBy}
+                    {displayCreatorName}
                   </div>
                 </div>
                 <div className="view-purchase-form__field">
@@ -425,7 +690,17 @@ export function ViewPurchaseOrderModal({
                 </div>
                 <div className="view-purchase-form__field">
                   <label>Thời gian cần vật tư</label>
-                  <div className="view-purchase-form__value">{formatDate(data.createDate)}</div>
+                  {isEditing ? (
+                    <input
+                      type="date"
+                      className="approve-purchase-textarea"
+                      style={{ height: 40 }}
+                      value={editNeedDate}
+                      onChange={(e) => setEditNeedDate(e.target.value)}
+                    />
+                  ) : (
+                    <div className="view-purchase-form__value">{extractedNeedDate ?? formatDateOnly(data.createDate)}</div>
+                  )}
                 </div>
               </div>
 
@@ -445,14 +720,7 @@ export function ViewPurchaseOrderModal({
                   <label>Tài sản / Vật tư</label>
                   <div className="view-purchase-form__value">{requestAssetDisplay ?? '—'}</div>
                 </div>
-              </div>
-
-              {/* Mã yêu cầu & tiêu đề */}
-              <div className="view-purchase-form__row">
-                <div className="view-purchase-form__field">
-                  <label>Mã yêu cầu</label>
-                  <div className="view-purchase-form__value">YC-{data.assetRequestId}</div>
-                </div>
+                <div className="view-purchase-form__field view-purchase-form__field--empty" aria-hidden="true" />
               </div>
 
               {/* Danh mục vật tư */}
@@ -465,7 +733,7 @@ export function ViewPurchaseOrderModal({
                         <th>STT</th>
                         <th>Tên vật tư</th>
                         <th>Số lượng</th>
-                        <th>Mã máy</th>
+                        <th>Mã model</th>
                         <th>Đơn vị tính</th>
                         <th>Đơn giá dự tính</th>
                       </tr>
@@ -476,7 +744,7 @@ export function ViewPurchaseOrderModal({
                           <td>{item.stt}</td>
                           <td>{item.name}</td>
                           <td>{item.quantity}</td>
-                          <td>{item.machineCode ?? '—'}</td>
+                          <td>{item.modelCode ?? '—'}</td>
                           <td>{item.unit ?? '—'}</td>
                           <td className="view-purchase-equipment-price">
                             {item.estimatedPrice ?? '—'}
@@ -505,7 +773,7 @@ export function ViewPurchaseOrderModal({
               )}
 
               {/* Mục đích sử dụng */}
-              {data.description && (
+              {(data.description || isEditing) && (
                 <div className="view-purchase-form__section">
                   <label>Mục đích sử dụng</label>
                   {isEditing ? (
@@ -515,8 +783,25 @@ export function ViewPurchaseOrderModal({
                       onChange={(e) => setEditDescription(e.target.value)}
                     />
                   ) : (
-                    <div className="view-purchase-form__value">{data.description}</div>
+                    <div className="view-purchase-form__value">{extractedPurpose ?? '—'}</div>
                   )}
+                </div>
+              )}
+
+              {!isEditing && (
+                <div className="view-purchase-form__row">
+                  <div className="view-purchase-form__field">
+                    <label>Ý kiến kế toán</label>
+                    <div className="view-purchase-form__value">
+                      {accountantCommentDisplay}
+                    </div>
+                  </div>
+                  <div className="view-purchase-form__field">
+                    <label>Ý kiến giám đốc</label>
+                    <div className="view-purchase-form__value">
+                      {directorCommentDisplay}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -599,18 +884,174 @@ export function ViewPurchaseOrderModal({
                 )}
               </div>
 
-              {isAccountantRole && data.status === 2 && (
+              {isAccountantRole && (data.status === 2 || capitalizedInstanceIds.length > 0) && (
                 <div className="view-purchase-form__section">
                   <h3 className="view-purchase-form__section-title">Kế toán xử lý sau duyệt</h3>
-                  <div className="view-purchase-form-grid-field">
-                    <label>Ghi chú ghi tăng (không bắt buộc)</label>
-                    <textarea
-                      className="approve-purchase-textarea"
-                      placeholder="Không cần thiết"
-                      value={capitalizeNote}
-                      onChange={(e) => setCapitalizeNote(e.target.value)}
-                    />
-                  </div>
+                  {data.status === 2 && capitalizationModeLabel && (
+                    <div className="view-purchase-flow-banner">
+                      <strong>Luồng đang áp dụng:</strong> {capitalizationModeLabel}
+                    </div>
+                  )}
+                  {data.status === 2 && (
+                    <>
+                      <ol className="view-purchase-flow-steps">
+                        <li>Bổ sung ghi chú hoặc tài liệu mua hàng (nếu cần).</li>
+                        <li>Kiểm tra thông tin tài sản hệ thống sẽ ghi tăng.</li>
+                        <li>Nhấn nút ghi tăng ở cuối khối này để hoàn tất.</li>
+                      </ol>
+                      <div className="view-purchase-form-grid-field">
+                        <label>Ghi chú ghi tăng (không bắt buộc)</label>
+                        <textarea
+                          className="approve-purchase-textarea"
+                          placeholder="Không cần thiết"
+                          value={capitalizeNote}
+                          onChange={(e) => setCapitalizeNote(e.target.value)}
+                        />
+                      </div>
+                      <div className="view-purchase-form-grid-2-full">
+                        <div className="view-purchase-form-grid-field">
+                          <label>Quy cách tài sản (thông tin chung)</label>
+                          <input
+                            className="approve-purchase-textarea view-purchase-select-inline"
+                            placeholder="Ví dụ: 3 pha, công suất 7.5kW, model XYZ"
+                            value={assetSpecificationInput}
+                            onChange={(e) => setAssetSpecificationInput(e.target.value)}
+                          />
+                        </div>
+                        <div className="view-purchase-form-grid-field">
+                          <label>Ghi chú tài sản (thông tin chung)</label>
+                          <input
+                            className="approve-purchase-textarea view-purchase-select-inline"
+                            placeholder="Mô tả chung áp dụng cho tài sản tạo mới"
+                            value={assetNoteInput}
+                            onChange={(e) => setAssetNoteInput(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  {purchaseLinesLoading && (
+                    <div className="view-purchase-form__value">Đang tải dòng vật tư...</div>
+                  )}
+                  {canCapitalizeMultiLines && !purchaseLinesLoading && (
+                    <div className="view-purchase-form-grid-2">
+                      <div className="view-purchase-form__value">
+                        Hệ thống sẽ tạo một tài sản danh mục cho từng dòng vật tư và ghi tăng đủ số lượng cá thể.
+                      </div>
+                      <div className="view-purchase-form-grid-2-full">
+                        <div className="view-purchase-form-grid-field">
+                          <label>Loại tài sản</label>
+                          {inferredAssetTypeIdFromText ? (
+                            <div className="view-purchase-form__value">{inferredAssetTypeName ?? '—'}</div>
+                          ) : (
+                            <select
+                              className="approve-purchase-textarea"
+                              style={{ height: 40 }}
+                              value={fallbackAssetTypeId}
+                              onChange={(e) => setFallbackAssetTypeId(e.target.value)}
+                            >
+                              <option value="">Chọn loại tài sản</option>
+                              {assetTypes.map((t) => (
+                                <option key={t.assetTypeId} value={t.assetTypeId}>
+                                  {t.name}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                        <div className="view-purchase-form-grid-field">
+                          <label>Kho lưu tài sản</label>
+                          <select
+                            className="approve-purchase-textarea view-purchase-select-inline"
+                            value={newAssetWarehouseId}
+                            onChange={(e) => setNewAssetWarehouseId(e.target.value)}
+                          >
+                            <option value="">Chọn kho lưu tài sản</option>
+                            {warehouses.map((w) => (
+                              <option key={w.warehouseId} value={w.warehouseId}>
+                                {w.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div
+                          className="view-purchase-form__section view-purchase-form-grid-field--full-row"
+                          style={{ marginTop: 8 }}
+                        >
+                          <h4 className="view-purchase-form__section-title">Từng dòng vật tư</h4>
+                          <table className="view-purchase-equipment-table">
+                            <thead>
+                              <tr>
+                                <th>Tên</th>
+                                <th>SL</th>
+                                <th>Tiền tố mã TS</th>
+                                <th>Tiền tố mã cá thể (nếu SL&gt;1)</th>
+                                <th>Trạng thái</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {purchaseLines.map((row) => {
+                                const inp = lineCapitalizeInputs[row.lineId] ?? {
+                                  assetCatalogPrefix: 'TS',
+                                  instanceCodePrefix: '',
+                                };
+                                const done = row.assetId != null;
+                                return (
+                                  <tr key={row.lineId}>
+                                    <td>{row.itemName ?? '—'}</td>
+                                    <td>{row.quantity}</td>
+                                    <td>
+                                      {done ? (
+                                        <span>{row.assetCode ?? '—'}</span>
+                                      ) : (
+                                        <input
+                                          className="approve-purchase-textarea"
+                                          style={{ height: 36, width: '100%' }}
+                                          value={inp.assetCatalogPrefix}
+                                          onChange={(e) =>
+                                            setLineCapitalizeInputs((prev) => ({
+                                              ...prev,
+                                              [row.lineId]: {
+                                                ...inp,
+                                                assetCatalogPrefix: e.target.value,
+                                              },
+                                            }))
+                                          }
+                                        />
+                                      )}
+                                    </td>
+                                    <td>
+                                      {done ? (
+                                        <span>—</span>
+                                      ) : row.quantity > 1 ? (
+                                        <input
+                                          className="approve-purchase-textarea"
+                                          style={{ height: 36, width: '100%' }}
+                                          value={inp.instanceCodePrefix}
+                                          onChange={(e) =>
+                                            setLineCapitalizeInputs((prev) => ({
+                                              ...prev,
+                                              [row.lineId]: {
+                                                ...inp,
+                                                instanceCodePrefix: e.target.value,
+                                              },
+                                            }))
+                                          }
+                                        />
+                                      ) : (
+                                        <span className="view-purchase-form__value">(mặc định = mã TS)</span>
+                                      )}
+                                    </td>
+                                    <td>{done ? 'Đã ghi tăng' : 'Chờ'}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {canCapitalizeWithoutAsset && (
                     <div className="view-purchase-form-grid-2">
                       <div className="view-purchase-form__value">
@@ -668,8 +1109,7 @@ export function ViewPurchaseOrderModal({
                         <div className="view-purchase-form-grid-field">
                           <label>Kho lưu tài sản</label>
                           <select
-                            className="approve-purchase-textarea"
-                            style={{ height: 40 }}
+                            className="approve-purchase-textarea view-purchase-select-inline"
                             value={newAssetWarehouseId}
                             onChange={(e) => setNewAssetWarehouseId(e.target.value)}
                           >
@@ -738,18 +1178,51 @@ export function ViewPurchaseOrderModal({
                       Chọn tài liệu từ máy tính
                     </button>
                   </div>
+                  {capitalizationMode !== 'none' && capitalizationMode !== 'multi-lines' && (
+                    <div className="view-purchase-form__actions">
+                      <button
+                        type="button"
+                        className="view-purchase-btn-approve"
+                        disabled={capitalizing || purchaseLinesLoading}
+                        onClick={() => {
+                          if (capitalizationMode === 'create-new-asset') {
+                            void handleCapitalizeFromRequest();
+                            return;
+                          }
+                          void handleRecordCapitalization();
+                        }}
+                      >
+                        <span>{capitalizing ? 'Đang ghi tăng...' : capitalizeActionLabel}</span>
+                      </button>
+                    </div>
+                  )}
+                  {firstCapitalizedInstanceId && (
+                    <div className="view-purchase-step2-box">
+                      <div className="view-purchase-step2-title">Bước 2 - Hoàn thiện hồ sơ cá thể</div>
+                      <div className="view-purchase-step2-text">
+                        Đã ghi tăng thành công. Mở ngay trang sửa cá thể để nhập đầy đủ định danh, tài chính, hợp đồng,
+                        phòng ban sử dụng và thông tin vận hành.
+                      </div>
+                      <div className="view-purchase-step2-actions">
+                        <button
+                          type="button"
+                          className="view-purchase-btn-approve"
+                          onClick={() => navigate(`/asset-instances/${firstCapitalizedInstanceId}/edit`)}
+                        >
+                          <span className="view-purchase-btn-approve-icon">🧾</span>
+                          <span>Hoàn thiện hồ sơ cá thể</span>
+                        </button>
+                        {capitalizedInstanceIds.length > 1 && (
+                          <span className="view-purchase-step2-count">
+                            Còn {capitalizedInstanceIds.length - 1} cá thể cần bổ sung thông tin.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Ghi chú của người gửi */}
-              {data.description && (
-                <div className="view-purchase-form__section">
-                  <div className="view-purchase-feedback-box">
-                    <label>Ghi chú của người gửi</label>
-                    <div className="view-purchase-feedback-content">{data.description}</div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -768,10 +1241,11 @@ export function ViewPurchaseOrderModal({
                 <>
                   <button
                     type="button"
-                    className="view-purchase-btn-approve"
+                    className="view-purchase-btn-approve view-purchase-btn-save"
                     disabled={savingEdit}
                     onClick={handleSaveEdit}
                   >
+                    <span className="view-purchase-btn-approve-icon">💾</span>
                     <span>{savingEdit ? 'Đang lưu...' : 'Lưu thay đổi'}</span>
                   </button>
                   <button
@@ -780,7 +1254,8 @@ export function ViewPurchaseOrderModal({
                     onClick={() => {
                       setIsEditing(false);
                       setEditTitle(data.title ?? '');
-                      setEditDescription(data.description ?? '');
+                      setEditDescription(extractedPurpose ?? '');
+                      setEditNeedDate(normalizeDateInput(extractedNeedDate ?? data.createDate));
                     }}
                   >
                     Huỷ
@@ -792,29 +1267,23 @@ export function ViewPurchaseOrderModal({
                   className="view-purchase-btn-approve"
                   onClick={() => setIsEditing(true)}
                 >
+                  <span className="view-purchase-btn-approve-icon">✏️</span>
                   <span>Chỉnh sửa</span>
                 </button>
               )}
             </>
           )}
-          {canRecordCapitalization && (
+          {capitalizationMode === 'multi-lines' && (
             <button
               type="button"
               className="view-purchase-btn-approve"
-              disabled={capitalizing}
-              onClick={handleRecordCapitalization}
+              disabled={capitalizing || purchaseLinesLoading}
+              onClick={() => {
+                void handleCapitalizeMultiLines();
+              }}
             >
-              <span>{capitalizing ? 'Đang ghi tăng...' : 'Biến thành tài sản cố định'}</span>
-            </button>
-          )}
-          {canCapitalizeWithoutAsset && (
-            <button
-              type="button"
-              className="view-purchase-btn-approve"
-              disabled={capitalizing}
-              onClick={handleCapitalizeFromRequest}
-            >
-              <span>{capitalizing ? 'Đang ghi tăng...' : 'Biến thành tài sản cố định'}</span>
+              <span className="view-purchase-btn-approve-icon">📈</span>
+              <span>{capitalizing ? 'Đang ghi tăng...' : 'Ghi tăng theo từng dòng vật tư'}</span>
             </button>
           )}
           {canAccountantApprove && (

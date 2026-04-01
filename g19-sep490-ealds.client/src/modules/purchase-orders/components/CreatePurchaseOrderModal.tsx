@@ -20,10 +20,24 @@ export interface CreatePurchaseFormValues {
   equipment?: {
     name?: string;
     quantity?: number;
-    machineCode?: string;
+    modelCode?: string;
     unit?: string;
     estimatedPrice?: string;
   }[];
+}
+
+function parseNumberInput(value: string): string {
+  const normalized = value.replace(/[^\d]/g, '');
+  return normalized;
+}
+
+function formatNumberInput(value?: string): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  const normalized = parseNumberInput(raw);
+  if (!normalized) return '';
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed.toLocaleString('en-US') : '';
 }
 
 interface CreatePurchaseOrderModalProps {
@@ -73,7 +87,7 @@ export function CreatePurchaseOrderModal({
           : undefined;
         form.setFieldsValue({
           equipment: [
-            { name: '', quantity: 1, machineCode: '', unit: 'Cái', estimatedPrice: '' },
+            { name: '', quantity: 1, modelCode: '', unit: 'Cái', estimatedPrice: '' },
           ],
           ...initialValues,
           assetType: mappedAssetTypeId != null ? String(mappedAssetTypeId) : initialValues.assetType,
@@ -81,7 +95,7 @@ export function CreatePurchaseOrderModal({
       } else {
         form.setFieldsValue({
           equipment: [
-            { name: '', quantity: 1, machineCode: '', unit: 'Cái', estimatedPrice: '' },
+            { name: '', quantity: 1, modelCode: '', unit: 'Cái', estimatedPrice: '' },
           ],
         });
       }
@@ -102,7 +116,7 @@ export function CreatePurchaseOrderModal({
       return {
         name: e.name,
         quantity: q,
-        machineCode: e.machineCode ?? '',
+        modelCode: e.modelCode ?? '',
         unit: e.unit ?? 'Cái',
         estimatedPrice: e.estimatedPrice ?? '0',
       };
@@ -287,12 +301,12 @@ export function CreatePurchaseOrderModal({
                           ),
                         },
                         {
-                          title: 'Mã máy',
-                          key: 'machineCode',
+                          title: 'Mã model',
+                          key: 'modelCode',
                           width: 110,
                           render: (_, __, i) => (
-                            <Form.Item name={[i, 'machineCode']} noStyle>
-                              <Input placeholder="Mã máy" />
+                            <Form.Item name={[i, 'modelCode']} noStyle>
+                              <Input placeholder="Mã model" />
                             </Form.Item>
                           ),
                         },
@@ -316,8 +330,13 @@ export function CreatePurchaseOrderModal({
                           key: 'estimatedPrice',
                           width: 140,
                           render: (_, __, i) => (
-                            <Form.Item name={[i, 'estimatedPrice']} noStyle>
-                              <Input placeholder="VD: 1000000" />
+                            <Form.Item
+                              name={[i, 'estimatedPrice']}
+                              noStyle
+                              getValueFromEvent={(e) => parseNumberInput(e?.target?.value ?? '')}
+                              getValueProps={(value) => ({ value: formatNumberInput(value) })}
+                            >
+                              <Input inputMode="numeric" placeholder="VD: 1000000" addonAfter="đ" />
                             </Form.Item>
                           ),
                         },
@@ -344,7 +363,7 @@ export function CreatePurchaseOrderModal({
                         add({
                           name: '',
                           quantity: 1,
-                          machineCode: '',
+                          modelCode: '',
                           unit: 'Cái',
                           estimatedPrice: '',
                         })

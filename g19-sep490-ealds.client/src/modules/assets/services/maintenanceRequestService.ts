@@ -48,6 +48,11 @@ export interface MaintenanceRequestListItemDTO {
   assetTypeName?: string | null;
   fromDepartment: string;
   toDepartment: string;
+  fromDepartmentId?: number;
+  toDepartmentId?: number;
+  createdBy?: number;
+  isSenderConfirmed?: boolean;
+  isReceiverConfirmed?: boolean;
   quantity: number;
   status: number;
   statusName: string;

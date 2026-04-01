@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { message } from 'antd';
 import type { TransferRequestListItem } from '../../assets/services/transferRequestService';
 import { transferRequestService } from '../../assets/services/transferRequestService';
@@ -15,10 +15,10 @@ const STATUS_MAP: Record<
   4: { label: 'Phê duyệt', color: 'success' },
 };
 
-function formatDateTime(iso?: string | null): string {
+function formatDate(iso?: string | null): string {
   if (!iso) return '—';
   try {
-    return new Date(iso).toLocaleString('vi-VN');
+    return new Date(iso).toLocaleDateString('vi-VN');
   } catch {
     return iso ?? '—';
   }
@@ -43,6 +43,17 @@ export function AccountantTransferRequestDetailModal({
   const [decision, setDecision] = useState<'approved' | 'rejected'>('approved');
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [handled, setHandled] = useState(false);
+
+  const requestStatus = data?.status ?? null;
+
+  useEffect(() => {
+    if (!open || !data) {
+      setHandled(false);
+      return;
+    }
+    setHandled(false);
+  }, [open, data?.assetRequestId, data?.status]);
 
   const statusConfig = useMemo(() => {
     if (!data) return null;
@@ -58,7 +69,7 @@ export function AccountantTransferRequestDetailModal({
     return 'acct-transfer-status-tag';
   }, [statusConfig]);
 
-  const canApprove = !!currentUserId && !!data && data.status === 1; // Đã gửi (kế toán xử lý)
+  const canApprove = !!currentUserId && !!data && requestStatus === 1 && !handled; // Đã gửi (kế toán xử lý)
 
   const handleSubmitApproval = async () => {
     if (!data) return;
@@ -83,6 +94,7 @@ export function AccountantTransferRequestDetailModal({
       }
       await onActionCompleted?.(data.assetRequestId);
       setIsApproveOpen(false);
+      setHandled(true);
     } catch (e: unknown) {
       const err = e as { response?: { data?: string } };
       message.error(err?.response?.data ?? 'Thao tác phê duyệt thất bại.');
@@ -118,7 +130,7 @@ export function AccountantTransferRequestDetailModal({
                   </div>
                   <div className="acct-transfer-form__field">
                     <label>Ngày điều chuyển</label>
-                    <div className="acct-transfer-form__value">{formatDateTime(data.transferDate)}</div>
+                    <div className="acct-transfer-form__value">{formatDate(data.transferDate)}</div>
                   </div>
                 </div>
 
@@ -135,9 +147,33 @@ export function AccountantTransferRequestDetailModal({
 
                 <div className="acct-transfer-form__row">
                   <div className="acct-transfer-form__field">
-                    <label>Tài sản</label>
+                    <label>Mã cá thể</label>
                     <div className="acct-transfer-form__value">
-                      {[data.assetCode, data.assetName].filter(Boolean).join(' - ') || '—'}
+                      {data.instanceCode || '—'}
+                    </div>
+                  </div>
+                  <div className="acct-transfer-form__field">
+                    <label>Trạng thái yêu cầu</label>
+                    <div className="acct-transfer-form__value">{statusConfig?.label || data.statusName || '—'}</div>
+                  </div>
+                </div>
+
+                <div className="acct-transfer-form__row">
+                  <div className="acct-transfer-form__field">
+                    <label>Mã tài sản</label>
+                    <div className="acct-transfer-form__value">{data.assetCode || '—'}</div>
+                  </div>
+                  <div className="acct-transfer-form__field">
+                    <label>Tên tài sản</label>
+                    <div className="acct-transfer-form__value">{data.assetName || '—'}</div>
+                  </div>
+                </div>
+
+                <div className="acct-transfer-form__row">
+                  <div className="acct-transfer-form__field">
+                    <label>Người gửi</label>
+                    <div className="acct-transfer-form__value">
+                      {data.createdByName?.trim() || `User #${data.createdBy}`}
                     </div>
                   </div>
                   <div className="acct-transfer-form__field">

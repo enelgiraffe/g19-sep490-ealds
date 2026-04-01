@@ -112,6 +112,15 @@ public class UpdateAssetInstanceDTO
     public string? ContractNo { get; set; }
     public string? Condition { get; set; }
     public string? Note { get; set; }
+    public int? WarrantyPeriodValue { get; set; }
+    public string? WarrantyPeriodUnit { get; set; }
+    public string? WarrantyConditions { get; set; }
+    public DateOnly? WarrantyStartDate { get; set; }
+    public DateOnly? WarrantyEndDate { get; set; }
+    public DateOnly? DepreciationPeriod { get; set; }
+    public decimal? DepreciationAmount { get; set; }
+    public decimal? AccumulatedDepreciation { get; set; }
+    public decimal? RemainingValue { get; set; }
 
     public int? AssignedDepartmentId { get; set; }
     public int? ResponsibleEmployeeId { get; set; }

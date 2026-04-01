@@ -51,6 +51,8 @@ public partial class AssetRequest
 
     public virtual ICollection<TransferRecord> TransferRecords { get; set; } = new List<TransferRecord>();
 
+    public virtual ICollection<AssetRequestPurchaseLine> PurchaseLines { get; set; } = new List<AssetRequestPurchaseLine>();
+
     public virtual RequestType RequestType { get; set; } = null!;
 
     public virtual WorkflowStep Step { get; set; } = null!;

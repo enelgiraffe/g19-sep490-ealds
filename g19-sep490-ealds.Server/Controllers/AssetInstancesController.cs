@@ -206,7 +206,7 @@ public class AssetInstancesController : ControllerBase
                 r.Title.StartsWith("Damage report") &&
                 r.Status == 0);
 
-        var latestDep = await _context.DepreciationRecords
+        var latestDepSnapshot = await _context.DepreciationRecords
             .Include(r => r.Policy)
             .AsNoTracking()
             .Where(r => r.AssetInstanceId == id)
@@ -215,7 +215,7 @@ public class AssetInstancesController : ControllerBase
             .FirstOrDefaultAsync();
 
         var forced = hasDamageReport ? AssetStatus.Damaged : (AssetStatus?)null;
-        return Ok(ToDto(instance, latestDep, forced));
+        return Ok(ToDto(instance, latestDepSnapshot, forced));
     }
 
     /// <summary>
@@ -383,6 +383,112 @@ public class AssetInstancesController : ControllerBase
             else
             {
                 existingDep.PolicyId = dto.DepreciationPolicyId.Value;
+            }
+        }
+
+        var hasWarrantyPayload =
+            dto.WarrantyPeriodValue.HasValue ||
+            dto.WarrantyPeriodUnit != null ||
+            dto.WarrantyConditions != null ||
+            dto.WarrantyStartDate.HasValue ||
+            dto.WarrantyEndDate.HasValue;
+
+        if (hasWarrantyPayload)
+        {
+            var latestGuarantee = await _context.Guarantees
+                .Where(g => g.AssetInstanceId == id)
+                .OrderByDescending(g => g.WarrantyEndDate)
+                .ThenByDescending(g => g.GuaranteeId)
+                .FirstOrDefaultAsync();
+
+            if (latestGuarantee == null)
+            {
+                if (!dto.WarrantyPeriodValue.HasValue ||
+                    string.IsNullOrWhiteSpace(dto.WarrantyPeriodUnit) ||
+                    !dto.WarrantyStartDate.HasValue ||
+                    !dto.WarrantyEndDate.HasValue)
+                {
+                    return BadRequest(new
+                    {
+                        message = "To create warranty info, provide warranty period value, unit, start date, and end date."
+                    });
+                }
+
+                if (dto.WarrantyPeriodValue.Value <= 0)
+                    return BadRequest(new { message = "Warranty period value must be greater than 0." });
+
+                if (dto.WarrantyEndDate.Value < dto.WarrantyStartDate.Value)
+                    return BadRequest(new { message = "Warranty end date must be greater than or equal to start date." });
+
+                latestGuarantee = new Guarantee
+                {
+                    AssetInstanceId = id,
+                    WarrantyPeriodValue = dto.WarrantyPeriodValue.Value,
+                    WarrantyPeriodUnit = dto.WarrantyPeriodUnit.Trim(),
+                    WarrantyConditions = dto.WarrantyConditions,
+                    StartDate = dto.WarrantyStartDate.Value,
+                    WarrantyEndDate = dto.WarrantyEndDate.Value
+                };
+                _context.Guarantees.Add(latestGuarantee);
+            }
+            else
+            {
+                if (dto.WarrantyPeriodValue.HasValue)
+                {
+                    if (dto.WarrantyPeriodValue.Value <= 0)
+                        return BadRequest(new { message = "Warranty period value must be greater than 0." });
+                    latestGuarantee.WarrantyPeriodValue = dto.WarrantyPeriodValue.Value;
+                }
+                if (dto.WarrantyPeriodUnit != null)
+                    latestGuarantee.WarrantyPeriodUnit = dto.WarrantyPeriodUnit.Trim();
+                if (dto.WarrantyConditions != null)
+                    latestGuarantee.WarrantyConditions = dto.WarrantyConditions;
+                if (dto.WarrantyStartDate.HasValue)
+                    latestGuarantee.StartDate = dto.WarrantyStartDate.Value;
+                if (dto.WarrantyEndDate.HasValue)
+                    latestGuarantee.WarrantyEndDate = dto.WarrantyEndDate.Value;
+
+                if (latestGuarantee.WarrantyEndDate < latestGuarantee.StartDate)
+                    return BadRequest(new { message = "Warranty end date must be greater than or equal to start date." });
+            }
+        }
+
+        var hasDepreciationPayload =
+            dto.DepreciationPeriod.HasValue ||
+            dto.DepreciationAmount.HasValue ||
+            dto.AccumulatedDepreciation.HasValue ||
+            dto.RemainingValue.HasValue;
+
+        if (hasDepreciationPayload)
+        {
+            var latestDepToUpdate = await _context.DepreciationRecords
+                .Where(r => r.AssetInstanceId == id)
+                .OrderByDescending(r => r.Period)
+                .ThenByDescending(r => r.CreateDate)
+                .FirstOrDefaultAsync();
+
+            if (latestDepToUpdate != null)
+            {
+                if (dto.DepreciationPeriod.HasValue)
+                    latestDepToUpdate.Period = dto.DepreciationPeriod.Value;
+                if (dto.DepreciationAmount.HasValue)
+                {
+                    if (dto.DepreciationAmount.Value < 0)
+                        return BadRequest(new { message = "Depreciation amount cannot be negative." });
+                    latestDepToUpdate.DepreciationAmount = dto.DepreciationAmount.Value;
+                }
+                if (dto.AccumulatedDepreciation.HasValue)
+                {
+                    if (dto.AccumulatedDepreciation.Value < 0)
+                        return BadRequest(new { message = "Accumulated depreciation cannot be negative." });
+                    latestDepToUpdate.AccumulatedDepreciation = dto.AccumulatedDepreciation.Value;
+                }
+                if (dto.RemainingValue.HasValue)
+                {
+                    if (dto.RemainingValue.Value < 0)
+                        return BadRequest(new { message = "Remaining value cannot be negative." });
+                    latestDepToUpdate.RemainingValue = dto.RemainingValue.Value;
+                }
             }
         }
 

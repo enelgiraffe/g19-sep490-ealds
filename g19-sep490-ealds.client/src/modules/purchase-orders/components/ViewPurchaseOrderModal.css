@@ -78,10 +78,19 @@
   margin-bottom: 16px;
 }
 
+.view-purchase-form__row--meta {
+  grid-template-columns: minmax(140px, 0.6fr) 1fr 1fr;
+}
+
 .view-purchase-form__field {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.view-purchase-form__field--empty {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .view-purchase-form__field label {
@@ -98,6 +107,12 @@
   font-size: 14px;
 }
 
+@media (max-width: 992px) {
+  .view-purchase-form__row--meta {
+    grid-template-columns: 1fr;
+  }
+}
+
 .view-purchase-form__section {
   margin-bottom: 20px;
 }
@@ -107,6 +122,24 @@
   font-weight: 600;
   color: #111827;
   margin-bottom: 12px;
+}
+
+.view-purchase-flow-banner {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 14px;
+}
+
+.view-purchase-flow-steps {
+  margin: 0 0 12px 18px;
+  color: #374151;
+  font-size: 13px;
+  display: grid;
+  gap: 6px;
 }
 
 .view-purchase-form-grid-2 {
@@ -131,6 +164,22 @@
   font-size: 13px;
   color: #6b7280;
   font-weight: 500;
+}
+
+.view-purchase-form-grid-field .view-purchase-form__value {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+.view-purchase-select-inline {
+  min-height: 40px;
+  height: 40px;
+  resize: none;
+}
+
+.view-purchase-form-grid-field--full-row {
+  grid-column: 1 / -1;
 }
 
 .view-purchase-equipment-table {
@@ -239,6 +288,12 @@
   align-items: center;
 }
 
+.view-purchase-form__actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .view-purchase-btn-close {
   background: #6b7280;
   border: 1px solid #6b7280;
@@ -271,6 +326,42 @@
   border-radius: 6px;
   cursor: pointer;
   font-weight: 500;
+}
+
+.view-purchase-btn-save {
+  margin-right: 5px;
+}
+
+.view-purchase-step2-box {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  background: #eff6ff;
+}
+
+.view-purchase-step2-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e3a8a;
+  margin-bottom: 6px;
+}
+
+.view-purchase-step2-text {
+  font-size: 13px;
+  color: #1f2937;
+}
+
+.view-purchase-step2-actions {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.view-purchase-step2-count {
+  font-size: 12px;
+  color: #374151;
 }
 
 .view-purchase-btn-approve-icon {

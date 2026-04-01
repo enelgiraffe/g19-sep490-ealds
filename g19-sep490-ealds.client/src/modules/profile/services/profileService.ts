@@ -29,6 +29,7 @@ export interface UserProfile {
   gender?: number | null;
   imageUrl?: string | null;
   departmentName?: string | null;
+  departmentId?: number | null;
   role: string;
 }
 

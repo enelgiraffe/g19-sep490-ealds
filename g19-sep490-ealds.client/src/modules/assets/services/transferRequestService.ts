@@ -2,6 +2,9 @@ import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
+/** Khớp App:TransferRequestTypeId trên backend (mặc định 3). */
+export const TRANSFER_REQUEST_TYPE_ID = 3;
+
 const transferApi = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -44,12 +47,20 @@ export interface TransferRequestListItem {
   transferDate: string;
   assetCode: string;
   assetName: string;
+  assetInstanceId?: number | null;
+  instanceCode?: string | null;
   fromDepartment: string;
   toDepartment: string;
+  fromDepartmentId: number;
+  toDepartmentId: number;
+  createdBy: number;
+  createdByName?: string | null;
   quantity: number;
   status: number;
   statusName: string;
   reason?: string | null;
+  isSenderConfirmed: boolean;
+  isReceiverConfirmed: boolean;
 }
 
 export const transferRequestService = {
@@ -74,6 +85,20 @@ export const transferRequestService = {
 
   async delete(assetRequestId: number): Promise<void> {
     await transferApi.delete(`/api/Assets/Requests/transfer/${assetRequestId}`);
+  },
+
+  async confirmSend(assetRequestId: number): Promise<{ message: string; isReady: boolean }> {
+    const response = await transferApi.post<{ message: string; isReady: boolean }>(
+      `/api/Assets/Requests/transfer/${assetRequestId}/confirm-send`,
+    );
+    return response.data;
+  },
+
+  async confirmReceive(assetRequestId: number): Promise<{ message: string; isReady: boolean }> {
+    const response = await transferApi.post<{ message: string; isReady: boolean }>(
+      `/api/Assets/Requests/transfer/${assetRequestId}/confirm-receive`,
+    );
+    return response.data;
   },
 
   async approveAsAccountant(

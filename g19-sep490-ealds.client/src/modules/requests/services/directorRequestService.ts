@@ -43,13 +43,19 @@ export interface DirectorRequestListItem {
   assetName?: string | null;
   assetQuantity?: number | null;
   currentDepartmentName?: string | null;
+  creatorDepartmentName?: string | null;
   /** Tên nhân viên (Employee.Name). */
   creatorName?: string | null;
   creatorEmail?: string | null;
+  accountantComment?: string | null;
+  accountantDecisionDate?: string | null;
+  directorComment?: string | null;
+  directorDecisionDate?: string | null;
 }
 
 export interface DirectorViewParams {
   status?: number | null;
+  statuses?: number[] | null;
   requestTypeId?: number | null;
   userId?: number | null;
   page?: number;
@@ -66,12 +72,16 @@ export interface DirectorViewResponse {
 
 export const directorRequestService = {
   async getView(params: DirectorViewParams = {}): Promise<DirectorViewResponse> {
-    const { status, requestTypeId, userId, page = 1, pageSize = 50 } = params;
-    const queryParams: Record<string, number> = {
+    const { status, statuses, requestTypeId, userId, page = 1, pageSize = 50 } = params;
+    const queryParams: Record<string, number | string> = {
       page,
       pageSize,
     };
-    if (status != null && status !== undefined) queryParams.status = status;
+    if (Array.isArray(statuses) && statuses.length > 0) {
+      queryParams.statuses = statuses.join(',');
+    } else if (status != null && status !== undefined) {
+      queryParams.status = status;
+    }
     if (requestTypeId != null && requestTypeId !== undefined) queryParams.requestTypeId = requestTypeId;
     if (userId != null && userId !== undefined) queryParams.userId = userId;
     const response = await directorApi.get<DirectorViewResponse>(

@@ -31,6 +31,8 @@ public partial class EaldsDbContext : DbContext
 
     public virtual DbSet<AssetRequestRecord> AssetRequestRecords { get; set; }
 
+    public virtual DbSet<AssetRequestPurchaseLine> AssetRequestPurchaseLines { get; set; }
+
     public virtual DbSet<AssetRevaluation> AssetRevaluations { get; set; }
 
     public virtual DbSet<AssetType> AssetTypes { get; set; }
@@ -339,6 +341,29 @@ public partial class EaldsDbContext : DbContext
                 .HasForeignKey(d => d.AssetRequestId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__AssetRequ__Asset__797309D9");
+        });
+
+        modelBuilder.Entity<AssetRequestPurchaseLine>(entity =>
+        {
+            entity.HasKey(e => e.LineId);
+
+            entity.ToTable("AssetRequestPurchaseLine");
+
+            entity.Property(e => e.ItemName).HasMaxLength(500);
+            entity.Property(e => e.Unit).HasMaxLength(50);
+            entity.Property(e => e.ModelCode).HasMaxLength(100);
+            entity.Property(e => e.EstimatedPrice).HasMaxLength(100);
+            entity.Property(e => e.CapitalizedAt).HasColumnType("datetime2");
+
+            entity.HasIndex(e => e.AssetRequestId, "IX_ARPL_AssetRequestId");
+
+            entity.HasOne(d => d.AssetRequest).WithMany(p => p.PurchaseLines)
+                .HasForeignKey(d => d.AssetRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(d => d.Asset).WithMany()
+                .HasForeignKey(d => d.AssetId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<AssetRevaluation>(entity =>
@@ -925,6 +950,10 @@ public partial class EaldsDbContext : DbContext
             entity.ToTable("TransferRecord");
 
             entity.Property(e => e.TransferDate).HasColumnType("datetime");
+            entity.Property(e => e.IsSenderConfirmed);
+            entity.Property(e => e.IsReceiverConfirmed);
+            entity.Property(e => e.SenderConfirmedAt).HasColumnType("datetime2");
+            entity.Property(e => e.ReceiverConfirmedAt).HasColumnType("datetime2");
 
             entity.HasOne(d => d.AssetRequest).WithMany(p => p.TransferRecords)
                 .HasForeignKey(d => d.AssetRequestId)
