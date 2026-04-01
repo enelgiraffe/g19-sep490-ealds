@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace g19_sep490_ealds.Server.Models;
@@ -12,6 +12,8 @@ public partial class Department
     public string Code { get; set; } = null!;
 
     public int Status { get; set; }
+
+    public decimal TotalBudget { get; set; }
 
     public DateTime CreateDate { get; set; }
 
