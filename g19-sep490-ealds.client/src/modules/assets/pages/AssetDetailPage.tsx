@@ -9,6 +9,7 @@ import {
 } from '../services/assetService';
 import {
   getMaintenanceRecordStatusLabel,
+  isRepairMaintenanceRecord,
   maintenanceRecordService,
   type MaintenanceRecordResponse,
 } from '../services/maintenanceRecordService';
@@ -203,6 +204,10 @@ export function AssetDetailPage() {
     row.instanceCode?.trim()
       ? row.instanceCode.trim()
       : '— (chung toàn bộ cá thể)';
+
+  const detailRecordIsRepair =
+    selectedMaintenanceRecord != null &&
+    isRepairMaintenanceRecord(selectedMaintenanceRecord);
 
   return (
     <div className="asset-detail-page">
@@ -458,8 +463,16 @@ export function AssetDetailPage() {
                         <button
                           type="button"
                           className="asset-detail__icon-btn"
-                          title="Xem chi tiết đơn hoàn thành bảo dưỡng"
-                          aria-label="Xem chi tiết đơn hoàn thành bảo dưỡng"
+                          title={
+                            isRepairMaintenanceRecord(record)
+                              ? 'Xem chi tiết biên bản sửa chữa'
+                              : 'Xem chi tiết đơn hoàn thành bảo dưỡng'
+                          }
+                          aria-label={
+                            isRepairMaintenanceRecord(record)
+                              ? 'Xem chi tiết biên bản sửa chữa'
+                              : 'Xem chi tiết đơn hoàn thành bảo dưỡng'
+                          }
                           onClick={() => setSelectedMaintenanceRecord(record)}
                         >
                           👁️
@@ -513,7 +526,11 @@ export function AssetDetailPage() {
             className="asset-detail__record-modal"
             role="dialog"
             aria-modal="true"
-            aria-label="Chi tiết đơn hoàn thành bảo dưỡng"
+            aria-label={
+              detailRecordIsRepair
+                ? 'Chi tiết biên bản sửa chữa'
+                : 'Chi tiết đơn hoàn thành bảo dưỡng'
+            }
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -527,7 +544,9 @@ export function AssetDetailPage() {
 
             <div className="asset-detail__record-modal-header">
               <h3 className="asset-detail__record-modal-title">
-                Chi tiết đơn hoàn thành bảo dưỡng
+                {detailRecordIsRepair
+                  ? 'Chi tiết biên bản sửa chữa'
+                  : 'Chi tiết đơn hoàn thành bảo dưỡng'}
               </h3>
             </div>
 
@@ -538,7 +557,11 @@ export function AssetDetailPage() {
                   <input
                     id="maintenance-record-no"
                     type="text"
-                    value={`MR-${selectedMaintenanceRecord.recordId}`}
+                    value={
+                      detailRecordIsRepair
+                        ? `SC-${selectedMaintenanceRecord.recordId}`
+                        : `MR-${selectedMaintenanceRecord.recordId}`
+                    }
                     disabled
                     className="asset-detail__record-input-disabled"
                   />
@@ -584,7 +607,9 @@ export function AssetDetailPage() {
 
                 <div className="asset-detail__record-form-section">
                   <h4 className="asset-detail__record-section-title">
-                    Thông tin báo cáo hoàn thành bảo dưỡng
+                    {detailRecordIsRepair
+                      ? 'Thông tin hoàn thành sửa chữa'
+                      : 'Thông tin báo cáo hoàn thành bảo dưỡng'}
                   </h4>
                   <div className="asset-detail__record-info-grid">
                     <div className="asset-detail__record-info-row">
@@ -619,7 +644,11 @@ export function AssetDetailPage() {
 
                     <div className="asset-detail__record-info-row asset-detail__record-info-row--single">
                       <div className="asset-detail__record-info-item">
-                        <label>Nội dung công việc đã thực hiện</label>
+                        <label>
+                          {detailRecordIsRepair
+                            ? 'Nội dung / tiến độ thực hiện'
+                            : 'Nội dung công việc đã thực hiện'}
+                        </label>
                         <div className="asset-detail__record-info-value">
                           {getCleanWorkPerformedText(selectedMaintenanceRecord.workPerformed)}
                         </div>
@@ -628,13 +657,21 @@ export function AssetDetailPage() {
 
                     <div className="asset-detail__record-info-row">
                       <div className="asset-detail__record-info-item">
-                        <label>Tình trạng trước bảo dưỡng</label>
+                        <label>
+                          {detailRecordIsRepair
+                            ? 'Tình trạng trước sửa chữa'
+                            : 'Tình trạng trước bảo dưỡng'}
+                        </label>
                         <div className="asset-detail__record-info-value">
                           {selectedMaintenanceRecord.conditionBefore || '—'}
                         </div>
                       </div>
                       <div className="asset-detail__record-info-item">
-                        <label>Tình trạng sau bảo dưỡng</label>
+                        <label>
+                          {detailRecordIsRepair
+                            ? 'Kết quả (tình trạng sau sửa chữa)'
+                            : 'Tình trạng sau bảo dưỡng'}
+                        </label>
                         <div className="asset-detail__record-info-value">
                           {selectedMaintenanceRecord.conditionAfter || '—'}
                         </div>

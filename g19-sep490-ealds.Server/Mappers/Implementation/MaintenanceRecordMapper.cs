@@ -18,7 +18,8 @@ public class MaintenanceRecordMapper : IMaintenanceRecordMapper
             ConditionBefore = entity.ConditionBefore,
             ConditionAfter = entity.ConditionAfter,
             TechnicalNote = null,
-            Status = (MaintenanceRecordStatus)entity.Status
+            Status = (MaintenanceRecordStatus)entity.Status,
+            RecordSource = "maintenance"
         };
     }
 

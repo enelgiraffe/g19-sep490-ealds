@@ -30,6 +30,12 @@ export interface MaintenanceRecordResponse {
   conditionAfter: string;
   technicalNote?: string | null;
   status: number;
+  /** maintenance | repair — từ API; mặc định coi là bảo dưỡng nếu thiếu */
+  recordSource?: string | null;
+}
+
+export function isRepairMaintenanceRecord(record: MaintenanceRecordResponse): boolean {
+  return String(record.recordSource ?? '').toLowerCase() === 'repair';
 }
 
 export function getMaintenanceRecordStatusLabel(status: number): string {

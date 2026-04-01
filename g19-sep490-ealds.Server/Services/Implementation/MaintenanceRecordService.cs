@@ -33,7 +33,8 @@ public class MaintenanceRecordService : IMaintenanceRecordService
                 ConditionBefore = mr.ConditionBefore,
                 ConditionAfter = mr.ConditionAfter,
                 TechnicalNote = null,
-                Status = (MaintenanceRecordStatus)mr.Status
+                Status = (MaintenanceRecordStatus)mr.Status,
+                RecordSource = "maintenance"
             }
         ).ToListAsync();
 
@@ -93,7 +94,8 @@ public class MaintenanceRecordService : IMaintenanceRecordService
                 ConditionBefore = mr.ConditionBefore,
                 ConditionAfter = mr.ConditionAfter,
                 TechnicalNote = null,
-                Status = (MaintenanceRecordStatus)mr.Status
+                Status = (MaintenanceRecordStatus)mr.Status,
+                RecordSource = "maintenance"
             }
         ).ToListAsync();
 
@@ -181,9 +183,10 @@ public class MaintenanceRecordService : IMaintenanceRecordService
             TotalCost = actualCost,
             WorkPerformed = workPerformed,
             ConditionBefore = repairTaskReason?.Trim() ?? string.Empty,
-            ConditionAfter = string.Empty,
+            ConditionAfter = narrative,
             TechnicalNote = technicalNote,
-            Status = MaintenanceRecordStatus.Completed
+            Status = MaintenanceRecordStatus.Completed,
+            RecordSource = "repair"
         };
     }
 
