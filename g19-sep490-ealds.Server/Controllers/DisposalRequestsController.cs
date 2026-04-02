@@ -1,4 +1,3 @@
-using System;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -19,6 +18,8 @@ public class DisposalRequestsController : ControllerBase
     private readonly EaldsDbContext _db;
     private readonly IAssetRequestNotificationService _requestNotifications;
     private readonly int _disposalRequestTypeId;
+    /// <summary>RoleId Trưởng phòng ban trong bảng Role (seed: 4, giống InventoryNotificationService).</summary>
+    private readonly int _departmentHeadRoleId;
 
     public DisposalRequestsController(
         EaldsDbContext db,
@@ -28,6 +29,7 @@ public class DisposalRequestsController : ControllerBase
         _db = db;
         _requestNotifications = requestNotifications;
         _disposalRequestTypeId = configuration.GetValue<int>("App:DisposalRequestTypeId", 5);
+        _departmentHeadRoleId = configuration.GetValue<int>("App:DepartmentHeadRoleId", 4);
     }
 
     /// <summary>
@@ -40,6 +42,7 @@ public class DisposalRequestsController : ControllerBase
             .AsNoTracking()
             .Include(d => d.AssetInstance)
                 .ThenInclude(ai => ai.Asset)
+                .ThenInclude(a => a.AssetType)
             .Include(d => d.AssetInstance)
                 .ThenInclude(ai => ai.AssetLocations)
                     .ThenInclude(al => al.Department)
@@ -54,8 +57,14 @@ public class DisposalRequestsController : ControllerBase
                 TransferDate = d.DiposalDate,
                 AssetCode = d.AssetInstance.Asset != null ? d.AssetInstance.Asset.Code : string.Empty,
                 AssetName = d.AssetInstance.Asset != null ? d.AssetInstance.Asset.Name : string.Empty,
+                AssetTypeName = d.AssetInstance.Asset != null && d.AssetInstance.Asset.AssetType != null
+                    ? d.AssetInstance.Asset.AssetType.Name
+                    : null,
                 AssetInstanceId = d.AssetInstanceId,
                 InstanceCode = d.AssetInstance.InstanceCode,
+                OriginalPrice = d.AssetInstance.OriginalPrice,
+                CurrentValue = d.AssetInstance.CurrentValue,
+                DisposalDeclaredValue = d.DiposalValue,
                 FromDepartment = d.AssetInstance.AssetLocations
                     .Where(al => al.IsCurrent)
                     .Select(al => al.Department != null ? al.Department.Name : string.Empty)
@@ -78,6 +87,10 @@ public class DisposalRequestsController : ControllerBase
                     .FirstOrDefault(),
                 ToDepartmentId = 0,
                 CreatedBy = d.AssetRequest.CreatedBy,
+                CreatedByName = _db.Employees
+                    .Where(e => e.UserId == d.AssetRequest.CreatedBy)
+                    .Select(e => e.Name)
+                    .FirstOrDefault(),
                 IsSenderConfirmed = false,
                 IsReceiverConfirmed = false
             })
@@ -111,75 +124,21 @@ public class DisposalRequestsController : ControllerBase
             ? parsedUserId
             : dto.CreatedBy;
 
-        // Fast path: allow based on JWT role claims first.
-        var hasManagerRoleFromToken =
-            User.IsInRole("DepartmentManager") ||
-            User.IsInRole("DEPARTMENT_MANAGER") ||
-            User.IsInRole("DEPT_MANAGER") ||
-            User.IsInRole("DEPARTMENT_HEAD") ||
-            User.IsInRole("HEAD_OF_DEPARTMENT") ||
-            User.IsInRole("TRUONG_PHONG") ||
-            User.IsInRole("TRUONGPHONG");
-
-        // permission check: only department managers can submit disposal
         var userRoles = await _db.UserRoles
             .Include(ur => ur.Role)
             .AsNoTracking()
             .Where(ur => ur.UserId == actorUserId)
             .ToListAsync();
 
-        // Auto-detect manager-like role IDs from DB (SQL-translatable predicates only).
-        var managerRoleIds = await _db.Roles
-            .AsNoTracking()
-            .Where(r =>
-                (r.Code != null &&
-                    (
-                        r.Code.ToUpper() == "DEPARTMENTMANAGER" ||
-                        r.Code.ToUpper() == "DEPARTMENT_MANAGER" ||
-                        r.Code.ToUpper() == "DEPT_MANAGER" ||
-                        r.Code.ToUpper() == "DEPARTMENT_HEAD" ||
-                        r.Code.ToUpper() == "HEAD_OF_DEPARTMENT" ||
-                        r.Code.ToUpper() == "TRUONG_PHONG" ||
-                        r.Code.ToUpper() == "TRUONGPHONG"
-                    )) ||
-                (r.Name != null &&
-                    (
-                        r.Name.ToUpper().Contains("MANAGER") ||
-                        r.Name.ToUpper().Contains("HEAD") ||
-                        r.Name.ToUpper().Contains("TRUONG PHONG") ||
-                        r.Name.ToUpper().Contains("TRUONG BO PHAN")
-                    ))
-            )
-            .Select(r => r.RoleId)
-            .ToListAsync();
-        var isDeptManager = hasManagerRoleFromToken || userRoles.Any(ur =>
-            managerRoleIds.Contains(ur.RoleId) ||
-            (ur.Role.Code != null &&
-                (
-                    ur.Role.Code.ToUpper() == "DEPARTMENTMANAGER" ||
-                    ur.Role.Code.ToUpper() == "DEPARTMENT_MANAGER" ||
-                    ur.Role.Code.ToUpper() == "DEPT_MANAGER" ||
-                    ur.Role.Code.ToUpper() == "DEPARTMENT_HEAD" ||
-                    ur.Role.Code.ToUpper() == "HEAD_OF_DEPARTMENT" ||
-                    ur.Role.Code.ToUpper() == "TRUONG_PHONG" ||
-                    ur.Role.Code.ToUpper() == "TRUONGPHONG"
-                )) ||
-            (ur.Role.Name != null &&
-                (
-                    ur.Role.Name.ToUpper().Contains("MANAGER") ||
-                    ur.Role.Name.ToUpper().Contains("HEAD") ||
-                    ur.Role.Name.ToUpper().Contains("TRUONG PHONG") ||
-                    ur.Role.Name.ToUpper().Contains("TRUONG BO PHAN")
-                ))
-        );
+        var isDepartmentHead = userRoles.Any(ur => ur.RoleId == _departmentHeadRoleId);
 
-        if (!isDeptManager)
+        if (!isDepartmentHead)
         {
             return StatusCode(403, new
             {
                 message = "Bạn không có quyền gửi yêu cầu thanh lý (chỉ trưởng phòng ban).",
                 actorUserId,
-                managerRoleIds,
+                requiredRoleId = _departmentHeadRoleId,
                 currentUserRoleIds = userRoles.Select(x => x.RoleId).Distinct().ToArray(),
                 currentUserRoleCodes = userRoles.Select(x => x.Role?.Code).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToArray(),
                 currentUserRoleNames = userRoles.Select(x => x.Role?.Name).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToArray()

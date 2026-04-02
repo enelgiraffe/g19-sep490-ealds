@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { TransferRequestListItem } from './transferRequestService';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -39,6 +40,12 @@ export interface DisposalRequestResponse {
 }
 
 export const disposalRequestService = {
+  /** Danh sách yêu cầu thanh lý (cùng DTO với điều chuyển). */
+  async getList(): Promise<TransferRequestListItem[]> {
+    const response = await disposalApi.get<TransferRequestListItem[]>('/api/Assets/Requests/disposal');
+    return response.data;
+  },
+
   async create(payload: DisposalRequestPayload): Promise<DisposalRequestResponse> {
     const body = {
       userId: payload.userId,

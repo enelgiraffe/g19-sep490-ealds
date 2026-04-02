@@ -101,6 +101,24 @@
   flex-wrap: wrap;
 }
 
+/* Tab Thanh lý (kế toán / trưởng phòng): tìm kiếm + trạng thái + ngày cùng hàng */
+.requests-filters.requests-filters--liquidation-row {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.requests-filters.requests-filters--liquidation-row .requests-search {
+  flex: 1 1 180px;
+  min-width: 160px;
+  max-width: 280px;
+}
+
+.requests-filters.requests-filters--liquidation-row .requests-select,
+.requests-filters.requests-filters--liquidation-row .requests-date-picker {
+  flex-shrink: 0;
+}
+
 .requests-search {
   max-width: 260px;
 }

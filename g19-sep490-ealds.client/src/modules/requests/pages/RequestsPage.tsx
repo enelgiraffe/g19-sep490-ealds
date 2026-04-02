@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button, DatePicker, Select, Tabs, message, Input } from 'antd';
-import { EyeOutlined, EditOutlined } from '@ant-design/icons';
+import { CheckOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import { CreatePurchaseOrderModal } from '../../purchase-orders/components/CreatePurchaseOrderModal';
@@ -13,9 +13,19 @@ import {
 import { profileService, type UserProfile } from '../../profile/services/profileService';
 import {
   transferRequestService,
+  type AssetLocationOption,
   type TransferRequestListItem,
 } from '../../assets/services/transferRequestService';
+import { disposalRequestService } from '../../assets/services/disposalRequestService';
+import { LiquidationDisposalApproveModal } from '../../liquidation/components/LiquidationDisposalApproveModal';
+import { LiquidationDisposalDetailModal } from '../../liquidation/components/LiquidationDisposalDetailModal';
+import { LiquidationExecutionModal } from '../../liquidation/components/LiquidationExecutionModal';
+import {
+  filterDisposalListForDepartmentHead,
+  isDepartmentHeadRoleCode,
+} from '../../../shared/utils/departmentHeadRole';
 import { AccountantTransferRequestDetailModal } from '../components/AccountantTransferRequestDetailModal';
+import { DisposalAppraisalDetailModal } from '../components/DisposalAppraisalDetailModal';
 import {
   accountantRequestService,
   type AccountantRequestListItem,
@@ -25,12 +35,20 @@ import {
   REQUEST_TYPE_IDS,
   type DirectorRequestListItem,
 } from '../services/directorRequestService';
+import {
+  disposalAppraisalService,
+  type DisposalAppraisalDetail,
+  type DisposalAppraisalListItem,
+} from '../services/disposalAppraisalService';
+import { userService } from '../../admin/services/userService';
 import './RequestsPage.css';
+import './DirectorDisposalAppraisalModal.css';
 
 const { Option } = Select;
 
 type ActiveTabKey = 'purchase' | 'transfer' | 'liquidation';
 type ActiveTabKeyAll = ActiveTabKey | 'maintenance' | 'repair';
+type LiquidationPillKey = 'requests' | 'appraisals';
 
 const PURCHASE_STATUS_MAP: Record<number, { label: string; color: string }> = {
   [-1]: { label: 'Nháp', color: 'default' },
@@ -64,6 +82,8 @@ const DIRECTOR_STATUS_MAP: Record<number, { label: string; color: string }> = {
   1: { label: 'Chờ phê duyệt', color: 'warning' },
   2: { label: 'Phê duyệt', color: 'success' },
   3: { label: 'Từ chối', color: 'error' },
+  4: { label: 'Đang thực hiện', color: 'processing' },
+  5: { label: 'Hoàn thành', color: 'success' },
 };
 
 /**
@@ -231,7 +251,7 @@ const REQUESTS_TAB_KEYS: ActiveTabKeyAll[] = [
 ];
 
 export function RequestsPage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<ActiveTabKeyAll>('purchase');
   const didInitDirectorDefaultTabRef = useRef(false);
 
@@ -259,15 +279,35 @@ export function RequestsPage() {
   const [transferLoading, setTransferLoading] = useState(false);
   const [isTransferDetailOpen, setIsTransferDetailOpen] = useState(false);
   const [selectedTransfer, setSelectedTransfer] = useState<TransferTableRow | null>(null);
-  const [liquidationRows, setLiquidationRows] = useState<AccountantRequestListItem[]>([]);
+  const [liquidationRows, setLiquidationRows] = useState<TransferRequestListItem[]>([]);
   const [liquidationLoading, setLiquidationLoading] = useState(false);
-  const [selectedLiquidationItem, setSelectedLiquidationItem] = useState<AccountantRequestListItem | null>(
-    null,
-  );
+  const [selectedLiquidationItem, setSelectedLiquidationItem] = useState<TransferRequestListItem | null>(null);
   const [isLiquidationApproveOpen, setIsLiquidationApproveOpen] = useState(false);
+  const [isLiquidationDetailOpen, setIsLiquidationDetailOpen] = useState(false);
+  const [liquidationDetailRow, setLiquidationDetailRow] = useState<TransferRequestListItem | null>(null);
   const [liquidationDecision, setLiquidationDecision] = useState<'approved' | 'rejected'>('approved');
   const [liquidationComment, setLiquidationComment] = useState('');
   const [liquidationSubmitting, setLiquidationSubmitting] = useState(false);
+  const [isLiquidationExecutionOpen, setIsLiquidationExecutionOpen] = useState(false);
+  const [liquidationExecutionRequestId, setLiquidationExecutionRequestId] = useState<number | null>(null);
+  const [liquidationExecutionCode, setLiquidationExecutionCode] = useState('');
+  const [liquidationPill, setLiquidationPill] = useState<LiquidationPillKey>('requests');
+  const [appraisalRows, setAppraisalRows] = useState<DisposalAppraisalListItem[]>([]);
+  const [appraisalLoading, setAppraisalLoading] = useState(false);
+  const [isAppraisalDetailOpen, setIsAppraisalDetailOpen] = useState(false);
+  const [viewAppraisalId, setViewAppraisalId] = useState<number | null>(null);
+  const [isDirectorAppraisalOpen, setIsDirectorAppraisalOpen] = useState(false);
+  const [directorAppraisalLoading, setDirectorAppraisalLoading] = useState(false);
+  const [directorAppraisalDetail, setDirectorAppraisalDetail] = useState<DisposalAppraisalDetail | null>(null);
+  const [directorAppraisalExists, setDirectorAppraisalExists] = useState(false);
+  const [committeeUserOptions, setCommitteeUserOptions] = useState<Array<{ userId: number; label: string }>>([]);
+  const [appraisalDepartmentOptions, setAppraisalDepartmentOptions] = useState<AssetLocationOption[]>([]);
+  const [appraisalFormDate, setAppraisalFormDate] = useState<Dayjs | null>(null);
+  const [appraisalFormDepartmentId, setAppraisalFormDepartmentId] = useState<number | undefined>(undefined);
+  const [appraisalFormReporterId, setAppraisalFormReporterId] = useState<number | undefined>(undefined);
+  const [newCommitteeUserId, setNewCommitteeUserId] = useState<number | undefined>(undefined);
+  const [newCommitteeRole, setNewCommitteeRole] = useState('');
+  const [appraisalMutating, setAppraisalMutating] = useState(false);
 
   const [directorRows, setDirectorRows] = useState<DirectorRequestListItem[]>([]);
   const [directorTotal, setDirectorTotal] = useState(0);
@@ -287,6 +327,23 @@ export function RequestsPage() {
   const [searchText, setSearchText] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+
+  // Từ trang cá thể: quay lại /requests?...&openAppraisal=… → mở lại modal biên bản thẩm định
+  useEffect(() => {
+    const aid = searchParams.get('openAppraisal');
+    if (!aid || !userProfile?.id) return;
+    const id = Number(aid);
+    if (!Number.isFinite(id) || id <= 0) return;
+    const pill = searchParams.get('liquidationPill');
+    setActiveTab('liquidation');
+    if (pill === 'appraisals') setLiquidationPill('appraisals');
+    setViewAppraisalId(id);
+    setIsAppraisalDetailOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('openAppraisal');
+    next.delete('liquidationPill');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, userProfile?.id, setSearchParams]);
 
   useEffect(() => {
     const loadPurchase = async () => {
@@ -324,24 +381,39 @@ export function RequestsPage() {
       }
     };
 
-    const loadLiquidations = async () => {
-      setLiquidationLoading(true);
-      try {
-        const list = await accountantRequestService.getLiquidationRequests();
-        setLiquidationRows(list);
-      } catch {
-        message.error('Không tải được danh sách yêu cầu thanh lý.');
-        setLiquidationRows([]);
-      } finally {
-        setLiquidationLoading(false);
-      }
-    };
-
     loadPurchase();
     loadTransfers();
-    loadLiquidations();
     loadProfile();
   }, []);
+
+  const reloadLiquidationRows = useCallback(async () => {
+    if (!userProfile) {
+      setLiquidationRows([]);
+      return;
+    }
+    setLiquidationLoading(true);
+    try {
+      const list = await disposalRequestService.getList();
+      const r = String(userProfile.role).toUpperCase();
+      const isAcct = r === 'ACCOUNTANT';
+      const isDept = isDepartmentHeadRoleCode(r);
+      const filtered = isAcct
+        ? list
+        : isDept
+          ? filterDisposalListForDepartmentHead(list, userProfile.id, userProfile.departmentId)
+          : [];
+      setLiquidationRows(filtered);
+    } catch {
+      message.error('Không tải được danh sách yêu cầu thanh lý.');
+      setLiquidationRows([]);
+    } finally {
+      setLiquidationLoading(false);
+    }
+  }, [userProfile]);
+
+  useEffect(() => {
+    void reloadLiquidationRows();
+  }, [reloadLiquidationRows]);
 
   // Director has all tabs; accountant / trưởng phòng only purchase, transfer, liquidation
   useEffect(() => {
@@ -379,6 +451,75 @@ export function RequestsPage() {
     }
   };
 
+  const reloadAppraisalList = async () => {
+    if (!userProfile?.id) return;
+    setAppraisalLoading(true);
+    try {
+      const asDirector = String(userProfile.role ?? '').toUpperCase() === 'DIRECTOR';
+      const rows = asDirector
+        ? await disposalAppraisalService.getDirectorAppraisals(userProfile.id)
+        : await disposalAppraisalService.getMyAppraisals(userProfile.id);
+      setAppraisalRows(rows);
+    } catch {
+      message.error('Không tải được danh sách thẩm định thanh lý.');
+      setAppraisalRows([]);
+    } finally {
+      setAppraisalLoading(false);
+    }
+  };
+
+  const openDirectorAppraisalModal = async () => {
+    if (!userProfile?.id || !selectedDirectorItem) return;
+    setIsDirectorAppraisalOpen(true);
+    setDirectorAppraisalLoading(true);
+    setNewCommitteeUserId(undefined);
+    setNewCommitteeRole('');
+    try {
+      const users = await userService.getAll();
+      setCommitteeUserOptions(
+        users.map((u) => ({
+          userId: u.userId,
+          label: `${u.fullName?.trim() || u.email} (#${u.userId})`,
+        })),
+      );
+    } catch {
+      setCommitteeUserOptions([]);
+      message.warning('Không tải được danh sách người dùng.');
+    }
+    try {
+      const deptList = await transferRequestService.getAssetLocations();
+      setAppraisalDepartmentOptions(deptList);
+    } catch {
+      setAppraisalDepartmentOptions([]);
+      message.warning('Không tải được danh sách phòng ban.');
+    }
+    try {
+      const d = await disposalAppraisalService.getByAssetRequest(
+        selectedDirectorItem.assetRequestId,
+        userProfile.id,
+      );
+      setDirectorAppraisalDetail(d);
+      setDirectorAppraisalExists(true);
+      setAppraisalFormDate(d.scheduledAt ? dayjs(d.scheduledAt) : null);
+      setAppraisalFormDepartmentId(d.meetingDepartmentId ?? undefined);
+      setAppraisalFormReporterId(d.reporterUserId ?? undefined);
+    } catch (e: unknown) {
+      const st = (e as { response?: { status?: number } })?.response?.status;
+      if (st === 404) {
+        setDirectorAppraisalDetail(null);
+        setDirectorAppraisalExists(false);
+        setAppraisalFormDate(null);
+        setAppraisalFormDepartmentId(undefined);
+        setAppraisalFormReporterId(undefined);
+      } else {
+        message.error('Không tải được thông tin hội đồng thẩm định.');
+        setIsDirectorAppraisalOpen(false);
+      }
+    } finally {
+      setDirectorAppraisalLoading(false);
+    }
+  };
+
   const normalizedRole = String(userProfile?.role ?? '').toUpperCase();
   const isDirectorRole = normalizedRole === 'DIRECTOR';
   const isAccountantRole = normalizedRole === 'ACCOUNTANT';
@@ -392,6 +533,7 @@ export function RequestsPage() {
 
   const directorRequestTypeId = shouldUseDirectorView ? REQUEST_TYPE_IDS[activeTab] : null;
   const isDirectorRepairTable = shouldUseDirectorView && activeTab === 'repair';
+  const isDirectorLiquidationTable = shouldUseDirectorView && activeTab === 'liquidation';
 
   // Ensure director sees only requests already passed accountant step (per workflow)
   // - Purchase: accountant approves 0->1, director decides at status=1
@@ -400,7 +542,8 @@ export function RequestsPage() {
     if (!isDirectorRole) return undefined;
     if (activeTab === 'purchase') return [1, 2];
     if (activeTab === 'transfer') return [2];
-    if (activeTab === 'liquidation') return [1];
+    // Thanh lý: hiển thị cả chờ phê duyệt (1) và đã phê duyệt (2) để giám đốc theo dõi toàn bộ.
+    if (activeTab === 'liquidation') return [1, 2];
     return undefined;
   }, [activeTab, isDirectorRole]);
 
@@ -410,9 +553,6 @@ export function RequestsPage() {
     (selectedDirectorItem.status === 1 ||
       (selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.transfer &&
         selectedDirectorItem.status === 2));
-
-  const canAccountantLiquidationApprove =
-    !!userProfile?.id && !!selectedLiquidationItem && selectedLiquidationItem.status === 0;
 
   const prevDirectorTypeIdRef = useRef<number | null>(null);
   const effectiveDirectorPage =
@@ -474,6 +614,12 @@ export function RequestsPage() {
     setPage(1);
   }, [activeTab, statusFilter, searchText, departmentFilter, sentDateFilter]);
 
+  useEffect(() => {
+    if (activeTab !== 'liquidation') {
+      setLiquidationPill('requests');
+    }
+  }, [activeTab]);
+
   // Accountant transfer list must always include requests already approved by director.
   // Reset status filter to "all" when switching to transfer tab to avoid hiding approved rows.
   useEffect(() => {
@@ -488,6 +634,13 @@ export function RequestsPage() {
     setSelectedDirectorItem(null);
     setIsDirectorDetailOpen(false);
   }, [activeTab, shouldUseDirectorView]);
+
+  useEffect(() => {
+    if (!userProfile?.id) return;
+    if (activeTab !== 'liquidation') return;
+    if (liquidationPill !== 'appraisals') return;
+    reloadAppraisalList();
+  }, [userProfile?.id, activeTab, liquidationPill]);
 
   const filteredPurchaseRows = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
@@ -535,7 +688,32 @@ export function RequestsPage() {
       let matchDate = true;
       if (sentDateFilter) {
         try {
-          const rowDate = new Date(row.createDate).toISOString().slice(0, 10);
+          const rowDate = new Date(row.transferDate).toISOString().slice(0, 10);
+          matchDate = rowDate === sentDateFilter;
+        } catch {
+          matchDate = true;
+        }
+      }
+      const ic = (row.instanceCode ?? '').toLowerCase();
+      const matchKeyword =
+        !keyword ||
+        (row.reason ?? '').toLowerCase().includes(keyword) ||
+        row.code.toLowerCase().includes(keyword) ||
+        row.assetCode.toLowerCase().includes(keyword) ||
+        row.assetName.toLowerCase().includes(keyword) ||
+        ic.includes(keyword) ||
+        `yc-${row.assetRequestId}`.includes(keyword);
+      return matchStatus && matchDate && matchKeyword;
+    });
+  }, [liquidationRows, searchText, statusFilter, sentDateFilter]);
+
+  const filteredAppraisalRows = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+    return appraisalRows.filter((row) => {
+      let matchDate = true;
+      if (sentDateFilter && row.scheduledAt) {
+        try {
+          const rowDate = new Date(row.scheduledAt).toISOString().slice(0, 10);
           matchDate = rowDate === sentDateFilter;
         } catch {
           matchDate = true;
@@ -543,11 +721,11 @@ export function RequestsPage() {
       }
       const matchKeyword =
         !keyword ||
-        row.title.toLowerCase().includes(keyword) ||
+        row.requestTitle.toLowerCase().includes(keyword) ||
         `yc-${row.assetRequestId}`.includes(keyword);
-      return matchStatus && matchDate && matchKeyword;
+      return matchDate && matchKeyword;
     });
-  }, [liquidationRows, searchText, statusFilter, sentDateFilter]);
+  }, [appraisalRows, searchText, sentDateFilter]);
 
   const departmentOptions = useMemo(
     () =>
@@ -560,6 +738,7 @@ export function RequestsPage() {
   const isPurchaseTab = activeTab === 'purchase';
   const isTransferTab = activeTab === 'transfer';
   const isLiquidationTab = activeTab === 'liquidation';
+  const isLiquidationAppraisalPill = isLiquidationTab && liquidationPill === 'appraisals';
   const hasDataTable = isPurchaseTab || isTransferTab || isLiquidationTab || shouldUseDirectorView;
 
   const currentRows = isPurchaseTab
@@ -567,26 +746,30 @@ export function RequestsPage() {
     : isTransferTab
       ? filteredTransferRows
       : isLiquidationTab
-        ? filteredLiquidationRows
+        ? (isLiquidationAppraisalPill ? filteredAppraisalRows : filteredLiquidationRows)
       : [];
-  const loading = isPurchaseTab
-    ? purchaseLoading
-    : isTransferTab
-      ? transferLoading
-      : isLiquidationTab && !shouldUseDirectorView
-        ? liquidationLoading
-      : shouldUseDirectorView
-        ? directorLoading
-        : false;
+  const loading = isLiquidationAppraisalPill
+    ? appraisalLoading
+    : isPurchaseTab
+      ? purchaseLoading
+      : isTransferTab
+        ? transferLoading
+        : isLiquidationTab && !shouldUseDirectorView
+          ? liquidationLoading
+          : shouldUseDirectorView
+            ? directorLoading
+            : false;
 
-  const total = shouldUseDirectorView ? directorTotal : currentRows.length;
+  const total =
+    shouldUseDirectorView && !isLiquidationAppraisalPill ? directorTotal : currentRows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
   const startIndex = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const endIndex = Math.min(safePage * pageSize, total);
-  const pagedRows = shouldUseDirectorView
-    ? directorRows
-    : currentRows.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const pagedRows =
+    shouldUseDirectorView && !isLiquidationAppraisalPill
+      ? directorRows
+      : currentRows.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleCloseCreatePurchase = () => {
     setIsCreatePurchaseOpen(false);
@@ -777,7 +960,33 @@ export function RequestsPage() {
           ]}
         />
 
-        <div className="requests-filters">
+        {isLiquidationTab && (!shouldUseDirectorView || isDirectorRole) && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <Button
+              type={liquidationPill === 'requests' ? 'primary' : 'default'}
+              onClick={() => setLiquidationPill('requests')}
+            >
+              Yêu cầu thanh lý
+            </Button>
+            <Button
+              type={liquidationPill === 'appraisals' ? 'primary' : 'default'}
+              onClick={() => {
+                setLiquidationPill('appraisals');
+                setPage(1);
+              }}
+            >
+              Thẩm định tài sản
+            </Button>
+          </div>
+        )}
+
+        <div
+          className={
+            isLiquidationTab && (!shouldUseDirectorView || isDirectorRole)
+              ? 'requests-filters requests-filters--liquidation-row'
+              : 'requests-filters'
+          }
+        >
           {(isPurchaseTab || isTransferTab || isLiquidationTab) && (
             <Input
               placeholder="Tìm kiếm"
@@ -819,7 +1028,7 @@ export function RequestsPage() {
               />
             </>
           )}
-          {isLiquidationTab && !shouldUseDirectorView && (
+          {isLiquidationTab && !shouldUseDirectorView && liquidationPill === 'requests' && (
             <>
               <Select
                 placeholder="Trạng thái"
@@ -839,7 +1048,17 @@ export function RequestsPage() {
               />
             </>
           )}
+          {isLiquidationTab && liquidationPill === 'appraisals' && (
+            <DatePicker
+              placeholder="Ngày hẹn thẩm định"
+              className="requests-date-picker"
+              onChange={(_, dateString) => {
+                setSentDateFilter(dateString || null);
+              }}
+            />
+          )}
           {shouldUseDirectorView &&
+            !(activeTab === 'liquidation' && liquidationPill === 'appraisals') &&
             (enforcedDirectorStatuses != null ? (
               <div style={{ color: '#6b7280', fontSize: 13 }}>
                 Chỉ hiển thị:{' '}
@@ -877,12 +1096,87 @@ export function RequestsPage() {
             </div>
           ) : loading ? (
             <div className="requests-table-loading">
-              {isPurchaseTab
-                ? 'Đang tải danh sách đơn mua...'
-                : isTransferTab
-                  ? 'Đang tải danh sách yêu cầu điều chuyển...'
-                  : 'Đang tải danh sách yêu cầu...'}
+              {isLiquidationAppraisalPill
+                ? 'Đang tải danh sách thẩm định...'
+                : isPurchaseTab
+                  ? 'Đang tải danh sách đơn mua...'
+                  : isTransferTab
+                    ? 'Đang tải danh sách yêu cầu điều chuyển...'
+                    : 'Đang tải danh sách yêu cầu...'}
             </div>
+          ) : isLiquidationAppraisalPill ? (
+            <table className="asset-table requests-table">
+              <thead>
+                <tr>
+                  <th>MÃ YÊU CẦU</th>
+                  <th>NGÀY HẸN THẨM ĐỊNH</th>
+                  <th>THÔNG TIN THẨM ĐỊNH</th>
+                  <th>TRẠNG THÁI</th>
+                  <th className="asset-table__cell asset-table__cell--actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {pagedRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="requests-table-empty">
+                      Không có dữ liệu.
+                    </td>
+                  </tr>
+                ) : (
+                  (pagedRows as DisposalAppraisalListItem[]).map((row) => {
+                    const statusText =
+                      row.status === 4
+                        ? 'Đã xác nhận hội đồng'
+                        : row.status === 2
+                          ? 'Đã có biên bản'
+                          : row.status === 1
+                            ? 'Đã lên lịch'
+                            : 'Đang xử lý';
+                    const roleHint =
+                      isDirectorRole && !row.isReporter && !row.isRelatedMember
+                        ? 'Hội đồng thẩm định'
+                        : row.isReporter
+                          ? 'Bạn là người nhập biên bản'
+                          : 'Bạn là thành viên liên quan';
+                    return (
+                      <tr key={row.appraisalId} className="asset-row">
+                        <td>YC-{row.assetRequestId}</td>
+                        <td>{row.scheduledAt ? formatDate(row.scheduledAt) : '—'}</td>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <span>{row.requestTitle || '—'}</span>
+                            <span style={{ color: '#6b7280', fontSize: 12 }}>
+                              {roleHint}
+                              {row.meetingDepartmentName || row.meetingLocation
+                                ? ` - ${row.meetingDepartmentName ?? row.meetingLocation}`
+                                : ''}
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          <span className="asset-status-pill asset-status-pill--processing">{statusText}</span>
+                        </td>
+                        <td className="asset-table__cell asset-table__cell--actions">
+                          <div className="requests-actions">
+                            <Button
+                              type="text"
+                              icon={<EyeOutlined />}
+                              size="small"
+                              onClick={() => {
+                                setViewAppraisalId(row.appraisalId);
+                                setIsAppraisalDetailOpen(true);
+                              }}
+                            >
+                              Xem
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           ) : shouldUseDirectorView ? (
             <table className="asset-table requests-table">
               <thead>
@@ -894,6 +1188,16 @@ export function RequestsPage() {
                       <th>TÊN TÀI SẢN</th>
                       <th>PHÒNG BAN ĐỀ XUẤT</th>
                       <th>NGÀY GỬI</th>
+                      <th>TRẠNG THÁI</th>
+                    </>
+                  ) : isDirectorLiquidationTable ? (
+                    <>
+                      <th>MÃ YÊU CẦU</th>
+                      <th>PHÒNG BAN ĐỀ XUẤT</th>
+                      <th>NGÀY GỬI</th>
+                      <th>MÃ TÀI SẢN</th>
+                      <th>MÃ CÁ THỂ</th>
+                      <th>TÊN TÀI SẢN</th>
                       <th>TRẠNG THÁI</th>
                     </>
                   ) : (
@@ -912,7 +1216,10 @@ export function RequestsPage() {
               <tbody>
                 {pagedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="requests-table-empty">
+                    <td
+                      colSpan={isDirectorRepairTable ? 7 : isDirectorLiquidationTable ? 8 : 7}
+                      className="requests-table-empty"
+                    >
                       Không có dữ liệu.
                     </td>
                   </tr>
@@ -949,6 +1256,14 @@ export function RequestsPage() {
                             <td>{assetTitle}</td>
                             <td>{row.creatorDepartmentName ?? row.currentDepartmentName ?? '—'}</td>
                             <td>{formatDate(row.createDate)}</td>
+                          </>
+                        ) : isDirectorLiquidationTable ? (
+                          <>
+                            <td>{row.creatorDepartmentName ?? row.currentDepartmentName ?? '—'}</td>
+                            <td>{formatDate(row.createDate)}</td>
+                            <td>{row.assetCode ?? '—'}</td>
+                            <td>{row.assetInstanceCode?.trim() || '—'}</td>
+                            <td>{row.assetName ?? '—'}</td>
                           </>
                         ) : (
                           <>
@@ -1090,6 +1405,10 @@ export function RequestsPage() {
                 <tr>
                   <th>MÃ YÊU CẦU</th>
                   <th>NGÀY GỬI</th>
+                  <th>MÃ TÀI SẢN</th>
+                  <th>MÃ CÁ THỂ</th>
+                  <th>TÊN TÀI SẢN</th>
+                  <th>PHÒNG BAN</th>
                   <th>NỘI DUNG</th>
                   <th>TRẠNG THÁI</th>
                   <th className="asset-table__cell asset-table__cell--actions" />
@@ -1098,31 +1417,22 @@ export function RequestsPage() {
               <tbody>
                 {pagedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="requests-table-empty">
+                    <td colSpan={9} className="requests-table-empty">
                       Không có dữ liệu.
                     </td>
                   </tr>
                 ) : (
-                  (pagedRows as AccountantRequestListItem[]).map((row) => {
+                  (pagedRows as TransferRequestListItem[]).map((row) => {
                     const config = DIRECTOR_STATUS_MAP[row.status] ?? DIRECTOR_STATUS_MAP[0];
                     return (
                       <tr key={row.assetRequestId} className="asset-row">
-                        <td>
-                          <button
-                            type="button"
-                            className="asset-code asset-code--link"
-                            onClick={() => {
-                              setSelectedLiquidationItem(row);
-                              setLiquidationDecision('approved');
-                              setLiquidationComment('');
-                              setIsLiquidationApproveOpen(true);
-                            }}
-                          >
-                            YC-{row.assetRequestId}
-                          </button>
-                        </td>
-                        <td>{formatDate(row.createDate)}</td>
-                        <td>{row.title ?? '—'}</td>
+                        <td>YC-{row.assetRequestId}</td>
+                        <td>{formatDate(row.transferDate)}</td>
+                        <td>{row.assetCode ?? '—'}</td>
+                        <td>{row.instanceCode?.trim() || '—'}</td>
+                        <td>{row.assetName ?? '—'}</td>
+                        <td>{row.fromDepartment ?? '—'}</td>
+                        <td>{row.reason?.trim() || '—'}</td>
                         <td>
                           <span
                             className={
@@ -1132,9 +1442,9 @@ export function RequestsPage() {
                                   ? 'asset-status-pill asset-status-pill--inactive'
                                 : config.color === 'processing'
                                   ? 'asset-status-pill asset-status-pill--processing'
-                                  : config.color === 'warning'
+                                : config.color === 'warning'
                                     ? 'asset-status-pill asset-status-pill--warning'
-                                    : config.color === 'error'
+                                : config.color === 'error'
                                       ? 'asset-status-pill asset-status-pill--danger'
                                       : 'asset-status-pill'
                             }
@@ -1143,16 +1453,47 @@ export function RequestsPage() {
                           </span>
                         </td>
                         <td className="asset-table__cell asset-table__cell--actions">
-                          <Button
-                            type="text"
-                            icon={<EyeOutlined />}
-                            onClick={() => {
-                              setSelectedLiquidationItem(row);
-                              setLiquidationDecision('approved');
-                              setLiquidationComment('');
-                              setIsLiquidationApproveOpen(true);
-                            }}
-                          />
+                          <div className="requests-actions">
+                            <Button
+                              type="text"
+                              icon={<EyeOutlined />}
+                              size="small"
+                              onClick={() => {
+                                setLiquidationDetailRow(row);
+                                setIsLiquidationDetailOpen(true);
+                              }}
+                            >
+                              Xem
+                            </Button>
+                            {isAccountantRole && row.status === 0 && (
+                              <Button
+                                type="text"
+                                icon={<CheckOutlined />}
+                                size="small"
+                                onClick={() => {
+                                  setSelectedLiquidationItem(row);
+                                  setLiquidationDecision('approved');
+                                  setLiquidationComment('');
+                                  setIsLiquidationApproveOpen(true);
+                                }}
+                              >
+                                Phê duyệt
+                              </Button>
+                            )}
+                            {isAccountantRole && row.status === 2 && (
+                              <Button
+                                type="text"
+                                size="small"
+                                onClick={() => {
+                                  setLiquidationExecutionRequestId(row.assetRequestId);
+                                  setLiquidationExecutionCode(row.code ?? `YC-${row.assetRequestId}`);
+                                  setIsLiquidationExecutionOpen(true);
+                                }}
+                              >
+                                Thực hiện thanh lý
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1346,93 +1687,86 @@ export function RequestsPage() {
         }}
       />
 
-      {canAccountantLiquidationApprove && isLiquidationApproveOpen && (
-        <div className="acct-transfer-approve-overlay" role="dialog" aria-modal="true">
-          <div className="acct-transfer-approve-modal">
-            <div className="acct-transfer-approve-modal__header">
-              <h3 className="acct-transfer-approve-modal__title">Duyệt yêu cầu thanh lý</h3>
-            </div>
+      <LiquidationDisposalDetailModal
+        open={isLiquidationDetailOpen}
+        onClose={() => {
+          setIsLiquidationDetailOpen(false);
+          setLiquidationDetailRow(null);
+        }}
+        row={liquidationDetailRow}
+        showAccountantExtras={isAccountantRole}
+        returnPathAfterInstance="/requests?tab=liquidation"
+        returnLabelAfterInstance="← Quay lại danh sách yêu cầu"
+      />
 
-            <div className="acct-transfer-approve-modal__body">
-              <div className="acct-transfer-approve-form">
-                <div className="acct-transfer-approve-form__row">
-                  <div className="acct-transfer-approve-form__field">
-                    <label>Phê duyệt</label>
-                    <select
-                      className="acct-transfer-approve-select"
-                      value={liquidationDecision}
-                      onChange={(e) =>
-                        setLiquidationDecision(e.target.value === 'rejected' ? 'rejected' : 'approved')
-                      }
-                    >
-                      <option value="approved">Phê duyệt</option>
-                      <option value="rejected">Từ chối</option>
-                    </select>
-                  </div>
-                  <div className="acct-transfer-approve-form__field">
-                    <label>Ghi chú</label>
-                    <textarea
-                      className="acct-transfer-approve-textarea"
-                      placeholder="Không cần thiết"
-                      value={liquidationComment}
-                      onChange={(e) => setLiquidationComment(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="acct-transfer-approve-modal__footer">
-              <button
-                type="button"
-                className="acct-transfer-approve-btn-back"
-                onClick={() => setIsLiquidationApproveOpen(false)}
-                disabled={liquidationSubmitting}
-              >
-                ← Quay lại
-              </button>
-              <button
-                type="button"
-                className="acct-transfer-approve-btn-submit"
-                disabled={liquidationSubmitting}
-                onClick={async () => {
-                  if (!selectedLiquidationItem || !userProfile?.id) return;
-                  setLiquidationSubmitting(true);
-                  try {
-                    const payload = {
-                      approvedBy: userProfile.id,
-                      comment: liquidationComment.trim() || null,
-                    };
-                    if (liquidationDecision === 'approved') {
-                      await accountantRequestService.approve(selectedLiquidationItem.assetRequestId, payload);
-                      message.success('Đã phê duyệt yêu cầu thanh lý.');
-                    } else {
-                      await accountantRequestService.reject(selectedLiquidationItem.assetRequestId, payload);
-                      message.success('Đã từ chối yêu cầu thanh lý.');
-                    }
-
-                    setIsLiquidationApproveOpen(false);
-                    setSelectedLiquidationItem(null);
-
-                    setLiquidationLoading(true);
-                    const list = await accountantRequestService.getLiquidationRequests();
-                    setLiquidationRows(list);
-                  } catch (e: unknown) {
-                    const err = e as { response?: { data?: string } };
-                    message.error(err?.response?.data ?? 'Thao tác duyệt thanh lý thất bại.');
-                  } finally {
-                    setLiquidationSubmitting(false);
-                    setLiquidationLoading(false);
-                  }
-                }}
-              >
-                <span className="acct-transfer-btn-approve-icon">📋</span>
-                <span>Xác nhận</span>
-              </button>
-            </div>
-          </div>
-        </div>
+      {isLiquidationApproveOpen && isAccountantRole && selectedLiquidationItem && (
+        <LiquidationDisposalApproveModal
+          open
+          onClose={() => {
+            setIsLiquidationApproveOpen(false);
+            setSelectedLiquidationItem(null);
+          }}
+          row={selectedLiquidationItem}
+          decision={liquidationDecision}
+          onDecisionChange={setLiquidationDecision}
+          comment={liquidationComment}
+          onCommentChange={setLiquidationComment}
+          submitting={liquidationSubmitting}
+          onConfirm={async () => {
+            if (!selectedLiquidationItem || !userProfile?.id) return;
+            setLiquidationSubmitting(true);
+            try {
+              const payload = {
+                approvedBy: userProfile.id,
+                comment: liquidationComment.trim() || null,
+              };
+              if (liquidationDecision === 'approved') {
+                await accountantRequestService.approve(selectedLiquidationItem.assetRequestId, payload);
+                message.success('Đã phê duyệt yêu cầu thanh lý.');
+              } else {
+                await accountantRequestService.reject(selectedLiquidationItem.assetRequestId, payload);
+                message.success('Đã từ chối yêu cầu thanh lý.');
+              }
+              setIsLiquidationApproveOpen(false);
+              setSelectedLiquidationItem(null);
+              await reloadLiquidationRows();
+            } catch (e: unknown) {
+              const err = e as { response?: { data?: string } };
+              message.error(err?.response?.data ?? 'Thao tác duyệt thanh lý thất bại.');
+            } finally {
+              setLiquidationSubmitting(false);
+            }
+          }}
+        />
       )}
+
+      {isLiquidationExecutionOpen && isAccountantRole && (
+        <LiquidationExecutionModal
+          open
+          assetRequestId={liquidationExecutionRequestId}
+          requestCode={liquidationExecutionCode}
+          userId={userProfile?.id}
+          onClose={() => {
+            setIsLiquidationExecutionOpen(false);
+            setLiquidationExecutionRequestId(null);
+            setLiquidationExecutionCode('');
+          }}
+          onSuccess={async () => {
+            await reloadLiquidationRows();
+          }}
+        />
+      )}
+
+      <DisposalAppraisalDetailModal
+        open={isAppraisalDetailOpen}
+        appraisalId={viewAppraisalId}
+        userId={userProfile?.id}
+        onClose={() => {
+          setIsAppraisalDetailOpen(false);
+          setViewAppraisalId(null);
+        }}
+        onRefreshList={reloadAppraisalList}
+      />
 
       {isDirectorDetailOpen && selectedDirectorItem && (
         <div className="acct-transfer-modal-overlay" role="dialog" aria-modal="true">
@@ -1687,11 +2021,60 @@ export function RequestsPage() {
                                     {selectedDirectorItem.title ?? '—'}
                                   </div>
                                 </div>
-                                {selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.transfer && (
+                                {selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.liquidation && (
+                                  <>
+                                    {selectedDirectorItem.disposalReason?.trim() ? (
+                                      <div className="acct-transfer-form__section">
+                                        <h3 className="acct-transfer-form__section-title">Lý do thanh lý</h3>
+                                        <div className="acct-transfer-form__value">
+                                          {selectedDirectorItem.disposalReason.trim()}
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                    {selectedDirectorItem.description?.trim() ? (
+                                      <div className="acct-transfer-form__section">
+                                        <h3 className="acct-transfer-form__section-title">
+                                          Ghi chú trên đơn đề nghị (người đề nghị)
+                                        </h3>
+                                        <div className="acct-transfer-form__value">
+                                          {selectedDirectorItem.description.trim()}
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                  </>
+                                )}
+                                {(selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.transfer ||
+                                  selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.liquidation) && (
                                   <div className="acct-transfer-form__section">
-                                    <h3 className="acct-transfer-form__section-title">Ý kiến kế toán</h3>
+                                    <h3 className="acct-transfer-form__section-title">
+                                      {selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.liquidation
+                                        ? 'Ghi chú của kế toán (khi phê duyệt)'
+                                        : 'Ý kiến kế toán'}
+                                    </h3>
                                     <div className="acct-transfer-form__value">
                                       {selectedDirectorItem.accountantComment?.trim() || '—'}
+                                    </div>
+                                    {selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.liquidation ? (
+                                      <p style={{ margin: '8px 0 0', fontSize: 12, color: '#6b7280' }}>
+                                        Nội dung kế toán nhập trong ô &quot;Ghi chú&quot; khi phê duyệt tại trang Yêu cầu
+                                        → Thanh lý.
+                                      </p>
+                                    ) : null}
+                                    {selectedDirectorItem.accountantDecisionDate ? (
+                                      <div
+                                        className="acct-transfer-form__value"
+                                        style={{ marginTop: 8, fontSize: 12, color: '#6b7280' }}
+                                      >
+                                        Thời điểm: {formatDate(selectedDirectorItem.accountantDecisionDate)}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                )}
+                                {selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.liquidation && (
+                                  <div className="acct-transfer-form__section">
+                                    <h3 className="acct-transfer-form__section-title">Ý kiến giám đốc</h3>
+                                    <div className="acct-transfer-form__value">
+                                      {selectedDirectorItem.directorComment?.trim() || '—'}
                                     </div>
                                   </div>
                                 )}
@@ -1741,6 +2124,20 @@ export function RequestsPage() {
                       Quay lại
                     </button>
 
+                    {selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.liquidation &&
+                      selectedDirectorItem.status >= 1 && (
+                      <button
+                        type="button"
+                        className="acct-transfer-btn-approve"
+                        onClick={() => {
+                          void openDirectorAppraisalModal();
+                        }}
+                      >
+                        <span className="acct-transfer-btn-approve-icon">👥</span>
+                        <span>Hội đồng thẩm định</span>
+                      </button>
+                    )}
+
                     {canDirectorApprove && (
                       <button
                         type="button"
@@ -1759,6 +2156,309 @@ export function RequestsPage() {
                 </>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {isDirectorAppraisalOpen && selectedDirectorItem && userProfile?.id && (
+        <div className="acct-transfer-modal-overlay" role="dialog" aria-modal="true">
+          <div className="acct-transfer-modal director-appraisal-modal">
+            <button
+              type="button"
+              className="director-appraisal-modal__close-btn"
+              onClick={() => {
+                setIsDirectorAppraisalOpen(false);
+                setDirectorAppraisalDetail(null);
+                setDirectorAppraisalExists(false);
+              }}
+              aria-label="Đóng"
+            >
+              <span className="director-appraisal-modal__close">×</span>
+            </button>
+            <div className="acct-transfer-modal__header">
+              <div className="acct-transfer-modal__header-left">
+                <h2 className="acct-transfer-modal__title">
+                  Hội đồng thẩm định — YC-{selectedDirectorItem.assetRequestId}
+                </h2>
+              </div>
+            </div>
+            <div className="acct-transfer-modal__body">
+              {directorAppraisalLoading ? (
+                <div className="director-appraisal-modal__loading">Đang tải...</div>
+              ) : (
+                <div className="director-appraisal-modal__content">
+                  <div className="director-appraisal-stack">
+                    <div>
+                      <h3 className="director-appraisal-section-title">Lịch và địa điểm</h3>
+                      <div className="acct-transfer-form__row">
+                        <div className="acct-transfer-form__field">
+                          <label htmlFor="director-appraisal-date">Ngày hẹn thẩm định</label>
+                          <DatePicker
+                            id="director-appraisal-date"
+                            className="requests-date-picker"
+                            style={{ width: '100%' }}
+                            value={appraisalFormDate}
+                            onChange={(v) => setAppraisalFormDate(v)}
+                            format="DD/MM/YYYY"
+                          />
+                        </div>
+                        <div className="acct-transfer-form__field">
+                          <label htmlFor="director-appraisal-dept">Phòng ban (địa điểm)</label>
+                          <Select
+                            id="director-appraisal-dept"
+                            allowClear
+                            placeholder="Chọn phòng ban"
+                            style={{ width: '100%' }}
+                            value={appraisalFormDepartmentId}
+                            onChange={(v) =>
+                              setAppraisalFormDepartmentId(v === undefined ? undefined : Number(v))
+                            }
+                            showSearch
+                            optionFilterProp="label"
+                            options={appraisalDepartmentOptions.map((d) => ({
+                              value: d.locationId,
+                              label: d.displayName?.trim() || `PB #${d.locationId}`,
+                            }))}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="director-appraisal-form__item">
+                      <label htmlFor="director-appraisal-reporter">Người nhập biên bản thẩm định</label>
+                      <Select
+                        id="director-appraisal-reporter"
+                        allowClear
+                        placeholder="Chọn người dùng"
+                        style={{ width: '100%' }}
+                        value={appraisalFormReporterId}
+                        onChange={(v) => setAppraisalFormReporterId(v === undefined ? undefined : Number(v))}
+                        showSearch
+                        optionFilterProp="label"
+                        options={committeeUserOptions.map((o) => ({
+                          value: o.userId,
+                          label: o.label,
+                        }))}
+                      />
+                    </div>
+
+                    {!directorAppraisalExists ? (
+                      <div className="director-appraisal-modal__actions">
+                        <Button
+                          type="primary"
+                          loading={appraisalMutating}
+                          onClick={async () => {
+                            if (!userProfile?.id) return;
+                            setAppraisalMutating(true);
+                            try {
+                              const d = await disposalAppraisalService.create({
+                                userId: userProfile.id,
+                                assetRequestId: selectedDirectorItem.assetRequestId,
+                                scheduledAt: appraisalFormDate
+                                  ? appraisalFormDate.startOf('day').toISOString()
+                                  : null,
+                                meetingDepartmentId: appraisalFormDepartmentId ?? null,
+                                reporterUserId: appraisalFormReporterId ?? null,
+                              });
+                              setDirectorAppraisalDetail(d);
+                              setDirectorAppraisalExists(true);
+                              message.success('Đã tạo hội đồng thẩm định.');
+                            } catch (e: unknown) {
+                              const msg = (e as { response?: { data?: string } })?.response?.data;
+                              message.error(typeof msg === 'string' ? msg : 'Tạo hội đồng thất bại.');
+                            } finally {
+                              setAppraisalMutating(false);
+                            }
+                          }}
+                        >
+                          Tạo hội đồng
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="director-appraisal-modal__actions">
+                          <Button
+                            type="primary"
+                            loading={appraisalMutating}
+                            onClick={async () => {
+                              if (!userProfile?.id || !directorAppraisalDetail) return;
+                              setAppraisalMutating(true);
+                              try {
+                                const d = await disposalAppraisalService.update(
+                                  directorAppraisalDetail.appraisalId,
+                                  {
+                                    userId: userProfile.id,
+                                    scheduledAt: appraisalFormDate
+                                      ? appraisalFormDate.startOf('day').toISOString()
+                                      : null,
+                                    meetingDepartmentId: appraisalFormDepartmentId ?? null,
+                                    reporterUserId: appraisalFormReporterId ?? null,
+                                  },
+                                );
+                                setDirectorAppraisalDetail(d);
+                                message.success('Đã cập nhật lịch và người nhập biên bản.');
+                              } catch {
+                                message.error('Cập nhật thất bại.');
+                              } finally {
+                                setAppraisalMutating(false);
+                              }
+                            }}
+                          >
+                            Lưu lịch & người nhập biên bản
+                          </Button>
+                        </div>
+
+                        <div>
+                          <h3 className="director-appraisal-section-title">Thành viên hội đồng</h3>
+                          <div className="director-appraisal-member-list">
+                            {directorAppraisalDetail?.members.map((m) => (
+                              <div key={m.appraisalMemberId} className="director-appraisal-member-row">
+                                <span style={{ flex: '1 1 200px' }}>
+                                  {m.memberName} (#{m.userId})
+                                  {m.memberRole ? ` — ${m.memberRole}` : ''}
+                                  {m.isReporter ? ' (Người nhập biên bản)' : ''}
+                                </span>
+                                <Button
+                                  size="small"
+                                  type="link"
+                                  disabled={appraisalMutating}
+                                  onClick={async () => {
+                                    if (!userProfile?.id || !directorAppraisalDetail) return;
+                                    setAppraisalMutating(true);
+                                    try {
+                                      const d = await disposalAppraisalService.update(
+                                        directorAppraisalDetail.appraisalId,
+                                        {
+                                          userId: userProfile.id,
+                                          scheduledAt: appraisalFormDate
+                                            ? appraisalFormDate.startOf('day').toISOString()
+                                            : null,
+                                          meetingDepartmentId: appraisalFormDepartmentId ?? null,
+                                          reporterUserId: m.userId,
+                                        },
+                                      );
+                                      setDirectorAppraisalDetail(d);
+                                      setAppraisalFormReporterId(m.userId);
+                                      message.success('Đã chỉ định người nhập biên bản.');
+                                    } catch {
+                                      message.error('Thao tác thất bại.');
+                                    } finally {
+                                      setAppraisalMutating(false);
+                                    }
+                                  }}
+                                >
+                                  Chọn làm người nhập biên bản
+                                </Button>
+                                <Button
+                                  size="small"
+                                  danger
+                                  type="link"
+                                  disabled={appraisalMutating}
+                                  onClick={async () => {
+                                    if (!userProfile?.id || !directorAppraisalDetail) return;
+                                    setAppraisalMutating(true);
+                                    try {
+                                      const d = await disposalAppraisalService.removeMember(
+                                        directorAppraisalDetail.appraisalId,
+                                        m.appraisalMemberId,
+                                        userProfile.id,
+                                      );
+                                      setDirectorAppraisalDetail(d);
+                                      setAppraisalFormReporterId(d.reporterUserId ?? undefined);
+                                      message.success('Đã xóa thành viên.');
+                                    } catch {
+                                      message.error('Xóa thành viên thất bại.');
+                                    } finally {
+                                      setAppraisalMutating(false);
+                                    }
+                                  }}
+                                >
+                                  Xóa
+                                </Button>
+                              </div>
+                            ))}
+                            {(!directorAppraisalDetail?.members ||
+                              directorAppraisalDetail.members.length === 0) && (
+                              <span style={{ color: '#6b7280', fontSize: 13 }}>Chưa có thành viên.</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <h3 className="director-appraisal-section-title">Thêm thành viên</h3>
+                          <div className="director-appraisal-add-row">
+                            <Select
+                              placeholder="Chọn người"
+                              style={{ minWidth: 220, flex: '1 1 200px' }}
+                              value={newCommitteeUserId}
+                              onChange={(v) => setNewCommitteeUserId(v === undefined ? undefined : Number(v))}
+                              showSearch
+                              optionFilterProp="label"
+                              options={committeeUserOptions.map((o) => ({
+                                value: o.userId,
+                                label: o.label,
+                              }))}
+                            />
+                            <Input
+                              style={{ width: 160, minWidth: 140 }}
+                              placeholder="Vai trò (vd: Ủy viên)"
+                              value={newCommitteeRole}
+                              onChange={(e) => setNewCommitteeRole(e.target.value)}
+                            />
+                            <Button
+                              type="default"
+                              loading={appraisalMutating}
+                              onClick={async () => {
+                                if (!userProfile?.id || !directorAppraisalDetail || !newCommitteeUserId) {
+                                  message.warning('Chọn người để thêm.');
+                                  return;
+                                }
+                                setAppraisalMutating(true);
+                                try {
+                                  const d = await disposalAppraisalService.addMember(
+                                    directorAppraisalDetail.appraisalId,
+                                    {
+                                      userId: userProfile.id,
+                                      memberUserId: newCommitteeUserId,
+                                      memberRole: newCommitteeRole.trim() || null,
+                                      setAsReporter: false,
+                                    },
+                                  );
+                                  setDirectorAppraisalDetail(d);
+                                  setNewCommitteeUserId(undefined);
+                                  setNewCommitteeRole('');
+                                  message.success('Đã thêm thành viên.');
+                                } catch (e: unknown) {
+                                  const msg = (e as { response?: { data?: string } })?.response?.data;
+                                  message.error(typeof msg === 'string' ? msg : 'Thêm thành viên thất bại.');
+                                } finally {
+                                  setAppraisalMutating(false);
+                                }
+                              }}
+                            >
+                              Thêm thành viên
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="acct-transfer-modal__footer">
+              <button
+                type="button"
+                className="acct-transfer-btn-close"
+                onClick={() => {
+                  setIsDirectorAppraisalOpen(false);
+                  setDirectorAppraisalDetail(null);
+                  setDirectorAppraisalExists(false);
+                }}
+              >
+                Đóng
+              </button>
+            </div>
           </div>
         </div>
       )}

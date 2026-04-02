@@ -100,6 +100,7 @@ builder.Services.AddScoped<IMaintenanceRecordService, MaintenanceRecordService>(
 builder.Services.AddScoped<IMaintenanceRecordMapper, MaintenanceRecordMapper>();
 builder.Services.AddScoped<IMaintenanceTaskService, MaintenanceTaskService>();
 builder.Services.AddScoped<IInventoryNotificationService, InventoryNotificationService>();
+builder.Services.AddScoped<IAssetRequestNotificationService, AssetRequestNotificationService>();
 
 // Asset capitalization
 builder.Services.AddScoped<IAssetCapitalizationMapper, AssetCapitalizationMapper>();

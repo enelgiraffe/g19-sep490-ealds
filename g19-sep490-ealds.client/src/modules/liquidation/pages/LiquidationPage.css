@@ -37,6 +37,26 @@
   align-items: center;
 }
 
+/* Tìm kiếm + trạng thái + ngày gửi cùng một hàng (Thanh lý: yêu cầu / thẩm định) */
+.liquidation-filters.liquidation-filters--single-row {
+  flex-wrap: nowrap;
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.liquidation-filters.liquidation-filters--single-row .liquidation-search {
+  flex: 1 1 200px;
+  min-width: 160px;
+  max-width: 320px;
+}
+
+.liquidation-filters.liquidation-filters--single-row .liquidation-select,
+.liquidation-filters.liquidation-filters--single-row .liquidation-date-picker {
+  flex-shrink: 0;
+  width: 180px;
+}
+
 .liquidation-search {
   max-width: 260px;
 }

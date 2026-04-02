@@ -9,6 +9,16 @@ import { notificationService } from '../services/notificationService';
 import type { AppRole } from '../types/layout.types';
 import './Sidebar.css';
 
+/** Đường dẫn public (icons, logo) — tôn trọng Vite `base` khi deploy subpath. */
+function publicAssetUrl(path: string): string {
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) return path;
+  const base = import.meta.env.BASE_URL ?? '/';
+  const withSlash = base.endsWith('/') ? base : `${base}/`;
+  const rel = path.startsWith('/') ? path.slice(1) : path;
+  return `${withSlash}${rel}`.replace(/([^:]\/)\/+/g, '$1');
+}
+
 export function Sidebar() {
   const navigate = useNavigate();
   const { currentRole, setCurrentRole } = useAppStore();
@@ -70,7 +80,7 @@ export function Sidebar() {
     <aside className="sidebar">
       <div className="sidebar__logo">
         <img
-          src="/images/logoCompany.png"
+          src={publicAssetUrl('/images/logoCompany.png')}
           alt="Logo"
           className="sidebar__logo-img"
         />
@@ -89,7 +99,7 @@ export function Sidebar() {
                   >
                     {item.icon && (
                       <img
-                        src={item.icon}
+                        src={publicAssetUrl(item.icon)}
                         alt=""
                         className="sidebar__link-icon"
                         aria-hidden="true"
@@ -119,7 +129,7 @@ export function Sidebar() {
               >
                 {item.icon && (
                   <img
-                    src={item.icon}
+                    src={publicAssetUrl(item.icon)}
                     alt=""
                     className="sidebar__link-icon"
                     aria-hidden="true"

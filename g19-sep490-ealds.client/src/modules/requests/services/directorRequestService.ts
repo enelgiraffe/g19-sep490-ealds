@@ -51,6 +51,8 @@ export interface DirectorRequestListItem {
   accountantDecisionDate?: string | null;
   directorComment?: string | null;
   directorDecisionDate?: string | null;
+  /** Thanh lý: lý do trên DisposalRecord (khác AssetRequest.Description). */
+  disposalReason?: string | null;
 }
 
 export interface DirectorViewParams {

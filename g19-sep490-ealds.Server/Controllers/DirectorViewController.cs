@@ -125,12 +125,16 @@ public class DirectorViewController : ControllerBase
                         .FirstOrDefault()
                     : null,
                 AccountantComment = ar.Approvals
-                    .Where(a => a.ApprovedRole != null && a.ApprovedRole.Code == "ACCOUNTANT")
+                    .Where(a => a.ApprovedRole != null
+                        && a.ApprovedRole.Code != null
+                        && a.ApprovedRole.Code.ToUpper() == "ACCOUNTANT")
                     .OrderByDescending(a => a.DecisionDate)
                     .Select(a => a.Comment)
                     .FirstOrDefault(),
                 AccountantDecisionDate = ar.Approvals
-                    .Where(a => a.ApprovedRole != null && a.ApprovedRole.Code == "ACCOUNTANT")
+                    .Where(a => a.ApprovedRole != null
+                        && a.ApprovedRole.Code != null
+                        && a.ApprovedRole.Code.ToUpper() == "ACCOUNTANT")
                     .OrderByDescending(a => a.DecisionDate)
                     .Select(a => (DateTime?)a.DecisionDate)
                     .FirstOrDefault(),
@@ -143,6 +147,10 @@ public class DirectorViewController : ControllerBase
                     .Where(a => a.ApprovedRole != null && a.ApprovedRole.Code == "DIRECTOR")
                     .OrderByDescending(a => a.DecisionDate)
                     .Select(a => (DateTime?)a.DecisionDate)
+                    .FirstOrDefault(),
+                DisposalReason = _db.DisposalRecords
+                    .Where(dr => dr.AssetRequestId == ar.AssetRequestId)
+                    .Select(dr => dr.Reason)
                     .FirstOrDefault()
             })
             .ToListAsync();

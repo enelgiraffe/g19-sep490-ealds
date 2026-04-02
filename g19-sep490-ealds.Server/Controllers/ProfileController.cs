@@ -34,10 +34,15 @@ public class ProfileController : ControllerBase
             .Include(e => e.Department)
             .FirstOrDefaultAsync(e => e.UserId == userId);
 
-        var roles = await _context.UserRoles
+        var roleCodes = await _context.UserRoles
             .Where(ur => ur.UserId == userId)
-            .Select(ur => ur.Role.Code)
+            .Select(ur => ur.Role != null ? ur.Role.Code : null)
             .ToListAsync();
+        var codes = roleCodes.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c!.Trim()).ToList();
+        // Nếu có nhiều role, ưu tiên DIRECTOR để màn hình / API giám đốc khớp JWT (tránh First() ngẫu nhiên).
+        var profileRole = codes.Any(c => string.Equals(c, "DIRECTOR", StringComparison.OrdinalIgnoreCase))
+            ? "DIRECTOR"
+            : codes.FirstOrDefault() ?? string.Empty;
 
         var profile = new UserProfileDto
         {
@@ -52,7 +57,7 @@ public class ProfileController : ControllerBase
             ImageUrl = employee?.ImageUrl,
             DepartmentName = employee?.Department?.Name,
             DepartmentId = employee?.DepartmentId,
-            Role = roles.FirstOrDefault() ?? string.Empty
+            Role = profileRole
         };
 
         return Ok(profile);
@@ -87,10 +92,14 @@ public class ProfileController : ControllerBase
         await _context.SaveChangesAsync();
 
         var user = await _context.Users.FindAsync(userId);
-        var role = await _context.UserRoles
+        var codesUpd = await _context.UserRoles
             .Where(ur => ur.UserId == userId)
-            .Select(ur => ur.Role.Code)
-            .FirstOrDefaultAsync();
+            .Select(ur => ur.Role != null ? ur.Role.Code : null)
+            .ToListAsync();
+        var codesList = codesUpd.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c!.Trim()).ToList();
+        var roleOut = codesList.Any(c => string.Equals(c, "DIRECTOR", StringComparison.OrdinalIgnoreCase))
+            ? "DIRECTOR"
+            : codesList.FirstOrDefault() ?? string.Empty;
 
         var updatedProfile = new UserProfileDto
         {
@@ -105,7 +114,7 @@ public class ProfileController : ControllerBase
             ImageUrl = employee.ImageUrl,
             DepartmentName = employee.Department?.Name,
             DepartmentId = employee.DepartmentId,
-            Role = role ?? string.Empty
+            Role = roleOut
         };
 
         return Ok(updatedProfile);

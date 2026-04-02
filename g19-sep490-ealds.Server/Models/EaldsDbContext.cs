@@ -47,6 +47,16 @@ public partial class EaldsDbContext : DbContext
 
     public virtual DbSet<DisposalRecord> DisposalRecords { get; set; }
 
+    public virtual DbSet<DisposalAppraisal> DisposalAppraisals { get; set; }
+
+    public virtual DbSet<DisposalAppraisalMember> DisposalAppraisalMembers { get; set; }
+
+    public virtual DbSet<DisposalAppraisalReport> DisposalAppraisalReports { get; set; }
+
+    public virtual DbSet<DisposalAppraisalMemberDecision> DisposalAppraisalMemberDecisions { get; set; }
+
+    public virtual DbSet<DisposalExecution> DisposalExecutions { get; set; }
+
     public virtual DbSet<Document> Documents { get; set; }
 
     public virtual DbSet<Employee> Employees { get; set; }
@@ -500,6 +510,141 @@ public partial class EaldsDbContext : DbContext
                 .HasForeignKey(d => d.ExecutedBy)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__DisposalR__Execu__3B40CD36");
+        });
+
+        modelBuilder.Entity<DisposalAppraisal>(entity =>
+        {
+            entity.HasKey(e => e.AppraisalId);
+            entity.ToTable("DisposalAppraisal");
+
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime");
+            entity.Property(e => e.MeetingLocation).HasMaxLength(255);
+            entity.Property(e => e.Notes).HasMaxLength(1000);
+            entity.Property(e => e.ScheduledAt).HasColumnType("datetime");
+            entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
+
+            entity.HasOne(d => d.AssetRequest).WithMany()
+                .HasForeignKey(d => d.AssetRequestId)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            entity.HasOne(d => d.ReporterUser).WithMany()
+                .HasForeignKey(d => d.ReporterUserId);
+
+            entity.HasOne(d => d.MeetingDepartment).WithMany()
+                .HasForeignKey(d => d.MeetingDepartmentId);
+
+            entity.HasOne(d => d.CreatedByNavigation).WithMany()
+                .HasForeignKey(d => d.CreatedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            entity.HasOne(d => d.UpdatedByNavigation).WithMany()
+                .HasForeignKey(d => d.UpdatedBy);
+        });
+
+        modelBuilder.Entity<DisposalAppraisalMember>(entity =>
+        {
+            entity.HasKey(e => e.AppraisalMemberId);
+            entity.ToTable("DisposalAppraisalMember");
+
+            entity.Property(e => e.AddedDate).HasColumnType("datetime");
+            entity.Property(e => e.MemberRole).HasMaxLength(100);
+
+            entity.HasOne(d => d.Appraisal).WithMany(p => p.DisposalAppraisalMembers)
+                .HasForeignKey(d => d.AppraisalId)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            entity.HasOne(d => d.User).WithMany()
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            entity.HasOne(d => d.AddedByNavigation).WithMany()
+                .HasForeignKey(d => d.AddedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+        });
+
+        modelBuilder.Entity<DisposalAppraisalReport>(entity =>
+        {
+            entity.HasKey(e => e.AppraisalReportId);
+            entity.ToTable("DisposalAppraisalReport");
+
+            entity.Property(e => e.AppraisedValue).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.MarketReferenceValue).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.MinutesNo).HasMaxLength(100);
+            entity.Property(e => e.SubmittedDate).HasColumnType("datetime");
+            entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
+            entity.Property(e => e.DirectorReviewedDate).HasColumnType("datetime");
+            entity.Property(e => e.DirectorComment).HasMaxLength(1000);
+            entity.Property(e => e.AppraisalMethod).HasMaxLength(200);
+            entity.Property(e => e.AppraisedValueInWords).HasMaxLength(1000);
+
+            entity.HasOne(d => d.Appraisal).WithMany(p => p.DisposalAppraisalReports)
+                .HasForeignKey(d => d.AppraisalId)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            entity.HasOne(d => d.SubmittedByNavigation).WithMany()
+                .HasForeignKey(d => d.SubmittedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            entity.HasOne(d => d.UpdatedByNavigation).WithMany()
+                .HasForeignKey(d => d.UpdatedBy);
+
+            entity.HasOne(d => d.DirectorReviewedByNavigation).WithMany()
+                .HasForeignKey(d => d.DirectorReviewedBy);
+        });
+
+        modelBuilder.Entity<DisposalAppraisalMemberDecision>(entity =>
+        {
+            entity.HasKey(e => e.AppraisalMemberDecisionId);
+            entity.ToTable("DisposalAppraisalMemberDecision");
+
+            entity.Property(e => e.DecisionDate).HasColumnType("datetime");
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime");
+            entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
+            entity.Property(e => e.RejectReason).HasMaxLength(1000);
+
+            entity.HasOne(d => d.Appraisal).WithMany(p => p.DisposalAppraisalMemberDecisions)
+                .HasForeignKey(d => d.AppraisalId)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            entity.HasOne(d => d.AppraisalMember).WithMany(p => p.DisposalAppraisalMemberDecisions)
+                .HasForeignKey(d => d.AppraisalMemberId)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            entity.HasOne(d => d.User).WithMany()
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+        });
+
+        modelBuilder.Entity<DisposalExecution>(entity =>
+        {
+            entity.HasKey(e => e.DisposalExecutionId);
+            entity.ToTable("DisposalExecution");
+
+            entity.Property(e => e.PlannedExecutionDate).HasColumnType("datetime");
+            entity.Property(e => e.ExecutedDate).HasColumnType("datetime");
+            entity.Property(e => e.BuyerName).HasMaxLength(255);
+            entity.Property(e => e.BuyerContact).HasMaxLength(255);
+            entity.Property(e => e.ContractNo).HasMaxLength(100);
+            entity.Property(e => e.InvoiceNo).HasMaxLength(100);
+            entity.Property(e => e.MinutesNo).HasMaxLength(100);
+            entity.Property(e => e.ActualDisposalValue).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ExpenseValue).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.SubmittedDate).HasColumnType("datetime");
+            entity.Property(e => e.ApprovedDate).HasColumnType("datetime");
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime");
+            entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
+
+            entity.HasOne(d => d.AssetRequest).WithMany()
+                .HasForeignKey(d => d.AssetRequestId)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            entity.HasOne(d => d.Appraisal).WithMany()
+                .HasForeignKey(d => d.AppraisalId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(d => d.DisposalRecord).WithMany()
+                .HasForeignKey(d => d.DisposalRecordId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Document>(entity =>

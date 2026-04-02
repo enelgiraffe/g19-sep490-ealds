@@ -47,6 +47,8 @@ export interface TransferRequestListItem {
   transferDate: string;
   assetCode: string;
   assetName: string;
+  /** Danh mục: từ API thanh lý / điều chuyển khi backend gửi kèm */
+  assetTypeName?: string | null;
   assetInstanceId?: number | null;
   instanceCode?: string | null;
   fromDepartment: string;
@@ -59,6 +61,12 @@ export interface TransferRequestListItem {
   status: number;
   statusName: string;
   reason?: string | null;
+  /** Chỉ API thanh lý: nguyên giá cá thể */
+  originalPrice?: number | null;
+  /** Chỉ API thanh lý: giá trị còn lại trên sổ */
+  currentValue?: number | null;
+  /** Chỉ API thanh lý: giá trị khai báo trên đơn */
+  disposalDeclaredValue?: number | null;
   isSenderConfirmed: boolean;
   isReceiverConfirmed: boolean;
 }

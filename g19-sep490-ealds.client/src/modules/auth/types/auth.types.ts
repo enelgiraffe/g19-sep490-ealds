@@ -1,4 +1,4 @@
-import type { AppRole } from '@/shared/types/layout.types';
+import type { AppRole } from '../../../shared/types/layout.types';
 
 export interface LoginFormData {
   email: string;

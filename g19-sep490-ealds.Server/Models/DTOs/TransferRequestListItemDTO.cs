@@ -42,6 +42,15 @@ public class TransferRequestListItemDTO
 
     public string? Reason { get; set; }
 
+    /// <summary>Chỉ gán cho danh sách thanh lý: nguyên giá cá thể tại thời điểm tra cứu.</summary>
+    public decimal? OriginalPrice { get; set; }
+
+    /// <summary>Chỉ gán cho danh sách thanh lý: giá trị còn lại trên sổ (sau khấu hao).</summary>
+    public decimal? CurrentValue { get; set; }
+
+    /// <summary>Chỉ gán cho thanh lý: giá trị khai báo trên đơn (DisposalRecord.DiposalValue).</summary>
+    public decimal? DisposalDeclaredValue { get; set; }
+
     public bool IsSenderConfirmed { get; set; }
 
     public bool IsReceiverConfirmed { get; set; }
