@@ -317,7 +317,7 @@ export function RequestsPage() {
   );
   const [isDirectorDetailOpen, setIsDirectorDetailOpen] = useState(false);
   const [isDirectorApproveOpen, setIsDirectorApproveOpen] = useState(false);
-  const [directorDecision, setDirectorDecision] = useState<'approved' | 'rejected'>('approved');
+  const [directorDecision, setDirectorDecision] = useState<'approved' | 'rejected' | 'funding'>('approved');
   const [directorComment, setDirectorComment] = useState('');
   const [directorSubmitting, setDirectorSubmitting] = useState(false);
 
@@ -2478,11 +2478,12 @@ export function RequestsPage() {
                     <select
                       className="acct-transfer-approve-select"
                       value={directorDecision}
-                      onChange={(e) =>
-                        setDirectorDecision(e.target.value === 'rejected' ? 'rejected' : 'approved')
-                      }
+                        onChange={(e) => setDirectorDecision(e.target.value as typeof directorDecision)}
                     >
                       <option value="approved">Phê duyệt</option>
+                        {selectedDirectorItem?.requestTypeId === REQUEST_TYPE_IDS.purchase && (
+                          <option value="funding">Chờ ngân sách</option>
+                        )}
                       <option value="rejected">Từ chối</option>
                     </select>
                   </div>
@@ -2523,9 +2524,12 @@ export function RequestsPage() {
                     if (directorDecision === 'approved') {
                       await directorRequestService.approve(selectedDirectorItem.assetRequestId, payload);
                       message.success('Đã phê duyệt yêu cầu.');
-                    } else {
+                    } else if (directorDecision === 'rejected') {
                       await directorRequestService.reject(selectedDirectorItem.assetRequestId, payload);
                       message.success('Đã từ chối yêu cầu.');
+                    } else {
+                      await directorRequestService.funding(selectedDirectorItem.assetRequestId, payload);
+                      message.success('Đã chuyển yêu cầu sang chờ ngân sách.');
                     }
 
                     setIsDirectorApproveOpen(false);
@@ -2559,7 +2563,7 @@ export function RequestsPage() {
                 }}
               >
                 <span className="acct-transfer-btn-approve-icon">📋</span>
-                <span>Phê duyệt</span>
+                <span>{directorDecision === 'funding' ? 'Chờ ngân sách' : 'Phê duyệt'}</span>
               </button>
             </div>
           </div>

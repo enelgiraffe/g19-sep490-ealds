@@ -120,4 +120,18 @@ export const directorRequestService = {
     );
     return response.data;
   },
+
+  async funding(
+    id: number,
+    payload: { approvedBy: number; comment?: string | null },
+  ): Promise<{ assetRequestId: number; status: number }> {
+    const response = await directorApi.post<{ assetRequestId: number; status: number }>(
+      `/api/Assets/Requests/director/${id}/funding`,
+      {
+        approvedBy: payload.approvedBy,
+        comment: payload.comment ?? null,
+      },
+    );
+    return response.data;
+  },
 };
