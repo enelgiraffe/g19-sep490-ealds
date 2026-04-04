@@ -43,47 +43,14 @@ public class AssetsController : ControllerBase
         }
 
         if (status.HasValue)
-        {
-            if (status.Value == AssetStatus.Damaged)
-            {
-                query = query.Where(a =>
-                    a.Status == (int)AssetStatus.Damaged ||
-                    _context.AssetRequests.Any(r =>
-                        r.AssetId == a.AssetId &&
-                        r.Title != null &&
-                        r.Title.StartsWith("Damage report") &&
-                        r.Status == 0));
-            }
-            else
-            {
-                query = query.Where(a => a.Status == (int)status.Value);
-            }
-        }
+            query = query.Where(a => a.Status == (int)status.Value);
 
         if (assetTypeId.HasValue)
             query = query.Where(a => a.AssetTypeId == assetTypeId.Value);
 
         var assets = await query.ToListAsync();
 
-        var assetIds = assets.Select(a => a.AssetId).ToList();
-        var damagedIds = await _context.AssetRequests
-            .AsNoTracking()
-            .Where(r =>
-                r.AssetId.HasValue &&
-                assetIds.Contains(r.AssetId.Value) &&
-                r.Title != null &&
-                r.Title.StartsWith("Damage report") &&
-                r.Status == 0)
-            .Select(r => r.AssetId!.Value)
-            .Distinct()
-            .ToListAsync();
-
-        var damagedSet = damagedIds.ToHashSet();
-
-        return Ok(assets.Select(a =>
-            damagedSet.Contains(a.AssetId)
-                ? ToAssetResponseDTO(a, AssetStatus.Damaged)
-                : ToAssetResponseDTO(a)));
+        return Ok(assets.Select(a => ToAssetResponseDTO(a)));
     }
 
     /// <summary>
@@ -139,14 +106,6 @@ public class AssetsController : ControllerBase
         if (asset == null)
             return null;
 
-        var hasDamageReport = await _context.AssetRequests
-            .AsNoTracking()
-            .AnyAsync(r =>
-                r.AssetId == id &&
-                r.Title != null &&
-                r.Title.StartsWith("Damage report") &&
-                r.Status == 0);
-
         var instanceIds = asset.AssetInstances.Select(i => i.AssetInstanceId).ToList();
         var latestDepsByInstance = await LoadLatestDepreciationByInstanceAsync(instanceIds);
 
@@ -178,8 +137,7 @@ public class AssetsController : ControllerBase
             .OrderBy(s => s.ScheduleId)
             .ToList();
 
-        var baseDto = ToAssetResponseDTO(asset,
-            hasDamageReport ? AssetStatus.Damaged : null);
+        var baseDto = ToAssetResponseDTO(asset, null);
 
         var dto = new AssetDetailResponseDTO
         {
@@ -205,12 +163,6 @@ public class AssetsController : ControllerBase
                     latestDepsByInstance.GetValueOrDefault(i.AssetInstanceId)))
                 .ToList()
         };
-
-        if (hasDamageReport)
-        {
-            dto.Status = AssetStatus.Damaged;
-            dto.StatusName = AssetStatus.Damaged.ToString();
-        }
 
         return dto;
     }
@@ -267,48 +219,15 @@ public class AssetsController : ControllerBase
         }
 
         if (status.HasValue)
-        {
-            if (status.Value == AssetStatus.Damaged)
-            {
-                query = query.Where(i =>
-                    i.Status == (int)AssetStatus.Damaged ||
-                    (i.Asset != null && _context.AssetRequests.Any(r =>
-                        r.AssetId == i.Asset.AssetId &&
-                        r.Title != null &&
-                        r.Title.StartsWith("Damage report") &&
-                        r.Status == 0)));
-            }
-            else
-            {
-                query = query.Where(i => i.Status == (int)status.Value);
-            }
-        }
+            query = query.Where(i => i.Status == (int)status.Value);
 
         var instances = await query.ToListAsync();
-        var assetIds = instances.Select(i => i.AssetId).Distinct().ToList();
-        var damagedAssetIds = await _context.AssetRequests
-            .AsNoTracking()
-            .Where(r =>
-                r.AssetId.HasValue &&
-                assetIds.Contains(r.AssetId.Value) &&
-                r.Title != null &&
-                r.Title.StartsWith("Damage report") &&
-                r.Status == 0)
-            .Select(r => r.AssetId!.Value)
-            .Distinct()
-            .ToListAsync();
-        var damagedSet = damagedAssetIds.ToHashSet();
 
         var instanceIds = instances.Select(i => i.AssetInstanceId).ToList();
         var latestDeps = await LoadLatestDepreciationByInstanceAsync(instanceIds);
 
         var result = instances.Select(i =>
-        {
-            var forced = i.Asset != null && damagedSet.Contains(i.Asset.AssetId)
-                ? AssetStatus.Damaged
-                : (AssetStatus?)null;
-            return ToAssetInstanceResponseDTO(i, latestDeps.GetValueOrDefault(i.AssetInstanceId), forced);
-        }).ToList();
+            ToAssetInstanceResponseDTO(i, latestDeps.GetValueOrDefault(i.AssetInstanceId), null)).ToList();
 
         return Ok(result);
     }

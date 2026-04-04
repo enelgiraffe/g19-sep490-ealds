@@ -149,25 +149,6 @@ function parseCurrencyToNumber(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-/** Cùng format mô tả báo hỏng: dòng Ngày hỏng / Tình trạng. */
-function parseDamageDescription(description?: string | null): {
-  damageDate?: string | null;
-  condition: string;
-} {
-  if (!description) return { condition: '' };
-  const lines = description
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const damageDateLine = lines.find((line) => /^Ngày hỏng:\s*/i.test(line));
-  const conditionLine = lines.find((line) => /^Tình trạng:\s*/i.test(line));
-  const fallbackCondition = lines.join(' ').trim();
-  return {
-    damageDate: damageDateLine?.replace(/^Ngày hỏng:\s*/i, '').trim() || null,
-    condition: conditionLine?.replace(/^Tình trạng:\s*/i, '').trim() || fallbackCondition,
-  };
-}
-
 function extractDescriptionField(description: string | null | undefined, label: string): string | null {
   const text = String(description ?? '');
   const marker = `${label}:`;
@@ -2051,10 +2032,6 @@ export function RequestsPage() {
                   <div className="acct-transfer-modal__body">
                     <div className="acct-transfer-modal__content">
                       {(() => {
-                        const parsed =
-                          selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.repair
-                            ? parseDamageDescription(selectedDirectorItem.description)
-                            : { damageDate: null as string | null, condition: '' };
                         const creatorDisplay =
                           (selectedDirectorItem.creatorName?.trim() &&
                             selectedDirectorItem.creatorName.trim()) ||
@@ -2263,7 +2240,44 @@ export function RequestsPage() {
                                   </div>
                                 </div>
                               </>
-                            ) : selectedDirectorItem.requestTypeId !== REQUEST_TYPE_IDS.repair ? (
+                            ) : selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.repair ? (
+                              <>
+                                <div className="acct-transfer-form__section">
+                                  <h3 className="acct-transfer-form__section-title">
+                                    Lý do hỏng
+                                  </h3>
+                                  <div className="acct-transfer-form__value">
+                                    {selectedDirectorItem.repairReason?.trim() || '—'}
+                                  </div>
+                                </div>
+                                <div className="acct-transfer-form__section">
+                                  <h3 className="acct-transfer-form__section-title">
+                                    Hình thức sửa chữa đề xuất
+                                  </h3>
+                                  <div className="acct-transfer-form__value">
+                                    {selectedDirectorItem.description?.trim() || '—'}
+                                  </div>
+                                </div>
+                                {selectedDirectorItem.repairEstimatedCost != null &&
+                                selectedDirectorItem.repairEstimatedCost > 0 ? (
+                                  <div className="acct-transfer-form__row">
+                                    <div className="acct-transfer-form__field">
+                                      <label>Chi phí dự kiến</label>
+                                      <div className="acct-transfer-form__value">
+                                        {Number(selectedDirectorItem.repairEstimatedCost).toLocaleString('vi-VN')}{' '}
+                                        ₫
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : null}
+                                <div className="acct-transfer-form__section">
+                                  <h3 className="acct-transfer-form__section-title">Ý kiến giám đốc</h3>
+                                  <div className="acct-transfer-form__value">
+                                    {selectedDirectorItem.directorComment?.trim() || '—'}
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
                               <>
                                 <div className="acct-transfer-form__section">
                                   <h3 className="acct-transfer-form__section-title">Nội dung yêu cầu</h3>
@@ -2329,26 +2343,15 @@ export function RequestsPage() {
                                   </div>
                                 )}
                               </>
-                            ) : null}
-
-                            {selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.repair &&
-                            parsed.damageDate ? (
-                              <div className="acct-transfer-form__row">
-                                <div className="acct-transfer-form__field">
-                                  <label>Ngày hỏng (ghi nhận)</label>
-                                  <div className="acct-transfer-form__value">
-                                    {formatDate(parsed.damageDate)}
-                                  </div>
-                                </div>
-                              </div>
-                            ) : null}
+                            )}
 
                           </>
                         );
                       })()}
 
                       {selectedDirectorItem.proposedData &&
-                        selectedDirectorItem.requestTypeId !== REQUEST_TYPE_IDS.purchase && (
+                        selectedDirectorItem.requestTypeId !== REQUEST_TYPE_IDS.purchase &&
+                        selectedDirectorItem.requestTypeId !== REQUEST_TYPE_IDS.repair && (
                         <div className="acct-transfer-form__section">
                           <h3 className="acct-transfer-form__section-title">Dữ liệu đề xuất</h3>
                           <pre

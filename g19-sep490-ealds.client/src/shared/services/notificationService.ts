@@ -61,6 +61,7 @@ export function markAllNotificationsRead(ids: number[]) {
 function inferType(title: string): NotificationType {
   const t = title.toLowerCase();
   if (t.includes('phê duyệt') || t.includes('yeu cau') || t.includes('yêu cầu')) return 'approval_request';
+  if (t.includes('sửa chữa') || t.includes('sua chua')) return 'approval_request';
   if (t.includes('bảo trì') || t.includes('bao tri')) return 'maintenance_due';
   if (t.includes('quá hạn') || t.includes('qua han')) return 'overdue_critical';
   return 'inventory_confirmation';
@@ -124,6 +125,7 @@ function inferNotificationLink(title: string, content: string | null, refId: num
   // Asset-request workflow (server: AssetRequestNotificationService) — match Loại # anywhere (not only line start).
   const tabFromLoai = requestTabFromLoaiContent(contentNorm);
   if (tabFromLoai != null) {
+    if (tabFromLoai === 'repair') return '/repairs';
     return `/requests?tab=${tabFromLoai}`;
   }
 
@@ -136,6 +138,7 @@ function inferNotificationLink(title: string, content: string | null, refId: num
       Number.isFinite(typeId) && REQUEST_TAB_BY_TYPE_ID[typeId]
         ? REQUEST_TAB_BY_TYPE_ID[typeId]
         : 'purchase';
+    if (tab === 'repair') return '/repairs';
     return `/requests?tab=${tab}`;
   }
 

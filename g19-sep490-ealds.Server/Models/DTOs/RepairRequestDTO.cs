@@ -13,6 +13,9 @@ public class RepairRequestDTO
 
     public string Reason { get; set; } = null!;
 
+    /// <summary>Hình thức / phạm vi sửa chữa đề xuất (bắt buộc khi tạo đơn từ tài sản hỏng).</summary>
+    public string? RepairKind { get; set; }
+
     public int CreatedBy { get; set; }
 
     public int? SupplierId { get; set; }

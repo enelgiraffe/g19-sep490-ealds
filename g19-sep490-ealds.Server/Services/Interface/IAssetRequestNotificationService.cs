@@ -8,7 +8,8 @@ public interface IAssetRequestNotificationService
     /// <summary>
     /// Notifies users who act on the first workflow step for this request type (first WorkflowStep role).
     /// Falls back to accountants when workflow is missing or has no assignees.
-    /// Allocation and handover request types (App:AllocationRequestTypeId / App:HandoverRequestTypeId) always notify accountants.
+    /// Allocation and handover request types always notify accountants.
+    /// Repair (App:RepairRequestTypeId) notifies users with role code DIRECTOR first, then falls back like other types.
     /// </summary>
     Task NotifyFirstApproversAsync(int assetRequestId, CancellationToken cancellationToken = default);
 

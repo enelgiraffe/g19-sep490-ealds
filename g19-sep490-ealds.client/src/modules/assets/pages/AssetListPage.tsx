@@ -370,7 +370,6 @@ export function AssetListPage() {
       await damageReportService.report({
         assetInstanceId: markDamagedAssetId,
         reportedBy,
-        requestTypeId: undefined,
         reportDate: damageDate
           ? new Date(damageDate).toISOString()
           : new Date().toISOString(),
@@ -378,7 +377,7 @@ export function AssetListPage() {
         severity: null,
         documentId: null,
       });
-      message.success('Gửi báo hỏng thành công.');
+      message.success('Đã đánh dấu hỏng. Vào Sửa chữa → Tài sản cần sửa chữa để lập đơn đề nghị sửa chữa.');
       await fetchAssets();
       handleCloseMarkDamagedModal();
     } catch (e: any) {
