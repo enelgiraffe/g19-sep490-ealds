@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Button, DatePicker, Select, Tabs, message, Input } from 'antd';
 import { CheckOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -30,6 +30,7 @@ import {
   accountantRequestService,
   type AccountantRequestListItem,
 } from '../services/accountantRequestService';
+import { AllocationHandoverAccountantRequestModal } from '../components/AllocationHandoverAccountantRequestModal';
 import {
   directorRequestService,
   REQUEST_TYPE_IDS,
@@ -47,7 +48,7 @@ import './DirectorDisposalAppraisalModal.css';
 const { Option } = Select;
 
 type ActiveTabKey = 'purchase' | 'transfer' | 'liquidation';
-type ActiveTabKeyAll = ActiveTabKey | 'maintenance' | 'repair';
+type ActiveTabKeyAll = ActiveTabKey | 'maintenance' | 'repair' | 'allocation' | 'handover';
 type LiquidationPillKey = 'requests' | 'appraisals';
 
 const PURCHASE_STATUS_MAP: Record<number, { label: string; color: string }> = {
@@ -90,6 +91,14 @@ const DIRECTOR_STATUS_MAP: Record<number, { label: string; color: string }> = {
  * Status cho Bảo dưỡng / Sửa chữa: trưởng phòng ban gửi thẳng cho giám đốc (không qua kế toán).
  * Thực tế dữ liệu có thể còn lẫn các status cũ, nên map vẫn cover 0/4 để tránh hiển thị sai/trống.
  */
+/** Cấp phát / Thu hồi — kế toán duyệt (AllocationOrderWorkflow status). */
+const ALLOC_HANDOVER_ACCOUNTANT_STATUS_MAP: Record<number, { label: string; color: string }> = {
+  0: { label: 'Chờ duyệt', color: 'warning' },
+  2: { label: 'Đã duyệt', color: 'processing' },
+  3: { label: 'Từ chối', color: 'error' },
+  4: { label: 'Hoàn tất', color: 'success' },
+};
+
 const MAINT_REPAIR_STATUS_MAP: Record<number, { label: string; color: string }> = {
   [-1]: { label: 'Nháp', color: 'default' },
   0: { label: 'Đã gửi', color: 'processing' },
@@ -248,6 +257,8 @@ const REQUESTS_TAB_KEYS: ActiveTabKeyAll[] = [
   'liquidation',
   'maintenance',
   'repair',
+  'allocation',
+  'handover',
 ];
 
 export function RequestsPage() {
@@ -292,6 +303,17 @@ export function RequestsPage() {
   const [liquidationExecutionRequestId, setLiquidationExecutionRequestId] = useState<number | null>(null);
   const [liquidationExecutionCode, setLiquidationExecutionCode] = useState('');
   const [liquidationPill, setLiquidationPill] = useState<LiquidationPillKey>('requests');
+  const [allocationRequestRows, setAllocationRequestRows] = useState<AccountantRequestListItem[]>([]);
+  const [allocationRequestLoading, setAllocationRequestLoading] = useState(false);
+  const [handoverRequestRows, setHandoverRequestRows] = useState<AccountantRequestListItem[]>([]);
+  const [handoverRequestLoading, setHandoverRequestLoading] = useState(false);
+  const [allocHandoverDetailOpen, setAllocHandoverDetailOpen] = useState(false);
+  const [selectedAllocHandoverItem, setSelectedAllocHandoverItem] = useState<AccountantRequestListItem | null>(
+    null,
+  );
+  const [allocHandoverModalVariant, setAllocHandoverModalVariant] = useState<'allocation' | 'handover'>(
+    'allocation',
+  );
   const [appraisalRows, setAppraisalRows] = useState<DisposalAppraisalListItem[]>([]);
   const [appraisalLoading, setAppraisalLoading] = useState(false);
   const [isAppraisalDetailOpen, setIsAppraisalDetailOpen] = useState(false);
@@ -415,11 +437,47 @@ export function RequestsPage() {
     void reloadLiquidationRows();
   }, [reloadLiquidationRows]);
 
+  const reloadAllocationRequests = useCallback(async () => {
+    setAllocationRequestLoading(true);
+    try {
+      const list = await accountantRequestService.getAllocationRequests();
+      setAllocationRequestRows(list);
+    } catch {
+      message.error('Không tải được yêu cầu cấp phát.');
+      setAllocationRequestRows([]);
+    } finally {
+      setAllocationRequestLoading(false);
+    }
+  }, []);
+
+  const reloadHandoverRequests = useCallback(async () => {
+    setHandoverRequestLoading(true);
+    try {
+      const list = await accountantRequestService.getHandoverRequests();
+      setHandoverRequestRows(list);
+    } catch {
+      message.error('Không tải được yêu cầu thu hồi.');
+      setHandoverRequestRows([]);
+    } finally {
+      setHandoverRequestLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!userProfile?.role) return;
+    if (String(userProfile.role).toUpperCase() !== 'ACCOUNTANT') return;
+    void reloadAllocationRequests();
+    void reloadHandoverRequests();
+  }, [userProfile?.role, reloadAllocationRequests, reloadHandoverRequests]);
+
   // Director has all tabs; accountant / trưởng phòng only purchase, transfer, liquidation
   useEffect(() => {
     if (!userProfile?.role) return;
     const r = String(userProfile.role).toUpperCase();
-    const limited: ActiveTabKeyAll[] = ['purchase', 'transfer', 'liquidation'];
+    const limited: ActiveTabKeyAll[] =
+      r === 'ACCOUNTANT'
+        ? ['purchase', 'transfer', 'liquidation', 'allocation', 'handover']
+        : ['purchase', 'transfer', 'liquidation'];
     const allowed: ActiveTabKeyAll[] = r === 'DIRECTOR' ? REQUESTS_TAB_KEYS : limited;
     if (!allowed.includes(activeTab)) {
       setActiveTab('purchase');
@@ -615,6 +673,12 @@ export function RequestsPage() {
   }, [activeTab, statusFilter, searchText, departmentFilter, sentDateFilter]);
 
   useEffect(() => {
+    if (activeTab === 'allocation' || activeTab === 'handover') {
+      setStatusFilter('all');
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
     if (activeTab !== 'liquidation') {
       setLiquidationPill('requests');
     }
@@ -727,6 +791,52 @@ export function RequestsPage() {
     });
   }, [appraisalRows, searchText, sentDateFilter]);
 
+  const filteredAllocationRequestRows = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+    return allocationRequestRows.filter((row) => {
+      const matchStatus = statusFilter === 'all' || row.status === statusFilter;
+      const dept = (row.targetDepartmentName ?? '').toLowerCase();
+      let matchDate = true;
+      if (sentDateFilter) {
+        try {
+          const rowDate = new Date(row.createDate).toISOString().slice(0, 10);
+          matchDate = rowDate === sentDateFilter;
+        } catch {
+          matchDate = true;
+        }
+      }
+      const matchKeyword =
+        !keyword ||
+        row.title.toLowerCase().includes(keyword) ||
+        `yc-${row.assetRequestId}`.includes(keyword) ||
+        dept.includes(keyword);
+      return matchStatus && matchKeyword && matchDate;
+    });
+  }, [allocationRequestRows, searchText, statusFilter, sentDateFilter]);
+
+  const filteredHandoverRequestRows = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+    return handoverRequestRows.filter((row) => {
+      const matchStatus = statusFilter === 'all' || row.status === statusFilter;
+      const dept = (row.targetDepartmentName ?? '').toLowerCase();
+      let matchDate = true;
+      if (sentDateFilter) {
+        try {
+          const rowDate = new Date(row.createDate).toISOString().slice(0, 10);
+          matchDate = rowDate === sentDateFilter;
+        } catch {
+          matchDate = true;
+        }
+      }
+      const matchKeyword =
+        !keyword ||
+        row.title.toLowerCase().includes(keyword) ||
+        `yc-${row.assetRequestId}`.includes(keyword) ||
+        dept.includes(keyword);
+      return matchStatus && matchKeyword && matchDate;
+    });
+  }, [handoverRequestRows, searchText, statusFilter, sentDateFilter]);
+
   const departmentOptions = useMemo(
     () =>
       Array.from(new Set(transferRows.map((row) => row.fromDepartment)))
@@ -738,27 +848,45 @@ export function RequestsPage() {
   const isPurchaseTab = activeTab === 'purchase';
   const isTransferTab = activeTab === 'transfer';
   const isLiquidationTab = activeTab === 'liquidation';
+  const isAllocationTab = activeTab === 'allocation';
+  const isHandoverTab = activeTab === 'handover';
+  const showAllocationRequestsTable = isAccountantRole && isAllocationTab;
+  const showHandoverRequestsTable = isAccountantRole && isHandoverTab;
   const isLiquidationAppraisalPill = isLiquidationTab && liquidationPill === 'appraisals';
-  const hasDataTable = isPurchaseTab || isTransferTab || isLiquidationTab || shouldUseDirectorView;
+  const hasDataTable =
+    isPurchaseTab ||
+    isTransferTab ||
+    isLiquidationTab ||
+    shouldUseDirectorView ||
+    showAllocationRequestsTable ||
+    showHandoverRequestsTable;
 
   const currentRows = isPurchaseTab
     ? filteredPurchaseRows
-    : isTransferTab
-      ? filteredTransferRows
-      : isLiquidationTab
-        ? (isLiquidationAppraisalPill ? filteredAppraisalRows : filteredLiquidationRows)
-      : [];
+    : showAllocationRequestsTable
+      ? filteredAllocationRequestRows
+      : showHandoverRequestsTable
+        ? filteredHandoverRequestRows
+        : isTransferTab
+          ? filteredTransferRows
+          : isLiquidationTab
+            ? (isLiquidationAppraisalPill ? filteredAppraisalRows : filteredLiquidationRows)
+            : [];
   const loading = isLiquidationAppraisalPill
     ? appraisalLoading
     : isPurchaseTab
       ? purchaseLoading
-      : isTransferTab
-        ? transferLoading
-        : isLiquidationTab && !shouldUseDirectorView
-          ? liquidationLoading
-          : shouldUseDirectorView
-            ? directorLoading
-            : false;
+      : showAllocationRequestsTable
+        ? allocationRequestLoading
+        : showHandoverRequestsTable
+          ? handoverRequestLoading
+          : isTransferTab
+            ? transferLoading
+            : isLiquidationTab && !shouldUseDirectorView
+              ? liquidationLoading
+              : shouldUseDirectorView
+                ? directorLoading
+                : false;
 
   const total =
     shouldUseDirectorView && !isLiquidationAppraisalPill ? directorTotal : currentRows.length;
@@ -910,7 +1038,9 @@ export function RequestsPage() {
       ? PURCHASE_STATUS_MAP
       : isTransferTab
         ? TRANSFER_STATUS_MAP
-        : DIRECTOR_STATUS_MAP;
+        : showAllocationRequestsTable || showHandoverRequestsTable
+          ? ALLOC_HANDOVER_ACCOUNTANT_STATUS_MAP
+          : DIRECTOR_STATUS_MAP;
     return Object.entries(map).map(([k, v]) => (
       <Option key={k} value={Number(k)}>
         {v.label}
@@ -943,6 +1073,8 @@ export function RequestsPage() {
                   { key: 'purchase', label: 'Đơn mua' },
                   { key: 'transfer', label: 'Điều chuyển' },
                   { key: 'liquidation', label: 'Thanh lý' },
+                  { key: 'allocation', label: 'Cấp phát' },
+                  { key: 'handover', label: 'Thu hồi' },
                 ] as const)
               : isDirectorRole
                 ? ([
@@ -987,13 +1119,37 @@ export function RequestsPage() {
               : 'requests-filters'
           }
         >
-          {(isPurchaseTab || isTransferTab || isLiquidationTab) && (
+          {(isPurchaseTab ||
+            isTransferTab ||
+            isLiquidationTab ||
+            showAllocationRequestsTable ||
+            showHandoverRequestsTable) && (
             <Input
               placeholder="Tìm kiếm"
               className="requests-search"
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
             />
+          )}
+          {(showAllocationRequestsTable || showHandoverRequestsTable) && (
+            <>
+              <Select
+                placeholder="Trạng thái"
+                className="requests-select"
+                value={statusFilter}
+                onChange={(v) => setStatusFilter(v)}
+              >
+                <Option value="all">Tất cả</Option>
+                {renderStatusFilterOptions()}
+              </Select>
+              <DatePicker
+                placeholder="Ngày gửi"
+                className="requests-date-picker"
+                onChange={(_, dateString) => {
+                  setSentDateFilter(dateString || null);
+                }}
+              />
+            </>
           )}
           {isTransferTab && (
             <>
@@ -1100,9 +1256,13 @@ export function RequestsPage() {
                 ? 'Đang tải danh sách thẩm định...'
                 : isPurchaseTab
                   ? 'Đang tải danh sách đơn mua...'
-                  : isTransferTab
-                    ? 'Đang tải danh sách yêu cầu điều chuyển...'
-                    : 'Đang tải danh sách yêu cầu...'}
+                  : showAllocationRequestsTable
+                    ? 'Đang tải yêu cầu cấp phát...'
+                    : showHandoverRequestsTable
+                      ? 'Đang tải yêu cầu thu hồi...'
+                      : isTransferTab
+                        ? 'Đang tải danh sách yêu cầu điều chuyển...'
+                        : 'Đang tải danh sách yêu cầu...'}
             </div>
           ) : isLiquidationAppraisalPill ? (
             <table className="asset-table requests-table">
@@ -1307,6 +1467,81 @@ export function RequestsPage() {
                               setIsDirectorDetailOpen(true);
                             }}
                           />
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          ) : showAllocationRequestsTable || showHandoverRequestsTable ? (
+            <table className="asset-table requests-table">
+              <thead>
+                <tr>
+                  <th>MÃ YÊU CẦU</th>
+                  <th>NGÀY GỬI</th>
+                  <th>TIÊU ĐỀ</th>
+                  <th>PHÒNG BAN</th>
+                  <th>TRẠNG THÁI</th>
+                  <th className="asset-table__cell asset-table__cell--actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {pagedRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="requests-table-empty">
+                      Không có dữ liệu.
+                    </td>
+                  </tr>
+                ) : (
+                  (pagedRows as AccountantRequestListItem[]).map((row) => {
+                    const config =
+                      ALLOC_HANDOVER_ACCOUNTANT_STATUS_MAP[row.status] ??
+                      ALLOC_HANDOVER_ACCOUNTANT_STATUS_MAP[0];
+                    const orderPath = showHandoverRequestsTable ? 'handover-order' : 'order';
+                    return (
+                      <tr key={row.assetRequestId} className="asset-row">
+                        <td>YC-{row.assetRequestId}</td>
+                        <td>{formatDate(row.createDate)}</td>
+                        <td>{row.title}</td>
+                        <td>{row.targetDepartmentName?.trim() || '—'}</td>
+                        <td>
+                          <span
+                            className={
+                              config.color === 'success'
+                                ? 'asset-status-pill asset-status-pill--active'
+                                : config.color === 'default'
+                                  ? 'asset-status-pill asset-status-pill--inactive'
+                                  : config.color === 'processing'
+                                    ? 'asset-status-pill asset-status-pill--processing'
+                                    : config.color === 'warning'
+                                      ? 'asset-status-pill asset-status-pill--warning'
+                                      : config.color === 'error'
+                                        ? 'asset-status-pill asset-status-pill--danger'
+                                        : 'asset-status-pill'
+                            }
+                          >
+                            {config.label}
+                          </span>
+                        </td>
+                        <td className="asset-table__cell asset-table__cell--actions">
+                          <div className="requests-actions">
+                            <Button
+                              type="text"
+                              icon={<EyeOutlined />}
+                              size="small"
+                              onClick={() => {
+                                setAllocHandoverModalVariant(showHandoverRequestsTable ? 'handover' : 'allocation');
+                                setSelectedAllocHandoverItem(row);
+                                setAllocHandoverDetailOpen(true);
+                              }}
+                            >
+                              Xem
+                            </Button>
+                            {row.assetAllocationOrderId != null && row.status >= 2 && (
+                              <Link to={`/allocations/${orderPath}/${row.assetAllocationOrderId}`}>Đơn</Link>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1634,6 +1869,21 @@ export function RequestsPage() {
         onSubmit={handleSubmitPurchaseOrder}
         creatorName={userProfile?.name ?? userProfile?.email ?? null}
         initialValues={editingPurchaseDetail ? parseToFormValues(editingPurchaseDetail) : undefined}
+      />
+
+      <AllocationHandoverAccountantRequestModal
+        open={allocHandoverDetailOpen}
+        onClose={() => {
+          setAllocHandoverDetailOpen(false);
+          setSelectedAllocHandoverItem(null);
+        }}
+        item={selectedAllocHandoverItem}
+        variant={allocHandoverModalVariant}
+        userId={userProfile?.id ?? null}
+        onAfterAction={async () => {
+          await reloadAllocationRequests();
+          await reloadHandoverRequests();
+        }}
       />
 
       <ViewPurchaseOrderModal

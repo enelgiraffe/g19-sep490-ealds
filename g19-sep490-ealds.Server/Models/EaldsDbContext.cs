@@ -43,6 +43,10 @@ public partial class EaldsDbContext : DbContext
 
     public virtual DbSet<BudgetAllocation> BudgetAllocations { get; set; }
 
+    public virtual DbSet<AssetAllocationOrder> AssetAllocationOrders { get; set; }
+
+    public virtual DbSet<AssetAllocationOrderLine> AssetAllocationOrderLines { get; set; }
+
     public virtual DbSet<DepreciationPolicy> DepreciationPolicies { get; set; }
 
     public virtual DbSet<DepreciationRecord> DepreciationRecords { get; set; }
@@ -302,6 +306,8 @@ public partial class EaldsDbContext : DbContext
                 .HasColumnType("datetime");
             entity.Property(e => e.Title).HasMaxLength(255);
 
+            entity.HasIndex(e => e.AllocationTargetDepartmentId);
+
             entity.HasOne(d => d.Asset).WithMany(p => p.AssetRequests)
                 .HasForeignKey(d => d.AssetId)
                 .HasConstraintName("FK__AssetRequ__Asset__72C60C4A");
@@ -329,6 +335,11 @@ public partial class EaldsDbContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__AssetRequ__UserI__71D1E811");
+
+            entity.HasOne(d => d.AssetAllocationOrder)
+                .WithOne(p => p.AssetRequest)
+                .HasForeignKey<AssetAllocationOrder>(p => p.AssetRequestId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<AssetRequestRecord>(entity =>
@@ -484,6 +495,53 @@ public partial class EaldsDbContext : DbContext
 
             entity.HasOne(d => d.SubmittedByUser).WithMany(p => p.BudgetAllocationsSubmitted)
                 .HasForeignKey(d => d.SubmittedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AssetAllocationOrder>(entity =>
+        {
+            entity.HasKey(e => e.AssetAllocationOrderId);
+            entity.ToTable("AssetAllocationOrder");
+            entity.Property(e => e.Status).HasConversion<byte>();
+            entity.Property(e => e.Kind).HasConversion<byte>();
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getutcdate())")
+                .HasColumnType("datetime2");
+            entity.Property(e => e.ConfirmedAt).HasColumnType("datetime2");
+            entity.Property(e => e.RequestSubmittedAt).HasColumnType("datetime2");
+            entity.HasIndex(e => e.AssetRequestId).IsUnique();
+            entity.HasIndex(e => e.DepartmentId);
+            entity.HasIndex(e => e.RequestedByUserId);
+
+            entity.HasOne(d => d.Department).WithMany(p => p.AssetAllocationOrders)
+                .HasForeignKey(d => d.DepartmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(d => d.RequestedByUser).WithMany()
+                .HasForeignKey(d => d.RequestedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(d => d.ConfirmedByUser).WithMany()
+                .HasForeignKey(d => d.ConfirmedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AssetAllocationOrderLine>(entity =>
+        {
+            entity.HasKey(e => e.AssetAllocationOrderLineId);
+            entity.ToTable("AssetAllocationOrderLine");
+            entity.Property(e => e.Reason).HasMaxLength(2000);
+
+            entity.HasOne(d => d.Order).WithMany(p => p.Lines)
+                .HasForeignKey(d => d.AssetAllocationOrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(d => d.AssetType).WithMany(p => p.AssetAllocationOrderLines)
+                .HasForeignKey(d => d.AssetTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(d => d.Asset).WithMany(p => p.AssetAllocationOrderLines)
+                .HasForeignKey(d => d.AssetId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

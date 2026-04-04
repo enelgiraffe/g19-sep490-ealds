@@ -34,6 +34,8 @@ import { UsersPage } from './modules/admin/pages/UsersPage';
 import { UserDetailPage } from './modules/admin/pages/UserDetailPage';
 import { CostRecordingPage } from './modules/cost-recording/pages/CostRecordingPage';
 import { AccountantAllocationsPage } from './modules/allocations/pages/AccountantAllocationsPage';
+import { DepartmentAllocationRequestsPage } from './modules/allocations/pages/DepartmentAllocationRequestsPage';
+import { AllocationOrderDetailPage } from './modules/allocations/pages/AllocationOrderDetailPage';
 import './App.css';
 
 function App() {
@@ -92,6 +94,9 @@ function App() {
           <Route path="reports" element={<DirectorInventoryPage />} />
           <Route path="liquidation" element={<LiquidationPage />} />
           <Route path="allocations" element={<AccountantAllocationsPage />} />
+          <Route path="allocations/order/:orderId" element={<AllocationOrderDetailPage />} />
+          <Route path="allocations/handover-order/:orderId" element={<AllocationOrderDetailPage />} />
+          <Route path="allocation-requests" element={<DepartmentAllocationRequestsPage />} />
           <Route path="cost-recording" element={<CostRecordingPage />} />
           <Route path="requests" element={<RequestsPage />} />
           <Route path="dashboard" element={<DirectorDashboardPage />} />

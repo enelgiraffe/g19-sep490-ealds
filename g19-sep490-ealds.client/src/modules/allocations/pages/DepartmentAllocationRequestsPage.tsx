@@ -1,12 +1,12 @@
 import { Tabs } from 'antd';
-import { AllocationOrdersPanel } from './AllocationOrdersPanel';
+import { DepartmentRequestsByModePanel } from './DepartmentRequestsByModePanel';
 import '../../requests/pages/RequestsPage.css';
 
-export function AccountantAllocationsPage() {
+export function DepartmentAllocationRequestsPage() {
   return (
     <div className="requests-page">
       <div className="requests-header">
-        <h1 className="requests-title">Đơn cấp phát &amp; thu hồi</h1>
+        <h1 className="requests-title">Cấp phát &amp; thu hồi tài sản</h1>
       </div>
 
       <div className="requests-card">
@@ -16,13 +16,13 @@ export function AccountantAllocationsPage() {
           items={[
             {
               key: 'allocation',
-              label: 'Đơn cấp phát',
-              children: <AllocationOrdersPanel kind="allocation" />,
+              label: 'Cấp phát',
+              children: <DepartmentRequestsByModePanel mode="allocation" />,
             },
             {
               key: 'handover',
-              label: 'Đơn thu hồi',
-              children: <AllocationOrdersPanel kind="handover" />,
+              label: 'Thu hồi',
+              children: <DepartmentRequestsByModePanel mode="handover" />,
             },
           ]}
         />

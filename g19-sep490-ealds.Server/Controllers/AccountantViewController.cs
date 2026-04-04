@@ -38,7 +38,16 @@ public class AccountantViewController : ControllerBase
                 ar.RequestTypeId,
                 ar.UserId,
                 ar.CreateDate,
-                ar.ProposedData
+                ar.ProposedData,
+                ar.AllocationTargetDepartmentId,
+                TargetDepartmentName = _db.Departments
+                    .Where(d => d.DepartmentId == ar.AllocationTargetDepartmentId)
+                    .Select(d => d.Name)
+                    .FirstOrDefault(),
+                AssetAllocationOrderId = _db.AssetAllocationOrders
+                    .Where(o => o.AssetRequestId == ar.AssetRequestId)
+                    .Select(o => (int?)o.AssetAllocationOrderId)
+                    .FirstOrDefault()
             })
             .ToListAsync();
 

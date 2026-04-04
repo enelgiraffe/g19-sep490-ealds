@@ -17,6 +17,8 @@ public class AccountantRejectController : ControllerBase
     private readonly EaldsDbContext _db;
     private readonly IAssetRequestNotificationService _requestNotifications;
     private readonly int _transferRequestTypeId;
+    private readonly int _allocationRequestTypeId;
+    private readonly int _handoverRequestTypeId;
 
     public AccountantRejectController(
         EaldsDbContext db,
@@ -26,6 +28,8 @@ public class AccountantRejectController : ControllerBase
         _db = db;
         _requestNotifications = requestNotifications;
         _transferRequestTypeId = configuration.GetValue<int>("App:TransferRequestTypeId", 3);
+        _allocationRequestTypeId = configuration.GetValue<int>("App:AllocationRequestTypeId", 6);
+        _handoverRequestTypeId = configuration.GetValue<int>("App:HandoverRequestTypeId", 7);
     }
 
     [HttpPost("{id}/reject")]
@@ -37,6 +41,8 @@ public class AccountantRejectController : ControllerBase
         var isTransfer =
             ar.RequestTypeId == _transferRequestTypeId
             || await _db.TransferRecords.AsNoTracking().AnyAsync(tr => tr.AssetRequestId == ar.AssetRequestId);
+        var isAllocation = ar.RequestTypeId == _allocationRequestTypeId;
+        var isHandover = ar.RequestTypeId == _handoverRequestTypeId;
         if (!(ar.Status == 0 || (isTransfer && ar.Status == 1)))
             return BadRequest("Only requests with status=0 (Sent) can be rejected by accountant.");
 
@@ -78,7 +84,8 @@ public class AccountantRejectController : ControllerBase
         // Accounting rejection:
         // - Purchase/etc: return to draft for creator to edit/resend => 0 -> -1
         // - Transfer: mark request as rejected => 1 -> 3
-        ar.Status = isTransfer ? 3 : -1;
+        // - Allocation: rejected => 3
+        ar.Status = isTransfer || isAllocation || isHandover ? 3 : -1;
         ar.ApproveDate = null;
 
         var record = new AssetRequestRecord

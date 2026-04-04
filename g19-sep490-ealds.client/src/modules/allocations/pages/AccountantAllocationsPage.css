@@ -436,3 +436,48 @@
     position: static;
   }
 }
+
+.alloc-mono {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, monospace;
+}
+
+.alloc-detail-body {
+  font-size: 14px;
+}
+
+.alloc-line-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  line-height: 1.5;
+}
+
+.alloc-muted {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+/* Compact editable lines table inside allocation request modal */
+.alloc-request-lines-table .ant-table {
+  font-size: 13px;
+}
+
+.alloc-request-lines-table .ant-table-cell {
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+.alloc-request-lines-table .ant-table-thead > tr > th {
+  padding: 8px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  background: #f9fafb;
+}
+
+/* Fill table cell; do not use display:block — it breaks the trigger's inline-flex row (chevron stacks under text). */
+.alloc-request-lines-table .alloc-request-lines-table__select.ant-select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
