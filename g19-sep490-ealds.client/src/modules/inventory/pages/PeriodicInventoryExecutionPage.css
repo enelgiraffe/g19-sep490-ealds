@@ -536,34 +536,6 @@
   font-weight: 600;
 }
 
-/* ── Location / Manager section ── */
-.exec-loc-mgr {
-  display: flex;
-  gap: 24px;
-}
-
-.exec-loc-mgr__col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.exec-loc-mgr__label {
-  font-size: 13px;
-  font-weight: 500;
-  color: #333;
-}
-
-.exec-loc-mgr__select {
-  width: 100%;
-}
-
-.exec-loc-mgr__book {
-  font-size: 12px;
-  color: #888;
-}
-
 /* ── Comparison table ── */
 .exec-comparison-table {
   width: 100%;
@@ -602,6 +574,16 @@
 .exec-comparison-table tbody td {
   padding: 9px 16px;
   color: #333;
+}
+
+.exec-comparison-table__actual-cell {
+  min-width: 200px;
+  vertical-align: middle;
+}
+
+.exec-comparison-table__select {
+  width: 100%;
+  min-width: 180px;
 }
 
 /* Match / Mismatch labels */

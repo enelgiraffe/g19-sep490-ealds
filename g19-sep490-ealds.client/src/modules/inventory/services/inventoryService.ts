@@ -20,9 +20,11 @@ inventoryApi.interceptors.response.use((response) => {
   const url = response.config.url ?? '';
   if (
     url.includes('/complete') ||
+    url.includes('/confirm') ||
     url.includes('/director-approve') ||
     url.includes('/reject') ||
-    url.includes('/cancel')
+    url.includes('/cancel') ||
+    url.includes('/apply-actual')
   ) {
     window.dispatchEvent(new Event('ealds-notifications-changed'));
   }
@@ -98,11 +100,7 @@ export interface AssetInventoryDetail {
   bookLocationId: number | null;
   bookLocationName: string;
   actualLocationId: number | null;
-  bookManagerId: number | null;
-  bookManagerName: string;
-  actualManagerId: number | null;
   locations: DropdownItem[];
-  managers: DropdownItem[];
 }
 
 export interface SaveAssetInventoryPayload {
@@ -110,7 +108,6 @@ export interface SaveAssetInventoryPayload {
   /** Reported AssetStatus int */
   actualStatus: number;
   actualLocationId: number | null;
-  actualManagerId: number | null;
   checkedBy: number;
 }
 

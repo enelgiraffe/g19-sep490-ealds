@@ -25,7 +25,6 @@ import { MaintenancePage } from './modules/maintenance/pages/MaintenancePage';
 import { InventoryPage } from './modules/inventory/pages/InventoryPage';
 import { PeriodicInventoryExecutionPage } from './modules/inventory/pages/PeriodicInventoryExecutionPage';
 import { DirectorInventoryPage } from './modules/inventory/pages/DirectorInventoryPage';
-import { AccountantInventoryPage } from './modules/inventory/pages/AccountantInventoryPage';
 import { InventoryReviewPage } from './modules/inventory/pages/InventoryReviewPage';
 import { LiquidationPage } from './modules/liquidation/pages/LiquidationPage';
 import { RequestsPage } from './modules/requests/pages/RequestsPage';
@@ -90,7 +89,6 @@ function App() {
           <Route path="inventory" element={<InventoryPage />} />
           <Route path="inventory/:sessionId" element={<PeriodicInventoryExecutionPage />} />
           <Route path="inventory-review/:sessionId" element={<InventoryReviewPage />} />
-          <Route path="accountant-inventory" element={<AccountantInventoryPage />} />
           <Route path="reports" element={<DirectorInventoryPage />} />
           <Route path="liquidation" element={<LiquidationPage />} />
           <Route path="allocations" element={<AccountantAllocationsPage />} />

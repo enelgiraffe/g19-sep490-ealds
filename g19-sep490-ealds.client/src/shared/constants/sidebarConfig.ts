@@ -19,7 +19,6 @@ export const ROLE_MENU: Record<AppRole, SidebarItem[]> = {
   accountant: [
     // Kế toán dùng màn tài sản riêng
     { key: 'assets', path: '/accountant-assets', label: 'Tài sản', icon: '/icons/sidebar-assets.svg' },
-    { key: 'accountant-inventory', path: '/accountant-inventory', label: 'Kiểm kê', icon: '/icons/sidebar-inventories.svg' },
     { key: 'transfers', path: '/transfers', label: 'Điều chuyển', icon: '/icons/sidebar-transfers.svg' },
     { key: 'allocations', path: '/allocations', label: 'Cấp phát-Thu hồi', icon: '/icons/sidebar-allocations.svg' },
     { key: 'liquidation', path: '/liquidation', label: 'Thanh lý', icon: '/icons/sidebar-liquidation.svg' },

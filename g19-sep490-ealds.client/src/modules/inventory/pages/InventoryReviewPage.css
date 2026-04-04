@@ -13,6 +13,21 @@
 
 .inv-review__header {
   margin-bottom: 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.inv-review__header-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.inv-review__header-actions {
+  flex-shrink: 0;
+  padding-top: 4px;
 }
 
 .inv-review__back {
@@ -83,6 +98,13 @@
 
 .inv-review__table-wrap {
   background: #fff;
+}
+
+.inv-review__table-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-bottom: 8px;
 }
 
 .inv-review__cell-stack {

@@ -89,11 +89,7 @@ public class AssetInventoryDetailDTO
     public int? BookLocationId { get; set; }
     public string BookLocationName { get; set; } = null!;
     public int? ActualLocationId { get; set; }
-    public int? BookManagerId { get; set; }
-    public string BookManagerName { get; set; } = null!;
-    public int? ActualManagerId { get; set; }
     public List<DropdownItemDTO> Locations { get; set; } = new();
-    public List<DropdownItemDTO> Managers { get; set; } = new();
 }
 
 public class InventoryTaskDTO

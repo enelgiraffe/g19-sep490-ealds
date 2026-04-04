@@ -15,7 +15,6 @@ public class InventoryNotificationService : IInventoryNotificationService
     /// Resolving users by <c>RoleId</c> avoids EF failing to translate custom string helpers in SQL.
     /// </summary>
     private const int RoleIdDirector = 2;
-    private const int RoleIdAccountant = 3;
     private const int RoleIdDepartmentHead = 4;
 
     private readonly EaldsDbContext _db;
@@ -92,7 +91,8 @@ public class InventoryNotificationService : IInventoryNotificationService
             _db.Notifications.Add(new Notification
             {
                 Title = TruncateTitle($"Chờ xác nhận kiểm kê: {session.Code}"),
-                Content = TruncateContent($"Trưởng phòng đã hoàn thành phiên {session.Code}. Vui lòng xác nhận."),
+                Content = TruncateContent(
+                    $"Trưởng phòng đã xử lý chênh lệch / báo cáo phiên {session.Code}. Vui lòng xác nhận."),
                 RefId = session.SessionId,
                 UserId = userId,
                 SentDate = DateTime.UtcNow,
@@ -118,30 +118,13 @@ public class InventoryNotificationService : IInventoryNotificationService
                 Title = TruncateTitle($"Đã xác nhận kiểm kê: {session.Code}"),
                 Content = TruncateContent(
                     hasQuantityOrUserMismatch
-                        ? $"GD đã xác nhận {session.Code}. Có chênh lệch — kế toán xử lý."
-                        : $"GD đã xác nhận {session.Code}. Không có chênh lệch SL/người PT."),
+                        ? $"GD đã xác nhận {session.Code}. Có chênh lệch — trưởng phòng xử lý trên sổ (Chờ xử lý)."
+                        : $"GD đã xác nhận {session.Code}. Không có chênh lệch cần xử lý thêm."),
                 RefId = session.SessionId,
                 UserId = userId,
                 SentDate = DateTime.UtcNow,
                 IsSend = true
             });
-        }
-
-        if (hasQuantityOrUserMismatch)
-        {
-            var accountantIds = await FilterExistingUserIdsAsync(await GetAccountantUserIdsAsync(cancellationToken), cancellationToken);
-            foreach (var userId in accountantIds)
-            {
-                _db.Notifications.Add(new Notification
-                {
-                    Title = TruncateTitle($"Xử lý chênh lệch kiểm kê: {session.Code}"),
-                    Content = TruncateContent($"GD xác nhận {session.Code}. Có chênh lệch — xử lý trên sổ."),
-                    RefId = session.SessionId,
-                    UserId = userId,
-                    SentDate = DateTime.UtcNow,
-                    IsSend = true
-                });
-            }
         }
 
         if (_db.ChangeTracker.HasChanges())
@@ -232,33 +215,6 @@ public class InventoryNotificationService : IInventoryNotificationService
             .Where(r =>
                 r.RoleId == RoleIdDirector ||
                 (r.Code != null && r.Code.ToUpper() == "DIRECTOR"))
-            .Select(r => r.RoleId)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-    }
-
-    private async Task<List<int>> GetAccountantUserIdsAsync(CancellationToken cancellationToken)
-    {
-        var roleIds = await GetAccountantRoleIdsAsync(cancellationToken);
-        if (roleIds.Count == 0)
-        {
-            _logger.LogWarning("No Role row found for accountant (expected id {RoleId} or Code ACCOUNTANT).", RoleIdAccountant);
-            return new List<int>();
-        }
-
-        return await _db.UserRoles.AsNoTracking()
-            .Where(ur => roleIds.Contains(ur.RoleId))
-            .Select(ur => ur.UserId)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-    }
-
-    private async Task<List<int>> GetAccountantRoleIdsAsync(CancellationToken cancellationToken)
-    {
-        return await _db.Roles.AsNoTracking()
-            .Where(r =>
-                r.RoleId == RoleIdAccountant ||
-                (r.Code != null && r.Code.ToUpper() == "ACCOUNTANT"))
             .Select(r => r.RoleId)
             .Distinct()
             .ToListAsync(cancellationToken);

@@ -275,11 +275,19 @@ export function InventoryPage() {
                 ) : (
                   filteredSessions.map((row) => {
                     const isScheduled = row.status === SESSION_STATUS.Scheduled || row.status === SESSION_STATUS.Due;
+                    const openSession = () => {
+                      if (isScheduled) return;
+                      if (row.status === SESSION_STATUS.InProgress) {
+                        navigate(`/inventory/${row.sessionId}`);
+                        return;
+                      }
+                      navigate(`/inventory-review/${row.sessionId}`);
+                    };
                     return (
                       <tr
                         key={row.sessionId}
                         className={`inventory-table__row${isScheduled ? '' : ' inventory-table__row--clickable'}`}
-                        onClick={isScheduled ? undefined : () => navigate(`/inventory/${row.sessionId}`)}
+                        onClick={isScheduled ? undefined : openSession}
                       >
                         <td>{formatDate(row.startDate)}</td>
                         <td>{row.purpose}</td>

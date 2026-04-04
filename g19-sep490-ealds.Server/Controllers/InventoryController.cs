@@ -426,12 +426,6 @@ public class InventoryController : ControllerBase
 
         var currentLoc = inst.AssetLocations.FirstOrDefault(al => al.IsCurrent);
 
-        var bookUsage = await _context.AssetUsages
-            .Where(u => u.AssetInstanceId == assetInstanceId && u.IsCurrent)
-            .Include(u => u.Employee)
-            .AsNoTracking()
-            .FirstOrDefaultAsync();
-
         var record = task.InventoryRecords.FirstOrDefault();
         int? actualLocationId = record?.ActualLocation?.DepartmentId;
         var actualStatusResolved = ResolveRecordedActualStatus(record, inst.Status);
@@ -439,12 +433,6 @@ public class InventoryController : ControllerBase
         var departments = await _context.Departments
             .AsNoTracking()
             .Select(d => new DropdownItemDTO { Id = d.DepartmentId, Name = d.Name })
-            .ToListAsync();
-
-        var managers = await _context.Employees
-            .Where(e => e.UserId != null)
-            .AsNoTracking()
-            .Select(e => new DropdownItemDTO { Id = e.UserId!.Value, Name = e.Name })
             .ToListAsync();
 
         var dto = new AssetInventoryDetailDTO
@@ -463,11 +451,7 @@ public class InventoryController : ControllerBase
             BookLocationId = currentLoc?.DepartmentId,
             BookLocationName = currentLoc?.Department?.Name ?? string.Empty,
             ActualLocationId = actualLocationId,
-            BookManagerId = bookUsage?.Employee?.UserId,
-            BookManagerName = bookUsage?.Employee?.Name ?? string.Empty,
-            ActualManagerId = record?.ActualUserId,
-            Locations = departments,
-            Managers = managers
+            Locations = departments
         };
 
         return Ok(dto);
@@ -566,11 +550,11 @@ public class InventoryController : ControllerBase
             {
                 TaskId = task.TaskId,
                 ActualLocationId = actualLocation.LocationId,
-                ActualUserId = dto.ActualManagerId,
+                ActualUserId = null,
                 ActualCondition = storedCondition,
                 IsFound = actualInUseBucket,
                 ActualQuantity = actualQtyLegacy,
-                CheckedBy = dto.CheckedBy > 0 ? dto.CheckedBy : (dto.ActualManagerId ?? 1),
+                CheckedBy = dto.CheckedBy > 0 ? dto.CheckedBy : 1,
                 CheckedDate = DateTime.UtcNow,
                 DateCheckCompleted = DateTime.UtcNow
             };
@@ -579,7 +563,7 @@ public class InventoryController : ControllerBase
         else
         {
             record.ActualLocationId = actualLocation.LocationId;
-            record.ActualUserId = dto.ActualManagerId;
+            record.ActualUserId = null;
             record.ActualCondition = storedCondition;
             record.IsFound = actualInUseBucket;
             record.ActualQuantity = actualQtyLegacy;
@@ -605,10 +589,6 @@ public class InventoryController : ControllerBase
             if (bookLocation != null && dto.ActualLocationId.HasValue &&
                 bookLocation.DepartmentId != dto.ActualLocationId.Value)
                 discrepancyFlags |= (int)DiscrepancyType.LocationMismatch;
-
-            if (dto.ActualManagerId != bookManagerId &&
-                (dto.ActualManagerId.HasValue || bookManagerId.HasValue))
-                discrepancyFlags |= (int)DiscrepancyType.UserMismatch;
         }
 
         // Replace existing discrepancies for this task
@@ -626,7 +606,7 @@ public class InventoryController : ControllerBase
                 BookCondition = ((AssetStatus)inst.Status).ToString(),
                 ActualValue = inst.CurrentValue,
                 ActualLocationId = actualLocation.LocationId,
-                ActualUserId = dto.ActualManagerId,
+                ActualUserId = null,
                 ActualCondition = storedCondition
             });
         }
@@ -905,7 +885,8 @@ public class InventoryController : ControllerBase
         if (totalTasks == 0 || checkedTasks < totalTasks)
             return BadRequest(new { message = "Cần hoàn tất kiểm kê 100% tài sản trước khi kết thúc phiên." });
 
-        session.Status = (int)InventorySessionStatus.Completed;
+        // Trưởng phòng xử lý chênh lệch trước; chỉ sau đó hệ thống mới báo Giám đốc.
+        session.Status = (int)InventorySessionStatus.PendingAccountant;
         session.ProgressPercent = totalTasks > 0
             ? (int)Math.Round((double)checkedTasks / totalTasks * 100)
             : 0;
@@ -917,10 +898,6 @@ public class InventoryController : ControllerBase
             .ToListAsync();
 
         await _context.SaveChangesAsync();
-
-        await SafeInventoryNotifyAsync(
-            () => _inventoryNotifications.NotifyDirectorsSessionAwaitingConfirmationAsync(session),
-            "complete → directors");
 
         return Ok(new
         {
@@ -938,7 +915,7 @@ public class InventoryController : ControllerBase
     }
 
     /// <summary>
-    /// GET /api/inventory/sessions/{id}/review-summary — Báo cáo chênh lệch cho giám đốc / kế toán
+    /// GET /api/inventory/sessions/{id}/review-summary — Báo cáo chênh lệch (trưởng phòng / giám đốc)
     /// </summary>
     [HttpGet("sessions/{id:int}/review-summary")]
     public async Task<ActionResult<InventoryReviewSummaryDTO>> GetReviewSummary(int id)
@@ -1042,7 +1019,7 @@ public class InventoryController : ControllerBase
     }
 
     /// <summary>
-    /// POST /api/inventory/sessions/{id}/director-approve — Chờ xác nhận → Chờ xử lý (có lệch SL/người phụ trách) hoặc Đã xử lý (không lệch)
+    /// POST /api/inventory/sessions/{id}/director-approve — Chờ xác nhận → Chờ xử lý (trưởng phòng xử lý sổ) hoặc Đã xử lý
     /// </summary>
     [HttpPost("sessions/{id:int}/director-approve")]
     public async Task<ActionResult> DirectorApproveSession(int id, [FromBody] ReviewInventorySessionDTO dto)
@@ -1067,19 +1044,10 @@ public class InventoryController : ControllerBase
             return BadRequest(new { message = "Chỉ có thể xác nhận khi phiên đang ở trạng thái Chờ xác nhận." });
 
         const int bookQtyPerInstance = 1;
-        var instanceIds = session.InventoryTasks.Select(t => t.AssetInstanceId).Distinct().ToList();
-        var bookUsages = await _context.AssetUsages
-            .Where(u => instanceIds.Contains(u.AssetInstanceId) && u.IsCurrent)
-            .Include(u => u.Employee)
-            .AsNoTracking()
-            .ToDictionaryAsync(u => u.AssetInstanceId, u => u.Employee?.UserId);
-
         var hasMismatch = false;
         foreach (var task in session.InventoryTasks.Where(t =>
                      !IsExcludedFromInventoryExecution(t.AssetInstance.Status)))
         {
-            bookUsages.TryGetValue(task.AssetInstanceId, out var bookUserId);
-
             var record = task.InventoryRecords.FirstOrDefault();
             if (record == null)
             {
@@ -1095,13 +1063,6 @@ public class InventoryController : ControllerBase
 
             var actualQty = record.ActualQuantity ?? (record.IsFound == true ? bookQtyPerInstance : 0);
             if (actualQty != bookQtyPerInstance)
-            {
-                hasMismatch = true;
-                break;
-            }
-
-            var actualUserId = record.ActualUserId;
-            if (actualUserId != bookUserId && (actualUserId.HasValue || bookUserId.HasValue))
             {
                 hasMismatch = true;
                 break;
@@ -1131,7 +1092,7 @@ public class InventoryController : ControllerBase
         return Ok(new
         {
             message = hasMismatch
-                ? "Đã xác nhận. Có chênh lệch so với sổ — phiên chuyển sang Chờ xử lý (kế toán)."
+                ? "Đã xác nhận. Có chênh lệch so với sổ — phiên chuyển sang Chờ xử lý (trưởng phòng xử lý trên sổ)."
                 : "Đã xác nhận. Không có chênh lệch so với sổ — phiên đã xử lý.",
             newStatus = displayStatus,
             statusName = GetSessionStatusName(displayStatus),
@@ -1182,13 +1143,13 @@ public class InventoryController : ControllerBase
     }
 
     /// <summary>
-    /// POST /api/inventory/sessions/{id}/confirm — Kế toán: Chờ xử lý → Đã xử lý
+    /// POST /api/inventory/sessions/{id}/confirm — Trưởng phòng: Chờ xử lý → Đã xử lý (không bắt buộc giám đốc xác nhận).
     /// </summary>
     [HttpPost("sessions/{id:int}/confirm")]
-    public async Task<ActionResult> AccountantConfirmSession(int id, [FromBody] ReviewInventorySessionDTO dto)
+    public async Task<ActionResult> DepartmentHeadFinishInventoryResolution(int id, [FromBody] ReviewInventorySessionDTO dto)
     {
-        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
-        if (gate != null) return gate;
+        var actorGate = await EnsureDepartmentHeadOrAdminForSessionAsync(id);
+        if (actorGate != null) return actorGate;
 
         var session = await _context.InventorySessions.FindAsync(id);
         if (session == null)
@@ -1211,22 +1172,23 @@ public class InventoryController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        return Ok(new { message = "Đã hoàn tất xử lý chênh lệch trên sổ sách.", sessionId = id });
+        return Ok(new
+        {
+            message = "Đã hoàn tất. Phiên kiểm kê được đánh dấu Đã xử lý.",
+            sessionId = id
+        });
     }
 
     /// <summary>
     /// POST /api/inventory/sessions/{sessionId}/discrepancies/{discrepancyId}/apply-actual —
-    /// Kế toán: cập nhật sổ (trạng thái, vị trí, người phụ trách, giá trị) theo kết quả thực tế đã ghi nhận; đánh dấu dòng chênh lệch đã xử lý (giữ trong báo cáo).
+    /// Trưởng phòng (phòng ban phiên) hoặc Admin: cập nhật sổ theo kết quả thực tế đã ghi nhận; đánh dấu dòng chênh lệch đã xử lý.
     /// Chỉ khi phiên ở trạng thái Chờ xử lý.
     /// </summary>
     [HttpPost("sessions/{sessionId:int}/discrepancies/{discrepancyId:int}/apply-actual")]
     public async Task<ActionResult> AccountantApplyDiscrepancyActual(int sessionId, int discrepancyId)
     {
-        var roleGate = await EnsureInventoryAccountantOrAdminAsync();
-        if (roleGate != null) return roleGate;
-
-        var gate = await EnsureInventorySessionDepartmentAccessAsync(sessionId);
-        if (gate != null) return gate;
+        var actorGate = await EnsureDepartmentHeadOrAdminForSessionAsync(sessionId);
+        if (actorGate != null) return actorGate;
 
         var discrepancy = await _context.InventoryDiscrepancies
             .Include(d => d.Task)
@@ -1623,8 +1585,8 @@ public class InventoryController : ControllerBase
         return null;
     }
 
-    /// <summary>Kế toán / Admin: được ghi nhận cập nhật sổ từ chênh lệch kiểm kê.</summary>
-    private async Task<ActionResult?> EnsureInventoryAccountantOrAdminAsync()
+    /// <summary>Trưởng phòng (đúng phòng ban phiên) hoặc Admin: cập nhật sổ / hoàn tất xử lý chênh lệch kiểm kê.</summary>
+    private async Task<ActionResult?> EnsureDepartmentHeadOrAdminForSessionAsync(int sessionId)
     {
         if (!TryGetCurrentUserId(out var userId))
             return Unauthorized();
@@ -1635,17 +1597,37 @@ public class InventoryController : ControllerBase
             .Select(ur => ur.Role.Code)
             .ToListAsync();
 
-        if (!roleCodes.Any(IsAccountantOrAdminRole))
+        if (roleCodes.Any(IsAdminRoleCode))
+            return null;
+
+        if (!roleCodes.Any(IsDepartmentHeadRole))
+            return Forbid();
+
+        var sessionDeptId = await _context.InventorySessions
+            .AsNoTracking()
+            .Where(s => s.SessionId == sessionId)
+            .Select(s => (int?)s.DepartmentId)
+            .FirstOrDefaultAsync();
+        if (!sessionDeptId.HasValue)
+            return NotFound();
+
+        var userDeptId = await _context.Employees
+            .AsNoTracking()
+            .Where(e => e.UserId == userId)
+            .Select(e => (int?)e.DepartmentId)
+            .FirstOrDefaultAsync();
+
+        if (!userDeptId.HasValue || userDeptId.Value != sessionDeptId.Value)
             return Forbid();
 
         return null;
     }
 
-    private static bool IsAccountantOrAdminRole(string? code)
+    private static bool IsAdminRoleCode(string? code)
     {
         if (string.IsNullOrWhiteSpace(code)) return false;
         var c = code.Trim().ToLowerInvariant().Replace(' ', '_');
-        return c is "accountant" or "admin" or "kế_toán" or "ke_toan";
+        return c is "admin";
     }
 
     private async Task CloseCurrentAssetLocationsExceptAsync(

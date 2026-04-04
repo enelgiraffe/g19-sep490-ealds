@@ -105,12 +105,8 @@ function inferNotificationLink(title: string, content: string | null, refId: num
   if (refId == null) return '/notifications';
   const t = title.toLowerCase();
   if (t.includes('chờ xác nhận') || t.includes('cho xac nhan')) return `/inventory-review/${refId}`;
-  if (
-    t.includes('xử lý chênh lệch') ||
-    t.includes('xu ly chenh lech') ||
-    (t.includes('chênh lệch') && t.includes('kế toán'))
-  ) {
-    return '/accountant-inventory';
+  if (t.includes('xử lý chênh lệch') || t.includes('xu ly chenh lech')) {
+    return refId != null ? `/inventory-review/${refId}` : '/inventory';
   }
   return `/inventory/${refId}`;
 }
