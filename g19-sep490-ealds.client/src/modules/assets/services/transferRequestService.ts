@@ -71,6 +71,28 @@ export interface TransferRequestListItem {
   isReceiverConfirmed: boolean;
 }
 
+export interface TransferHandoverDetails {
+  side: string;
+  protocolCode: string;
+  assetRequestId: number;
+  fromDepartment: string;
+  toDepartment: string;
+  instanceCode: string;
+  assetCode: string;
+  assetName: string;
+  summary: string;
+}
+
+export interface TransferHandoverRecordItem {
+  transferHandoverRecordId: number;
+  side: string;
+  actionByUserId: number;
+  actionByUserName?: string | null;
+  occurredAt: string;
+  details: TransferHandoverDetails;
+  userNote?: string | null;
+}
+
 export const transferRequestService = {
   async getList(): Promise<TransferRequestListItem[]> {
     const response = await transferApi.get<TransferRequestListItem[]>('/api/Assets/Requests/transfer');
@@ -95,16 +117,31 @@ export const transferRequestService = {
     await transferApi.delete(`/api/Assets/Requests/transfer/${assetRequestId}`);
   },
 
-  async confirmSend(assetRequestId: number): Promise<{ message: string; isReady: boolean }> {
-    const response = await transferApi.post<{ message: string; isReady: boolean }>(
-      `/api/Assets/Requests/transfer/${assetRequestId}/confirm-send`,
+  async getHandoverRecords(assetRequestId: number): Promise<TransferHandoverRecordItem[]> {
+    const response = await transferApi.get<TransferHandoverRecordItem[]>(
+      `/api/Assets/Requests/transfer/${assetRequestId}/handover-records`,
     );
     return response.data;
   },
 
-  async confirmReceive(assetRequestId: number): Promise<{ message: string; isReady: boolean }> {
+  async confirmSend(
+    assetRequestId: number,
+    payload?: { note?: string | null },
+  ): Promise<{ message: string; isReady: boolean }> {
+    const response = await transferApi.post<{ message: string; isReady: boolean }>(
+      `/api/Assets/Requests/transfer/${assetRequestId}/confirm-send`,
+      payload ?? {},
+    );
+    return response.data;
+  },
+
+  async confirmReceive(
+    assetRequestId: number,
+    payload?: { note?: string | null },
+  ): Promise<{ message: string; isReady: boolean }> {
     const response = await transferApi.post<{ message: string; isReady: boolean }>(
       `/api/Assets/Requests/transfer/${assetRequestId}/confirm-receive`,
+      payload ?? {},
     );
     return response.data;
   },

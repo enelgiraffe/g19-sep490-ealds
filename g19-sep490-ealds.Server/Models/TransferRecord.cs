@@ -44,4 +44,6 @@ public partial class TransferRecord
     public virtual AssetLocation ToLocation { get; set; } = null!;
 
     public virtual User? ToUser { get; set; }
+
+    public virtual ICollection<TransferHandoverRecord> HandoverRecords { get; set; } = new List<TransferHandoverRecord>();
 }

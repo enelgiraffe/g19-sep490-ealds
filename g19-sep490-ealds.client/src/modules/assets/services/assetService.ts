@@ -164,6 +164,8 @@ export interface GetAssetInstancesParams {
   status?: number;
   assetTypeId?: number;
   warehouseId?: number;
+  /** Filter to instances whose current AssetLocation is in this department (e.g. transfer “from” department). */
+  currentDepartmentId?: number;
   minPrice?: number;
   maxPrice?: number;
   fromDate?: string;

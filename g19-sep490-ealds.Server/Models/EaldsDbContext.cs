@@ -101,6 +101,8 @@ public partial class EaldsDbContext : DbContext
 
     public virtual DbSet<TransferRecord> TransferRecords { get; set; }
 
+    public virtual DbSet<TransferHandoverRecord> TransferHandoverRecords { get; set; }
+
     public virtual DbSet<User> Users { get; set; }
 
     public virtual DbSet<UserRole> UserRoles { get; set; }
@@ -1227,6 +1229,28 @@ public partial class EaldsDbContext : DbContext
             entity.HasOne(d => d.ToUser).WithMany(p => p.TransferRecordToUsers)
                 .HasForeignKey(d => d.ToUserId)
                 .HasConstraintName("FK__TransferR__ToUse__3587F3E0");
+        });
+
+        modelBuilder.Entity<TransferHandoverRecord>(entity =>
+        {
+            entity.HasKey(e => e.TransferHandoverRecordId);
+
+            entity.ToTable("TransferHandoverRecord");
+
+            entity.Property(e => e.Side).HasMaxLength(20);
+            entity.Property(e => e.DetailsJson).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.UserNote).HasMaxLength(2000);
+            entity.Property(e => e.OccurredAt).HasColumnType("datetime2");
+
+            entity.HasOne(d => d.Transfer)
+                .WithMany(p => p.HandoverRecords)
+                .HasForeignKey(d => d.TransferId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(d => d.ActionByUser)
+                .WithMany()
+                .HasForeignKey(d => d.ActionByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<User>(entity =>

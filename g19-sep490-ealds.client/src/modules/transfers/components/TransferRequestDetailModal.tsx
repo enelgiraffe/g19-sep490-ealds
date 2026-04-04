@@ -1,5 +1,10 @@
+import { useEffect, useState } from 'react';
 import './TransferRequestDetailModal.css';
-import type { TransferRequestListItem } from '../../assets/services/transferRequestService';
+import {
+  transferRequestService,
+  type TransferHandoverRecordItem,
+  type TransferRequestListItem,
+} from '../../assets/services/transferRequestService';
 
 const STATUS_MAP: Record<
   number,
@@ -31,11 +36,53 @@ function formatDate(iso?: string | null): string {
   }
 }
 
+function formatDateTime(iso?: string | null): string {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString('vi-VN');
+  } catch {
+    return iso ?? '—';
+  }
+}
+
+function handoverSideLabel(side: string): string {
+  const s = (side || '').toLowerCase();
+  if (s === 'sender') return 'Bên gửi';
+  if (s === 'receiver') return 'Bên nhận';
+  return side || '—';
+}
+
 export function TransferRequestDetailModal({
   open,
   onClose,
   request,
 }: TransferRequestDetailModalProps) {
+  const [handoverLogs, setHandoverLogs] = useState<TransferHandoverRecordItem[]>([]);
+  const [handoverLoading, setHandoverLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !request?.assetRequestId) {
+      setHandoverLogs([]);
+      return;
+    }
+    let cancelled = false;
+    setHandoverLoading(true);
+    transferRequestService
+      .getHandoverRecords(request.assetRequestId)
+      .then((list) => {
+        if (!cancelled) setHandoverLogs(list);
+      })
+      .catch(() => {
+        if (!cancelled) setHandoverLogs([]);
+      })
+      .finally(() => {
+        if (!cancelled) setHandoverLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, request?.assetRequestId]);
+
   if (!open || !request) return null;
 
   const statusConfig =
@@ -138,6 +185,43 @@ export function TransferRequestDetailModal({
                   </div>
                 </div>
               </div>
+            </div>
+
+            <div className="transfer-detail-form__section">
+              <h3 className="transfer-detail-section-title">Biên bản bàn giao / tiếp nhận</h3>
+              {handoverLoading ? (
+                <div className="transfer-detail-info-value">Đang tải…</div>
+              ) : handoverLogs.length === 0 ? (
+                <div className="transfer-detail-info-value">
+                  Chưa có biên bản (sau khi bên gửi / bên nhận xác nhận, thông tin sẽ hiển thị tại đây).
+                </div>
+              ) : (
+                <ul className="transfer-detail-handover-list">
+                  {handoverLogs.map((log) => (
+                    <li key={log.transferHandoverRecordId} className="transfer-detail-handover-item">
+                      <div className="transfer-detail-handover-item__meta">
+                        <strong>{handoverSideLabel(log.side)}</strong>
+                        <span className="transfer-detail-handover-item__time">
+                          {formatDateTime(log.occurredAt)}
+                        </span>
+                      </div>
+                      <div className="transfer-detail-info-value transfer-detail-info-value--multiline">
+                        {log.details?.summary || '—'}
+                      </div>
+                      <div className="transfer-detail-handover-item__actor">
+                        Người thực hiện:{' '}
+                        {log.actionByUserName?.trim() || `User #${log.actionByUserId}`}
+                      </div>
+                      {log.userNote ? (
+                        <div className="transfer-detail-handover-item__note">
+                          <span className="transfer-detail-handover-item__note-label">Ghi chú:</span>{' '}
+                          {log.userNote}
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </div>

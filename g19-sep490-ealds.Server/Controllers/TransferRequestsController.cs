@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -98,6 +99,81 @@ public class TransferRequestsController : ControllerBase
             .ToListAsync();
 
         return Ok(list);
+    }
+
+    /// <summary>
+    /// GET /api/Assets/Requests/transfer/{assetRequestId}/handover-records — biên bản bàn giao theo từng thao tác gửi/nhận.
+    /// </summary>
+    [HttpGet("{id:int}/handover-records")]
+    public async Task<ActionResult<IEnumerable<TransferHandoverRecordItemDto>>> GetHandoverRecords(int id)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            return Unauthorized();
+
+        var isAccountant = User.IsInRole("ACCOUNTANT");
+        var userDeptId = await _db.Employees.AsNoTracking()
+            .Where(e => e.UserId == userId)
+            .Select(e => (int?)e.DepartmentId)
+            .FirstOrDefaultAsync();
+
+        var transfer = await _db.TransferRecords
+            .AsNoTracking()
+            .Include(t => t.FromLocation)
+            .Include(t => t.ToLocation)
+            .Include(t => t.AssetRequest)
+            .FirstOrDefaultAsync(t => t.AssetRequestId == id);
+
+        if (transfer == null)
+            return NotFound("Transfer request not found");
+
+        var ar = transfer.AssetRequest;
+        if (ar == null || ar.RequestTypeId != _transferRequestTypeId)
+            return NotFound("Transfer request not found");
+
+        var canView = isAccountant
+            || ar.CreatedBy == userId
+            || (userDeptId.HasValue && transfer.FromLocation.DepartmentId == userDeptId.Value)
+            || (userDeptId.HasValue && transfer.ToLocation.DepartmentId == userDeptId.Value);
+        if (!canView)
+            return Forbid();
+
+        var handovers = await _db.TransferHandoverRecords
+            .AsNoTracking()
+            .Where(h => h.TransferId == transfer.TransferId)
+            .OrderBy(h => h.OccurredAt)
+            .ToListAsync();
+
+        var result = new List<TransferHandoverRecordItemDto>(handovers.Count);
+        foreach (var h in handovers)
+        {
+            TransferHandoverDetailsDto details;
+            try
+            {
+                details = JsonSerializer.Deserialize<TransferHandoverDetailsDto>(h.DetailsJson) ?? new TransferHandoverDetailsDto();
+            }
+            catch
+            {
+                details = new TransferHandoverDetailsDto();
+            }
+
+            var actorName = await _db.Employees.AsNoTracking()
+                .Where(e => e.UserId == h.ActionByUserId)
+                .Select(e => e.Name)
+                .FirstOrDefaultAsync();
+
+            result.Add(new TransferHandoverRecordItemDto
+            {
+                TransferHandoverRecordId = h.TransferHandoverRecordId,
+                Side = h.Side,
+                ActionByUserId = h.ActionByUserId,
+                ActionByUserName = actorName,
+                OccurredAt = h.OccurredAt,
+                Details = details,
+                UserNote = h.UserNote
+            });
+        }
+
+        return Ok(result);
     }
 
     [HttpPost]
@@ -285,7 +361,7 @@ public class TransferRequestsController : ControllerBase
     }
 
     [HttpPost("{id:int}/confirm-send")]
-    public async Task<IActionResult> ConfirmSend(int id)
+    public async Task<IActionResult> ConfirmSend(int id, [FromBody] TransferHandoverConfirmBody? body)
     {
         if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
             return Unauthorized();
@@ -295,8 +371,9 @@ public class TransferRequestsController : ControllerBase
         if (ar.Status != 4) return BadRequest("Chỉ được xác nhận gửi khi yêu cầu đã được Giám đốc phê duyệt (Status = 4).");
 
         var transfer = await _db.TransferRecords
-            .Include(t => t.FromLocation)
-            .Include(t => t.ToLocation)
+            .Include(t => t.FromLocation).ThenInclude(fl => fl.Department)
+            .Include(t => t.ToLocation).ThenInclude(tl => tl.Department)
+            .Include(t => t.AssetInstance).ThenInclude(ai => ai.Asset)
             .FirstOrDefaultAsync(t => t.AssetRequestId == id);
         if (transfer == null) return NotFound("Transfer record not found");
 
@@ -313,8 +390,23 @@ public class TransferRequestsController : ControllerBase
             || (userDeptId.HasValue && transfer.FromLocation.DepartmentId == userDeptId.Value);
         if (!canSend) return Forbid();
 
+        var note = string.IsNullOrWhiteSpace(body?.Note) ? null : body!.Note!.Trim();
+        if (note != null && note.Length > 2000)
+            return BadRequest("Ghi chú không quá 2000 ký tự.");
+
+        var occurred = DateTime.UtcNow;
+        _db.TransferHandoverRecords.Add(new TransferHandoverRecord
+        {
+            TransferId = transfer.TransferId,
+            Side = "Sender",
+            ActionByUserId = userId,
+            OccurredAt = occurred,
+            DetailsJson = BuildHandoverDetailsJson(transfer, "Sender"),
+            UserNote = note
+        });
+
         transfer.IsSenderConfirmed = true;
-        transfer.SenderConfirmedAt = DateTime.UtcNow;
+        transfer.SenderConfirmedAt = occurred;
         var senderUserRole = await _db.UserRoles
             .AsNoTracking()
             .FirstOrDefaultAsync(ur => ur.UserId == userId);
@@ -338,7 +430,7 @@ public class TransferRequestsController : ControllerBase
     }
 
     [HttpPost("{id:int}/confirm-receive")]
-    public async Task<IActionResult> ConfirmReceive(int id)
+    public async Task<IActionResult> ConfirmReceive(int id, [FromBody] TransferHandoverConfirmBody? body)
     {
         if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
             return Unauthorized();
@@ -348,8 +440,9 @@ public class TransferRequestsController : ControllerBase
         if (ar.Status != 4) return BadRequest("Chỉ được xác nhận nhận khi yêu cầu đã được Giám đốc phê duyệt (Status = 4).");
 
         var transfer = await _db.TransferRecords
-            .Include(t => t.FromLocation)
-            .Include(t => t.ToLocation)
+            .Include(t => t.FromLocation).ThenInclude(fl => fl.Department)
+            .Include(t => t.ToLocation).ThenInclude(tl => tl.Department)
+            .Include(t => t.AssetInstance).ThenInclude(ai => ai.Asset)
             .FirstOrDefaultAsync(t => t.AssetRequestId == id);
         if (transfer == null) return NotFound("Transfer record not found");
 
@@ -367,8 +460,23 @@ public class TransferRequestsController : ControllerBase
             || (userDeptId.HasValue && transfer.ToLocation.DepartmentId == userDeptId.Value);
         if (!canReceive) return Forbid();
 
+        var note = string.IsNullOrWhiteSpace(body?.Note) ? null : body!.Note!.Trim();
+        if (note != null && note.Length > 2000)
+            return BadRequest("Ghi chú không quá 2000 ký tự.");
+
+        var occurred = DateTime.UtcNow;
+        _db.TransferHandoverRecords.Add(new TransferHandoverRecord
+        {
+            TransferId = transfer.TransferId,
+            Side = "Receiver",
+            ActionByUserId = userId,
+            OccurredAt = occurred,
+            DetailsJson = BuildHandoverDetailsJson(transfer, "Receiver"),
+            UserNote = note
+        });
+
         transfer.IsReceiverConfirmed = true;
-        transfer.ReceiverConfirmedAt = DateTime.UtcNow;
+        transfer.ReceiverConfirmedAt = occurred;
         var receiverUserRole = await _db.UserRoles
             .AsNoTracking()
             .FirstOrDefaultAsync(ur => ur.UserId == userId);
@@ -420,5 +528,34 @@ public class TransferRequestsController : ControllerBase
                 toLocation.StartDate = todayDate;
             }
         }
+    }
+
+    private static string BuildHandoverDetailsJson(TransferRecord transfer, string side)
+    {
+        var fromDept = transfer.FromLocation.Department?.Name ?? "";
+        var toDept = transfer.ToLocation.Department?.Name ?? "";
+        var instanceCode = transfer.AssetInstance?.InstanceCode ?? "";
+        var assetCode = transfer.AssetInstance?.Asset?.Code ?? "";
+        var assetName = transfer.AssetInstance?.Asset?.Name ?? "";
+        string summary;
+        if (string.Equals(side, "Sender", StringComparison.OrdinalIgnoreCase))
+            summary = $"Bên gửi bàn giao tài sản {instanceCode} — {assetName} từ {fromDept} đến {toDept}.";
+        else
+            summary = $"Bên nhận tiếp nhận tài sản {instanceCode} — {assetName} tại {toDept} (xuất từ {fromDept}).";
+
+        var dto = new TransferHandoverDetailsDto
+        {
+            Side = side,
+            ProtocolCode = "SBB" + transfer.TransferId,
+            AssetRequestId = transfer.AssetRequestId,
+            FromDepartment = fromDept,
+            ToDepartment = toDept,
+            InstanceCode = instanceCode,
+            AssetCode = assetCode,
+            AssetName = assetName,
+            Summary = summary
+        };
+
+        return JsonSerializer.Serialize(dto);
     }
 }

@@ -30,6 +30,7 @@ public class AssetInstancesController : ControllerBase
         [FromQuery] AssetStatus? status,
         [FromQuery] int? assetTypeId,
         [FromQuery] int? warehouseId,
+        [FromQuery] int? currentDepartmentId,
         [FromQuery] decimal? minPrice,
         [FromQuery] decimal? maxPrice,
         [FromQuery] DateOnly? fromDate,
@@ -62,6 +63,10 @@ public class AssetInstancesController : ControllerBase
 
         if (warehouseId.HasValue)
             query = query.Where(i => i.WarehouseId == warehouseId.Value);
+
+        if (currentDepartmentId.HasValue)
+            query = query.Where(i =>
+                i.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == currentDepartmentId.Value));
 
         if (minPrice.HasValue)
             query = query.Where(i => i.CurrentValue >= minPrice.Value);

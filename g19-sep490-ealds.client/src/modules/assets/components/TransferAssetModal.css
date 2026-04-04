@@ -154,8 +154,20 @@
 
 .transfer-asset-actions {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
   margin-bottom: 10px;
+}
+
+.transfer-asset-hint {
+  margin: 0;
+  max-width: 100%;
+  align-self: stretch;
+  text-align: right;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #6b7280;
 }
 
 .transfer-btn-pick-asset {
@@ -169,9 +181,14 @@
   font-weight: 500;
 }
 
-.transfer-btn-pick-asset:hover {
+.transfer-btn-pick-asset:hover:not(:disabled) {
   border-color: #fe3720;
   color: #fe3720;
+}
+
+.transfer-btn-pick-asset:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .transfer-modal__footer {

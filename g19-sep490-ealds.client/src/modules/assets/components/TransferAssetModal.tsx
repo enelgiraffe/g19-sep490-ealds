@@ -100,6 +100,21 @@ export function TransferAssetModal({
     }
   }, [open, assetInfo]);
 
+  useEffect(() => {
+    if (!open) return;
+    const deptId = fromLocationId ? Number(fromLocationId) : NaN;
+    if (!Number.isFinite(deptId) || deptId <= 0) {
+      if (!assetInfo) setSelectedAssets([]);
+      return;
+    }
+    setSelectedAssets((prev) => prev.filter((a) => a.currentDepartmentId === deptId));
+  }, [open, fromLocationId, assetInfo]);
+
+  const fromDeptNum = fromLocationId ? Number(fromLocationId) : NaN;
+  const validFromDepartmentId =
+    Number.isFinite(fromDeptNum) && fromDeptNum > 0 ? fromDeptNum : null;
+  const canPickAssets = !!assetInfo || validFromDepartmentId != null;
+
   const handleSubmit = () => {
     let hasError = false;
     if (!transferDate) {
@@ -262,7 +277,16 @@ export function TransferAssetModal({
               <button
                 type="button"
                 className="transfer-btn-pick-asset"
-                onClick={() => setIsSelectAssetsOpen(true)}
+                disabled={!canPickAssets}
+                title={
+                  !canPickAssets
+                    ? 'Vui lòng chọn phòng ban / vị trí nguồn trước khi chọn cá thể'
+                    : undefined
+                }
+                onClick={() => {
+                  if (!canPickAssets) return;
+                  setIsSelectAssetsOpen(true);
+                }}
               >
                 Chọn cá thể
               </button>
@@ -328,6 +352,7 @@ export function TransferAssetModal({
         onClose={() => setIsSelectAssetsOpen(false)}
         initialSelectedIds={selectedAssets.map((a) => a.assetId)}
         enforceSameDepartment
+        restrictToDepartmentId={validFromDepartmentId}
         onConfirm={(assets) => {
           setSelectedAssets(assets);
           const deptIds = Array.from(new Set(assets.map((a) => a.currentDepartmentId).filter((x) => x != null)));

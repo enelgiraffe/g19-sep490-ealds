@@ -63,6 +63,7 @@ export function TransfersPage() {
   const [confirmModal, setConfirmModal] = useState<{ type: 'send' | 'receive'; row: TableRow } | null>(
     null,
   );
+  const [handoverNote, setHandoverNote] = useState('');
   const [confirmSubmitting, setConfirmSubmitting] = useState(false);
   const tableHostRef = useRef<HTMLDivElement | null>(null);
   const [page, setPage] = useState(1);
@@ -97,6 +98,10 @@ export function TransfersPage() {
   useEffect(() => {
     loadList();
   }, []);
+
+  useEffect(() => {
+    if (confirmModal) setHandoverNote('');
+  }, [confirmModal]);
 
   const isAccountant = (profile?.role ?? '').toUpperCase() === 'ACCOUNTANT';
 
@@ -545,6 +550,20 @@ export function TransfersPage() {
                     Thời điểm xác nhận: {formatDateTime(new Date().toISOString())}
                   </div>
                 </div>
+
+                <div className="mark-damaged-form__item" style={{ marginTop: 16 }}>
+                  <label htmlFor="transfer-handover-note">Ghi chú biên bản (tuỳ chọn)</label>
+                  <textarea
+                    id="transfer-handover-note"
+                    className="mark-damaged-textarea"
+                    rows={3}
+                    maxLength={2000}
+                    value={handoverNote}
+                    onChange={(e) => setHandoverNote(e.target.value)}
+                    placeholder="Ví dụ: tình trạng tài sản khi bàn giao, số seal, người chứng kiến…"
+                    disabled={confirmSubmitting}
+                  />
+                </div>
               </div>
             </div>
 
@@ -558,15 +577,20 @@ export function TransfersPage() {
                     return;
                   }
                   setConfirmSubmitting(true);
+                  const notePayload = handoverNote.trim() ? handoverNote.trim() : undefined;
                   try {
                     if (confirmModal.type === 'send') {
-                      const res = await transferRequestService.confirmSend(confirmModal.row.assetRequestId);
+                      const res = await transferRequestService.confirmSend(confirmModal.row.assetRequestId, {
+                        note: notePayload,
+                      });
                       message.success(res.message);
                       if (res.isReady) {
                         message.info('Đã hoàn tất bàn giao: vị trí tài sản đã được cập nhật.');
                       }
                     } else {
-                      const res = await transferRequestService.confirmReceive(confirmModal.row.assetRequestId);
+                      const res = await transferRequestService.confirmReceive(confirmModal.row.assetRequestId, {
+                        note: notePayload,
+                      });
                       message.success(res.message);
                       if (res.isReady) {
                         message.info('Đã hoàn tất bàn giao: vị trí tài sản đã được cập nhật.');
