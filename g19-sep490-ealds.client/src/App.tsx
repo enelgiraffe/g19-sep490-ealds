@@ -34,6 +34,7 @@ import { DepartmentsPage } from './modules/admin/pages/DepartmentsPage';
 import { UsersPage } from './modules/admin/pages/UsersPage';
 import { UserDetailPage } from './modules/admin/pages/UserDetailPage';
 import { CostRecordingPage } from './modules/cost-recording/pages/CostRecordingPage';
+import { AccountantAllocationsPage } from './modules/allocations/pages/AccountantAllocationsPage';
 import './App.css';
 
 function App() {
@@ -92,7 +93,7 @@ function App() {
           <Route path="accountant-inventory" element={<AccountantInventoryPage />} />
           <Route path="reports" element={<DirectorInventoryPage />} />
           <Route path="liquidation" element={<LiquidationPage />} />
-          <Route path="allocations" element={<ModulePlaceholder title="Cấp phát-Thu hồi" />} />
+          <Route path="allocations" element={<AccountantAllocationsPage />} />
           <Route path="cost-recording" element={<CostRecordingPage />} />
           <Route path="requests" element={<RequestsPage />} />
           <Route path="dashboard" element={<DirectorDashboardPage />} />

@@ -29,5 +29,7 @@ public partial class Department
 
     public virtual ICollection<InventorySession> InventorySessions { get; set; } = new List<InventorySession>();
 
+    public virtual ICollection<BudgetAllocation> BudgetAllocations { get; set; } = new List<BudgetAllocation>();
+
     public virtual User? UpdatedByNavigation { get; set; }
 }

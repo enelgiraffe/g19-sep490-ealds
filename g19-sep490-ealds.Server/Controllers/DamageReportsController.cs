@@ -15,8 +15,8 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class DamageReportsController : ControllerBase
 {
     private readonly EaldsDbContext _db;
-    private const int DamageRequestTypeId = 4;
     private readonly IAssetRequestNotificationService _requestNotifications;
+    private const int DamageRequestTypeId = 4;
     private const string DamageReportTitlePrefix = "Damage report -";
 
     public DamageReportsController(EaldsDbContext db, IAssetRequestNotificationService requestNotifications)

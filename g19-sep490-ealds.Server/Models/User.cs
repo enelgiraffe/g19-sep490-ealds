@@ -21,6 +21,8 @@ public partial class User
 
     public DateTime? ResetPasswordTokenExpiryTime { get; set; }
 
+    public virtual ICollection<BudgetAllocation> BudgetAllocationsSubmitted { get; set; } = new List<BudgetAllocation>();
+
     public virtual ICollection<Approval> Approvals { get; set; } = new List<Approval>();
 
     public virtual ICollection<AssetCapitalization> AssetCapitalizations { get; set; } = new List<AssetCapitalization>();
