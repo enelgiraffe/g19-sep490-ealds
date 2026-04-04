@@ -103,7 +103,7 @@ public class AccountantRejectController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        await _requestNotifications.NotifySenderDecisionAsync(ar.AssetRequestId, false, dto.ApprovedBy);
+        await _requestNotifications.NotifySenderDecisionAsync(ar.AssetRequestId, false, dto.ApprovedBy, dto.Comment);
 
         return Ok(new { assetRequestId = ar.AssetRequestId, status = ar.Status });
     }

@@ -96,7 +96,7 @@ public class AccountantApproveController : ControllerBase
             });
 
             await _db.SaveChangesAsync();
-            await _requestNotifications.NotifySenderDecisionAsync(ar.AssetRequestId, true, dto.ApprovedBy);
+            await _requestNotifications.NotifySenderDecisionAsync(ar.AssetRequestId, true, dto.ApprovedBy, dto.Comment);
             return Ok(new { assetRequestId = ar.AssetRequestId, status = ar.Status });
         }
 
@@ -144,7 +144,7 @@ public class AccountantApproveController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        await _requestNotifications.NotifySenderDecisionAsync(ar.AssetRequestId, true, dto.ApprovedBy);
+        await _requestNotifications.NotifySenderDecisionAsync(ar.AssetRequestId, true, dto.ApprovedBy, dto.Comment);
 
         return Ok(new { assetRequestId = ar.AssetRequestId, status = ar.Status });
     }
