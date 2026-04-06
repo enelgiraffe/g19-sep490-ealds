@@ -212,7 +212,7 @@ export const assetService = {
   },
 
   async getAssetTypes(): Promise<AssetTypeItem[]> {
-    const response = await assetApi.get<AssetTypeItem[]>('/api/assettypes');
+    const response = await assetApi.get<AssetTypeItem[]>('/api/AssetTypes');
     return response.data;
   },
 

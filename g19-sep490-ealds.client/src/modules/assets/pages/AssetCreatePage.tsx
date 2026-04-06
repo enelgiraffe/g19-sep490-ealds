@@ -1,6 +1,11 @@
-import { FormEvent, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { assetService, type CreateAssetPayload } from '../services/assetService';
+import {
+  assetService,
+  type AssetTypeItem,
+  type CreateAssetPayload,
+} from '../services/assetService';
+import { getCurrentUserId } from '../../inventory/services/inventoryService';
 import { useAppStore } from '../../../stores/appStore';
 import './AssetCreatePage.css';
 
@@ -48,6 +53,24 @@ interface AllocationForm {
 interface ExtraInfoForm {
   customFieldKey: string;
   contactInfo: string;
+}
+
+function toDateInputValue(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function parseLocalDateOnly(isoYmd: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoYmd.trim());
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return dt;
 }
 
 export function AssetCreatePage() {
@@ -104,6 +127,32 @@ export function AssetCreatePage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [assetTypes, setAssetTypes] = useState<AssetTypeItem[]>([]);
+  const [assetTypesLoading, setAssetTypesLoading] = useState(true);
+  const [assetTypesError, setAssetTypesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setAssetTypesLoading(true);
+    setAssetTypesError(null);
+    void assetService
+      .getAssetTypes()
+      .then((list) => {
+        if (!cancelled) setAssetTypes(list);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAssetTypesError('Không tải được danh sách loại tài sản.');
+          setAssetTypes([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAssetTypesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -113,6 +162,30 @@ export function AssetCreatePage() {
     }
     if (!general.warehouseId || Number(general.warehouseId) <= 0) {
       alert('Vui lòng chọn kho.');
+      return;
+    }
+
+    const qty = Number(general.quantity);
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isInteger(qty)) {
+      alert('Số lượng phải là số nguyên lớn hơn 0.');
+      return;
+    }
+
+    const unitTrim = general.unit.trim();
+    if (!unitTrim) {
+      alert('Vui lòng chọn đơn vị tính.');
+      return;
+    }
+
+    const purchase = parseLocalDateOnly(general.purchaseDate);
+    if (!purchase) {
+      alert('Ngày mua không hợp lệ.');
+      return;
+    }
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    if (purchase > todayStart) {
+      alert('Ngày mua không được lớn hơn ngày hiện tại.');
       return;
     }
 
@@ -128,10 +201,10 @@ export function AssetCreatePage() {
       currentValue: Number(general.value || 0),
       warrantyEndDate: warranty.expiryDate || null,
       inUseDate: general.purchaseDate || null,
-      unit: general.unit || 'Cái',
-      quantity: Number(general.quantity || 1),
+      unit: unitTrim,
+      quantity: qty,
       warehouseId: Number(general.warehouseId),
-      createdBy: 0,
+      createdBy: getCurrentUserId(),
       depreciationPolicyId: depreciation.depreciationPolicyId
         ? Number(depreciation.depreciationPolicyId)
         : null,
@@ -219,12 +292,22 @@ export function AssetCreatePage() {
                   className="asset-create__select"
                   value={general.assetTypeId}
                   onChange={(e) => setGeneral({ ...general, assetTypeId: e.target.value })}
+                  disabled={assetTypesLoading}
                 >
-                  <option value="">Chọn loại tài sản</option>
-                  <option value="1">Máy móc</option>
-                  <option value="2">Thiết bị</option>
-                  <option value="3">Khác</option>
+                  <option value="">
+                    {assetTypesLoading ? 'Đang tải...' : 'Chọn loại tài sản'}
+                  </option>
+                  {assetTypes.map((t) => (
+                    <option key={t.assetTypeId} value={String(t.assetTypeId)}>
+                      {t.name}
+                    </option>
+                  ))}
                 </select>
+                {assetTypesError && (
+                  <p className="asset-create__error" role="alert">
+                    {assetTypesError}
+                  </p>
+                )}
               </div>
 
               <div className="asset-create__field">
@@ -241,21 +324,39 @@ export function AssetCreatePage() {
               <div className="asset-create__field asset-create__field--inline">
                 <div>
                   <label className="asset-create__label">Số lượng</label>
-                  <input
-                    type="number"
-                    min={1}
-                    className="asset-create__input"
-                    value={general.quantity}
-                    onChange={(e) => setGeneral({ ...general, quantity: e.target.value })}
-                  />
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  className="asset-create__input"
+                  value={general.quantity}
+                  onChange={(e) => setGeneral({ ...general, quantity: e.target.value })}
+                />
                 </div>
                 <div>
                   <label className="asset-create__label">Đơn vị tính</label>
-                  <input
-                    className="asset-create__input"
+                  <select
+                    className="asset-create__select"
                     value={general.unit}
                     onChange={(e) => setGeneral({ ...general, unit: e.target.value })}
-                  />
+                  >
+                    <option value="">Chọn đơn vị tính</option>
+                    <option value="Bộ">Bộ</option>
+                    <option value="Cái">Cái</option>
+                    <option value="Chiếc">Chiếc</option>
+                    <option value="Máy">Máy</option>
+                    <option value="Đôi">Đôi</option>
+                    <option value="Bình">Bình</option>
+                    <option value="Chai">Chai</option>
+                    <option value="Cuốn">Cuốn</option>
+                    <option value="Tập">Tập</option>
+                    <option value="Mét">Mét</option>
+                    <option value="Kiện">Kiện</option>
+                    <option value="Thùng">Thùng</option>
+                    <option value="Quyển">Quyển</option>
+                    <option value="Hộp">Hộp</option>
+                    <option value="Gói">Gói</option>
+                  </select>
                 </div>
               </div>
 
@@ -313,6 +414,7 @@ export function AssetCreatePage() {
                 </label>
                 <input
                   type="date"
+                  max={toDateInputValue(new Date())}
                   className="asset-create__input"
                   value={general.purchaseDate}
                   onChange={(e) => setGeneral({ ...general, purchaseDate: e.target.value })}

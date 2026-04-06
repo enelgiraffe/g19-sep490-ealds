@@ -346,11 +346,28 @@ export function AssetEditPage() {
                 </div>
                 <div>
                   <label className="asset-create__label">Đơn vị tính</label>
-                  <input
-                    className="asset-create__input"
+                  <select
+                    className="asset-create__select"
                     value={unit}
                     onChange={(e) => setUnit(e.target.value)}
-                  />
+                  >
+                    <option value="">Chọn đơn vị tính</option>
+                    <option value="Bộ">Bộ</option>
+                    <option value="Cái">Cái</option>
+                    <option value="Chiếc">Chiếc</option>
+                    <option value="Máy">Máy</option>
+                    <option value="Đôi">Đôi</option>
+                    <option value="Bình">Bình</option>
+                    <option value="Chai">Chai</option>
+                    <option value="Cuốn">Cuốn</option>
+                    <option value="Tập">Tập</option>
+                    <option value="Mét">Mét</option>
+                    <option value="Kiện">Kiện</option>
+                    <option value="Thùng">Thùng</option>
+                    <option value="Quyển">Quyển</option>
+                    <option value="Hộp">Hộp</option>
+                    <option value="Gói">Gói</option>
+                  </select>
                 </div>
               </div>
 

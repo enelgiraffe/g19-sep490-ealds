@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
@@ -302,6 +304,19 @@ public class AssetsController : ControllerBase
         if (await _context.Assets.AnyAsync(a => a.Code == dto.Code))
             return BadRequest(new { message = "Asset code already exists." });
 
+        if (dto.Quantity <= 0)
+            return BadRequest(new { message = "Quantity must be greater than 0." });
+
+        var unitTrim = dto.Unit.Trim();
+        if (string.IsNullOrWhiteSpace(unitTrim))
+            return BadRequest(new { message = "Unit of measure is required." });
+        if (!IsUnitOfMeasureNumericOk(unitTrim))
+            return BadRequest(new { message = "Đơn vị tính phải lớn hơn 0 khi nhập dạng số; hoặc nhập tên đơn vị (ví dụ: Cái, Bộ, kg)." });
+
+        var purchaseToday = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (dto.PurchaseDate > purchaseToday)
+            return BadRequest(new { message = "Purchase date cannot be in the future." });
+
         var asset = new Asset
         {
             Code = dto.Code,
@@ -313,7 +328,7 @@ public class AssetsController : ControllerBase
             Status = (int)AssetStatus.Available,
             WarrantyEndDate = dto.WarrantyEndDate,
             InUseDate = dto.InUseDate,
-            Unit = dto.Unit,
+            Unit = unitTrim,
             Quantity = dto.Quantity,
             WarehouseId = dto.WarehouseId,
             CreatedBy = dto.CreatedBy
@@ -408,7 +423,15 @@ public class AssetsController : ControllerBase
         if (dto.Status.HasValue) asset.Status = (int)dto.Status.Value;
         if (dto.WarrantyEndDate.HasValue) asset.WarrantyEndDate = dto.WarrantyEndDate;
         if (dto.InUseDate.HasValue) asset.InUseDate = dto.InUseDate;
-        if (dto.Unit != null) asset.Unit = dto.Unit;
+        if (dto.Unit != null)
+        {
+            var u = dto.Unit.Trim();
+            if (string.IsNullOrWhiteSpace(u))
+                return BadRequest(new { message = "Đơn vị tính không được để trống." });
+            if (!IsUnitOfMeasureNumericOk(u))
+                return BadRequest(new { message = "Đơn vị tính phải lớn hơn 0 khi nhập dạng số; hoặc nhập tên đơn vị (ví dụ: Cái, Bộ, kg)." });
+            asset.Unit = u;
+        }
         if (dto.Quantity.HasValue) asset.Quantity = dto.Quantity.Value;
         if (dto.WarehouseId.HasValue)
         {
@@ -861,5 +884,15 @@ public class AssetsController : ControllerBase
         }).ToList();
 
         return dto;
+    }
+
+    /// <summary>
+    /// Text units (e.g. "Cái", "kg") are valid. If the entire value is numeric, it must be &gt; 0.
+    /// </summary>
+    private static bool IsUnitOfMeasureNumericOk(string trimmedUnit)
+    {
+        if (!Regex.IsMatch(trimmedUnit, @"^-?\d+(\.\d+)?$"))
+            return true;
+        return decimal.TryParse(trimmedUnit, NumberStyles.Number, CultureInfo.InvariantCulture, out var n) && n > 0;
     }
 }
