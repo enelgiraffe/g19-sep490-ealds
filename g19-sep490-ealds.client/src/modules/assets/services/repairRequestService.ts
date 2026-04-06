@@ -46,7 +46,8 @@ export interface RepairRequestListItem {
   fromDepartment: string;
   status: number;
   statusName: string;
-  reason?: string | null;
+  /** Sửa chữa: tình trạng hỏng hóc (RepairTask). */
+  damageCondition?: string | null;
   requestDescription?: string | null;
   fromDepartmentId: number;
   createdBy: number;
@@ -67,7 +68,7 @@ export interface DamagedInstancePendingItem {
 export interface CreateRepairRequestPayload {
   assetInstanceId: number;
   createdBy: number;
-  reason: string;
+  damageCondition: string;
   repairKind: string;
   estimatedCost?: number;
   requestTypeId?: number;
@@ -94,7 +95,7 @@ export const repairRequestService = {
     const body = {
       assetInstanceId: payload.assetInstanceId,
       createdBy: payload.createdBy,
-      reason: payload.reason,
+      damageCondition: payload.damageCondition,
       repairKind: payload.repairKind,
       estimatedCost: payload.estimatedCost ?? 0,
       requestTypeId: payload.requestTypeId ?? 4,

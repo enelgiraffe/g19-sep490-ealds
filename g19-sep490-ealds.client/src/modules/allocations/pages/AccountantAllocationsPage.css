@@ -1,4 +1,4 @@
-/* Cấp phát & Thu hồi — aligned with cost-recording / asset pages */
+/* Cấp phát & Hoàn trả — aligned with cost-recording / asset pages */
 .alloc-page {
   display: flex;
   flex-direction: column;

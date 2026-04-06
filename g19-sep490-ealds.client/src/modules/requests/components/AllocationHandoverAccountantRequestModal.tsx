@@ -117,7 +117,7 @@ export function AllocationHandoverAccountantRequestModal({
           approvedBy: userId,
           comment: comment.trim() || null,
         });
-        message.success(isAlloc ? 'Đã duyệt và tạo đơn cấp phát.' : 'Đã duyệt và tạo đơn thu hồi.');
+        message.success(isAlloc ? 'Đã duyệt và tạo đơn cấp phát.' : 'Đã duyệt và tạo đơn hoàn trả.');
       } else {
         await accountantRequestService.reject(item.assetRequestId, {
           approvedBy: userId,
@@ -191,7 +191,7 @@ export function AllocationHandoverAccountantRequestModal({
         {item.assetAllocationOrderId != null && (
           <div style={{ marginBottom: 16 }}>
             <Link to={`/allocations/${orderPath}/${item.assetAllocationOrderId}`}>
-              Mở đơn {isAlloc ? 'cấp phát' : 'thu hồi'} #{item.assetAllocationOrderId}
+              Mở đơn {isAlloc ? 'cấp phát' : 'hoàn trả'} #{item.assetAllocationOrderId}
             </Link>
           </div>
         )}

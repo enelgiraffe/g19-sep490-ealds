@@ -40,7 +40,7 @@ export interface AssetRequestDetailsResponse {
   repairTasks?: Array<{
     taskId: number;
     estimatedCost: number;
-    reason: string;
+    damageCondition: string;
     status: number;
   }>;
 }

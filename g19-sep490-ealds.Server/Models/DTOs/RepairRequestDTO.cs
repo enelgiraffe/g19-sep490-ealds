@@ -11,9 +11,10 @@ public class RepairRequestDTO
 
     public decimal EstimatedCost { get; set; }
 
-    public string Reason { get; set; } = null!;
+    /// <summary>Tình trạng hỏng hóc (lưu vào RepairTask.Reason).</summary>
+    public string DamageCondition { get; set; } = null!;
 
-    /// <summary>Hình thức / phạm vi sửa chữa đề xuất (bắt buộc khi tạo đơn từ tài sản hỏng).</summary>
+    /// <summary>Phương án sửa chữa đề xuất (bắt buộc khi tạo đơn từ tài sản hỏng).</summary>
     public string? RepairKind { get; set; }
 
     public int CreatedBy { get; set; }

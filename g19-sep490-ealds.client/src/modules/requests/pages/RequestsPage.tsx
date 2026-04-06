@@ -91,7 +91,7 @@ const DIRECTOR_STATUS_MAP: Record<number, { label: string; color: string }> = {
  * Status cho Bảo dưỡng / Sửa chữa: trưởng phòng ban gửi thẳng cho giám đốc (không qua kế toán).
  * Thực tế dữ liệu có thể còn lẫn các status cũ, nên map vẫn cover 0/4 để tránh hiển thị sai/trống.
  */
-/** Cấp phát / Thu hồi — kế toán duyệt (AllocationOrderWorkflow status). */
+/** Cấp phát / Hoàn trả — kế toán duyệt (AllocationOrderWorkflow status). */
 const ALLOC_HANDOVER_ACCOUNTANT_STATUS_MAP: Record<number, { label: string; color: string }> = {
   0: { label: 'Chờ duyệt', color: 'warning' },
   2: { label: 'Đã duyệt', color: 'processing' },
@@ -1055,7 +1055,7 @@ export function RequestsPage() {
                   { key: 'transfer', label: 'Điều chuyển' },
                   { key: 'liquidation', label: 'Thanh lý' },
                   { key: 'allocation', label: 'Cấp phát' },
-                  { key: 'handover', label: 'Thu hồi' },
+                  { key: 'handover', label: 'Hoàn trả' },
                 ] as const)
               : isDirectorRole
                 ? ([
@@ -2244,15 +2244,15 @@ export function RequestsPage() {
                               <>
                                 <div className="acct-transfer-form__section">
                                   <h3 className="acct-transfer-form__section-title">
-                                    Lý do hỏng
+                                    Tình trạng hỏng hóc
                                   </h3>
                                   <div className="acct-transfer-form__value">
-                                    {selectedDirectorItem.repairReason?.trim() || '—'}
+                                    {selectedDirectorItem.repairDamageCondition?.trim() || '—'}
                                   </div>
                                 </div>
                                 <div className="acct-transfer-form__section">
                                   <h3 className="acct-transfer-form__section-title">
-                                    Hình thức sửa chữa đề xuất
+                                    Phương án sửa chữa đề xuất
                                   </h3>
                                   <div className="acct-transfer-form__value">
                                     {selectedDirectorItem.description?.trim() || '—'}

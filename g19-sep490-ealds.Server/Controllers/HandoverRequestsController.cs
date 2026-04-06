@@ -84,7 +84,7 @@ public class HandoverRequestsController : ControllerBase
         var inHeadRole = await _db.UserRoles.AsNoTracking()
             .AnyAsync(ur => ur.UserId == actorUserId && ur.RoleId == _departmentHeadRoleId);
         if (!inHeadRole)
-            return StatusCode(403, new { message = "Chỉ trưởng phòng ban được gửi yêu cầu thu hồi." });
+            return StatusCode(403, new { message = "Chỉ trưởng phòng ban được gửi yêu cầu hoàn trả." });
 
         var departmentId = await _db.Employees.AsNoTracking()
             .Where(e => e.UserId == actorUserId)
@@ -98,7 +98,7 @@ public class HandoverRequestsController : ControllerBase
             return BadRequest(new
             {
                 message =
-                    $"RequestType {_handoverRequestTypeId} chưa có trong bảng RequestType. Chạy script SQL thu hồi hoặc cấu hình App:HandoverRequestTypeId."
+                    $"RequestType {_handoverRequestTypeId} chưa có trong bảng RequestType. Chạy script SQL hoàn trả hoặc cấu hình App:HandoverRequestTypeId."
             });
 
         var workflowId = await _db.RequestTypes.AsNoTracking()
@@ -106,7 +106,7 @@ public class HandoverRequestsController : ControllerBase
             .Select(rt => (int?)rt.WorkflowId)
             .FirstOrDefaultAsync();
         if (!workflowId.HasValue || workflowId.Value <= 0)
-            return BadRequest(new { message = "Loại yêu cầu thu hồi chưa gắn WorkflowId hợp lệ." });
+            return BadRequest(new { message = "Loại yêu cầu hoàn trả chưa gắn WorkflowId hợp lệ." });
 
         var initialStepId = await _db.WorkflowSteps.AsNoTracking()
             .Where(ws => ws.WorkflowId == workflowId.Value)
@@ -114,7 +114,7 @@ public class HandoverRequestsController : ControllerBase
             .Select(ws => (int?)ws.StepId)
             .FirstOrDefaultAsync();
         if (!initialStepId.HasValue)
-            return BadRequest(new { message = "Chưa cấu hình bước workflow cho loại yêu cầu thu hồi." });
+            return BadRequest(new { message = "Chưa cấu hình bước workflow cho loại yêu cầu hoàn trả." });
 
         var proposedJson = AllocationOrderWorkflow.BuildProposedDataJson(departmentId.Value, dto.Lines);
         if (!AllocationOrderWorkflow.TryParseProposedData(proposedJson, out var root, out var parseErr) || root == null)
@@ -131,7 +131,7 @@ public class HandoverRequestsController : ControllerBase
             AssetId = null,
             AssetInstanceId = null,
             Title = dto.Title!.Trim(),
-            Description = "Yêu cầu thu hồi tài sản từ phòng ban về kho",
+            Description = "Yêu cầu hoàn trả tài sản từ phòng ban về kho",
             ProposedData = proposedJson,
             Status = AllocationOrderWorkflow.RequestStatusPendingAccountant,
             CreatedBy = actorUserId,
@@ -151,7 +151,7 @@ public class HandoverRequestsController : ControllerBase
             Action = 0,
             ActionByUserId = actorUserId,
             ActionRoleId = _departmentHeadRoleId,
-            Comment = "Gửi yêu cầu thu hồi về kho",
+            Comment = "Gửi yêu cầu hoàn trả về kho",
             OccurredAt = DateTime.UtcNow
         });
         await _db.SaveChangesAsync();
@@ -346,7 +346,7 @@ public class HandoverRequestsController : ControllerBase
         if (kind == null)
             return NotFound();
         if (kind != AssetAllocationOrderKind.ReturnToWarehouse)
-            return BadRequest(new { message = "Đơn không phải thu hồi về kho." });
+            return BadRequest(new { message = "Đơn không phải hoàn trả về kho." });
 
         var err = await AllocationOrderWorkflow.ConfirmOrderAsync(_db, orderId, actorUserId, _departmentHeadRoleId);
         if (err != null)
@@ -356,7 +356,7 @@ public class HandoverRequestsController : ControllerBase
         return Ok(new { assetAllocationOrderId = orderId, status = "confirmed" });
     }
 
-    /// <summary>Accountant: all thu hồi orders.</summary>
+    /// <summary>Accountant: all hoàn trả orders.</summary>
     [HttpGet("orders-summary")]
     public async Task<ActionResult<IEnumerable<AllocationOrderSummaryDto>>> ListHandoverOrdersSummary()
     {

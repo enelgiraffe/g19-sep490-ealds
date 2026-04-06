@@ -51,7 +51,7 @@ public class AccountantApproveController : ControllerBase
         {
             if (ar.Status != 0)
                 return BadRequest(isHandover
-                    ? "Yêu cầu thu hồi không ở trạng thái chờ kế toán."
+                    ? "Yêu cầu hoàn trả không ở trạng thái chờ kế toán."
                     : "Yêu cầu cấp phát không ở trạng thái chờ kế toán.");
             var orderErr = isHandover
                 ? await AllocationOrderWorkflow.TryCreateHandoverOrderOnAccountantApproveAsync(_db, ar)

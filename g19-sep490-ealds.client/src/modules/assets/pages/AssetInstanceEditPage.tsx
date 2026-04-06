@@ -565,7 +565,7 @@ export function AssetInstanceEditPage() {
                 />
               </div>
               <div className="asset-create__field">
-                <label className="asset-create__label">Giá trị thu hồi ước tính</label>
+                <label className="asset-create__label">Giá trị hoàn trả ước tính</label>
                 <input
                   className="asset-create__input"
                   value={formatMoneyInput(instance?.depreciationSalvageValue)}

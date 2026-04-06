@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Button,
+  Checkbox,
   Input,
   Modal,
   Select,
@@ -35,6 +36,7 @@ import {
   RepairProposalModal,
   type RepairProposalFormValues,
 } from '../components/RepairProposalModal';
+import { isDepartmentHeadRoleCode } from '../../../shared/utils/departmentHeadRole';
 
 type RepairStatus =
   | 'needsProposal'
@@ -139,7 +141,7 @@ function transferItemToRepairRow(t: RepairRequestListItem): RepairRow {
     assetInstanceId: t.assetInstanceId ?? null,
     assetCode: code || String(t.assetInstanceId ?? t.assetRequestId),
     assetName: t.assetName || '(Không có tên)',
-    condition: (t.reason ?? '').trim(),
+    condition: (t.damageCondition ?? '').trim(),
     brokenDate: formatDate(t.transferDate),
     quantity: 1,
     location: t.fromDepartment ?? '',
@@ -201,8 +203,9 @@ export function RepairsPage() {
   const [repairCompleteReportNumber, setRepairCompleteReportNumber] = useState('');
 
   const [proposalOpen, setProposalOpen] = useState(false);
-  const [proposalRow, setProposalRow] = useState<RepairRow | null>(null);
+  const [proposalRows, setProposalRows] = useState<RepairRow[]>([]);
   const [proposalSubmitting, setProposalSubmitting] = useState(false);
+  const [selectedDamagedRowIds, setSelectedDamagedRowIds] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -271,6 +274,8 @@ export function RepairsPage() {
   }, []);
 
   const isDirector = String(profile?.role ?? '').toUpperCase() === 'DIRECTOR';
+  const isDeptHead = isDepartmentHeadRoleCode(profile?.role);
+  const showDeptHeadProposalUi = isDeptHead && activeTab === 'need-repair';
   const canDirectorApprove =
     isDirector &&
     !!selected &&
@@ -516,18 +521,28 @@ export function RepairsPage() {
   };
 
   const submitRepairProposal = async (values: RepairProposalFormValues) => {
-    if (!proposalRow?.assetInstanceId || !profile?.id) return;
+    const rows = proposalRows.filter((r) => r.assetInstanceId != null);
+    if (!rows.length || !profile?.id) return;
     setProposalSubmitting(true);
     try {
-      await repairRequestService.create({
-        assetInstanceId: proposalRow.assetInstanceId,
-        createdBy: profile.id,
-        reason: values.reason.trim(),
-        repairKind: values.repairKind.trim(),
-      });
-      message.success('Đã gửi đơn sửa chữa, chờ giám đốc phê duyệt.');
+      const damageCondition = values.damageCondition.trim();
+      const repairKind = values.repairKind.trim();
+      for (const row of rows) {
+        await repairRequestService.create({
+          assetInstanceId: row.assetInstanceId!,
+          createdBy: profile.id,
+          damageCondition,
+          repairKind,
+        });
+      }
+      message.success(
+        rows.length > 1
+          ? `Đã gửi ${rows.length} đơn sửa chữa, chờ giám đốc phê duyệt.`
+          : 'Đã gửi đơn sửa chữa, chờ giám đốc phê duyệt.',
+      );
       setProposalOpen(false);
-      setProposalRow(null);
+      setProposalRows([]);
+      setSelectedDamagedRowIds(new Set());
       await reload();
     } catch (e: any) {
       const msg = e?.response?.data ?? 'Gửi đơn sửa chữa thất bại.';
@@ -550,20 +565,67 @@ export function RepairsPage() {
     });
   }, [tabRows, search, statusFilter]);
 
+  const damagedRowsInView = useMemo(
+    () => filteredData.filter((r) => r.rowSource === 'damaged'),
+    [filteredData],
+  );
+
+  useEffect(() => {
+    if (!showDeptHeadProposalUi) {
+      setSelectedDamagedRowIds(new Set());
+      return;
+    }
+    const allowed = new Set(damagedRowsInView.map((r) => r.id));
+    setSelectedDamagedRowIds((prev) => {
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (allowed.has(id)) next.add(id);
+      }
+      return next.size === prev.size && [...prev].every((id) => allowed.has(id)) ? prev : next;
+    });
+  }, [showDeptHeadProposalUi, damagedRowsInView]);
+
+  const tableColCount = showDeptHeadProposalUi ? 10 : 9;
+  const allDamagedInViewSelected =
+    damagedRowsInView.length > 0 &&
+    damagedRowsInView.every((r) => selectedDamagedRowIds.has(r.id));
+  const someDamagedInViewSelected = damagedRowsInView.some((r) =>
+    selectedDamagedRowIds.has(r.id),
+  );
+
   return (
     <div className="repairs-page">
       <h1 className="repairs-page__title">Sửa chữa</h1>
 
       <div className="repairs-card">
-        <Tabs
-          activeKey={activeTab}
-          onChange={(key) => setActiveTab(key as 'need-repair' | 'in-repair')}
-          className="repairs-tabs"
-          items={[
-            { key: 'need-repair', label: 'Tài sản cần sửa chữa' },
-            { key: 'in-repair', label: 'Đang sửa chữa' },
-          ]}
-        />
+        <div className="repairs-card__tabs-row">
+          <Tabs
+            activeKey={activeTab}
+            onChange={(key) => setActiveTab(key as 'need-repair' | 'in-repair')}
+            className="repairs-tabs"
+            items={[
+              { key: 'need-repair', label: 'Tài sản cần sửa chữa' },
+              { key: 'in-repair', label: 'Đang sửa chữa' },
+            ]}
+          />
+          {showDeptHeadProposalUi ? (
+            <Button
+              type="primary"
+              className="repairs-card__proposal-action"
+              disabled={selectedDamagedRowIds.size === 0}
+              onClick={() => {
+                const picked = filteredData.filter(
+                  (r) => r.rowSource === 'damaged' && selectedDamagedRowIds.has(r.id),
+                );
+                if (!picked.length) return;
+                setProposalRows(picked);
+                setProposalOpen(true);
+              }}
+            >
+              Tạo đơn sửa chữa
+            </Button>
+          ) : null}
+        </div>
 
         <div className="repairs-filters">
           <Input
@@ -608,6 +670,23 @@ export function RepairsPage() {
           <table className="asset-table repairs-table">
             <thead>
               <tr>
+                {showDeptHeadProposalUi ? (
+                  <th className="repairs-table__th-select">
+                    <Checkbox
+                      aria-label="Chọn tất cả tài sản chưa lập đơn"
+                      indeterminate={someDamagedInViewSelected && !allDamagedInViewSelected}
+                      checked={allDamagedInViewSelected}
+                      disabled={damagedRowsInView.length === 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedDamagedRowIds(new Set(damagedRowsInView.map((r) => r.id)));
+                        } else {
+                          setSelectedDamagedRowIds(new Set());
+                        }
+                      }}
+                    />
+                  </th>
+                ) : null}
                 <th>MÃ CÁ THỂ</th>
                 <th>TÊN TÀI SẢN</th>
                 <th>TÌNH TRẠNG</th>
@@ -622,19 +701,37 @@ export function RepairsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="repairs-table-empty">
+                  <td colSpan={tableColCount} className="repairs-table-empty">
                     Đang tải dữ liệu...
                   </td>
                 </tr>
               ) : filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="repairs-table-empty">
+                  <td colSpan={tableColCount} className="repairs-table-empty">
                     Không có dữ liệu.
                   </td>
                 </tr>
               ) : (
                 filteredData.map((row) => (
                   <tr key={row.id} className="asset-row">
+                    {showDeptHeadProposalUi ? (
+                      <td className="repairs-table__td-select">
+                        {row.rowSource === 'damaged' ? (
+                          <Checkbox
+                            aria-label={`Chọn ${row.assetCode}`}
+                            checked={selectedDamagedRowIds.has(row.id)}
+                            onChange={(e) => {
+                              setSelectedDamagedRowIds((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(row.id);
+                                else next.delete(row.id);
+                                return next;
+                              });
+                            }}
+                          />
+                        ) : null}
+                      </td>
+                    ) : null}
                     <td>
                       <button type="button" className="asset-code asset-code--link">
                         {row.assetCode}
@@ -658,12 +755,14 @@ export function RepairsPage() {
                           setDetailOpen(true);
                         }}
                       />
-                      {activeTab === 'need-repair' && row.rowSource === 'damaged' ? (
+                      {activeTab === 'need-repair' &&
+                      row.rowSource === 'damaged' &&
+                      !isDeptHead ? (
                         <Button
                           type="link"
                           size="small"
                           onClick={() => {
-                            setProposalRow(row);
+                            setProposalRows([row]);
                             setProposalOpen(true);
                           }}
                         >
@@ -776,7 +875,7 @@ export function RepairsPage() {
                         <div className="repair-detail-info-item">
                           <label>
                             {selected.rowSource === 'repair'
-                              ? 'Lý do hỏng'
+                              ? 'Tình trạng hỏng hóc'
                               : 'Ghi nhận khi đánh dấu hỏng'}
                           </label>
                           <div className="repair-detail-info-value">{selected.condition || '—'}</div>
@@ -789,7 +888,7 @@ export function RepairsPage() {
                       {selected.rowSource === 'repair' && selected.repairKind ? (
                         <div className="repair-detail-info-row">
                           <div className="repair-detail-info-item repair-detail-info-item--full">
-                            <label>Hình thức sửa chữa đề xuất</label>
+                            <label>Phương án sửa chữa đề xuất</label>
                             <div className="repair-detail-info-value">{selected.repairKind}</div>
                           </div>
                         </div>
@@ -878,11 +977,13 @@ export function RepairsPage() {
       <RepairProposalModal
         open={proposalOpen}
         loading={proposalSubmitting}
-        assetCode={proposalRow?.assetCode ?? ''}
-        assetName={proposalRow?.assetName ?? ''}
+        items={proposalRows.map((r) => ({
+          assetCode: r.assetCode,
+          assetName: r.assetName,
+        }))}
         onClose={() => {
           setProposalOpen(false);
-          setProposalRow(null);
+          setProposalRows([]);
         }}
         onSubmit={submitRepairProposal}
       />

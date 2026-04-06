@@ -25,6 +25,35 @@
   min-height: 0;
 }
 
+.repairs-card__tabs-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.repairs-card__tabs-row .repairs-tabs {
+  flex: 1;
+  min-width: 0;
+}
+
+.repairs-card__proposal-action {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.repairs-table th.repairs-table__th-select,
+.repairs-table td.repairs-table__td-select {
+  width: 44px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.repairs-table__td-select .ant-checkbox-wrapper {
+  margin-inline: 0;
+}
+
 .repairs-tabs {
   margin-top: 0;
 }

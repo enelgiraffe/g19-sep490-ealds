@@ -356,7 +356,7 @@ export function AssetInstanceDetailPage() {
                 </span>
               </div>
               <div className="asset-detail__info-row">
-                <span className="label">Giá trị thu hồi ước tính</span>
+                <span className="label">Giá trị hoàn trả ước tính</span>
                 <span className="value">
                   {instance.depreciationSalvageValue != null
                     ? formatVnd(instance.depreciationSalvageValue)

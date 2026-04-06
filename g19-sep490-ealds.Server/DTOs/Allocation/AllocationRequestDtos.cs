@@ -74,7 +74,7 @@ public class AllocationOrderLineDetailDto
     public string? Reason { get; set; }
 }
 
-/// <summary>Light list row for accountant đơn cấp phát / thu hồi (orders only).</summary>
+/// <summary>Light list row for accountant đơn cấp phát / hoàn trả (orders only).</summary>
 public class AllocationOrderSummaryDto
 {
     public int AssetAllocationOrderId { get; set; }

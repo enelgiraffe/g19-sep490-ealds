@@ -152,8 +152,8 @@ public class DirectorViewController : ControllerBase
                     .Where(dr => dr.AssetRequestId == ar.AssetRequestId)
                     .Select(dr => dr.Reason)
                     .FirstOrDefault(),
-                // Sửa chữa: lý do hỏng trên RepairTask; Description trên AssetRequest = hình thức SC đề xuất
-                RepairReason = _db.RepairTasks
+                // Sửa chữa: tình trạng hỏng hóc trên RepairTask; Description trên AssetRequest = phương án sửa chữa đề xuất
+                RepairDamageCondition = _db.RepairTasks
                     .Where(t => t.AssetRequestId == ar.AssetRequestId)
                     .OrderBy(t => t.TaskId)
                     .Select(t => t.Reason)

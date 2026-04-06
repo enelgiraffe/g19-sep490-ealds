@@ -1,9 +1,11 @@
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Utils;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using System.Security.Claims;
 
 namespace g19_sep490_ealds.Server.Controllers;
@@ -13,10 +15,12 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class AssetsController : ControllerBase
 {
     private readonly EaldsDbContext _context;
+    private readonly int _departmentHeadRoleId;
 
-    public AssetsController(EaldsDbContext context)
+    public AssetsController(EaldsDbContext context, IConfiguration configuration)
     {
         _context = context;
+        _departmentHeadRoleId = configuration.GetValue<int>("App:DepartmentHeadRoleId", 4);
     }
 
     /// <summary>
@@ -47,6 +51,20 @@ public class AssetsController : ControllerBase
 
         if (assetTypeId.HasValue)
             query = query.Where(a => a.AssetTypeId == assetTypeId.Value);
+
+        var scope = await DepartmentAssetScope.ResolveForUserAsync(User, _context, _departmentHeadRoleId);
+        if (scope.IsRestricted && !scope.DepartmentId.HasValue)
+            return Ok(Array.Empty<AssetResponseDTO>());
+
+        if (scope.IsRestricted && scope.DepartmentId is int scopedDept && scopedDept > 0)
+        {
+            query = query.Where(a => _context.AssetInstances.Any(i =>
+                i.AssetId == a.AssetId &&
+                i.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == scopedDept) &&
+                i.Status != (int)AssetStatus.Disposed &&
+                i.Status != (int)AssetStatus.Lost &&
+                i.Status != (int)AssetStatus.Liquidated));
+        }
 
         var assets = await query.ToListAsync();
 
@@ -85,13 +103,19 @@ public class AssetsController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<AssetDetailResponseDTO>> GetById(int id)
     {
-        var dto = await BuildAssetDetailAsync(id);
+        var scope = await DepartmentAssetScope.ResolveForUserAsync(User, _context, _departmentHeadRoleId);
+        if (scope.IsRestricted && !scope.DepartmentId.HasValue)
+            return NotFound();
+
+        var dto = await BuildAssetDetailAsync(id, scope);
         if (dto == null)
+            return NotFound();
+        if (scope.IsRestricted && scope.DepartmentId.HasValue && (dto.Instances?.Count ?? 0) == 0)
             return NotFound();
         return Ok(dto);
     }
 
-    private async Task<AssetDetailResponseDTO?> BuildAssetDetailAsync(int id)
+    private async Task<AssetDetailResponseDTO?> BuildAssetDetailAsync(int id, AssetDepartmentScope scope = default)
     {
         var asset = await _context.Assets
             .Include(a => a.AssetType)
@@ -106,7 +130,12 @@ public class AssetsController : ControllerBase
         if (asset == null)
             return null;
 
-        var instanceIds = asset.AssetInstances.Select(i => i.AssetInstanceId).ToList();
+        var visibleInstances = asset.AssetInstances.AsEnumerable();
+        if (scope.IsRestricted && scope.DepartmentId is int scopedDeptId)
+            visibleInstances = visibleInstances.Where(i => DepartmentAssetScope.InstanceBelongsToDepartment(i, scopedDeptId));
+
+        var instanceList = visibleInstances.OrderBy(i => i.InstanceCode).ToList();
+        var instanceIds = instanceList.Select(i => i.AssetInstanceId).ToList();
         var latestDepsByInstance = await LoadLatestDepreciationByInstanceAsync(instanceIds);
 
         var documents = await _context.Documents
@@ -126,13 +155,13 @@ public class AssetsController : ControllerBase
             .Where(s => s.IsActive)
             .Select(ToMaintenanceScheduleDto)
             .Concat(
-                asset.AssetInstances.SelectMany(inst =>
+                instanceList.SelectMany(inst =>
                     inst.MaintenanceSchedules.Where(s => s.IsActive).Select(s =>
                     {
-                        var dto = ToMaintenanceScheduleDto(s);
-                        dto.AssetInstanceId = inst.AssetInstanceId;
-                        dto.InstanceCode = inst.InstanceCode;
-                        return dto;
+                        var schedDto = ToMaintenanceScheduleDto(s);
+                        schedDto.AssetInstanceId = inst.AssetInstanceId;
+                        schedDto.InstanceCode = inst.InstanceCode;
+                        return schedDto;
                     })))
             .OrderBy(s => s.ScheduleId)
             .ToList();
@@ -156,8 +185,7 @@ public class AssetsController : ControllerBase
             Note = baseDto.Note,
             Documents = documents,
             MaintenanceSchedules = schedules,
-            Instances = asset.AssetInstances
-                .OrderBy(i => i.InstanceCode)
+            Instances = instanceList
                 .Select(i => ToAssetInstanceResponseDTO(
                     i,
                     latestDepsByInstance.GetValueOrDefault(i.AssetInstanceId)))

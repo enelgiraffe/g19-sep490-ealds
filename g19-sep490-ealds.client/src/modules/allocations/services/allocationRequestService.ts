@@ -81,7 +81,7 @@ export interface AllocationOrderSummaryRow {
 export interface AllocationOrderDetail {
   assetAllocationOrderId: number;
   assetRequestId: number;
-  /** allocation = cấp phát; return = thu hồi về kho */
+  /** allocation = cấp phát; return = hoàn trả về kho */
   orderKind?: 'allocation' | 'return';
   title: string;
   departmentId: number;

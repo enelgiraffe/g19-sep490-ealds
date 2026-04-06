@@ -6,7 +6,7 @@ export function DepartmentAllocationRequestsPage() {
   return (
     <div className="requests-page">
       <div className="requests-header">
-        <h1 className="requests-title">Cấp phát &amp; thu hồi tài sản</h1>
+        <h1 className="requests-title">Cấp phát &amp; hoàn trả tài sản</h1>
       </div>
 
       <div className="requests-card">
@@ -21,7 +21,7 @@ export function DepartmentAllocationRequestsPage() {
             },
             {
               key: 'handover',
-              label: 'Thu hồi',
+              label: 'Hoàn trả',
               children: <DepartmentRequestsByModePanel mode="handover" />,
             },
           ]}

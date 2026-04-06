@@ -245,7 +245,7 @@ public static class AllocationOrderWorkflow
             return validation;
 
         if (await db.AssetAllocationOrders.AnyAsync(o => o.AssetRequestId == ar.AssetRequestId, cancellationToken))
-            return "Đơn thu hồi đã được tạo cho yêu cầu này.";
+            return "Đơn hoàn trả đã được tạo cho yêu cầu này.";
 
         var order = new AssetAllocationOrder
         {
@@ -329,7 +329,7 @@ public static class AllocationOrderWorkflow
                         .Where(a => a.AssetId == line.AssetId)
                         .Select(a => a.Name)
                         .FirstOrDefaultAsync(cancellationToken) ?? $"#{line.AssetId}";
-                    return $"Không đủ tài sản tại phòng ban để thu hồi: {assetName} (thiếu {line.Quantity - instances.Count}).";
+                    return $"Không đủ tài sản tại phòng ban để hoàn trả: {assetName} (thiếu {line.Quantity - instances.Count}).";
                 }
 
                 foreach (var inst in instances)

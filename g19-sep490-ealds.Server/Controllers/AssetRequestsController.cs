@@ -365,7 +365,7 @@ public class AssetRequestsController : ControllerBase
             {
                 t.TaskId,
                 t.EstimatedCost,
-                t.Reason,
+                damageCondition = t.Reason,
                 t.Status,
                 t.AssetInstanceId,
                 InstanceCode = t.AssetInstance != null ? t.AssetInstance.InstanceCode : null,

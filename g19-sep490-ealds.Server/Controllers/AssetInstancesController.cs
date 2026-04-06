@@ -1,9 +1,11 @@
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Utils;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -15,10 +17,12 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class AssetInstancesController : ControllerBase
 {
     private readonly EaldsDbContext _context;
+    private readonly int _departmentHeadRoleId;
 
-    public AssetInstancesController(EaldsDbContext context)
+    public AssetInstancesController(EaldsDbContext context, IConfiguration configuration)
     {
         _context = context;
+        _departmentHeadRoleId = configuration.GetValue<int>("App:DepartmentHeadRoleId", 4);
     }
 
     /// <summary>
@@ -77,6 +81,19 @@ public class AssetInstancesController : ControllerBase
             query = query.Where(i => i.PurchaseDate >= fromDate.Value);
         if (toDate.HasValue)
             query = query.Where(i => i.PurchaseDate <= toDate.Value);
+
+        var scope = await DepartmentAssetScope.ResolveForUserAsync(User, _context, _departmentHeadRoleId);
+        if (scope.IsRestricted && !scope.DepartmentId.HasValue)
+            return Ok(Array.Empty<AssetInstanceResponseDTO>());
+
+        if (scope.IsRestricted && scope.DepartmentId is int headDeptId && headDeptId > 0)
+        {
+            query = query.Where(i =>
+                i.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == headDeptId) &&
+                i.Status != (int)AssetStatus.Disposed &&
+                i.Status != (int)AssetStatus.Lost &&
+                i.Status != (int)AssetStatus.Liquidated);
+        }
 
         var instances = await query.ToListAsync();
 
@@ -158,6 +175,10 @@ public class AssetInstancesController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<AssetInstanceResponseDTO>> GetById(int id)
     {
+        var scope = await DepartmentAssetScope.ResolveForUserAsync(User, _context, _departmentHeadRoleId);
+        if (scope.IsRestricted && !scope.DepartmentId.HasValue)
+            return NotFound();
+
         var instance = await _context.AssetInstances
             .Include(i => i.Asset).ThenInclude(a => a!.AssetType)
             .Include(i => i.Warehouse)
@@ -168,6 +189,10 @@ public class AssetInstancesController : ControllerBase
             .FirstOrDefaultAsync(i => i.AssetInstanceId == id);
 
         if (instance == null)
+            return NotFound();
+
+        if (scope.IsRestricted && scope.DepartmentId is int allowedDeptId &&
+            !DepartmentAssetScope.InstanceBelongsToDepartment(instance, allowedDeptId))
             return NotFound();
 
         var latestDepSnapshot = await _context.DepreciationRecords

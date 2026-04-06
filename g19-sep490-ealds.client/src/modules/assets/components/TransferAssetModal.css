@@ -122,6 +122,14 @@
   color: #ef4444;
 }
 
+.transfer-asset-table {
+  max-height: min(42vh, 360px);
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
 .transfer-asset-table table {
   width: 100%;
   border-collapse: collapse;
@@ -135,8 +143,12 @@
 }
 
 .transfer-asset-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   background-color: #fafafa;
   font-weight: 600;
+  box-shadow: 0 1px 0 #f0f0f0;
 }
 
 .transfer-attachments {

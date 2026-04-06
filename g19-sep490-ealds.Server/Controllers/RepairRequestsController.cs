@@ -94,7 +94,8 @@ public class RepairRequestsController : ControllerBase
                     t.AssetRequest.Status == 4 ? "Đang sửa chữa" :
                     t.AssetRequest.Status == 5 ? "Hoàn thành" :
                     "Không xác định",
-                Reason = t.Reason,
+                Reason = null,
+                DamageCondition = t.Reason,
                 RequestDescription = t.AssetRequest.Description,
                 FromDepartmentId = t.AssetInstance.AssetLocations
                     .Where(al => al.IsCurrent)
@@ -185,11 +186,11 @@ public class RepairRequestsController : ControllerBase
         if (dto == null)
             return BadRequest("Request body is required.");
 
-        if (string.IsNullOrWhiteSpace(dto.Reason))
-            return BadRequest("Reason is required.");
+        if (string.IsNullOrWhiteSpace(dto.DamageCondition))
+            return BadRequest("Tình trạng hỏng hóc là bắt buộc.");
 
         if (string.IsNullOrWhiteSpace(dto.RepairKind))
-            return BadRequest("RepairKind (hình thức sửa chữa) is required.");
+            return BadRequest("Phương án sửa chữa (repairKind) là bắt buộc.");
 
         if (dto.DamageDate.HasValue && dto.DamageDate.Value.Date > DateTime.UtcNow.Date)
             return BadRequest("Ngày hỏng không được lớn hơn ngày hiện tại.");
@@ -249,7 +250,7 @@ public class RepairRequestsController : ControllerBase
             AssetRequestId = assetRequest.AssetRequestId,
             AssetInstanceId = dto.AssetInstanceId,
             EstimatedCost = dto.EstimatedCost,
-            Reason = dto.Reason.Trim(),
+            Reason = dto.DamageCondition.Trim(),
             Status = 0
         };
 

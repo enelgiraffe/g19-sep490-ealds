@@ -40,9 +40,13 @@ public class TransferRequestListItemDTO
 
     public string StatusName { get; set; } = null!;
 
+    /// <summary>Điều chuyển, bảo dưỡng, thanh lý: lý do / mô tả (AssetRequest.Description hoặc tương đương). Không dùng cho GET sửa chữa.</summary>
     public string? Reason { get; set; }
 
-    /// <summary>Mô tả đơn / hình thức sửa chữa (AssetRequest.Description) khi có.</summary>
+    /// <summary>Sửa chữa: tình trạng hỏng hóc (RepairTask.Reason). Chỉ gán cho GET /api/Assets/Requests/repair.</summary>
+    public string? DamageCondition { get; set; }
+
+    /// <summary>Mô tả đơn / phương án sửa chữa (AssetRequest.Description) khi có.</summary>
     public string? RequestDescription { get; set; }
 
     /// <summary>Chỉ gán cho danh sách thanh lý: nguyên giá cá thể tại thời điểm tra cứu.</summary>

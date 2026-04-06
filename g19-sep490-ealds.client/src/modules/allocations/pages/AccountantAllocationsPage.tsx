@@ -6,7 +6,7 @@ export function AccountantAllocationsPage() {
   return (
     <div className="requests-page">
       <div className="requests-header">
-        <h1 className="requests-title">Đơn cấp phát &amp; thu hồi</h1>
+        <h1 className="requests-title">Đơn cấp phát &amp; hoàn trả</h1>
       </div>
 
       <div className="requests-card">
@@ -21,7 +21,7 @@ export function AccountantAllocationsPage() {
             },
             {
               key: 'handover',
-              label: 'Đơn thu hồi',
+              label: 'Đơn hoàn trả',
               children: <AllocationOrdersPanel kind="handover" />,
             },
           ]}

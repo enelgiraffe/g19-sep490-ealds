@@ -37,7 +37,7 @@ export function AllocationOrderDetailPage() {
         : await allocationRequestService.getOrder(idNum);
       setDetail(d);
     } catch {
-      message.error(isHandover ? 'Không tải được đơn thu hồi.' : 'Không tải được đơn cấp phát.');
+      message.error(isHandover ? 'Không tải được đơn hoàn trả.' : 'Không tải được đơn cấp phát.');
       setDetail(null);
     } finally {
       setLoading(false);
@@ -55,7 +55,7 @@ export function AllocationOrderDetailPage() {
       if (isHandover) await handoverRequestService.confirmOrder(idNum);
       else await allocationRequestService.confirmOrder(idNum);
       message.success(
-        isHandover ? 'Đã xác nhận trả tài sản về kho.' : 'Đã xác nhận và gán tài sản về phòng ban.',
+        isHandover ? 'Đã xác nhận hoàn trả tài sản về kho.' : 'Đã xác nhận và gán tài sản về phòng ban.',
       );
       await load();
     } catch {
@@ -110,7 +110,7 @@ export function AllocationOrderDetailPage() {
           </Button>
           <div>
             <h1 className="requests-title" style={{ fontSize: 22 }}>
-              {isReturnFlow ? 'Đơn thu hồi' : 'Đơn cấp phát'}
+              {isReturnFlow ? 'Đơn hoàn trả' : 'Đơn cấp phát'}
             </h1>
             <Text type="secondary">
               {detail.departmentName}
@@ -119,7 +119,7 @@ export function AllocationOrderDetailPage() {
         </div>
         {canConfirm && (
           <Button type="primary" loading={confirming} onClick={() => void confirm()}>
-            {isReturnFlow ? 'Xác nhận trả về kho' : 'Xác nhận cấp phát'}
+            {isReturnFlow ? 'Xác nhận hoàn trả' : 'Xác nhận cấp phát'}
           </Button>
         )}
       </div>
@@ -151,12 +151,12 @@ export function AllocationOrderDetailPage() {
             {detail.createdAt?.replace('T', ' ').slice(0, 19)} UTC
           </Descriptions.Item>
           {detail.confirmedAt && (
-            <Descriptions.Item label={isReturnFlow ? 'Xác nhận trả về kho lúc' : 'Xác nhận nhận tài sản lúc'}>
+            <Descriptions.Item label={isReturnFlow ? 'Xác nhận hoàn trả lúc' : 'Xác nhận nhận tài sản lúc'}>
               {detail.confirmedAt.replace('T', ' ').slice(0, 19)} UTC
             </Descriptions.Item>
           )}
           {detail.confirmedByName && (
-            <Descriptions.Item label={isReturnFlow ? 'Người xác nhận trả' : 'Người xác nhận nhận'}>
+            <Descriptions.Item label={isReturnFlow ? 'Người xác nhận hoàn trả' : 'Người xác nhận nhận'}>
               {detail.confirmedByName}
             </Descriptions.Item>
           )}

@@ -39,7 +39,7 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
             .Include(rt => rt.Workflow)
             .FirstOrDefaultAsync(rt => rt.RequestTypeId == ar.RequestTypeId, cancellationToken);
 
-        // Cấp phát / thu hồi: bước xử lý đầu là kế toán.
+        // Cấp phát / hoàn trả: bước xử lý đầu là kế toán.
         // Sửa chữa: ưu tiên thông báo Giám đốc (không phụ thuộc RoleId bước 1 workflow — thường là kế toán).
         List<int> recipientIds;
         if (IsAllocationOrHandoverRequestType(ar.RequestTypeId))
@@ -267,7 +267,7 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
             4 => "Yêu cầu sửa chữa",
             5 => "Yêu cầu thanh lý",
             6 => "Yêu cầu cấp phát",
-            7 => "Yêu cầu thu hồi",
+            7 => "Yêu cầu hoàn trả",
             _ => string.IsNullOrWhiteSpace(workflowNameFallback)
                 ? $"Yêu cầu (loại {requestTypeId})"
                 : workflowNameFallback.Trim()
