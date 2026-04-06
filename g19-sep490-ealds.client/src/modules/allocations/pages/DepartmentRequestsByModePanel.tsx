@@ -45,7 +45,7 @@ function statusLabel(mode: DepartmentRequestsMode, status: number): { text: stri
       return { text: 'Từ chối', color: 'red' };
     case 4:
       return {
-        text: mode === 'handover' ? 'Hoàn tất thu hồi' : 'Hoàn tất cấp phát',
+        text: mode === 'handover' ? 'Hoàn tất hoàn trả' : 'Hoàn tất cấp phát',
         color: 'green',
       };
     default:
@@ -70,7 +70,7 @@ function newKey() {
 
 const DEFAULT_TITLES: Record<DepartmentRequestsMode, string> = {
   allocation: 'Yêu cầu cấp phát tài sản',
-  handover: 'Yêu cầu thu hồi tài sản về kho',
+  handover: 'Yêu cầu hoàn trả tài sản về kho',
 };
 
 export function DepartmentRequestsByModePanel({ mode }: { mode: DepartmentRequestsMode }) {
@@ -242,7 +242,7 @@ export function DepartmentRequestsByModePanel({ mode }: { mode: DepartmentReques
     try {
       if (mode === 'handover') {
         await handoverRequestService.create({ title: title.trim(), lines });
-        message.success('Đã gửi yêu cầu thu hồi. Kế toán sẽ nhận thông báo.');
+        message.success('Đã gửi yêu cầu hoàn trả. Kế toán sẽ nhận thông báo.');
       } else {
         await allocationRequestService.create({ title: title.trim(), lines });
         message.success('Đã gửi yêu cầu. Kế toán sẽ nhận thông báo.');
@@ -251,7 +251,7 @@ export function DepartmentRequestsByModePanel({ mode }: { mode: DepartmentReques
       await loadRequests();
     } catch (e) {
       if (e instanceof Error && !axios.isAxiosError(e)) {
-        message.error(e.message || 'Gửi yêu cầu thất bại.');
+        message.error(e.message || 'Gửi yêu cầu hoàn trả thất bại.');
       } else {
         const fromAxios =
           axios.isAxiosError(e) && e.response?.data ? allocationRequestApiErrorMessage(e.response.data) : null;
@@ -263,7 +263,7 @@ export function DepartmentRequestsByModePanel({ mode }: { mode: DepartmentReques
   }, [closeRequestModal, loadRequests, mode, rows, title]);
 
   const orderPath = mode === 'handover' ? 'handover-order' : 'order';
-  const orderLinkLabel = mode === 'handover' ? 'Đơn thu hồi' : 'Đơn cấp phát';
+  const orderLinkLabel = mode === 'handover' ? 'Đơn hoàn trả' : 'Đơn cấp phát';
   const receiptCol = mode === 'handover' ? 'Xác nhận trả' : 'Nhận TS';
 
   const lineColumns: ColumnsType<FormRow> = useMemo(
@@ -400,8 +400,8 @@ export function DepartmentRequestsByModePanel({ mode }: { mode: DepartmentReques
     mode === 'handover'
       ? 'Gửi danh sách tài sản trả về kho'
       : 'Gửi danh sách tài sản cần cấp về phòng ban';
-  const modalTitle = mode === 'handover' ? 'Gửi yêu cầu thu hồi' : 'Gửi yêu cầu cấp phát';
-  const listHeading = mode === 'handover' ? 'Yêu cầu thu hồi của phòng ban' : 'Yêu cầu của phòng ban';
+  const modalTitle = mode === 'handover' ? 'Gửi yêu cầu hoàn trả' : 'Gửi yêu cầu cấp phát';
+  const listHeading = mode === 'handover' ? 'Yêu cầu hoàn trả của phòng ban' : 'Yêu cầu của phòng ban';
 
   return (
     <>

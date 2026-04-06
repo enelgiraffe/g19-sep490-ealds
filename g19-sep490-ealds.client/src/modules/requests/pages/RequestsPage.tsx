@@ -437,7 +437,7 @@ export function RequestsPage() {
       const list = await accountantRequestService.getHandoverRequests();
       setHandoverRequestRows(list);
     } catch {
-      message.error('Không tải được yêu cầu thu hồi.');
+      message.error('Không tải được yêu cầu hoàn trả.');
       setHandoverRequestRows([]);
     } finally {
       setHandoverRequestLoading(false);
@@ -1240,7 +1240,7 @@ export function RequestsPage() {
                   : showAllocationRequestsTable
                     ? 'Đang tải yêu cầu cấp phát...'
                     : showHandoverRequestsTable
-                      ? 'Đang tải yêu cầu thu hồi...'
+                      ? 'Đang tải yêu cầu hoàn trả...'
                       : isTransferTab
                         ? 'Đang tải danh sách yêu cầu điều chuyển...'
                         : 'Đang tải danh sách yêu cầu...'}

@@ -29,6 +29,8 @@ public class InventoryNotificationService : IInventoryNotificationService
     public async Task ProcessScheduledCheckArrivalsAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
+        var utcDayStart = now.Date;
+        var utcDayEnd = utcDayStart.AddDays(1);
         var sessions = await _db.InventorySessions
             .Include(s => s.Department)
             .Where(s =>
@@ -50,22 +52,28 @@ public class InventoryNotificationService : IInventoryNotificationService
                 continue;
             }
 
+            var title = TruncateTitle($"{ScheduledArrivalTitle}: {session.Code}");
+            var deptName = session.Department?.Name ?? "?";
+            var content = TruncateContent($"KK {session.Code} ({deptName}). Đã đến khung lịch kiểm kê — vui lòng bắt đầu phiên.");
+
             foreach (var userId in headUserIds)
             {
-                var already = await _db.Notifications.AnyAsync(
-                    n => n.RefId == session.SessionId &&
-                         n.UserId == userId &&
-                         n.Title == ScheduledArrivalTitle,
+                // One reminder per recipient per session per UTC day while still in window.
+                // RefId must stay null: schema FK points RefId → User, not inventory session.
+                var alreadyToday = await _db.Notifications.AnyAsync(
+                    n => n.UserId == userId &&
+                         n.Title == title &&
+                         n.SentDate >= utcDayStart &&
+                         n.SentDate < utcDayEnd,
                     cancellationToken);
-                if (already)
+                if (alreadyToday)
                     continue;
 
-                var deptName = session.Department?.Name ?? "?";
                 _db.Notifications.Add(new Notification
                 {
-                    Title = ScheduledArrivalTitle,
-                    Content = TruncateContent($"KK {session.Code} ({deptName}). Đã đến ngày kiểm kê trong khung lịch."),
-                    RefId = session.SessionId,
+                    Title = title,
+                    Content = content,
+                    RefId = null,
                     UserId = userId,
                     SentDate = DateTime.UtcNow,
                     IsSend = true
@@ -93,7 +101,7 @@ public class InventoryNotificationService : IInventoryNotificationService
                 Title = TruncateTitle($"Chờ xác nhận kiểm kê: {session.Code}"),
                 Content = TruncateContent(
                     $"Trưởng phòng đã xử lý chênh lệch / báo cáo phiên {session.Code}. Vui lòng xác nhận."),
-                RefId = session.SessionId,
+                RefId = null,
                 UserId = userId,
                 SentDate = DateTime.UtcNow,
                 IsSend = true
@@ -120,7 +128,7 @@ public class InventoryNotificationService : IInventoryNotificationService
                     hasQuantityOrUserMismatch
                         ? $"GD đã xác nhận {session.Code}. Có chênh lệch — trưởng phòng xử lý trên sổ (Chờ xử lý)."
                         : $"GD đã xác nhận {session.Code}. Không có chênh lệch cần xử lý thêm."),
-                RefId = session.SessionId,
+                RefId = null,
                 UserId = userId,
                 SentDate = DateTime.UtcNow,
                 IsSend = true
@@ -142,7 +150,7 @@ public class InventoryNotificationService : IInventoryNotificationService
             {
                 Title = TruncateTitle($"Kiểm kê lại: {session.Code}"),
                 Content = TruncateContent($"GD yêu cầu kiểm kê lại phiên {session.Code}."),
-                RefId = session.SessionId,
+                RefId = null,
                 UserId = userId,
                 SentDate = DateTime.UtcNow,
                 IsSend = true

@@ -5,7 +5,7 @@ namespace g19_sep490_ealds.Server.Services.Interface;
 public interface IInventoryNotificationService
 {
     /// <summary>
-    /// Quartz: sessions scheduled whose start window has begun — notify department heads once each.
+    /// Quartz: sessions in the "Đến lịch" window (scheduled, start ≤ now ≤ end) — notify department heads once per UTC day per session until started.
     /// </summary>
     Task ProcessScheduledCheckArrivalsAsync(CancellationToken cancellationToken = default);
 

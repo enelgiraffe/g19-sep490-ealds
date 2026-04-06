@@ -1,11 +1,11 @@
 /*
-  Handover (thu hồi về kho) — RequestType 7 + AssetAllocationOrder.Kind
+  Handover (hoàn trả về kho) — RequestType 7 + AssetAllocationOrder.Kind
   Run after allocation flow script. Idempotent where possible.
 */
 
 SET NOCOUNT ON;
 
-/* 1) Order kind: 1 = cấp phát, 2 = thu hồi */
+/* 1) Order kind: 1 = cấp phát, 2 = hoàn trả */
 IF COL_LENGTH(N'dbo.AssetAllocationOrder', N'Kind') IS NULL
 BEGIN
     ALTER TABLE [dbo].[AssetAllocationOrder]

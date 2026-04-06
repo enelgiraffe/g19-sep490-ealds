@@ -639,69 +639,21 @@ public class InventoryController : ControllerBase
 
         dto.CreatedBy = currentUserId;
 
-        var department = await _context.Departments.FindAsync(dto.DepartmentId);
-        if (department == null)
-            return BadRequest(new { message = "Phòng ban không tồn tại." });
+        var created = await CreateInventorySessionCoreAsync(
+            dto.Purpose ?? string.Empty,
+            dto.StartDate,
+            dto.EndDate,
+            dto.DepartmentId,
+            dto.CreatedBy,
+            dto.IsPeriodic,
+            dto.IsPeriodic ? dto.PeriodDays : null,
+            assetCategoryId: null,
+            assetTypeId: null);
 
-        // One inventory task per physical asset instance in the department.
-        var instances = await _context.AssetInstances
-            .Where(ai =>
-                ai.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == dto.DepartmentId) &&
-                ai.Status != (int)AssetStatus.Disposed &&
-                ai.Status != (int)AssetStatus.Lost &&
-                ai.Status != (int)AssetStatus.Liquidated &&
-                ai.Status != (int)AssetStatus.Damaged)
-            .AsNoTracking()
-            .ToListAsync();
+        if (!created.Success)
+            return BadRequest(new { message = created.ErrorMessage });
 
-        if (!instances.Any())
-            return BadRequest(new { message = "Không có tài sản hợp lệ nào trong phòng ban này." });
-
-        await using var transaction = await _context.Database.BeginTransactionAsync();
-        try
-        {
-            var code = await GenerateSessionCode();
-            var session = new InventorySession
-            {
-                Code = code,
-                Purpose = dto.Purpose ?? string.Empty,
-                StartDate = dto.StartDate,
-                EndDate = dto.EndDate,
-                DepartmentId = dto.DepartmentId,
-                AssetCategoryId = null,
-                AssetTypeId = null,
-                Status = (int)InventorySessionStatus.Scheduled,
-                ProgressPercent = 0,
-                CreatedBy = dto.CreatedBy,
-                CreateDate = DateTime.UtcNow,
-                IsPeriodic = dto.IsPeriodic,
-                PeriodDays = dto.IsPeriodic ? dto.PeriodDays : null
-            };
-
-            foreach (var inst in instances)
-            {
-                session.InventoryTasks.Add(new InventoryTask
-                {
-                    AssetInstanceId = inst.AssetInstanceId,
-                    AssignedUserId = dto.CreatedBy,
-                    DepartmentId = dto.DepartmentId,
-                    Status = (int)InventoryTaskStatus.Pending,
-                    CheckDate = dto.EndDate
-                });
-            }
-
-            _context.InventorySessions.Add(session);
-            await _context.SaveChangesAsync();
-            // Thông báo "đến lịch" cho trưởng phòng do Quartz (InventoryScheduledCheckNotificationJob) khi tới khung ngày.
-            await transaction.CommitAsync();
-
-            return Ok(new { message = "Đã lên lịch kiểm kê thành công.", sessionIds = new[] { session.SessionId }, count = 1 });
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
+        return Ok(new { message = "Đã lên lịch kiểm kê thành công.", sessionIds = new[] { created.SessionId!.Value }, count = 1 });
     }
 
     /// <summary>
@@ -1083,6 +1035,9 @@ public class InventoryController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        if (!hasMismatch)
+            await TryCreateNextPeriodicSessionIfApplicableAsync(session);
+
         await SafeInventoryNotifyAsync(
             () => _inventoryNotifications.NotifyAfterDirectorApprovalAsync(session, hasMismatch),
             "director-approve → heads/accountants");
@@ -1171,6 +1126,8 @@ public class InventoryController : ControllerBase
         session.Status = (int)InventorySessionStatus.Confirmed;
 
         await _context.SaveChangesAsync();
+
+        await TryCreateNextPeriodicSessionIfApplicableAsync(session);
 
         return Ok(new
         {
@@ -1317,6 +1274,10 @@ public class InventoryController : ControllerBase
 
         if (session.Status != (int)InventorySessionStatus.Scheduled)
             return BadRequest(new { message = "Chỉ có thể kích hoạt phiên kiểm kê ở trạng thái Đã lên lịch." });
+
+        var now = DateTime.UtcNow;
+        if (session.StartDate > now || session.EndDate < now)
+            return BadRequest(new { message = "Chỉ có thể bắt đầu khi đã đến khung lịch (trạng thái hiển thị \"Đến lịch\")." });
 
         session.Status = (int)InventorySessionStatus.InProgress;
 
@@ -1692,6 +1653,131 @@ public class InventoryController : ControllerBase
         {
             _logger.LogError(ex, "Inventory notification failed ({Step}). Session update already committed.", step);
         }
+    }
+
+    private sealed record CreateInventorySessionResult(bool Success, string? ErrorMessage, int? SessionId);
+
+    /// <summary>
+    /// Persists a scheduled inventory session and tasks (same rules as POST sessions). Used by API and periodic follow-up.
+    /// </summary>
+    private async Task<CreateInventorySessionResult> CreateInventorySessionCoreAsync(
+        string purpose,
+        DateTime startDate,
+        DateTime endDate,
+        int departmentId,
+        int createdBy,
+        bool isPeriodic,
+        int? periodDays,
+        int? assetCategoryId,
+        int? assetTypeId)
+    {
+        var department = await _context.Departments.FindAsync(departmentId);
+        if (department == null)
+            return new CreateInventorySessionResult(false, "Phòng ban không tồn tại.", null);
+
+        var instances = await _context.AssetInstances
+            .Where(ai =>
+                ai.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == departmentId) &&
+                ai.Status != (int)AssetStatus.Disposed &&
+                ai.Status != (int)AssetStatus.Lost &&
+                ai.Status != (int)AssetStatus.Liquidated &&
+                ai.Status != (int)AssetStatus.Damaged)
+            .AsNoTracking()
+            .ToListAsync();
+
+        if (!instances.Any())
+            return new CreateInventorySessionResult(false, "Không có tài sản hợp lệ nào trong phòng ban này.", null);
+
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+        try
+        {
+            var code = await GenerateSessionCode();
+            var session = new InventorySession
+            {
+                Code = code,
+                Purpose = purpose,
+                StartDate = startDate,
+                EndDate = endDate,
+                DepartmentId = departmentId,
+                AssetCategoryId = assetCategoryId,
+                AssetTypeId = assetTypeId,
+                Status = (int)InventorySessionStatus.Scheduled,
+                ProgressPercent = 0,
+                CreatedBy = createdBy,
+                CreateDate = DateTime.UtcNow,
+                IsPeriodic = isPeriodic,
+                PeriodDays = isPeriodic ? periodDays : null
+            };
+
+            foreach (var inst in instances)
+            {
+                session.InventoryTasks.Add(new InventoryTask
+                {
+                    AssetInstanceId = inst.AssetInstanceId,
+                    AssignedUserId = createdBy,
+                    DepartmentId = departmentId,
+                    Status = (int)InventoryTaskStatus.Pending,
+                    CheckDate = endDate
+                });
+            }
+
+            _context.InventorySessions.Add(session);
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return new CreateInventorySessionResult(true, null, session.SessionId);
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// When a periodic session is fully closed (Confirmed), schedule the next window using the same purpose, department,
+    /// creator, execution span (end − start), and <see cref="InventorySession.PeriodDays"/> as when the schedule was created.
+    /// </summary>
+    private async Task TryCreateNextPeriodicSessionIfApplicableAsync(InventorySession closedSession)
+    {
+        if (!closedSession.IsPeriodic || closedSession.PeriodDays is not int periodDays || periodDays <= 0)
+            return;
+
+        var utcNow = DateTime.UtcNow;
+        var executionLength = closedSession.EndDate - closedSession.StartDate;
+        if (executionLength <= TimeSpan.Zero)
+            executionLength = TimeSpan.FromDays(1);
+
+        var nextStart = closedSession.StartDate.AddDays(periodDays);
+        while (nextStart < utcNow)
+            nextStart = nextStart.AddDays(periodDays);
+
+        var nextEnd = nextStart + executionLength;
+
+        var created = await CreateInventorySessionCoreAsync(
+            closedSession.Purpose ?? string.Empty,
+            nextStart,
+            nextEnd,
+            closedSession.DepartmentId,
+            closedSession.CreatedBy,
+            isPeriodic: true,
+            periodDays,
+            closedSession.AssetCategoryId,
+            closedSession.AssetTypeId);
+
+        if (!created.Success)
+        {
+            _logger.LogWarning(
+                "Could not auto-schedule next periodic inventory after session {SessionId}: {Reason}",
+                closedSession.SessionId,
+                created.ErrorMessage);
+            return;
+        }
+
+        _logger.LogInformation(
+            "Auto-scheduled next periodic inventory session {NewSessionId} after confirmed session {ClosedSessionId}.",
+            created.SessionId,
+            closedSession.SessionId);
     }
 
     private async Task<string> GenerateSessionCode()

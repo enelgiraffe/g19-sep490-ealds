@@ -275,6 +275,7 @@ export function InventoryPage() {
                 ) : (
                   filteredSessions.map((row) => {
                     const isScheduled = row.status === SESSION_STATUS.Scheduled || row.status === SESSION_STATUS.Due;
+                    const canStartInWindow = row.status === SESSION_STATUS.Due;
                     const openSession = () => {
                       if (isScheduled) return;
                       if (row.status === SESSION_STATUS.InProgress) {
@@ -318,14 +319,16 @@ export function InventoryPage() {
                           <div className="inventory-row-actions">
                             {isScheduled && (
                               <>
-                                <button
-                                  type="button"
-                                  className="inventory-action-btn inventory-action-btn--execute"
-                                  title="Thực hiện kiểm kê"
-                                  onClick={(e) => { e.stopPropagation(); setExecuteTarget(row); }}
-                                >
-                                  <PlayCircleOutlined />
-                                </button>
+                                {canStartInWindow && (
+                                  <button
+                                    type="button"
+                                    className="inventory-action-btn inventory-action-btn--execute"
+                                    title="Thực hiện kiểm kê (Đến lịch)"
+                                    onClick={(e) => { e.stopPropagation(); setExecuteTarget(row); }}
+                                  >
+                                    <PlayCircleOutlined />
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   className="inventory-action-btn"
@@ -371,7 +374,6 @@ export function InventoryPage() {
         {executeTarget && (
           <p>
             Bắt đầu thực hiện kiểm kê cho phiên <strong>{executeTarget.purpose}</strong>?
-            Trạng thái sẽ chuyển sang <strong>Đang thực hiện</strong>.
           </p>
         )}
       </Modal>

@@ -98,7 +98,7 @@ public class HandoverRequestsController : ControllerBase
             return BadRequest(new
             {
                 message =
-                    $"RequestType {_handoverRequestTypeId} chưa có trong bảng RequestType. Chạy script SQL hoàn trả hoặc cấu hình App:HandoverRequestTypeId."
+                    $"RequestType {_handoverRequestTypeId} chưa có trong bảng RequestType."
             });
 
         var workflowId = await _db.RequestTypes.AsNoTracking()
