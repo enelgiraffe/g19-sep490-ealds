@@ -1,4 +1,4 @@
-﻿using g19_sep490_ealds.Server.Services.Interface;
+using g19_sep490_ealds.Server.Services.Interface;
 using Quartz;
 
 namespace g19_sep490_ealds.Server.Utils;
@@ -14,6 +14,7 @@ public class DepreciationJobs : IJob
         _logger = logger;
     }
 
+    // Điểm vào Quartz: chạy job khấu hao tự động theo lịch.
     public async Task Execute(IJobExecutionContext context)
     {
         try
@@ -25,7 +26,7 @@ public class DepreciationJobs : IJob
 
             await service.RunMonthlyDepreciation();
 
-            _logger.LogInformation($"[CRON] Depreciation job run at {DateTime.Now}");
+            _logger.LogInformation("[CRON] Depreciation job run at {RunAtUtc}", DateTime.UtcNow);
         }
         catch (Exception ex)
         {

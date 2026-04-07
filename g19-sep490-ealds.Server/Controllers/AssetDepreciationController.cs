@@ -1,4 +1,4 @@
-﻿using g19_sep490_ealds.Server.DTO.RequestDTO.AssetDepreciation;
+using g19_sep490_ealds.Server.DTO.RequestDTO.AssetDepreciation;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
 using Microsoft.AspNetCore.Mvc;
@@ -26,6 +26,7 @@ public class AssetDepreciationController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(CreatePolicyDTO dto)
     {
+        // Create a new depreciation policy.
         var policy = new DepreciationPolicy
         {
             Name = dto.Name,
@@ -45,24 +46,41 @@ public class AssetDepreciationController : ControllerBase
     [HttpPost("revaluation")]
     public async Task<IActionResult> Revaluate([FromBody] RevaluationDTO dto)
     {
-
+        // Update carrying value and write revaluation log.
         await _serviceRe.RevaluateAsync(dto.AssetInstanceId, dto.NewValue);
 
         return Ok("Revaluation success");
     }
 
-    //[HttpPut("assign-policy")]
-    //public async Task<IActionResult> AssignPolicy([FromBody] AssignPolicyDTO dto)
-    //{
-    //    await _service.AssignPolicyAsync(dto.AssetInstanceId, dto.PolicyId);
-    //    return Ok("Policy assigned");
-    //}
+    [HttpPut("assign-policy")]
+    public async Task<IActionResult> AssignPolicy([FromBody] AssignPolicyDTO dto)
+    {
+        // Assign policy to target asset instance.
+        await _service.AssignPolicyAsync(dto.AssetInstanceId, dto.PolicyId);
+        return Ok("Policy assigned");
+    }
 
-    //chạy thủ công khấu hao
+    [HttpPut("update")]
+    public async Task<IActionResult> UpdateDepreciation([FromBody] UpdateDepreciationDTO dto)
+    {
+        // Manual adjust one depreciation record.
+        await _service.UpdateDepreciation(dto.RecordId, dto.NewAmount);
+        return Ok("Depreciation updated");
+    }
+
+    // Trigger monthly depreciation manually.
     [HttpPost("run")]
     public async Task<IActionResult> RunDepreciation()
     {
         await _service.RunMonthlyDepreciation();
         return Ok("Depreciation executed");
+    }
+
+    [HttpPost("manual-run")]
+    public async Task<IActionResult> RunManualDepreciation([FromBody] ManualDepreciationRunDTO dto)
+    {
+        // Chạy khấu hao thủ công để test theo kỳ/tài sản tùy chọn.
+        await _service.RunManualDepreciation(dto.AssetInstanceId, dto.Year, dto.Month);
+        return Ok("Manual depreciation executed");
     }
 }
