@@ -63,10 +63,16 @@ public class InventoryController : ControllerBase
 
         if (status.HasValue)
         {
-            // Status 5 ("Đến lịch") is a computed display status: DB status=0 with StartDate ≤ today ≤ EndDate
-            var timeNow = DateTime.UtcNow;
+            // Status 5 ("Đến lịch"): scheduled and today's UTC calendar day lies in [StartDate, EndDate] inclusive (see InventoryScheduleWindow).
+            var todayUtc = DateTime.UtcNow.Date;
+            var tomorrowUtc = todayUtc.AddDays(1);
             if (status.Value == 5)
-                query = query.Where(s => s.Status == 0 && s.StartDate <= timeNow && s.EndDate >= timeNow);
+            {
+                query = query.Where(s =>
+                    s.Status == 0 &&
+                    s.StartDate < tomorrowUtc &&
+                    s.EndDate >= todayUtc);
+            }
             else
                 query = query.Where(s => s.Status == status.Value);
         }
@@ -1289,7 +1295,7 @@ public class InventoryController : ControllerBase
             return BadRequest(new { message = "Chỉ có thể kích hoạt phiên kiểm kê ở trạng thái Đã lên lịch." });
 
         var now = DateTime.UtcNow;
-        if (session.StartDate > now || session.EndDate < now)
+        if (!InventoryScheduleWindow.UtcCalendarDayInInclusiveRange(session.StartDate, session.EndDate, now))
             return BadRequest(new { message = "Chỉ có thể bắt đầu khi đã đến khung lịch (trạng thái hiển thị \"Đến lịch\")." });
 
         session.Status = (int)InventorySessionStatus.InProgress;
@@ -1671,26 +1677,33 @@ public class InventoryController : ControllerBase
     private sealed record CreateInventorySessionResult(bool Success, string? ErrorMessage, int? SessionId);
 
     /// <summary>
-    /// True when [newStart, newEnd] overlaps any open inventory window for the department.
-    /// Open = not cancelled and not fully closed (Confirmed). Overlap is inclusive on both ends.
+    /// True when [newStart, newEnd] overlaps any open inventory window for the department (UTC calendar days, inclusive).
+    /// Open = not cancelled and not fully closed (Confirmed).
     /// </summary>
-    private Task<bool> DepartmentHasOverlappingOpenInventoryAsync(
+    private async Task<bool> DepartmentHasOverlappingOpenInventoryAsync(
         int departmentId,
         DateTime newStart,
         DateTime newEnd,
         int? excludeSessionId)
     {
-        var q = _context.InventorySessions.Where(s =>
-            s.DepartmentId == departmentId &&
-            s.Status != (int)InventorySessionStatus.Cancelled &&
-            s.Status != (int)InventorySessionStatus.Confirmed &&
-            s.StartDate <= newEnd &&
-            newStart <= s.EndDate);
+        var rows = await _context.InventorySessions
+            .AsNoTracking()
+            .Where(s =>
+                s.DepartmentId == departmentId &&
+                s.Status != (int)InventorySessionStatus.Cancelled &&
+                s.Status != (int)InventorySessionStatus.Confirmed)
+            .Select(s => new { s.SessionId, s.StartDate, s.EndDate })
+            .ToListAsync();
 
-        if (excludeSessionId.HasValue)
-            q = q.Where(s => s.SessionId != excludeSessionId.Value);
+        foreach (var s in rows)
+        {
+            if (excludeSessionId.HasValue && s.SessionId == excludeSessionId.Value)
+                continue;
+            if (InventoryScheduleWindow.CalendarRangesOverlap(s.StartDate, s.EndDate, newStart, newEnd))
+                return true;
+        }
 
-        return q.AnyAsync();
+        return false;
     }
 
     /// <summary>
@@ -1957,11 +1970,11 @@ public class InventoryController : ControllerBase
 
     /// <summary>
     /// Returns the display status for a session. Status 5 ("Đến lịch") is a computed status:
-    /// the session is scheduled (DB status=0) and today falls within its start/end window.
+    /// the session is scheduled (DB status=0) and today's UTC calendar day falls within the inclusive window.
     /// </summary>
     private static int GetDisplayStatus(InventorySession session, DateTime now) =>
         session.Status == (int)InventorySessionStatus.Scheduled
-            && session.StartDate <= now && session.EndDate >= now
+            && InventoryScheduleWindow.UtcCalendarDayInInclusiveRange(session.StartDate, session.EndDate, now)
             ? 5
             : session.Status;
 

@@ -5,6 +5,8 @@ import { useAppStore } from '../../../stores/appStore';
 import {
   inventoryService,
   getCurrentUserId,
+  inventorySessionDateToUtcIso,
+  inventorySessionEndOfDayUtcIso,
   type DropdownItem,
 } from '../services/inventoryService';
 import './SchedulePeriodicModal.css';
@@ -101,8 +103,8 @@ export function SchedulePeriodicModal({
       try {
         await inventoryService.createSession({
           purpose: values.purpose,
-          startDate: values.startDate.toISOString(),
-          endDate: computedEndDate.toISOString(),
+          startDate: inventorySessionDateToUtcIso(values.startDate),
+          endDate: inventorySessionEndOfDayUtcIso(computedEndDate),
           departmentId,
           createdBy: getCurrentUserId(),
           isPeriodic: true,
@@ -133,7 +135,7 @@ export function SchedulePeriodicModal({
     >
       <div className="schedule-modal__header">
         <h2 className="schedule-modal__title">Hẹn lịch kiểm kê</h2>
-        <p className="schedule-modal__subtitle">Kiểm kê định kỳ theo nhóm và loại tài sản</p>
+        <p className="schedule-modal__subtitle">Kiểm kê định kỳ</p>
       </div>
 
       <Form form={form} layout="vertical" className="schedule-periodic-form">

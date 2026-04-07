@@ -1,5 +1,6 @@
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
+using g19_sep490_ealds.Server.Utils;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using Microsoft.EntityFrameworkCore;
 
@@ -31,13 +32,13 @@ public class InventoryNotificationService : IInventoryNotificationService
         var now = DateTime.UtcNow;
         var utcDayStart = now.Date;
         var utcDayEnd = utcDayStart.AddDays(1);
-        var sessions = await _db.InventorySessions
+        var candidates = await _db.InventorySessions
             .Include(s => s.Department)
-            .Where(s =>
-                s.Status == (int)InventorySessionStatus.Scheduled &&
-                s.StartDate <= now &&
-                s.EndDate >= now)
+            .Where(s => s.Status == (int)InventorySessionStatus.Scheduled)
             .ToListAsync(cancellationToken);
+        var sessions = candidates
+            .Where(s => InventoryScheduleWindow.UtcCalendarDayInInclusiveRange(s.StartDate, s.EndDate, now))
+            .ToList();
 
         foreach (var session in sessions)
         {

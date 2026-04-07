@@ -5,6 +5,8 @@ import { useAppStore } from '../../../stores/appStore';
 import {
   inventoryService,
   getCurrentUserId,
+  inventorySessionDateToUtcIso,
+  inventorySessionEndOfDayUtcIso,
   type DropdownItem,
 } from '../services/inventoryService';
 import './ScheduleIndividualModal.css';
@@ -65,11 +67,11 @@ export function ScheduleIndividualModal({
       }
       setSubmitting(true);
       try {
-        const checkDate = values.checkDate.toISOString();
+        const startIso = inventorySessionDateToUtcIso(values.checkDate);
         await inventoryService.createSession({
           purpose: values.purpose ?? '',
-          startDate: checkDate,
-          endDate: checkDate,
+          startDate: startIso,
+          endDate: inventorySessionEndOfDayUtcIso(values.checkDate),
           departmentId,
           createdBy: getCurrentUserId(),
         });
@@ -103,7 +105,7 @@ export function ScheduleIndividualModal({
     >
       <div className="schedule-modal__header">
         <h2 className="schedule-modal__title">Lập lịch kiểm kê</h2>
-        <p className="schedule-modal__subtitle">Kiểm kê toàn bộ tài sản của phòng ban</p>
+        <p className="schedule-modal__subtitle">Kiểm kê riêng lẻ</p>
       </div>
 
       <Form form={form} layout="vertical" className="schedule-individual-form">
