@@ -8,8 +8,6 @@ public partial class DisposalExecution
 
     public int AssetRequestId { get; set; }
 
-    public int? AppraisalId { get; set; }
-
     public int? DisposalRecordId { get; set; }
 
     public DateTime? PlannedExecutionDate { get; set; }
@@ -56,8 +54,6 @@ public partial class DisposalExecution
     public DateTime? UpdatedDate { get; set; }
 
     public virtual AssetRequest AssetRequest { get; set; } = null!;
-
-    public virtual DisposalAppraisal? Appraisal { get; set; }
 
     public virtual DisposalRecord? DisposalRecord { get; set; }
 }

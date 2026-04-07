@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { assetService, type AssetDetailResponse, type UpdateAssetPayload } from '../services/assetService';
 import {

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Form, Input, Button, Table, InputNumber, Select, DatePicker } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import { assetService, type AssetTypeItem } from '../../assets/services/assetService';
 import './CreatePurchaseOrderModal.css';

@@ -19,7 +19,6 @@ executionApi.interceptors.request.use((config) => {
 export interface DisposalExecutionDto {
   disposalExecutionId?: number | null;
   assetRequestId: number;
-  appraisalId?: number | null;
   disposalRecordId?: number | null;
   plannedExecutionDate?: string | null;
   executedDate?: string | null;
@@ -34,9 +33,17 @@ export interface DisposalExecutionDto {
   attachmentUrls?: string | null;
   executionNote?: string | null;
   status: number;
+  assetRequestStatus: number;
   canEdit: boolean;
   canFinalize: boolean;
   blockFinalizeReason?: string | null;
+}
+
+export interface RecordDisposalAppraisalPayload {
+  userId: number;
+  appraisalDate?: string | null;
+  appraisalMinutesNo?: string | null;
+  appraisalConclusion?: string | null;
 }
 
 export interface SaveDisposalExecutionPayload {
@@ -75,5 +82,16 @@ export const disposalExecutionService = {
     await executionApi.post(`/api/Assets/Requests/disposal/execution/by-request/${assetRequestId}/finalize`, {
       userId,
     });
+  },
+
+  async recordAppraisal(
+    assetRequestId: number,
+    payload: RecordDisposalAppraisalPayload,
+  ): Promise<DisposalExecutionDto> {
+    const response = await executionApi.post<DisposalExecutionDto>(
+      `/api/Assets/Requests/disposal/execution/by-request/${assetRequestId}/record-appraisal`,
+      payload,
+    );
+    return response.data;
   },
 };

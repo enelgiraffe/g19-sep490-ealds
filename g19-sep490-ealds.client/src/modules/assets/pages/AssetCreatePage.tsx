@@ -8,6 +8,7 @@ import {
 } from '../services/assetService';
 import { transferRequestService, type AssetLocationOption } from '../services/transferRequestService';
 import { useAppStore } from '../../../stores/appStore';
+import { profileService } from '../../profile/services/profileService';
 import './AssetCreatePage.css';
 
 interface GeneralInfoForm {
@@ -57,6 +58,10 @@ export function AssetCreatePage() {
   const currentRole = useAppStore((s) => s.currentRole);
 
   const backToListPath = currentRole === 'accountant' ? '/accountant-assets' : '/assets';
+
+  /** Chỉ tạo bản ghi danh mục (Asset), chưa tạo cá thể / nhập kho — phù hợp luồng đơn mua. */
+  const [catalogOnly, setCatalogOnly] = useState(currentRole === 'accountant');
+  const [actorUserId, setActorUserId] = useState(0);
 
   const [general, setGeneral] = useState<GeneralInfoForm>({
     assetCodePrefix: '',
@@ -115,6 +120,21 @@ export function AssetCreatePage() {
     { employeeId: number; name: string; code: string }[]
   >([]);
   const [loadMetaError, setLoadMetaError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const p = await profileService.getProfile();
+        if (!cancelled) setActorUserId(p.id);
+      } catch {
+        if (!cancelled) setActorUserId(0);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -195,6 +215,39 @@ export function AssetCreatePage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (catalogOnly) {
+      if (!general.name?.trim() || !general.assetTypeId || !general.assetCodePrefix.trim()) {
+        alert('Vui lòng nhập mã danh mục, loại và tên tài sản.');
+        return;
+      }
+      const qty = Math.max(1, Number(general.quantity || 1));
+      setSubmitError(null);
+      setIsSubmitting(true);
+      try {
+        await assetService.create({
+          assetCodePrefix: general.assetCodePrefix.trim(),
+          name: general.name.trim(),
+          assetTypeId: Number(general.assetTypeId),
+          unit: general.unit || 'Cái',
+          quantity: qty,
+          createdBy: actorUserId > 0 ? actorUserId : 0,
+          specification: general.specification?.trim() || null,
+          note: general.note?.trim() || null,
+          inUseDate: null,
+        });
+        navigate(backToListPath);
+      } catch (err: unknown) {
+        const msg =
+          err && typeof err === 'object' && 'response' in err
+            ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+            : null;
+        setSubmitError(msg || 'Tạo danh mục tài sản thất bại.');
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
     if (!general.name || !general.assetTypeId || !general.purchaseDate) {
       alert('Vui lòng nhập đầy đủ các trường bắt buộc được đánh dấu *.');
       return;
@@ -245,7 +298,7 @@ export function AssetCreatePage() {
       unit: general.unit || 'Cái',
       quantity: qty,
       instanceCodePrefix: prefix,
-      createdBy: 0,
+      createdBy: actorUserId > 0 ? actorUserId : 0,
       inUseDate: general.purchaseDate || null,
       specification: general.specification?.trim() || null,
       note: general.note?.trim() || null,
@@ -295,6 +348,14 @@ export function AssetCreatePage() {
         <div className="asset-create__title-row">
           <h1 className="asset-create__title">Thêm tài sản</h1>
           <span className="asset-create__status">Đang sử dụng</span>
+          <label className="asset-create__checkbox-row" style={{ marginLeft: 12 }}>
+            <input
+              type="checkbox"
+              checked={catalogOnly}
+              onChange={(e) => setCatalogOnly(e.target.checked)}
+            />
+            <span>Chỉ tạo danh mục (chưa tạo cá thể / nhập kho)</span>
+          </label>
           <div className="asset-create__header-actions">
             <button
               type="button"
@@ -383,32 +444,36 @@ export function AssetCreatePage() {
                 />
               </div>
 
-              <div className="asset-create__field">
-                <label className="asset-create__label">
-                  Mã cá thể<span className="asset-create__required">*</span>
-                </label>
-                <input
-                  className="asset-create__input"
-                  list="asset-instance-prefix-options"
-                  placeholder="Ví dụ: LAP"
-                  value={general.instanceCodePrefix}
-                  onChange={(e) =>
-                    setGeneral({ ...general, instanceCodePrefix: e.target.value })
-                  }
-                />
-                <datalist id="asset-instance-prefix-options">
-                  {instancePrefixes.map((p) => (
-                    <option key={p} value={p} />
-                  ))}
-                </datalist>
-                <p className="asset-create__hint">
-                  Hệ thống gắn số thứ tự tự động (ví dụ LAP → LAP01, LAP02…).
-                </p>
-              </div>
+              {!catalogOnly && (
+                <div className="asset-create__field">
+                  <label className="asset-create__label">
+                    Mã cá thể<span className="asset-create__required">*</span>
+                  </label>
+                  <input
+                    className="asset-create__input"
+                    list="asset-instance-prefix-options"
+                    placeholder="Ví dụ: LAP"
+                    value={general.instanceCodePrefix}
+                    onChange={(e) =>
+                      setGeneral({ ...general, instanceCodePrefix: e.target.value })
+                    }
+                  />
+                  <datalist id="asset-instance-prefix-options">
+                    {instancePrefixes.map((p) => (
+                      <option key={p} value={p} />
+                    ))}
+                  </datalist>
+                  <p className="asset-create__hint">
+                    Hệ thống gắn số thứ tự tự động (ví dụ LAP → LAP01, LAP02…).
+                  </p>
+                </div>
+              )}
 
               <div className="asset-create__field asset-create__field--quantity-unit-row">
                 <div className="asset-create__quantity-unit-cell">
-                  <label className="asset-create__label">Số lượng</label>
+                  <label className="asset-create__label">
+                    {catalogOnly ? 'Số lượng (danh mục)' : 'Số lượng'}
+                  </label>
                   <input
                     type="number"
                     min={1}
@@ -434,16 +499,18 @@ export function AssetCreatePage() {
                 </div>
               </div>
 
-              <div className="asset-create__field">
-                <label className="asset-create__label">Giá trị</label>
-                <input
-                  type="number"
-                  min={0}
-                  className="asset-create__input"
-                  value={general.value}
-                  onChange={(e) => setGeneral({ ...general, value: e.target.value })}
-                />
-              </div>
+              {!catalogOnly && (
+                <div className="asset-create__field">
+                  <label className="asset-create__label">Giá trị</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="asset-create__input"
+                    value={general.value}
+                    onChange={(e) => setGeneral({ ...general, value: e.target.value })}
+                  />
+                </div>
+              )}
 
               <div className="asset-create__field">
                 <label className="asset-create__label">Nguồn gốc</label>
@@ -462,8 +529,28 @@ export function AssetCreatePage() {
                 />
                 <span>Là tài sản cố định</span>
               </label>
+
+              <div className="asset-create__field">
+                <label className="asset-create__label">Quy cách tài sản</label>
+                <input
+                  className="asset-create__input"
+                  value={general.specification}
+                  onChange={(e) => setGeneral({ ...general, specification: e.target.value })}
+                />
+              </div>
+
+              <div className="asset-create__field">
+                <label className="asset-create__label">Ghi chú</label>
+                <textarea
+                  className="asset-create__textarea"
+                  rows={2}
+                  value={general.note}
+                  onChange={(e) => setGeneral({ ...general, note: e.target.value })}
+                />
+              </div>
             </div>
 
+            {!catalogOnly && (
             <div className="asset-create__column">
               <div className="asset-create__field">
                 <label className="asset-create__label">
@@ -592,30 +679,13 @@ export function AssetCreatePage() {
                   <p className="asset-create__hint">Chỉ áp dụng khi số lượng là 1.</p>
                 )}
               </div>
-
-              <div className="asset-create__field">
-                <label className="asset-create__label">Quy cách tài sản</label>
-                <input
-                  className="asset-create__input"
-                  value={general.specification}
-                  onChange={(e) => setGeneral({ ...general, specification: e.target.value })}
-                />
-              </div>
-
-              <div className="asset-create__field">
-                <label className="asset-create__label">Ghi chú</label>
-                <textarea
-                  className="asset-create__textarea"
-                  rows={2}
-                  value={general.note}
-                  onChange={(e) => setGeneral({ ...general, note: e.target.value })}
-                />
-              </div>
             </div>
+            )}
           </div>
         </section>
 
         {/* Bảo hành */}
+        {!catalogOnly && (
         <section className="asset-create__section">
           <h2 className="asset-create__section-title">Bảo hành</h2>
           <div className="asset-create__grid asset-create__grid--three">
@@ -653,8 +723,10 @@ export function AssetCreatePage() {
             </div>
           </div>
         </section>
+        )}
 
         {/* Thông tin khấu hao */}
+        {!catalogOnly && (
         <section className="asset-create__section">
           <h2 className="asset-create__section-title">Thông tin khấu hao</h2>
           <div className="asset-create__grid asset-create__grid--three">
@@ -743,8 +815,10 @@ export function AssetCreatePage() {
             </div>
           </div>
         </section>
+        )}
 
         {/* Đã cấp phát */}
+        {!catalogOnly && (
         <section className="asset-create__section">
           <h2 className="asset-create__section-title">Đã cấp phát</h2>
           <div className="asset-create__grid asset-create__grid--two">
@@ -771,6 +845,7 @@ export function AssetCreatePage() {
             </div>
           </div>
         </section>
+        )}
 
         {/* Tài liệu */}
         <section className="asset-create__section">

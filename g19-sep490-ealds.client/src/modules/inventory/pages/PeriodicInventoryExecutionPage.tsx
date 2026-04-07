@@ -21,8 +21,6 @@ import {
 } from '../../assets/services/assetService';
 import './PeriodicInventoryExecutionPage.css';
 
-const { TextArea } = Input;
-
 const INVENTORY_STATUS_SELECT_OPTIONS = getInventoryExecutionStatusSelectOptions();
 
 const CHECK_STATUS_TABS: { label: string; value: number | undefined }[] = [

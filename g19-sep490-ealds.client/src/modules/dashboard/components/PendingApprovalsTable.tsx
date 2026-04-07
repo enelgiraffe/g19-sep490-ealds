@@ -32,7 +32,7 @@ export function PendingApprovalsTable({ dataSource, maxRows = 6 }: PendingApprov
   return (
     <div style={{ marginBottom: 24 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>
-        Yêu cầu chờ phê duyệt
+        Yêu cầu chờ phê duyệt (tối đa {maxRows} mục)
       </h3>
       <Table
         dataSource={dataSource}

@@ -6,7 +6,7 @@ import {
   type DisposalExecutionDto,
 } from '../../requests/services/disposalExecutionService';
 import { parseIntegerMoneyInput } from '../../../shared/utils/moneyInput';
-import '../../requests/components/DisposalAppraisalDetailModal.css';
+import './LiquidationExecutionModal.css';
 import '../../assets/components/MarkDamagedAssetModal.css';
 
 function axiosErrorDetail(e: unknown): string | null {
@@ -89,7 +89,8 @@ export function LiquidationExecutionModal({
       status: 0,
       canEdit: true,
       canFinalize: false,
-      blockFinalizeReason: 'Lưu nháp trước; sau đó mới hoàn tất thanh lý khi đủ điều kiện hội đồng.',
+      assetRequestStatus: 2,
+      blockFinalizeReason: 'Ghi nhận biên bản thẩm định trước, sau đó mới ghi nhận biên bản thanh lý.',
     });
 
     setHydrating(true);
@@ -147,6 +148,7 @@ export function LiquidationExecutionModal({
   const completed = (dto?.status ?? 0) >= 2;
   const canEdit = !completed && (dto?.canEdit ?? true);
   const canFinalize = !completed && !!dto?.canFinalize;
+  const isAppraisalStep = (dto?.assetRequestStatus ?? 2) === 2;
 
   const buildPayload = () => {
     const actual = parseIntegerMoneyInput(actualValueText);
@@ -221,6 +223,34 @@ export function LiquidationExecutionModal({
     });
   };
 
+  const handleRecordAppraisal = async () => {
+    if (!userId) return;
+    if (!plannedAt) {
+      message.error('Vui lòng nhập ngày thẩm định.');
+      return;
+    }
+    if (!minutesNo.trim() && !executionNote.trim()) {
+      message.error('Vui lòng nhập số biên bản hoặc kết luận thẩm định.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const next = await disposalExecutionService.recordAppraisal(assetRequestId, {
+        userId,
+        appraisalDate: plannedAt.toISOString(),
+        appraisalMinutesNo: minutesNo.trim() || null,
+        appraisalConclusion: executionNote.trim() || null,
+      });
+      setDto(next);
+      message.success('Đã ghi nhận biên bản thẩm định.');
+      await onSuccess();
+    } catch (e) {
+      message.error(axiosErrorDetail(e)?.slice(0, 200) ?? 'Ghi nhận thẩm định thất bại.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="mark-damaged-modal-overlay" role="dialog" aria-modal="true">
       <div className="mark-damaged-modal">
@@ -230,7 +260,7 @@ export function LiquidationExecutionModal({
 
         <div className="mark-damaged-modal__header">
           <h2 className="mark-damaged-modal__title">
-            Thực hiện thanh lý — {requestCode ?? `YC-${assetRequestId}`}
+            {isAppraisalStep ? 'Ghi nhận biên bản thẩm định' : 'Ghi nhận biên bản thanh lý'} — {requestCode ?? `YC-${assetRequestId}`}
           </h2>
         </div>
 
@@ -257,9 +287,11 @@ export function LiquidationExecutionModal({
               )}
 
               <div className="mark-damaged-form-section">
-                <h3 className="mark-damaged-section-title">Thông tin thực hiện</h3>
+                <h3 className="mark-damaged-section-title">
+                  {isAppraisalStep ? 'Thông tin biên bản thẩm định' : 'Thông tin biên bản thanh lý'}
+                </h3>
                   <div className="mark-damaged-form__item">
-                    <label htmlFor="lex-planned">Ngày dự kiến</label>
+                    <label htmlFor="lex-planned">{isAppraisalStep ? 'Ngày thẩm định' : 'Ngày dự kiến'}</label>
                     <input
                       id="lex-planned"
                       type="date"
@@ -331,7 +363,9 @@ export function LiquidationExecutionModal({
                     />
                   </div>
                   <div className="mark-damaged-form__item">
-                    <label htmlFor="lex-minutes">Số biên bản giao nhận</label>
+                    <label htmlFor="lex-minutes">
+                      {isAppraisalStep ? 'Số biên bản thẩm định' : 'Số biên bản giao nhận'}
+                    </label>
                     <input
                       id="lex-minutes"
                       type="text"
@@ -382,7 +416,7 @@ export function LiquidationExecutionModal({
                     </div>
                   </div>
                   <div className="mark-damaged-form__item">
-                    <label htmlFor="lex-note">Ghi chú</label>
+                    <label htmlFor="lex-note">{isAppraisalStep ? 'Kết luận thẩm định' : 'Ghi chú'}</label>
                     <textarea
                       id="lex-note"
                       className="mark-damaged-textarea"
@@ -412,14 +446,24 @@ export function LiquidationExecutionModal({
               {saving ? 'Đang lưu...' : 'Lưu nháp'}
             </button>
           )}
-          {canFinalize && (
+          {isAppraisalStep && canEdit && (
+            <button
+              type="button"
+              className="mark-damaged-btn-submit"
+              disabled={saving || finalizing || !userId}
+              onClick={() => void handleRecordAppraisal()}
+            >
+              Ghi nhận biên bản thẩm định
+            </button>
+          )}
+          {canFinalize && !isAppraisalStep && (
             <button
               type="button"
               className="mark-damaged-btn-submit"
               disabled={saving || finalizing || !userId}
               onClick={() => handleFinalize()}
             >
-              Hoàn tất thanh lý
+              Ghi nhận biên bản thanh lý
             </button>
           )}
         </div>

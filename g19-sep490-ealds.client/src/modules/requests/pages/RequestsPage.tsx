@@ -13,7 +13,6 @@ import {
 import { profileService, type UserProfile } from '../../profile/services/profileService';
 import {
   transferRequestService,
-  type AssetLocationOption,
   type TransferRequestListItem,
 } from '../../assets/services/transferRequestService';
 import { disposalRequestService } from '../../assets/services/disposalRequestService';
@@ -25,7 +24,6 @@ import {
   isDepartmentHeadRoleCode,
 } from '../../../shared/utils/departmentHeadRole';
 import { AccountantTransferRequestDetailModal } from '../components/AccountantTransferRequestDetailModal';
-import { DisposalAppraisalDetailModal } from '../components/DisposalAppraisalDetailModal';
 import {
   accountantRequestService,
   type AccountantRequestListItem,
@@ -35,20 +33,12 @@ import {
   REQUEST_TYPE_IDS,
   type DirectorRequestListItem,
 } from '../services/directorRequestService';
-import {
-  disposalAppraisalService,
-  type DisposalAppraisalDetail,
-  type DisposalAppraisalListItem,
-} from '../services/disposalAppraisalService';
-import { userService } from '../../admin/services/userService';
 import './RequestsPage.css';
-import './DirectorDisposalAppraisalModal.css';
 
 const { Option } = Select;
 
 type ActiveTabKey = 'purchase' | 'transfer' | 'liquidation';
 type ActiveTabKeyAll = ActiveTabKey | 'maintenance' | 'repair';
-type LiquidationPillKey = 'requests' | 'appraisals';
 
 const PURCHASE_STATUS_MAP: Record<number, { label: string; color: string }> = {
   [-1]: { label: 'Nháp', color: 'default' },
@@ -82,8 +72,8 @@ const DIRECTOR_STATUS_MAP: Record<number, { label: string; color: string }> = {
   1: { label: 'Chờ phê duyệt', color: 'warning' },
   2: { label: 'Phê duyệt', color: 'success' },
   3: { label: 'Từ chối', color: 'error' },
-  4: { label: 'Đang thực hiện', color: 'processing' },
-  5: { label: 'Hoàn thành', color: 'success' },
+  4: { label: 'Đã thẩm định', color: 'processing' },
+  5: { label: 'Đã thanh lý', color: 'success' },
 };
 
 /**
@@ -291,23 +281,6 @@ export function RequestsPage() {
   const [isLiquidationExecutionOpen, setIsLiquidationExecutionOpen] = useState(false);
   const [liquidationExecutionRequestId, setLiquidationExecutionRequestId] = useState<number | null>(null);
   const [liquidationExecutionCode, setLiquidationExecutionCode] = useState('');
-  const [liquidationPill, setLiquidationPill] = useState<LiquidationPillKey>('requests');
-  const [appraisalRows, setAppraisalRows] = useState<DisposalAppraisalListItem[]>([]);
-  const [appraisalLoading, setAppraisalLoading] = useState(false);
-  const [isAppraisalDetailOpen, setIsAppraisalDetailOpen] = useState(false);
-  const [viewAppraisalId, setViewAppraisalId] = useState<number | null>(null);
-  const [isDirectorAppraisalOpen, setIsDirectorAppraisalOpen] = useState(false);
-  const [directorAppraisalLoading, setDirectorAppraisalLoading] = useState(false);
-  const [directorAppraisalDetail, setDirectorAppraisalDetail] = useState<DisposalAppraisalDetail | null>(null);
-  const [directorAppraisalExists, setDirectorAppraisalExists] = useState(false);
-  const [committeeUserOptions, setCommitteeUserOptions] = useState<Array<{ userId: number; label: string }>>([]);
-  const [appraisalDepartmentOptions, setAppraisalDepartmentOptions] = useState<AssetLocationOption[]>([]);
-  const [appraisalFormDate, setAppraisalFormDate] = useState<Dayjs | null>(null);
-  const [appraisalFormDepartmentId, setAppraisalFormDepartmentId] = useState<number | undefined>(undefined);
-  const [appraisalFormReporterId, setAppraisalFormReporterId] = useState<number | undefined>(undefined);
-  const [newCommitteeUserId, setNewCommitteeUserId] = useState<number | undefined>(undefined);
-  const [newCommitteeRole, setNewCommitteeRole] = useState('');
-  const [appraisalMutating, setAppraisalMutating] = useState(false);
 
   const [directorRows, setDirectorRows] = useState<DirectorRequestListItem[]>([]);
   const [directorTotal, setDirectorTotal] = useState(0);
@@ -328,22 +301,15 @@ export function RequestsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  // Từ trang cá thể: quay lại /requests?...&openAppraisal=… → mở lại modal biên bản thẩm định
+  // Luồng hội đồng/thẩm định đã ngừng sử dụng: chỉ dọn query cũ nếu còn.
   useEffect(() => {
     const aid = searchParams.get('openAppraisal');
-    if (!aid || !userProfile?.id) return;
-    const id = Number(aid);
-    if (!Number.isFinite(id) || id <= 0) return;
-    const pill = searchParams.get('liquidationPill');
-    setActiveTab('liquidation');
-    if (pill === 'appraisals') setLiquidationPill('appraisals');
-    setViewAppraisalId(id);
-    setIsAppraisalDetailOpen(true);
+    if (!aid) return;
     const next = new URLSearchParams(searchParams);
     next.delete('openAppraisal');
     next.delete('liquidationPill');
     setSearchParams(next, { replace: true });
-  }, [searchParams, userProfile?.id, setSearchParams]);
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     const loadPurchase = async () => {
@@ -451,75 +417,6 @@ export function RequestsPage() {
     }
   };
 
-  const reloadAppraisalList = async () => {
-    if (!userProfile?.id) return;
-    setAppraisalLoading(true);
-    try {
-      const asDirector = String(userProfile.role ?? '').toUpperCase() === 'DIRECTOR';
-      const rows = asDirector
-        ? await disposalAppraisalService.getDirectorAppraisals(userProfile.id)
-        : await disposalAppraisalService.getMyAppraisals(userProfile.id);
-      setAppraisalRows(rows);
-    } catch {
-      message.error('Không tải được danh sách thẩm định thanh lý.');
-      setAppraisalRows([]);
-    } finally {
-      setAppraisalLoading(false);
-    }
-  };
-
-  const openDirectorAppraisalModal = async () => {
-    if (!userProfile?.id || !selectedDirectorItem) return;
-    setIsDirectorAppraisalOpen(true);
-    setDirectorAppraisalLoading(true);
-    setNewCommitteeUserId(undefined);
-    setNewCommitteeRole('');
-    try {
-      const users = await userService.getAll();
-      setCommitteeUserOptions(
-        users.map((u) => ({
-          userId: u.userId,
-          label: `${u.fullName?.trim() || u.email} (#${u.userId})`,
-        })),
-      );
-    } catch {
-      setCommitteeUserOptions([]);
-      message.warning('Không tải được danh sách người dùng.');
-    }
-    try {
-      const deptList = await transferRequestService.getAssetLocations();
-      setAppraisalDepartmentOptions(deptList);
-    } catch {
-      setAppraisalDepartmentOptions([]);
-      message.warning('Không tải được danh sách phòng ban.');
-    }
-    try {
-      const d = await disposalAppraisalService.getByAssetRequest(
-        selectedDirectorItem.assetRequestId,
-        userProfile.id,
-      );
-      setDirectorAppraisalDetail(d);
-      setDirectorAppraisalExists(true);
-      setAppraisalFormDate(d.scheduledAt ? dayjs(d.scheduledAt) : null);
-      setAppraisalFormDepartmentId(d.meetingDepartmentId ?? undefined);
-      setAppraisalFormReporterId(d.reporterUserId ?? undefined);
-    } catch (e: unknown) {
-      const st = (e as { response?: { status?: number } })?.response?.status;
-      if (st === 404) {
-        setDirectorAppraisalDetail(null);
-        setDirectorAppraisalExists(false);
-        setAppraisalFormDate(null);
-        setAppraisalFormDepartmentId(undefined);
-        setAppraisalFormReporterId(undefined);
-      } else {
-        message.error('Không tải được thông tin hội đồng thẩm định.');
-        setIsDirectorAppraisalOpen(false);
-      }
-    } finally {
-      setDirectorAppraisalLoading(false);
-    }
-  };
-
   const normalizedRole = String(userProfile?.role ?? '').toUpperCase();
   const isDirectorRole = normalizedRole === 'DIRECTOR';
   const isAccountantRole = normalizedRole === 'ACCOUNTANT';
@@ -614,12 +511,6 @@ export function RequestsPage() {
     setPage(1);
   }, [activeTab, statusFilter, searchText, departmentFilter, sentDateFilter]);
 
-  useEffect(() => {
-    if (activeTab !== 'liquidation') {
-      setLiquidationPill('requests');
-    }
-  }, [activeTab]);
-
   // Accountant transfer list must always include requests already approved by director.
   // Reset status filter to "all" when switching to transfer tab to avoid hiding approved rows.
   useEffect(() => {
@@ -634,13 +525,6 @@ export function RequestsPage() {
     setSelectedDirectorItem(null);
     setIsDirectorDetailOpen(false);
   }, [activeTab, shouldUseDirectorView]);
-
-  useEffect(() => {
-    if (!userProfile?.id) return;
-    if (activeTab !== 'liquidation') return;
-    if (liquidationPill !== 'appraisals') return;
-    reloadAppraisalList();
-  }, [userProfile?.id, activeTab, liquidationPill]);
 
   const filteredPurchaseRows = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
@@ -707,26 +591,6 @@ export function RequestsPage() {
     });
   }, [liquidationRows, searchText, statusFilter, sentDateFilter]);
 
-  const filteredAppraisalRows = useMemo(() => {
-    const keyword = searchText.trim().toLowerCase();
-    return appraisalRows.filter((row) => {
-      let matchDate = true;
-      if (sentDateFilter && row.scheduledAt) {
-        try {
-          const rowDate = new Date(row.scheduledAt).toISOString().slice(0, 10);
-          matchDate = rowDate === sentDateFilter;
-        } catch {
-          matchDate = true;
-        }
-      }
-      const matchKeyword =
-        !keyword ||
-        row.requestTitle.toLowerCase().includes(keyword) ||
-        `yc-${row.assetRequestId}`.includes(keyword);
-      return matchDate && matchKeyword;
-    });
-  }, [appraisalRows, searchText, sentDateFilter]);
-
   const departmentOptions = useMemo(
     () =>
       Array.from(new Set(transferRows.map((row) => row.fromDepartment)))
@@ -738,7 +602,6 @@ export function RequestsPage() {
   const isPurchaseTab = activeTab === 'purchase';
   const isTransferTab = activeTab === 'transfer';
   const isLiquidationTab = activeTab === 'liquidation';
-  const isLiquidationAppraisalPill = isLiquidationTab && liquidationPill === 'appraisals';
   const hasDataTable = isPurchaseTab || isTransferTab || isLiquidationTab || shouldUseDirectorView;
 
   const currentRows = isPurchaseTab
@@ -746,30 +609,26 @@ export function RequestsPage() {
     : isTransferTab
       ? filteredTransferRows
       : isLiquidationTab
-        ? (isLiquidationAppraisalPill ? filteredAppraisalRows : filteredLiquidationRows)
+        ? filteredLiquidationRows
       : [];
-  const loading = isLiquidationAppraisalPill
-    ? appraisalLoading
-    : isPurchaseTab
-      ? purchaseLoading
-      : isTransferTab
-        ? transferLoading
-        : isLiquidationTab && !shouldUseDirectorView
-          ? liquidationLoading
-          : shouldUseDirectorView
-            ? directorLoading
-            : false;
+  const loading = isPurchaseTab
+    ? purchaseLoading
+    : isTransferTab
+      ? transferLoading
+      : isLiquidationTab && !shouldUseDirectorView
+        ? liquidationLoading
+        : shouldUseDirectorView
+          ? directorLoading
+          : false;
 
-  const total =
-    shouldUseDirectorView && !isLiquidationAppraisalPill ? directorTotal : currentRows.length;
+  const total = shouldUseDirectorView ? directorTotal : currentRows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
   const startIndex = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const endIndex = Math.min(safePage * pageSize, total);
-  const pagedRows =
-    shouldUseDirectorView && !isLiquidationAppraisalPill
-      ? directorRows
-      : currentRows.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const pagedRows = shouldUseDirectorView
+    ? directorRows
+    : currentRows.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleCloseCreatePurchase = () => {
     setIsCreatePurchaseOpen(false);
@@ -960,26 +819,6 @@ export function RequestsPage() {
           ]}
         />
 
-        {isLiquidationTab && (!shouldUseDirectorView || isDirectorRole) && (
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            <Button
-              type={liquidationPill === 'requests' ? 'primary' : 'default'}
-              onClick={() => setLiquidationPill('requests')}
-            >
-              Yêu cầu thanh lý
-            </Button>
-            <Button
-              type={liquidationPill === 'appraisals' ? 'primary' : 'default'}
-              onClick={() => {
-                setLiquidationPill('appraisals');
-                setPage(1);
-              }}
-            >
-              Thẩm định tài sản
-            </Button>
-          </div>
-        )}
-
         <div
           className={
             isLiquidationTab && (!shouldUseDirectorView || isDirectorRole)
@@ -1028,7 +867,7 @@ export function RequestsPage() {
               />
             </>
           )}
-          {isLiquidationTab && !shouldUseDirectorView && liquidationPill === 'requests' && (
+          {isLiquidationTab && !shouldUseDirectorView && (
             <>
               <Select
                 placeholder="Trạng thái"
@@ -1048,17 +887,7 @@ export function RequestsPage() {
               />
             </>
           )}
-          {isLiquidationTab && liquidationPill === 'appraisals' && (
-            <DatePicker
-              placeholder="Ngày hẹn thẩm định"
-              className="requests-date-picker"
-              onChange={(_, dateString) => {
-                setSentDateFilter(dateString || null);
-              }}
-            />
-          )}
           {shouldUseDirectorView &&
-            !(activeTab === 'liquidation' && liquidationPill === 'appraisals') &&
             (enforcedDirectorStatuses != null ? (
               <div style={{ color: '#6b7280', fontSize: 13 }}>
                 Chỉ hiển thị:{' '}
@@ -1096,87 +925,12 @@ export function RequestsPage() {
             </div>
           ) : loading ? (
             <div className="requests-table-loading">
-              {isLiquidationAppraisalPill
-                ? 'Đang tải danh sách thẩm định...'
-                : isPurchaseTab
-                  ? 'Đang tải danh sách đơn mua...'
-                  : isTransferTab
-                    ? 'Đang tải danh sách yêu cầu điều chuyển...'
-                    : 'Đang tải danh sách yêu cầu...'}
+              {isPurchaseTab
+                ? 'Đang tải danh sách đơn mua...'
+                : isTransferTab
+                  ? 'Đang tải danh sách yêu cầu điều chuyển...'
+                  : 'Đang tải danh sách yêu cầu...'}
             </div>
-          ) : isLiquidationAppraisalPill ? (
-            <table className="asset-table requests-table">
-              <thead>
-                <tr>
-                  <th>MÃ YÊU CẦU</th>
-                  <th>NGÀY HẸN THẨM ĐỊNH</th>
-                  <th>THÔNG TIN THẨM ĐỊNH</th>
-                  <th>TRẠNG THÁI</th>
-                  <th className="asset-table__cell asset-table__cell--actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {pagedRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="requests-table-empty">
-                      Không có dữ liệu.
-                    </td>
-                  </tr>
-                ) : (
-                  (pagedRows as DisposalAppraisalListItem[]).map((row) => {
-                    const statusText =
-                      row.status === 4
-                        ? 'Đã xác nhận hội đồng'
-                        : row.status === 2
-                          ? 'Đã có biên bản'
-                          : row.status === 1
-                            ? 'Đã lên lịch'
-                            : 'Đang xử lý';
-                    const roleHint =
-                      isDirectorRole && !row.isReporter && !row.isRelatedMember
-                        ? 'Hội đồng thẩm định'
-                        : row.isReporter
-                          ? 'Bạn là người nhập biên bản'
-                          : 'Bạn là thành viên liên quan';
-                    return (
-                      <tr key={row.appraisalId} className="asset-row">
-                        <td>YC-{row.assetRequestId}</td>
-                        <td>{row.scheduledAt ? formatDate(row.scheduledAt) : '—'}</td>
-                        <td>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            <span>{row.requestTitle || '—'}</span>
-                            <span style={{ color: '#6b7280', fontSize: 12 }}>
-                              {roleHint}
-                              {row.meetingDepartmentName || row.meetingLocation
-                                ? ` - ${row.meetingDepartmentName ?? row.meetingLocation}`
-                                : ''}
-                            </span>
-                          </div>
-                        </td>
-                        <td>
-                          <span className="asset-status-pill asset-status-pill--processing">{statusText}</span>
-                        </td>
-                        <td className="asset-table__cell asset-table__cell--actions">
-                          <div className="requests-actions">
-                            <Button
-                              type="text"
-                              icon={<EyeOutlined />}
-                              size="small"
-                              onClick={() => {
-                                setViewAppraisalId(row.appraisalId);
-                                setIsAppraisalDetailOpen(true);
-                              }}
-                            >
-                              Xem
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
           ) : shouldUseDirectorView ? (
             <table className="asset-table requests-table">
               <thead>
@@ -1480,7 +1234,7 @@ export function RequestsPage() {
                                 Phê duyệt
                               </Button>
                             )}
-                            {isAccountantRole && row.status === 2 && (
+                            {isAccountantRole && (row.status === 2 || row.status === 4) && (
                               <Button
                                 type="text"
                                 size="small"
@@ -1490,7 +1244,7 @@ export function RequestsPage() {
                                   setIsLiquidationExecutionOpen(true);
                                 }}
                               >
-                                Thực hiện thanh lý
+                                {row.status === 2 ? 'Ghi nhận biên bản thẩm định' : 'Ghi nhận biên bản thanh lý'}
                               </Button>
                             )}
                           </div>
@@ -1756,17 +1510,6 @@ export function RequestsPage() {
           }}
         />
       )}
-
-      <DisposalAppraisalDetailModal
-        open={isAppraisalDetailOpen}
-        appraisalId={viewAppraisalId}
-        userId={userProfile?.id}
-        onClose={() => {
-          setIsAppraisalDetailOpen(false);
-          setViewAppraisalId(null);
-        }}
-        onRefreshList={reloadAppraisalList}
-      />
 
       {isDirectorDetailOpen && selectedDirectorItem && (
         <div className="acct-transfer-modal-overlay" role="dialog" aria-modal="true">
@@ -2124,20 +1867,6 @@ export function RequestsPage() {
                       Quay lại
                     </button>
 
-                    {selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.liquidation &&
-                      selectedDirectorItem.status >= 1 && (
-                      <button
-                        type="button"
-                        className="acct-transfer-btn-approve"
-                        onClick={() => {
-                          void openDirectorAppraisalModal();
-                        }}
-                      >
-                        <span className="acct-transfer-btn-approve-icon">👥</span>
-                        <span>Hội đồng thẩm định</span>
-                      </button>
-                    )}
-
                     {canDirectorApprove && (
                       <button
                         type="button"
@@ -2156,309 +1885,6 @@ export function RequestsPage() {
                 </>
               );
             })()}
-          </div>
-        </div>
-      )}
-
-      {isDirectorAppraisalOpen && selectedDirectorItem && userProfile?.id && (
-        <div className="acct-transfer-modal-overlay" role="dialog" aria-modal="true">
-          <div className="acct-transfer-modal director-appraisal-modal">
-            <button
-              type="button"
-              className="director-appraisal-modal__close-btn"
-              onClick={() => {
-                setIsDirectorAppraisalOpen(false);
-                setDirectorAppraisalDetail(null);
-                setDirectorAppraisalExists(false);
-              }}
-              aria-label="Đóng"
-            >
-              <span className="director-appraisal-modal__close">×</span>
-            </button>
-            <div className="acct-transfer-modal__header">
-              <div className="acct-transfer-modal__header-left">
-                <h2 className="acct-transfer-modal__title">
-                  Hội đồng thẩm định — YC-{selectedDirectorItem.assetRequestId}
-                </h2>
-              </div>
-            </div>
-            <div className="acct-transfer-modal__body">
-              {directorAppraisalLoading ? (
-                <div className="director-appraisal-modal__loading">Đang tải...</div>
-              ) : (
-                <div className="director-appraisal-modal__content">
-                  <div className="director-appraisal-stack">
-                    <div>
-                      <h3 className="director-appraisal-section-title">Lịch và địa điểm</h3>
-                      <div className="acct-transfer-form__row">
-                        <div className="acct-transfer-form__field">
-                          <label htmlFor="director-appraisal-date">Ngày hẹn thẩm định</label>
-                          <DatePicker
-                            id="director-appraisal-date"
-                            className="requests-date-picker"
-                            style={{ width: '100%' }}
-                            value={appraisalFormDate}
-                            onChange={(v) => setAppraisalFormDate(v)}
-                            format="DD/MM/YYYY"
-                          />
-                        </div>
-                        <div className="acct-transfer-form__field">
-                          <label htmlFor="director-appraisal-dept">Phòng ban (địa điểm)</label>
-                          <Select
-                            id="director-appraisal-dept"
-                            allowClear
-                            placeholder="Chọn phòng ban"
-                            style={{ width: '100%' }}
-                            value={appraisalFormDepartmentId}
-                            onChange={(v) =>
-                              setAppraisalFormDepartmentId(v === undefined ? undefined : Number(v))
-                            }
-                            showSearch
-                            optionFilterProp="label"
-                            options={appraisalDepartmentOptions.map((d) => ({
-                              value: d.locationId,
-                              label: d.displayName?.trim() || `PB #${d.locationId}`,
-                            }))}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="director-appraisal-form__item">
-                      <label htmlFor="director-appraisal-reporter">Người nhập biên bản thẩm định</label>
-                      <Select
-                        id="director-appraisal-reporter"
-                        allowClear
-                        placeholder="Chọn người dùng"
-                        style={{ width: '100%' }}
-                        value={appraisalFormReporterId}
-                        onChange={(v) => setAppraisalFormReporterId(v === undefined ? undefined : Number(v))}
-                        showSearch
-                        optionFilterProp="label"
-                        options={committeeUserOptions.map((o) => ({
-                          value: o.userId,
-                          label: o.label,
-                        }))}
-                      />
-                    </div>
-
-                    {!directorAppraisalExists ? (
-                      <div className="director-appraisal-modal__actions">
-                        <Button
-                          type="primary"
-                          loading={appraisalMutating}
-                          onClick={async () => {
-                            if (!userProfile?.id) return;
-                            setAppraisalMutating(true);
-                            try {
-                              const d = await disposalAppraisalService.create({
-                                userId: userProfile.id,
-                                assetRequestId: selectedDirectorItem.assetRequestId,
-                                scheduledAt: appraisalFormDate
-                                  ? appraisalFormDate.startOf('day').toISOString()
-                                  : null,
-                                meetingDepartmentId: appraisalFormDepartmentId ?? null,
-                                reporterUserId: appraisalFormReporterId ?? null,
-                              });
-                              setDirectorAppraisalDetail(d);
-                              setDirectorAppraisalExists(true);
-                              message.success('Đã tạo hội đồng thẩm định.');
-                            } catch (e: unknown) {
-                              const msg = (e as { response?: { data?: string } })?.response?.data;
-                              message.error(typeof msg === 'string' ? msg : 'Tạo hội đồng thất bại.');
-                            } finally {
-                              setAppraisalMutating(false);
-                            }
-                          }}
-                        >
-                          Tạo hội đồng
-                        </Button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="director-appraisal-modal__actions">
-                          <Button
-                            type="primary"
-                            loading={appraisalMutating}
-                            onClick={async () => {
-                              if (!userProfile?.id || !directorAppraisalDetail) return;
-                              setAppraisalMutating(true);
-                              try {
-                                const d = await disposalAppraisalService.update(
-                                  directorAppraisalDetail.appraisalId,
-                                  {
-                                    userId: userProfile.id,
-                                    scheduledAt: appraisalFormDate
-                                      ? appraisalFormDate.startOf('day').toISOString()
-                                      : null,
-                                    meetingDepartmentId: appraisalFormDepartmentId ?? null,
-                                    reporterUserId: appraisalFormReporterId ?? null,
-                                  },
-                                );
-                                setDirectorAppraisalDetail(d);
-                                message.success('Đã cập nhật lịch và người nhập biên bản.');
-                              } catch {
-                                message.error('Cập nhật thất bại.');
-                              } finally {
-                                setAppraisalMutating(false);
-                              }
-                            }}
-                          >
-                            Lưu lịch & người nhập biên bản
-                          </Button>
-                        </div>
-
-                        <div>
-                          <h3 className="director-appraisal-section-title">Thành viên hội đồng</h3>
-                          <div className="director-appraisal-member-list">
-                            {directorAppraisalDetail?.members.map((m) => (
-                              <div key={m.appraisalMemberId} className="director-appraisal-member-row">
-                                <span style={{ flex: '1 1 200px' }}>
-                                  {m.memberName} (#{m.userId})
-                                  {m.memberRole ? ` — ${m.memberRole}` : ''}
-                                  {m.isReporter ? ' (Người nhập biên bản)' : ''}
-                                </span>
-                                <Button
-                                  size="small"
-                                  type="link"
-                                  disabled={appraisalMutating}
-                                  onClick={async () => {
-                                    if (!userProfile?.id || !directorAppraisalDetail) return;
-                                    setAppraisalMutating(true);
-                                    try {
-                                      const d = await disposalAppraisalService.update(
-                                        directorAppraisalDetail.appraisalId,
-                                        {
-                                          userId: userProfile.id,
-                                          scheduledAt: appraisalFormDate
-                                            ? appraisalFormDate.startOf('day').toISOString()
-                                            : null,
-                                          meetingDepartmentId: appraisalFormDepartmentId ?? null,
-                                          reporterUserId: m.userId,
-                                        },
-                                      );
-                                      setDirectorAppraisalDetail(d);
-                                      setAppraisalFormReporterId(m.userId);
-                                      message.success('Đã chỉ định người nhập biên bản.');
-                                    } catch {
-                                      message.error('Thao tác thất bại.');
-                                    } finally {
-                                      setAppraisalMutating(false);
-                                    }
-                                  }}
-                                >
-                                  Chọn làm người nhập biên bản
-                                </Button>
-                                <Button
-                                  size="small"
-                                  danger
-                                  type="link"
-                                  disabled={appraisalMutating}
-                                  onClick={async () => {
-                                    if (!userProfile?.id || !directorAppraisalDetail) return;
-                                    setAppraisalMutating(true);
-                                    try {
-                                      const d = await disposalAppraisalService.removeMember(
-                                        directorAppraisalDetail.appraisalId,
-                                        m.appraisalMemberId,
-                                        userProfile.id,
-                                      );
-                                      setDirectorAppraisalDetail(d);
-                                      setAppraisalFormReporterId(d.reporterUserId ?? undefined);
-                                      message.success('Đã xóa thành viên.');
-                                    } catch {
-                                      message.error('Xóa thành viên thất bại.');
-                                    } finally {
-                                      setAppraisalMutating(false);
-                                    }
-                                  }}
-                                >
-                                  Xóa
-                                </Button>
-                              </div>
-                            ))}
-                            {(!directorAppraisalDetail?.members ||
-                              directorAppraisalDetail.members.length === 0) && (
-                              <span style={{ color: '#6b7280', fontSize: 13 }}>Chưa có thành viên.</span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div>
-                          <h3 className="director-appraisal-section-title">Thêm thành viên</h3>
-                          <div className="director-appraisal-add-row">
-                            <Select
-                              placeholder="Chọn người"
-                              style={{ minWidth: 220, flex: '1 1 200px' }}
-                              value={newCommitteeUserId}
-                              onChange={(v) => setNewCommitteeUserId(v === undefined ? undefined : Number(v))}
-                              showSearch
-                              optionFilterProp="label"
-                              options={committeeUserOptions.map((o) => ({
-                                value: o.userId,
-                                label: o.label,
-                              }))}
-                            />
-                            <Input
-                              style={{ width: 160, minWidth: 140 }}
-                              placeholder="Vai trò (vd: Ủy viên)"
-                              value={newCommitteeRole}
-                              onChange={(e) => setNewCommitteeRole(e.target.value)}
-                            />
-                            <Button
-                              type="default"
-                              loading={appraisalMutating}
-                              onClick={async () => {
-                                if (!userProfile?.id || !directorAppraisalDetail || !newCommitteeUserId) {
-                                  message.warning('Chọn người để thêm.');
-                                  return;
-                                }
-                                setAppraisalMutating(true);
-                                try {
-                                  const d = await disposalAppraisalService.addMember(
-                                    directorAppraisalDetail.appraisalId,
-                                    {
-                                      userId: userProfile.id,
-                                      memberUserId: newCommitteeUserId,
-                                      memberRole: newCommitteeRole.trim() || null,
-                                      setAsReporter: false,
-                                    },
-                                  );
-                                  setDirectorAppraisalDetail(d);
-                                  setNewCommitteeUserId(undefined);
-                                  setNewCommitteeRole('');
-                                  message.success('Đã thêm thành viên.');
-                                } catch (e: unknown) {
-                                  const msg = (e as { response?: { data?: string } })?.response?.data;
-                                  message.error(typeof msg === 'string' ? msg : 'Thêm thành viên thất bại.');
-                                } finally {
-                                  setAppraisalMutating(false);
-                                }
-                              }}
-                            >
-                              Thêm thành viên
-                            </Button>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="acct-transfer-modal__footer">
-              <button
-                type="button"
-                className="acct-transfer-btn-close"
-                onClick={() => {
-                  setIsDirectorAppraisalOpen(false);
-                  setDirectorAppraisalDetail(null);
-                  setDirectorAppraisalExists(false);
-                }}
-              >
-                Đóng
-              </button>
-            </div>
           </div>
         </div>
       )}

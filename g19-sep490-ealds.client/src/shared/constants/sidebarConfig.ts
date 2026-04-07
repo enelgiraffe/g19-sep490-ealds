@@ -9,7 +9,12 @@ export const COMMON_MENU: SidebarItem[] = [
 export const ROLE_MENU: Record<AppRole, SidebarItem[]> = {
   department_head: [
     { key: 'assets', path: '/assets', label: 'Tài sản', icon: '/icons/sidebar-assets.svg' },
-    { key: 'purchase-orders', path: '/purchase-orders', label: 'Đơn mua', icon: '/icons/sidebar-purchase-orders.svg' },
+    {
+      key: 'purchase-requisitions',
+      path: '/purchase-requisitions',
+      label: 'Yêu cầu mua',
+      icon: '/icons/sidebar-purchase-orders.svg',
+    },
     { key: 'transfers', path: '/transfers', label: 'Điều chuyển', icon: '/icons/sidebar-transfers.svg' },
     { key: 'repairs', path: '/repairs', label: 'Sửa chữa', icon: '/icons/sidebar-repairs.svg' },
     { key: 'maintenance', path: '/maintenance', label: 'Bảo trì', icon: '/icons/sidebar-maintenance.svg' },
@@ -22,9 +27,20 @@ export const ROLE_MENU: Record<AppRole, SidebarItem[]> = {
     { key: 'accountant-inventory', path: '/accountant-inventory', label: 'Kiểm kê', icon: '/icons/sidebar-inventories.svg' },
     { key: 'transfers', path: '/transfers', label: 'Điều chuyển', icon: '/icons/sidebar-transfers.svg' },
     { key: 'allocations', path: '/allocations', label: 'Cấp phát-Thu hồi', icon: '/icons/sidebar-allocations.svg' },
-    { key: 'liquidation', path: '/liquidation', label: 'Thanh lý', icon: '/icons/sidebar-liquidation.svg' },
-    { key: 'cost-recording', path: '/cost-recording', label: 'Ghi nhận chi phí', icon: '/icons/sidebar-cost-recording.svg' },
     { key: 'requests', path: '/requests', label: 'Yêu cầu', icon: '/icons/sidebar-requests.svg' },
+    { key: 'purchase-orders', path: '/purchase-orders', label: 'Đơn mua', icon: '/icons/sidebar-purchase-orders.svg' },
+    {
+      key: 'goods-receipts',
+      path: '/goods-receipts',
+      label: 'Biên nhận hàng',
+      icon: '/icons/sidebar-purchase-orders.svg',
+    },
+    {
+      key: 'supplier-invoices',
+      path: '/supplier-invoices',
+      label: 'Hóa đơn NCC',
+      icon: '/icons/sidebar-purchase-orders.svg',
+    },
   ],
   director: [
     { key: 'dashboard', path: '/dashboard', label: 'Dashboard', icon: '/icons/sidebar-dashboard.svg' },

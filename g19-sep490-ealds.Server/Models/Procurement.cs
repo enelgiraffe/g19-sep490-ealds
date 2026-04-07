@@ -7,7 +7,8 @@ public partial class Procurement
 {
     public int ProcurementId { get; set; }
 
-    public int AssetRequestId { get; set; }
+    /// <summary>Optional link to an approved purchase requisition. Null for standalone purchase orders (UC).</summary>
+    public int? AssetRequestId { get; set; }
 
     public int? SupplierId { get; set; }
 
@@ -16,6 +17,9 @@ public partial class Procurement
     public DateOnly ContractDate { get; set; }
 
     public string Title { get; set; } = null!;
+
+    /// <summary>ISO currency code, e.g. VND, USD.</summary>
+    public string Currency { get; set; } = "VND";
 
     public decimal TotalAmount { get; set; }
 
@@ -31,7 +35,13 @@ public partial class Procurement
 
     public virtual ICollection<AcceptanceRecord> AcceptanceRecords { get; set; } = new List<AcceptanceRecord>();
 
-    public virtual AssetRequest AssetRequest { get; set; } = null!;
+    public virtual ICollection<ProcurementLine> Lines { get; set; } = new List<ProcurementLine>();
+
+    public virtual ICollection<GoodsReceipt> GoodsReceipts { get; set; } = new List<GoodsReceipt>();
+
+    public virtual ICollection<SupplierInvoice> SupplierInvoices { get; set; } = new List<SupplierInvoice>();
+
+    public virtual AssetRequest? AssetRequest { get; set; }
 
     public virtual User CreatedByNavigation { get; set; } = null!;
 

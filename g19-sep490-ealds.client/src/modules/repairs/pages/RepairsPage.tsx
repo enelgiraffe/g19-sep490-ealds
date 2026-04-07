@@ -19,7 +19,6 @@ import { assetRequestService } from '../../assets/services/assetRequestService';
 import {
   assetInstanceService,
   assetService,
-  formatVnd,
   type AssetDetailResponse,
 } from '../../assets/services/assetService';
 import {

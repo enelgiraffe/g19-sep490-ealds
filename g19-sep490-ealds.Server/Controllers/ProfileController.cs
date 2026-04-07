@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using g19_sep490_ealds.Server.DTOs.Profile;
 using g19_sep490_ealds.Server.Models;
+using g19_sep490_ealds.Server.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -13,11 +14,16 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class ProfileController : ControllerBase
 {
     private readonly EaldsDbContext _context;
+    private readonly IConfiguration _configuration;
 
-    public ProfileController(EaldsDbContext context)
+    public ProfileController(EaldsDbContext context, IConfiguration configuration)
     {
         _context = context;
+        _configuration = configuration;
     }
+
+    private int AccountantRoleId =>
+        _configuration.GetValue("App:AccountantRoleId", 3);
 
     [HttpGet]
     public async Task<IActionResult> GetProfile()
@@ -34,11 +40,16 @@ public class ProfileController : ControllerBase
             .Include(e => e.Department)
             .FirstOrDefaultAsync(e => e.UserId == userId);
 
-        var roleCodes = await _context.UserRoles
+        var roleRows = await _context.UserRoles
             .Where(ur => ur.UserId == userId)
-            .Select(ur => ur.Role != null ? ur.Role.Code : null)
+            .Select(ur => new { ur.RoleId, Code = ur.Role != null ? ur.Role.Code : null })
             .ToListAsync();
-        var codes = roleCodes.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c!.Trim()).ToList();
+        var acctId = AccountantRoleId;
+        var codes = roleRows
+            .Select(r => RoleCanonicalization.CanonicalizeRoleCode(r.RoleId, r.Code, acctId))
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         // Nếu có nhiều role, ưu tiên DIRECTOR để màn hình / API giám đốc khớp JWT (tránh First() ngẫu nhiên).
         var profileRole = codes.Any(c => string.Equals(c, "DIRECTOR", StringComparison.OrdinalIgnoreCase))
             ? "DIRECTOR"
@@ -92,11 +103,16 @@ public class ProfileController : ControllerBase
         await _context.SaveChangesAsync();
 
         var user = await _context.Users.FindAsync(userId);
-        var codesUpd = await _context.UserRoles
+        var roleRowsUpd = await _context.UserRoles
             .Where(ur => ur.UserId == userId)
-            .Select(ur => ur.Role != null ? ur.Role.Code : null)
+            .Select(ur => new { ur.RoleId, Code = ur.Role != null ? ur.Role.Code : null })
             .ToListAsync();
-        var codesList = codesUpd.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c!.Trim()).ToList();
+        var acctIdUpd = AccountantRoleId;
+        var codesList = roleRowsUpd
+            .Select(r => RoleCanonicalization.CanonicalizeRoleCode(r.RoleId, r.Code, acctIdUpd))
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         var roleOut = codesList.Any(c => string.Equals(c, "DIRECTOR", StringComparison.OrdinalIgnoreCase))
             ? "DIRECTOR"
             : codesList.FirstOrDefault() ?? string.Empty;

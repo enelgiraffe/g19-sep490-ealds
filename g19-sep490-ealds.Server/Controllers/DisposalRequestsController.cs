@@ -73,12 +73,12 @@ public class DisposalRequestsController : ControllerBase
                 Quantity = 1,
                 Status = d.AssetRequest!.Status,
                 StatusName =
-                    d.AssetRequest.Status == 0 ? "Nháp" :
-                    d.AssetRequest.Status == 1 ? "Chờ phê duyệt" :
+                    d.AssetRequest.Status == 0 ? "Đã gửi" :
+                    d.AssetRequest.Status == 1 ? "Chờ duyệt giám đốc" :
                     d.AssetRequest.Status == 2 ? "Đã duyệt" :
                     d.AssetRequest.Status == 3 ? "Từ chối" :
-                    d.AssetRequest.Status == 4 ? "Đang thực hiện" :
-                    d.AssetRequest.Status == 5 ? "Hoàn thành" :
+                    d.AssetRequest.Status == 4 ? "Đã thẩm định" :
+                    d.AssetRequest.Status == 5 ? "Đã thanh lý" :
                     "Không xác định",
                 Reason = d.Reason,
                 FromDepartmentId = d.AssetInstance.AssetLocations

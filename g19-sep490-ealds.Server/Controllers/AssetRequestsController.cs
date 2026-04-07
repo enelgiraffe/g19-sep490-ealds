@@ -242,33 +242,11 @@ public class AssetRequestsController : ControllerBase
         var ar = await _db.AssetRequests.FirstOrDefaultAsync(x => x.AssetRequestId == id && x.RequestTypeId == _purchaseRequestTypeId);
         if (ar == null) return NotFound();
 
-        var actorRoleCode = await _db.UserRoles
-            .AsNoTracking()
-            .Where(ur => ur.UserId == dto.CreatedBy)
-            .Select(ur => ur.Role.Code)
-            .FirstOrDefaultAsync();
-
-        var isAccountantActor = string.Equals(actorRoleCode, "ACCOUNTANT", StringComparison.OrdinalIgnoreCase);
-
-        // Editable cases:
-        // - Draft (-1): creator can edit and keep Draft or submit (0)
-        // - Director-approved (2): accountant can edit info/attachments and must keep status=2
-        if (ar.Status == -1)
-        {
-            if (desiredStatus != -1 && desiredStatus != 0)
-                return BadRequest("Invalid status. Allowed: -1 (Draft), 0 (Sent).");
-        }
-        else if (ar.Status == 2)
-        {
-            if (!isAccountantActor)
-                return BadRequest("Only accountant can edit requests after director approval.");
-            if (desiredStatus != 2)
-                return BadRequest("Invalid status. Allowed: 2.");
-        }
-        else
-        {
-            return BadRequest("Only draft requests (status=-1) or director-approved requests (status=2) can be edited.");
-        }
+        // Only draft (-1) can be edited; after submission/approval the request is immutable via this endpoint.
+        if (ar.Status != -1)
+            return BadRequest("Only draft purchase requests (status=-1) can be edited.");
+        if (desiredStatus != -1 && desiredStatus != 0)
+            return BadRequest("Invalid status. Allowed: -1 (Draft), 0 (Sent).");
 
         var fromStatus = ar.Status;
 
@@ -293,8 +271,7 @@ public class AssetRequestsController : ControllerBase
             ActionRoleId = actionRoleId,
             Comment =
                 (fromStatus == -1 && desiredStatus == 0) ? "Submitted request"
-                : (fromStatus == -1) ? "Updated draft request"
-                : "Updated after accountant approval",
+                : "Updated draft request",
             OccurredAt = DateTime.UtcNow
         };
         _db.AssetRequestRecords.Add(record);

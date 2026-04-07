@@ -1,0 +1,55 @@
+.goods-receipts-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+}
+
+.goods-receipts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.goods-receipts-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.goods-receipts-card {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #dad9d9;
+  border-radius: 20px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+  padding: 24px 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.goods-receipts-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.gr-code-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #1677ff;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}
+
+.gr-code-link:hover {
+  color: #4096ff;
+}
