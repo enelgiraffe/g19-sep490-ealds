@@ -106,9 +106,18 @@ export interface CatalogAssetOption {
 }
 
 export const allocationRequestService = {
-  async catalogByType(assetTypeId: number, keyword?: string): Promise<CatalogAssetOption[]> {
+  /** When `warehouseStockOnly`, only assets with ≥1 instance not assigned to any department (kho). */
+  async catalogByType(
+    assetTypeId: number,
+    keyword?: string,
+    warehouseStockOnly?: boolean,
+  ): Promise<CatalogAssetOption[]> {
     const res = await api.get<CatalogAssetOption[]>('/api/Assets', {
-      params: { assetTypeId, keyword: keyword?.trim() || undefined },
+      params: {
+        assetTypeId,
+        keyword: keyword?.trim() || undefined,
+        ...(warehouseStockOnly ? { warehouseStockOnly: true } : {}),
+      },
     });
     return Array.isArray(res.data) ? res.data : [];
   },

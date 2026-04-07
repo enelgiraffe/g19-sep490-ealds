@@ -127,14 +127,21 @@ export function DepartmentRequestsByModePanel({ mode }: { mode: DepartmentReques
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   }, []);
 
-  const loadAssetsForRow = useCallback(async (rowKey: string, typeId: number, search?: string) => {
-    try {
-      const list = await allocationRequestService.catalogByType(typeId, search);
-      setAssetOptionsByRow((m) => ({ ...m, [rowKey]: list }));
-    } catch {
-      message.error('Không tải được danh mục tài sản.');
-    }
-  }, []);
+  const loadAssetsForRow = useCallback(
+    async (rowKey: string, typeId: number, search?: string) => {
+      try {
+        const list = await allocationRequestService.catalogByType(
+          typeId,
+          search,
+          mode === 'allocation',
+        );
+        setAssetOptionsByRow((m) => ({ ...m, [rowKey]: list }));
+      } catch {
+        message.error('Không tải được danh mục tài sản.');
+      }
+    },
+    [mode],
+  );
 
   const onTypeChange = useCallback(
     (rowKey: string, typeId: number | undefined) => {

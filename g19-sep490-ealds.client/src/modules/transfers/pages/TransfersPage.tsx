@@ -210,7 +210,6 @@ export function TransfersPage() {
                   <th>ĐIỀU CHUYỂN ĐẾN</th>
                   <th>SỐ LƯỢNG</th>
                   <th>TRẠNG THÁI</th>
-                  <th>LÝ DO ĐIỀU CHUYỂN</th>
                   <th>BÀN GIAO</th>
                   <th className="asset-table__cell asset-table__cell--actions" />
                 </tr>
@@ -264,7 +263,6 @@ export function TransfersPage() {
                             {config.label}
                           </span>
                         </td>
-                        <td>{row.reason}</td>
                         <td>
                           {activeTab === 'outgoing' ? (
                             row.status === 4 ? (

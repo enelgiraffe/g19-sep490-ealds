@@ -31,7 +31,8 @@ public class AssetsController : ControllerBase
     public async Task<ActionResult<IEnumerable<AssetResponseDTO>>> GetAll(
         [FromQuery] string? keyword,
         [FromQuery] AssetStatus? status,
-        [FromQuery] int? assetTypeId)
+        [FromQuery] int? assetTypeId,
+        [FromQuery] bool warehouseStockOnly = false)
     {
         var query = _context.Assets
             .Include(a => a.AssetType)
@@ -56,7 +57,16 @@ public class AssetsController : ControllerBase
         if (scope.IsRestricted && !scope.DepartmentId.HasValue)
             return Ok(Array.Empty<AssetResponseDTO>());
 
-        if (scope.IsRestricted && scope.DepartmentId is int scopedDept && scopedDept > 0)
+        // Allocation requests: catalog must list assets that have instances not yet assigned to any department
+        // (same rule as GET .../allocation/warehouse-available and confirm workflow). Dept-head scope would
+        // otherwise only show assets already in that department, which is wrong for "cấp phát từ kho".
+        if (warehouseStockOnly)
+        {
+            query = query.Where(a => _context.AssetInstances.Any(i =>
+                i.AssetId == a.AssetId &&
+                !i.AssetLocations.Any(al => al.IsCurrent)));
+        }
+        else if (scope.IsRestricted && scope.DepartmentId is int scopedDept && scopedDept > 0)
         {
             query = query.Where(a => _context.AssetInstances.Any(i =>
                 i.AssetId == a.AssetId &&
