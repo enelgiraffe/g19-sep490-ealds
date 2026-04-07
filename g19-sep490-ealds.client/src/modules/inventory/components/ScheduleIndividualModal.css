@@ -7,6 +7,25 @@
   padding: 0;
 }
 
+.schedule-individual-modal .schedule-modal__header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #e8e8e8;
+  background: #fff;
+}
+
+.schedule-individual-modal .schedule-modal__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.schedule-individual-modal .schedule-modal__close {
+  font-size: 20px;
+  color: #666;
+  line-height: 1;
+}
+
 .schedule-individual-form {
   padding: 20px 24px 0;
 }
@@ -32,14 +51,32 @@
   gap: 12px;
 }
 
-.schedule-modal__subtitle {
+.schedule-individual-modal .schedule-modal__subtitle {
   font-size: 12px;
   color: #888;
   margin: 4px 0 0;
 }
 
-.schedule-modal__dept-hint {
+.schedule-individual-modal .schedule-modal__dept-hint {
   margin: 0 0 16px;
   font-size: 13px;
   color: #595959;
+}
+
+.schedule-individual-modal .schedule-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid #e8e8e8;
+  margin-top: 4px;
+}
+
+.schedule-individual-modal .schedule-modal__btn-cancel {
+  min-width: 80px;
+}
+
+.schedule-individual-modal .schedule-modal__btn-submit {
+  min-width: 80px;
+  background-color: #1677ff;
 }

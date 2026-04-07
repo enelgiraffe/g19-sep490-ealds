@@ -320,6 +320,7 @@
   z-index: 1000;
 }
 
+/* Scoped under .schedule-modal so BEM names do not leak to inventory Ant Modals */
 .schedule-modal {
   position: relative;
   background: #fff;
@@ -331,7 +332,7 @@
   flex-direction: column;
 }
 
-.schedule-modal__close-btn {
+.schedule-modal .schedule-modal__close-btn {
   position: absolute;
   top: 12px;
   right: 16px;
@@ -340,39 +341,39 @@
   cursor: pointer;
 }
 
-.schedule-modal__close {
+.schedule-modal .schedule-modal__close {
   font-size: 24px;
   color: #fe3720;
   font-weight: 300;
 }
 
-.schedule-modal__header {
+.schedule-modal .schedule-modal__header {
   background: #ffe5e0;
   padding: 16px 24px;
   border-bottom: 1px solid #ffd4cc;
 }
 
-.schedule-modal__title {
+.schedule-modal .schedule-modal__title {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
   color: #fe3720;
 }
 
-.schedule-modal__body {
+.schedule-modal .schedule-modal__body {
   padding: 0;
   overflow-y: auto;
 }
 
-.schedule-modal__content {
+.schedule-modal .schedule-modal__content {
   padding: 24px;
 }
 
-.schedule-form__item {
+.schedule-modal .schedule-form__item {
   margin-bottom: 20px;
 }
 
-.schedule-form__item label {
+.schedule-modal .schedule-form__item label {
   display: block;
   font-size: 13px;
   color: #6b7280;
@@ -380,7 +381,7 @@
   margin-bottom: 8px;
 }
 
-.schedule-input {
+.schedule-modal .schedule-input {
   width: 100%;
   padding: 10px 12px;
   border-radius: 6px;
@@ -388,35 +389,35 @@
   font-size: 14px;
 }
 
-.schedule-input--textarea {
+.schedule-modal .schedule-input--textarea {
   resize: vertical;
   min-height: 96px;
 }
 
-.schedule-radio-row {
+.schedule-modal .schedule-radio-row {
   display: flex;
   align-items: center;
   gap: 24px;
   color: #111827;
 }
 
-.schedule-timepoint-row {
+.schedule-modal .schedule-timepoint-row {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) 120px auto;
   gap: 8px;
   align-items: center;
 }
 
-.schedule-input--days {
+.schedule-modal .schedule-input--days {
   text-align: center;
 }
 
-.schedule-timepoint-unit {
+.schedule-modal .schedule-timepoint-unit {
   color: #6b7280;
   font-size: 14px;
 }
 
-.schedule-modal__footer {
+.schedule-modal .schedule-modal__footer {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
@@ -424,7 +425,7 @@
   border-top: 1px solid #e5e7eb;
 }
 
-.schedule-btn-submit {
+.schedule-modal .schedule-btn-submit {
   background: #fe3720;
   border: 1px solid #fe3720;
   height: 40px;
@@ -434,17 +435,17 @@
   cursor: pointer;
 }
 
-.schedule-btn-submit:hover {
+.schedule-modal .schedule-btn-submit:hover {
   background: #e5321c;
   border-color: #e5321c;
 }
 
-.schedule-btn-submit:disabled {
+.schedule-modal .schedule-btn-submit:disabled {
   opacity: 0.7;
   cursor: default;
 }
 
-.schedule-btn-close {
+.schedule-modal .schedule-btn-close {
   background: #6b7280;
   border: 1px solid #6b7280;
   color: #fff;
@@ -454,7 +455,7 @@
   cursor: pointer;
 }
 
-.schedule-btn-close:hover {
+.schedule-modal .schedule-btn-close:hover {
   background: #4b5563;
   border-color: #4b5563;
 }

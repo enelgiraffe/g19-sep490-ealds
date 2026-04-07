@@ -1247,6 +1247,19 @@ public class InventoryController : ControllerBase
         if (dto.EndDate <= dto.StartDate)
             return BadRequest(new { message = "Ngày kết thúc phải sau ngày bắt đầu." });
 
+        if (await DepartmentHasOverlappingOpenInventoryAsync(
+                session.DepartmentId,
+                dto.StartDate,
+                dto.EndDate,
+                excludeSessionId: id))
+        {
+            return BadRequest(new
+            {
+                message =
+                    "Phòng ban này đã có phiên kiểm kê (chưa hủy, chưa hoàn tất xử lý) trùng hoặc gối khoảng thời gian mới. Vui lòng chọn khác hoặc chỉnh phiên hiện có.",
+            });
+        }
+
         session.Purpose = dto.Purpose ?? string.Empty;
         session.StartDate = dto.StartDate;
         session.EndDate = dto.EndDate;
@@ -1658,6 +1671,29 @@ public class InventoryController : ControllerBase
     private sealed record CreateInventorySessionResult(bool Success, string? ErrorMessage, int? SessionId);
 
     /// <summary>
+    /// True when [newStart, newEnd] overlaps any open inventory window for the department.
+    /// Open = not cancelled and not fully closed (Confirmed). Overlap is inclusive on both ends.
+    /// </summary>
+    private Task<bool> DepartmentHasOverlappingOpenInventoryAsync(
+        int departmentId,
+        DateTime newStart,
+        DateTime newEnd,
+        int? excludeSessionId)
+    {
+        var q = _context.InventorySessions.Where(s =>
+            s.DepartmentId == departmentId &&
+            s.Status != (int)InventorySessionStatus.Cancelled &&
+            s.Status != (int)InventorySessionStatus.Confirmed &&
+            s.StartDate <= newEnd &&
+            newStart <= s.EndDate);
+
+        if (excludeSessionId.HasValue)
+            q = q.Where(s => s.SessionId != excludeSessionId.Value);
+
+        return q.AnyAsync();
+    }
+
+    /// <summary>
     /// Persists a scheduled inventory session and tasks (same rules as POST sessions). Used by API and periodic follow-up.
     /// </summary>
     private async Task<CreateInventorySessionResult> CreateInventorySessionCoreAsync(
@@ -1674,6 +1710,14 @@ public class InventoryController : ControllerBase
         var department = await _context.Departments.FindAsync(departmentId);
         if (department == null)
             return new CreateInventorySessionResult(false, "Phòng ban không tồn tại.", null);
+
+        if (await DepartmentHasOverlappingOpenInventoryAsync(departmentId, startDate, endDate, excludeSessionId: null))
+        {
+            return new CreateInventorySessionResult(
+                false,
+                "Phòng ban này đã có phiên kiểm kê (chưa hủy, chưa hoàn tất xử lý) trùng hoặc gối khoảng thời gian được chọn. Vui lòng điều chỉnh lịch hoặc chờ phiên hiện tại kết thúc.",
+                null);
+        }
 
         var instances = await _context.AssetInstances
             .Where(ai =>
