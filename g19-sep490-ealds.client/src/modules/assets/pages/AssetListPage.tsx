@@ -403,7 +403,6 @@ export function AssetListPage() {
   const handleSubmitLiquidation = async (values: {
     liquidationDate: Date | null;
     reason?: string;
-    disposalMethod?: string;
     notes?: string;
   }) => {
     const createdBy = profile?.id ?? getStoredUserId();
@@ -413,8 +412,6 @@ export function AssetListPage() {
       return;
     }
 
-    const disposalMethod = Number(values.disposalMethod);
-    const methodValue = Number.isFinite(disposalMethod) ? disposalMethod : 0;
     const submittedAt = values.liquidationDate ?? new Date();
     const noteText = values.notes?.trim();
     const reasonText = values.reason?.trim();
@@ -426,7 +423,7 @@ export function AssetListPage() {
         createdBy,
         title: `Đề nghị thanh lý tài sản ${selectedAssetInfo?.code ?? resolvedInstanceId}`,
         description: noteText || null,
-        diposalMethod: methodValue,
+        diposalMethod: 0,
         diposalValue: 0,
         diposalDate: submittedAt.toISOString(),
         reason: reasonText || null,

@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, DatePicker, Input, Select, message } from 'antd';
-import { SearchOutlined, EyeOutlined, CheckOutlined, FileSearchOutlined, FileTextOutlined } from '@ant-design/icons';
+import { SearchOutlined, EyeOutlined, CheckOutlined } from '@ant-design/icons';
 import { disposalRequestService } from '../../assets/services/disposalRequestService';
 import type { TransferRequestListItem } from '../../assets/services/transferRequestService';
 import { profileService, type UserProfile } from '../../profile/services/profileService';
 import { accountantRequestService } from '../../requests/services/accountantRequestService';
 import { LiquidationDisposalApproveModal } from '../components/LiquidationDisposalApproveModal';
 import { LiquidationDisposalDetailModal } from '../components/LiquidationDisposalDetailModal';
-import { LiquidationAppraisalModal } from '../components/LiquidationAppraisalModal';
-import { LiquidationExecutionModal } from '../components/LiquidationExecutionModal';
 import {
   filterDisposalListForDepartmentHead,
   isDepartmentHeadRoleCode,
@@ -20,8 +18,8 @@ const { Option } = Select;
 const LIQUIDATION_STATUS_MAP: Record<number, { label: string; color: string }> = {
   [-1]: { label: 'Nháp', color: 'default' },
   0: { label: 'Đã gửi', color: 'processing' },
-  1: { label: 'Chờ phê duyệt', color: 'warning' },
-  2: { label: 'Phê duyệt', color: 'success' },
+  1: { label: 'Chờ duyệt giám đốc', color: 'warning' },
+  2: { label: 'Đã duyệt', color: 'success' },
   3: { label: 'Từ chối', color: 'error' },
   4: { label: 'Đã thẩm định', color: 'processing' },
   5: { label: 'Đã thanh lý', color: 'success' },
@@ -51,14 +49,8 @@ export function LiquidationPage() {
   const [selectedLiquidationItem, setSelectedLiquidationItem] = useState<TransferRequestListItem | null>(null);
   const [liquidationDecision, setLiquidationDecision] = useState<'approved' | 'rejected'>('approved');
   const [liquidationComment, setLiquidationComment] = useState('');
+  const [liquidationDisposalMethod, setLiquidationDisposalMethod] = useState('');
   const [liquidationSubmitting, setLiquidationSubmitting] = useState(false);
-  const [isLiquidationAppraisalOpen, setIsLiquidationAppraisalOpen] = useState(false);
-  const [liquidationAppraisalRequestId, setLiquidationAppraisalRequestId] = useState<number | null>(null);
-  const [liquidationAppraisalCode, setLiquidationAppraisalCode] = useState('');
-  const [liquidationAppraisalAssetName, setLiquidationAppraisalAssetName] = useState('');
-  const [isLiquidationExecutionOpen, setIsLiquidationExecutionOpen] = useState(false);
-  const [liquidationExecutionRequestId, setLiquidationExecutionRequestId] = useState<number | null>(null);
-  const [liquidationExecutionCode, setLiquidationExecutionCode] = useState('');
 
   const normalizedRole = String(userProfile?.role ?? '').toUpperCase();
   const isAccountantRole = normalizedRole === 'ACCOUNTANT';
@@ -208,7 +200,6 @@ export function LiquidationPage() {
                 ) : (
                   filteredDisposalRows.map((row) => {
                     const config = LIQUIDATION_STATUS_MAP[row.status] ?? LIQUIDATION_STATUS_MAP[0];
-                    console.log(`Row ${row.code}: status=${row.status}, config=${config.label}`);
                     return (
                       <tr key={row.assetRequestId} className="asset-row">
                         <td>YC-{row.assetRequestId}</td>
@@ -242,54 +233,11 @@ export function LiquidationPage() {
                                 setSelectedLiquidationItem(row);
                                 setLiquidationDecision('approved');
                                 setLiquidationComment('');
+                                setLiquidationDisposalMethod('');
                                 setIsLiquidationApproveOpen(true);
                               }}
                             >
                               Phê duyệt
-                            </Button>
-                          )}
-                          {isAccountantRole && row.status === 2 && (
-                            <Button
-                              type="text"
-                              icon={<FileSearchOutlined />}
-                              size="small"
-                              style={{ color: '#1890ff' }}
-                              onClick={() => {
-                                console.log('Opening Appraisal Modal for:', row.code, 'Status:', row.status);
-                                // Đóng modal execution nếu đang mở
-                                setIsLiquidationExecutionOpen(false);
-                                setLiquidationExecutionRequestId(null);
-                                setLiquidationExecutionCode('');
-                                // Mở modal appraisal
-                                setLiquidationAppraisalRequestId(row.assetRequestId);
-                                setLiquidationAppraisalCode(row.code ?? `YC-${row.assetRequestId}`);
-                                setLiquidationAppraisalAssetName(row.assetName ?? '');
-                                setIsLiquidationAppraisalOpen(true);
-                              }}
-                            >
-                              Thẩm định
-                            </Button>
-                          )}
-                          {isAccountantRole && row.status === 4 && (
-                            <Button
-                              type="text"
-                              icon={<FileTextOutlined />}
-                              size="small"
-                              style={{ color: '#52c41a' }}
-                              onClick={() => {
-                                console.log('Opening Execution Modal for:', row.code, 'Status:', row.status);
-                                // Đóng modal appraisal nếu đang mở
-                                setIsLiquidationAppraisalOpen(false);
-                                setLiquidationAppraisalRequestId(null);
-                                setLiquidationAppraisalCode('');
-                                setLiquidationAppraisalAssetName('');
-                                // Mở modal execution
-                                setLiquidationExecutionRequestId(row.assetRequestId);
-                                setLiquidationExecutionCode(row.code ?? `YC-${row.assetRequestId}`);
-                                setIsLiquidationExecutionOpen(true);
-                              }}
-                            >
-                              Thanh lý
                             </Button>
                           )}
                         </td>
@@ -325,9 +273,17 @@ export function LiquidationPage() {
           onDecisionChange={setLiquidationDecision}
           comment={liquidationComment}
           onCommentChange={setLiquidationComment}
+          disposalMethod={liquidationDisposalMethod}
+          onDisposalMethodChange={setLiquidationDisposalMethod}
           submitting={liquidationSubmitting}
           onConfirm={async () => {
             if (!selectedLiquidationItem || !userProfile?.id) return;
+            
+            if (liquidationDecision === 'approved' && !liquidationDisposalMethod.trim()) {
+              message.error('Vui lòng nhập phương án thanh lý.');
+              return;
+            }
+            
             setLiquidationSubmitting(true);
             try {
               const payload = {
@@ -354,55 +310,6 @@ export function LiquidationPage() {
         />
       )}
 
-      {isLiquidationAppraisalOpen && isAccountantRole && (
-        <>
-          {console.log('Rendering LiquidationAppraisalModal', {
-            open: isLiquidationAppraisalOpen,
-            requestId: liquidationAppraisalRequestId,
-            code: liquidationAppraisalCode,
-          })}
-          <LiquidationAppraisalModal
-            open
-            assetRequestId={liquidationAppraisalRequestId}
-            requestCode={liquidationAppraisalCode}
-            assetName={liquidationAppraisalAssetName}
-            userId={userProfile?.id}
-            onClose={() => {
-              setIsLiquidationAppraisalOpen(false);
-              setLiquidationAppraisalRequestId(null);
-              setLiquidationAppraisalCode('');
-              setLiquidationAppraisalAssetName('');
-            }}
-            onSuccess={async () => {
-              await reloadDisposalRows();
-            }}
-          />
-        </>
-      )}
-
-      {isLiquidationExecutionOpen && isAccountantRole && (
-        <>
-          {console.log('Rendering LiquidationExecutionModal', {
-            open: isLiquidationExecutionOpen,
-            requestId: liquidationExecutionRequestId,
-            code: liquidationExecutionCode,
-          })}
-          <LiquidationExecutionModal
-            open
-            assetRequestId={liquidationExecutionRequestId}
-            requestCode={liquidationExecutionCode}
-            userId={userProfile?.id}
-            onClose={() => {
-              setIsLiquidationExecutionOpen(false);
-              setLiquidationExecutionRequestId(null);
-              setLiquidationExecutionCode('');
-            }}
-            onSuccess={async () => {
-              await reloadDisposalRows();
-            }}
-          />
-        </>
-      )}
     </div>
   );
 }

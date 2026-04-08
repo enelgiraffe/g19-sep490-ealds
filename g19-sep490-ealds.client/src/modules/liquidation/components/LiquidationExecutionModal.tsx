@@ -6,8 +6,8 @@ import {
   type DisposalExecutionDto,
 } from '../../requests/services/disposalExecutionService';
 import { parseIntegerMoneyInput } from '../../../shared/utils/moneyInput';
-import './LiquidationExecutionModal.css';
 import '../../assets/components/MarkDamagedAssetModal.css';
+import './LiquidationExecutionModal.css';
 
 function axiosErrorDetail(e: unknown): string | null {
   const err = e as { response?: { data?: unknown } };
@@ -142,10 +142,11 @@ export function LiquidationExecutionModal({
 
   if (!open || assetRequestId == null) return null;
 
+  console.log('🟢 LiquidationExecutionModal RENDERING', { open, assetRequestId, requestCode });
+
   const completed = (dto?.status ?? 0) >= 2;
   const canEdit = !completed && (dto?.canEdit ?? true);
   const canFinalize = !completed && !!dto?.canFinalize;
-  const isAppraisalStep = (dto?.assetRequestStatus ?? 2) === 2;
 
   const buildPayload = () => {
     const actual = parseIntegerMoneyInput(actualValueText);
@@ -187,8 +188,41 @@ export function LiquidationExecutionModal({
     }
   };
 
-  const handleFinalize = () => {
+  const handleFinalize = async () => {
     if (!userId) return;
+
+    // Validate required fields before confirming
+    if (!executedAt) {
+      message.warning('Vui lòng nhập ngày thực hiện thanh lý.');
+      return;
+    }
+    if (!buyerName.trim()) {
+      message.warning('Vui lòng nhập bên nhận / đơn vị thu mua.');
+      return;
+    }
+    const actual = parseIntegerMoneyInput(actualValueText);
+    if (actual == null) {
+      message.warning('Vui lòng nhập số tiền thu được thực tế (có thể là 0).');
+      return;
+    }
+
+    // Auto-save before finalizing
+    if (dto && dto.status < 2) {
+      message.info('Đang lưu thông tin trước khi hoàn tất...');
+      setSaving(true);
+      try {
+        const next = await disposalExecutionService.save(assetRequestId, buildPayload());
+        setDto(next);
+      } catch (e) {
+        const detail = axiosErrorDetail(e);
+        message.error(detail?.slice(0, 200) ?? 'Lưu thất bại. Vui lòng thử lại.');
+        setSaving(false);
+        return;
+      } finally {
+        setSaving(false);
+      }
+    }
+
     Modal.confirm({
       title: 'Hoàn tất thanh lý?',
       content:
@@ -223,7 +257,7 @@ export function LiquidationExecutionModal({
 
   return (
     <div className="mark-damaged-modal-overlay" role="dialog" aria-modal="true">
-      <div className="mark-damaged-modal">
+      <div className="mark-damaged-modal liquidation-execution-modal">
         <button type="button" className="mark-damaged-modal__close-btn" onClick={onClose} aria-label="Đóng">
           <span className="mark-damaged-modal__close">×</span>
         </button>
@@ -247,14 +281,7 @@ export function LiquidationExecutionModal({
                   {loadError.length > 280 ? '…' : ''}
                 </p>
               )}
-              {isAppraisalStep && (
-                <div style={{ padding: 12, backgroundColor: '#fef3c7', border: '1px solid #fbbf24', borderRadius: 6, marginBottom: 12 }}>
-                  <p style={{ fontSize: 14, color: '#92400e', margin: 0 }}>
-                    ⚠️ Yêu cầu đang ở bước thẩm định. Vui lòng ghi nhận biên bản thẩm định trước khi nhập biên bản thanh lý.
-                  </p>
-                </div>
-              )}
-              {dto?.blockFinalizeReason && !loadError && !isAppraisalStep && (
+              {dto?.blockFinalizeReason && !loadError && (
                 <p className="disposal-appraisal-member-hint" style={{ marginBottom: 12 }}>
                   {dto.blockFinalizeReason}
                 </p>
@@ -398,20 +425,6 @@ export function LiquidationExecutionModal({
                     Chi phí vận chuyển, xử lý, v.v.
                   </small>
                 </div>
-
-                <div className="mark-damaged-form__item">
-                  <label htmlFor="lex-note">Ghi chú</label>
-                  <textarea
-                    id="lex-note"
-                    className="mark-damaged-textarea"
-                    rows={3}
-                    readOnly={!canEdit}
-                    disabled={!canEdit}
-                    value={executionNote}
-                    onChange={(e) => setExecutionNote(e.target.value)}
-                    placeholder="Ghi chú thêm về quá trình thanh lý"
-                  />
-                </div>
               </div>
             </>
           </div>
@@ -421,7 +434,7 @@ export function LiquidationExecutionModal({
           <button type="button" className="mark-damaged-btn-draft" onClick={onClose} disabled={saving || finalizing}>
             Đóng
           </button>
-          {!isAppraisalStep && canEdit && (
+          {canEdit && (
             <button
               type="button"
               className="mark-damaged-btn-draft"
@@ -431,7 +444,7 @@ export function LiquidationExecutionModal({
               {saving ? 'Đang lưu...' : 'Lưu nháp'}
             </button>
           )}
-          {!isAppraisalStep && canFinalize && (
+          {canFinalize && (
             <button
               type="button"
               className="mark-damaged-btn-submit"

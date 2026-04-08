@@ -28,6 +28,19 @@ function axiosErrorDetail(e: unknown): string | null {
   return null;
 }
 
+// Tạo DTO mặc định cho modal thẩm định
+function createDefaultDto(assetRequestId: number): DisposalExecutionDto {
+  return {
+    assetRequestId,
+    disposalExecutionId: null,
+    status: 0,
+    canEdit: true,
+    canFinalize: false,
+    assetRequestStatus: 2,
+    blockFinalizeReason: null,
+  };
+}
+
 export interface LiquidationAppraisalModalProps {
   open: boolean;
   assetRequestId: number | null;
@@ -47,8 +60,6 @@ export function LiquidationAppraisalModal({
   onClose,
   onSuccess,
 }: LiquidationAppraisalModalProps) {
-  const [hydrating, setHydrating] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [dto, setDto] = useState<DisposalExecutionDto | null>(null);
 
@@ -74,12 +85,10 @@ export function LiquidationAppraisalModal({
   useEffect(() => {
     if (!open || assetRequestId == null) {
       setDto(null);
-      setLoadError(null);
       return;
     }
-    let cancelled = false;
 
-    // Reset form
+    // Reset form - Modal thẩm định luôn bắt đầu với form trống
     setAppraisalDate(null);
     setAppraisalLocation('');
     setMinutesNo('');
@@ -89,59 +98,14 @@ export function LiquidationAppraisalModal({
     setAssetOrigin('');
     setAppraisedValueText('');
     setAppraisalConclusion('');
-    setLoadError(null);
 
-    // Khởi tạo DTO mặc định
-    setDto({
-      assetRequestId,
-      disposalExecutionId: null,
-      status: 0,
-      canEdit: true,
-      canFinalize: false,
-      assetRequestStatus: 2,
-      blockFinalizeReason: null,
-    });
-
-    // Load bản nháp nếu có
-    setHydrating(true);
-    disposalExecutionService
-      .getByAssetRequest(assetRequestId)
-      .then((d) => {
-        if (cancelled) return;
-        setDto(d);
-        setLoadError(null);
-        
-        // Hydrate dữ liệu đã lưu
-        setAppraisalDate(d.plannedExecutionDate ? dayjs(d.plannedExecutionDate) : null);
-        setMinutesNo(d.minutesNo ?? '');
-        setAppraisedValueText(
-          d.actualDisposalValue != null && !Number.isNaN(Number(d.actualDisposalValue))
-            ? Math.floor(Number(d.actualDisposalValue)).toLocaleString('en-US')
-            : '',
-        );
-        setAppraisalConclusion(d.executionNote ?? '');
-        
-        // Parse thông tin từ executionNote nếu có format đặc biệt
-        // (có thể lưu JSON hoặc format khác trong executionNote)
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        const detail = axiosErrorDetail(e);
-        setLoadError(detail ?? 'Không đọc được dữ liệu từ máy chủ.');
-        message.warning(
-          'Không tải được bản nháp đã lưu; bạn vẫn có thể nhập form mới.',
-          5,
-        );
-      })
-      .finally(() => {
-        if (!cancelled) setHydrating(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    // Khởi tạo DTO mặc định - không cần load từ API
+    setDto(createDefaultDto(assetRequestId));
   }, [open, assetRequestId]);
 
   if (!open || assetRequestId == null) return null;
+
+  console.log('🔵 LiquidationAppraisalModal RENDERING', { open, assetRequestId, requestCode });
 
   const completed = (dto?.status ?? 0) >= 2;
   const canEdit = !completed && (dto?.canEdit ?? true);
@@ -185,38 +149,7 @@ export function LiquidationAppraisalModal({
     };
   };
 
-  const handleSaveDraft = async () => {
-    if (!userId) return;
-    setSaving(true);
-    try {
-      const payload = buildAppraisalData();
-      // Tạm thời lưu vào các trường hiện có
-      const savePayload = {
-        userId,
-        plannedExecutionDate: payload.appraisalDate,
-        executedDate: null,
-        executionMethod: null,
-        buyerName: null,
-        buyerContact: null,
-        contractNo: null,
-        invoiceNo: null,
-        minutesNo: payload.appraisalMinutesNo,
-        actualDisposalValue: payload.appraisedValue,
-        expenseValue: null,
-        attachmentUrls: null,
-        executionNote: payload.appraisalConclusion,
-      };
-      
-      const next = await disposalExecutionService.save(assetRequestId, savePayload);
-      setDto(next);
-      message.success('Đã lưu nháp biên bản thẩm định.');
-    } catch (e) {
-      const detail = axiosErrorDetail(e);
-      message.error(detail?.slice(0, 200) ?? 'Lưu nháp thất bại.');
-    } finally {
-      setSaving(false);
-    }
-  };
+  // Không cần lưu nháp cho modal thẩm định - chỉ ghi nhận trực tiếp
 
   const handleRecordAppraisal = async () => {
     if (!userId) return;
@@ -275,16 +208,8 @@ export function LiquidationAppraisalModal({
 
         <div className="mark-damaged-modal__body">
           <div className="mark-damaged-modal__content">
-            {hydrating && (
-              <p style={{ marginBottom: 8, fontSize: 13 }}>Đang kiểm tra bản nháp đã lưu (nếu có)…</p>
-            )}
-            {loadError && (
-              <p className="appraisal-hint-error" style={{ marginBottom: 12 }}>
-                Không đọc được bản nháp: {loadError.slice(0, 200)}
-              </p>
-            )}
             {completed && (
-              <p style={{ marginBottom: 12, color: '#16a34a' }}>Đã hoàn tất ghi nhận biên bản thẩm định.</p>
+              <p style={{ marginBottom: 12, color: '#16a34a' }}>✓ Đã hoàn tất ghi nhận biên bản thẩm định.</p>
             )}
 
             {/* I. Thông tin chung */}
@@ -482,24 +407,14 @@ export function LiquidationAppraisalModal({
             Đóng
           </button>
           {canEdit && (
-            <>
-              <button
-                type="button"
-                className="mark-damaged-btn-draft"
-                disabled={saving || !userId}
-                onClick={() => void handleSaveDraft()}
-              >
-                {saving ? 'Đang lưu...' : 'Lưu nháp'}
-              </button>
-              <button
-                type="button"
-                className="mark-damaged-btn-submit"
-                disabled={saving || !userId}
-                onClick={() => void handleRecordAppraisal()}
-              >
-                Ghi nhận biên bản thẩm định
-              </button>
-            </>
+            <button
+              type="button"
+              className="mark-damaged-btn-submit"
+              disabled={saving || !userId}
+              onClick={() => void handleRecordAppraisal()}
+            >
+              {saving ? 'Đang ghi nhận...' : 'Ghi nhận biên bản thẩm định'}
+            </button>
           )}
         </div>
       </div>

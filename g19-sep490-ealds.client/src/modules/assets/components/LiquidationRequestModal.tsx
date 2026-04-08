@@ -22,7 +22,6 @@ interface LiquidationRequestModalProps {
   onSubmit: (values: {
     liquidationDate: Date | null;
     reason?: string;
-    disposalMethod?: string;
     notes?: string;
   }) => void;
   assetInfo: AssetInfo | null;
@@ -32,7 +31,6 @@ export function LiquidationRequestModal({ open, onClose, onSubmit, assetInfo }: 
   const [liquidationDate, setLiquidationDate] = useState<string>('');
   const [recordNumber, setRecordNumber] = useState<string>('');
   const [reason, setReason] = useState<string>('');
-  const [disposalMethod, setDisposalMethod] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [dateError, setDateError] = useState<string | null>(null);
 
@@ -44,7 +42,6 @@ export function LiquidationRequestModal({ open, onClose, onSubmit, assetInfo }: 
       const randomPart = Math.floor(Math.random() * 900 + 100);
       setRecordNumber(`BB-TL-${datePart}-${randomPart}`);
       setReason('');
-      setDisposalMethod('');
       setNotes('');
       setDateError(null);
     }
@@ -63,7 +60,6 @@ export function LiquidationRequestModal({ open, onClose, onSubmit, assetInfo }: 
     onSubmit({
       liquidationDate: dateValue,
       reason: reason.trim() || undefined,
-      disposalMethod: disposalMethod.trim() || undefined,
       notes: notes.trim() || undefined,
     });
     onClose();
@@ -194,31 +190,6 @@ export function LiquidationRequestModal({ open, onClose, onSubmit, assetInfo }: 
                 </div>
 
                 <div className="liquidation-form-col">
-                  <label htmlFor="liquidation-reason">Lý do thanh lý</label>
-                  <textarea
-                    id="liquidation-reason"
-                    className="liquidation-textarea"
-                    rows={1}
-                    placeholder="-"
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="liquidation-form-row">
-                <div className="liquidation-form-col">
-                  <label htmlFor="liquidation-disposal-method">Phương án xử lý</label>
-                  <input
-                    id="liquidation-disposal-method"
-                    className="liquidation-input"
-                    placeholder="-"
-                    value={disposalMethod}
-                    onChange={(e) => setDisposalMethod(e.target.value)}
-                  />
-                </div>
-
-                <div className="liquidation-form-col">
                   <label htmlFor="liquidation-notes">Ghi chú</label>
                   <input
                     id="liquidation-notes"
@@ -226,6 +197,20 @@ export function LiquidationRequestModal({ open, onClose, onSubmit, assetInfo }: 
                     placeholder="-"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="liquidation-form-row">
+                <div className="liquidation-form-col" style={{ gridColumn: '1 / -1' }}>
+                  <label htmlFor="liquidation-reason">Lý do thanh lý</label>
+                  <textarea
+                    id="liquidation-reason"
+                    className="liquidation-textarea"
+                    rows={3}
+                    placeholder="-"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
                   />
                 </div>
               </div>

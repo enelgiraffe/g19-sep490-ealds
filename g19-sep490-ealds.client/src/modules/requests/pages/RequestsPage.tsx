@@ -18,6 +18,7 @@ import {
 import { disposalRequestService } from '../../assets/services/disposalRequestService';
 import { LiquidationDisposalApproveModal } from '../../liquidation/components/LiquidationDisposalApproveModal';
 import { LiquidationDisposalDetailModal } from '../../liquidation/components/LiquidationDisposalDetailModal';
+import { LiquidationAppraisalModal } from '../../liquidation/components/LiquidationAppraisalModal';
 import { LiquidationExecutionModal } from '../../liquidation/components/LiquidationExecutionModal';
 import {
   filterDisposalListForDepartmentHead,
@@ -278,9 +279,10 @@ export function RequestsPage() {
   const [liquidationDecision, setLiquidationDecision] = useState<'approved' | 'rejected'>('approved');
   const [liquidationComment, setLiquidationComment] = useState('');
   const [liquidationSubmitting, setLiquidationSubmitting] = useState(false);
-  const [isLiquidationExecutionOpen, setIsLiquidationExecutionOpen] = useState(false);
-  const [liquidationExecutionRequestId, setLiquidationExecutionRequestId] = useState<number | null>(null);
-  const [liquidationExecutionCode, setLiquidationExecutionCode] = useState('');
+  const [liquidationModalType, setLiquidationModalType] = useState<'appraisal' | 'execution' | null>(null);
+  const [liquidationModalRequestId, setLiquidationModalRequestId] = useState<number | null>(null);
+  const [liquidationModalCode, setLiquidationModalCode] = useState('');
+  const [liquidationModalAssetName, setLiquidationModalAssetName] = useState('');
 
   const [directorRows, setDirectorRows] = useState<DirectorRequestListItem[]>([]);
   const [directorTotal, setDirectorTotal] = useState(0);
@@ -1234,17 +1236,32 @@ export function RequestsPage() {
                                 Phê duyệt
                               </Button>
                             )}
-                            {isAccountantRole && (row.status === 2 || row.status === 4) && (
+                            {isAccountantRole && row.status === 2 && (
                               <Button
                                 type="text"
                                 size="small"
                                 onClick={() => {
-                                  setLiquidationExecutionRequestId(row.assetRequestId);
-                                  setLiquidationExecutionCode(row.code ?? `YC-${row.assetRequestId}`);
-                                  setIsLiquidationExecutionOpen(true);
+                                  setLiquidationModalType('appraisal');
+                                  setLiquidationModalRequestId(row.assetRequestId);
+                                  setLiquidationModalCode(row.code ?? `YC-${row.assetRequestId}`);
+                                  setLiquidationModalAssetName(row.assetName ?? '');
                                 }}
                               >
-                                {row.status === 2 ? 'Ghi nhận biên bản thẩm định' : 'Ghi nhận biên bản thanh lý'}
+                                Ghi nhận biên bản thẩm định
+                              </Button>
+                            )}
+                            {isAccountantRole && row.status === 4 && (
+                              <Button
+                                type="text"
+                                size="small"
+                                onClick={() => {
+                                  setLiquidationModalType('execution');
+                                  setLiquidationModalRequestId(row.assetRequestId);
+                                  setLiquidationModalCode(row.code ?? `YC-${row.assetRequestId}`);
+                                  setLiquidationModalAssetName(row.assetName ?? '');
+                                }}
+                              >
+                                Ghi nhận biên bản thanh lý
                               </Button>
                             )}
                           </div>
@@ -1494,16 +1511,35 @@ export function RequestsPage() {
         />
       )}
 
-      {isLiquidationExecutionOpen && isAccountantRole && (
-        <LiquidationExecutionModal
+      {liquidationModalType === 'appraisal' && isAccountantRole && (
+        <LiquidationAppraisalModal
           open
-          assetRequestId={liquidationExecutionRequestId}
-          requestCode={liquidationExecutionCode}
+          assetRequestId={liquidationModalRequestId}
+          requestCode={liquidationModalCode}
+          assetName={liquidationModalAssetName}
           userId={userProfile?.id}
           onClose={() => {
-            setIsLiquidationExecutionOpen(false);
-            setLiquidationExecutionRequestId(null);
-            setLiquidationExecutionCode('');
+            setLiquidationModalType(null);
+            setLiquidationModalRequestId(null);
+            setLiquidationModalCode('');
+            setLiquidationModalAssetName('');
+          }}
+          onSuccess={async () => {
+            await reloadLiquidationRows();
+          }}
+        />
+      )}
+
+      {liquidationModalType === 'execution' && isAccountantRole && (
+        <LiquidationExecutionModal
+          open
+          assetRequestId={liquidationModalRequestId}
+          requestCode={liquidationModalCode}
+          userId={userProfile?.id}
+          onClose={() => {
+            setLiquidationModalType(null);
+            setLiquidationModalRequestId(null);
+            setLiquidationModalCode('');
           }}
           onSuccess={async () => {
             await reloadLiquidationRows();
