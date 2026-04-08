@@ -142,7 +142,7 @@ export function PurchaseOrderFormModal({
       ),
     },
     {
-      title: 'Tài sản (danh mục)',
+      title: 'Tài sản',
       width: 220,
       render: (_, row) => (
         <Select

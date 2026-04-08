@@ -51,6 +51,19 @@ export function ViewPurchaseOrderModal({
   const normalizedRole = String(currentUserRole ?? '').toUpperCase();
   const isAccountantRole = normalizedRole === 'ACCOUNTANT';
   const canAccountantApprove = isAccountantRole && !!currentUserId && data?.status === 0;
+  const canRevertToDraft = !!currentUserId && data?.status === 0 && data?.createdBy === currentUserId;
+
+  // Debug log to help troubleshoot
+  useEffect(() => {
+    if (open && data) {
+      console.log('ViewPurchaseOrderModal Debug:', {
+        currentUserId,
+        createdBy: data.createdBy,
+        status: data.status,
+        canRevertToDraft,
+      });
+    }
+  }, [open, data, currentUserId, canRevertToDraft]);
 
   const parsedProposedData = useMemo(() => {
     try {
@@ -107,6 +120,25 @@ export function ViewPurchaseOrderModal({
     } catch (e: unknown) {
       const err = e as { response?: { data?: string } };
       message.error(err?.response?.data ?? 'Thao tác phê duyệt thất bại.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRevertToDraft = async () => {
+    if (!currentUserId || !data) {
+      message.error('Không lấy được thông tin người dùng.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await purchaseOrderService.revertToDraft(data.assetRequestId, currentUserId);
+      message.success('Đã rút yêu cầu về trạng thái Nháp.');
+      await onActionCompleted?.(data.assetRequestId, res.status);
+      onClose();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: string } };
+      message.error(err?.response?.data ?? 'Rút về nháp thất bại.');
     } finally {
       setSubmitting(false);
     }
@@ -339,16 +371,20 @@ export function ViewPurchaseOrderModal({
                 </div>
               )}
 
-              <div className="view-purchase-form__row">
-                <div className="view-purchase-form__field">
-                  <label>Ý kiến kế toán</label>
-                  <div className="view-purchase-form__value">{accountantCommentDisplay}</div>
+              {data.status > 0 && (
+                <div className="view-purchase-form__row">
+                  <div className="view-purchase-form__field">
+                    <label>Ý kiến kế toán</label>
+                    <div className="view-purchase-form__value">{accountantCommentDisplay}</div>
+                  </div>
+                  {data.status > 1 && (
+                    <div className="view-purchase-form__field">
+                      <label>Ý kiến giám đốc</label>
+                      <div className="view-purchase-form__value">{directorCommentDisplay}</div>
+                    </div>
+                  )}
                 </div>
-                <div className="view-purchase-form__field">
-                  <label>Ý kiến giám đốc</label>
-                  <div className="view-purchase-form__value">{directorCommentDisplay}</div>
-                </div>
-              </div>
+              )}
 
               <div className="view-purchase-form__section">
                 <h3 className="view-purchase-form__section-title">Tài liệu đính kèm</h3>
@@ -380,6 +416,16 @@ export function ViewPurchaseOrderModal({
           <button type="button" onClick={onClose} className="view-purchase-btn-close">
             Quay lại
           </button>
+          {canRevertToDraft && (
+            <button
+              type="button"
+              className="view-purchase-btn-revert"
+              onClick={handleRevertToDraft}
+              disabled={submitting}
+            >
+              <span>↩️ Rút về nháp</span>
+            </button>
+          )}
           {canAccountantApprove && (
             <button type="button" className="view-purchase-btn-approve" onClick={() => setIsApproveOpen(true)}>
               <span className="view-purchase-btn-approve-icon">📋</span>

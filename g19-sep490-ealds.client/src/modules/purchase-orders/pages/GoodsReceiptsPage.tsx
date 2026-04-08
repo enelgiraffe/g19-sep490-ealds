@@ -213,7 +213,7 @@ export function GoodsReceiptsPage() {
       }
       const assetId = row.assetId ?? pl.assetId;
       if (!assetId || assetId <= 0) {
-        message.error(`Dòng ${pl.lineIndex + 1}: cần chọn tài sản danh mục.`);
+        message.error(`Dòng ${pl.lineIndex + 1}: cần chọn tài sản.`);
         return;
       }
       const tokens = parseSerialTokens(row.serialsText);
@@ -342,7 +342,7 @@ export function GoodsReceiptsPage() {
       ),
     },
     {
-      title: 'Tài sản (danh mục)',
+      title: 'Tài sản',
       width: 220,
       render: (_, r) => (
         <Select

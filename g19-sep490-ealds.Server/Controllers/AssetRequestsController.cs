@@ -426,4 +426,34 @@ public class AssetRequestsController : ControllerBase
 
         return Ok(new { items, total, page, pageSize, totalPages = (int)Math.Ceiling(total / (double)pageSize) });
     }
+
+    /// <summary>
+    /// POST /api/Assets/Requests/purchase/{id}/revert-to-draft
+    /// Reverts a submitted purchase request (status=0) back to draft (status=-1).
+    /// Only the creator can revert their own request.
+    /// </summary>
+    [HttpPost("{id:int}/revert-to-draft")]
+    public async Task<IActionResult> RevertToDraft(int id, [FromBody] RevertToDraftDTO dto)
+    {
+        if (dto == null || dto.UserId <= 0)
+            return BadRequest(new { message = "UserId is required." });
+
+        var request = await _db.AssetRequests
+            .Where(r => r.AssetRequestId == id && r.RequestTypeId == _purchaseRequestTypeId)
+            .FirstOrDefaultAsync();
+
+        if (request == null)
+            return NotFound(new { message = $"Purchase request with id {id} not found." });
+
+        if (request.Status != 0)
+            return BadRequest(new { message = "Only submitted requests (status=0) can be reverted to draft." });
+
+        if (request.CreatedBy != dto.UserId)
+            return Forbid();
+
+        request.Status = -1;
+        await _db.SaveChangesAsync();
+
+        return Ok(new { assetRequestId = request.AssetRequestId, status = request.Status });
+    }
 }

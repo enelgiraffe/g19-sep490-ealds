@@ -77,7 +77,7 @@ export function LiquidationDisposalDetailModal({
                 </div>
                 <div className="mark-damaged-info-row">
                   <div className="mark-damaged-info-item">
-                    <label>Mã tài sản (danh mục)</label>
+                    <label>Mã tài sản gốc</label>
                     <div className="mark-damaged-info-value">{row.assetCode ?? '—'}</div>
                   </div>
                   <div className="mark-damaged-info-item">

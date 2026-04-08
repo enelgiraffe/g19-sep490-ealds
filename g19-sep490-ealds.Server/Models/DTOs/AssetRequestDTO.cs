@@ -26,3 +26,8 @@ public class AssetRequestDTO
     /// </summary>
     public int? Status { get; set; }
 }
+
+public class RevertToDraftDTO
+{
+    public int UserId { get; set; }
+}

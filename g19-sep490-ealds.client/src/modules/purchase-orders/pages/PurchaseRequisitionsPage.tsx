@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button, Input, Select, message } from 'antd';
-import { SearchOutlined, FilterOutlined, SettingOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { SearchOutlined, FilterOutlined, SettingOutlined, EyeOutlined, EditOutlined, DeleteOutlined, RollbackOutlined } from '@ant-design/icons';
 import { CreatePurchaseOrderModal } from '../components/CreatePurchaseOrderModal';
 import { ViewPurchaseOrderModal } from '../components/ViewPurchaseOrderModal';
 import { purchaseOrderService, type PurchaseOrderListItem, type PurchaseOrderDetail } from '../services/purchaseOrderService';
@@ -266,6 +266,28 @@ export function PurchaseRequisitionsPage() {
     }
   };
 
+  const handleRevertToDraft = async (record: TableRow) => {
+    if (!profile) {
+      message.error('Vui lòng đăng nhập lại.');
+      return;
+    }
+    if (record.status !== 0) {
+      message.warning('Chỉ được rút về nháp khi yêu cầu đang ở trạng thái Đã gửi.');
+      return;
+    }
+    try {
+      const res = await purchaseOrderService.revertToDraft(record.assetRequestId, profile.id);
+      message.success('Đã rút yêu cầu về trạng thái Nháp.');
+      setData((prev) =>
+        prev.map((row) =>
+          row.assetRequestId === record.assetRequestId ? { ...row, status: res.status } : row
+        )
+      );
+    } catch (e: any) {
+      message.error(e?.response?.data ?? 'Rút về nháp thất bại.');
+    }
+  };
+
   const filteredData = data.filter((row) => {
     const matchStatus = statusFilter === 'all' || row.status === statusFilter;
     const matchSearch =
@@ -329,9 +351,6 @@ export function PurchaseRequisitionsPage() {
             <table className="asset-table purchase-orders-table">
               <thead>
                 <tr>
-                  <th className="asset-table__cell asset-table__cell--checkbox">
-                    <input type="checkbox" />
-                  </th>
                   <th>STT</th>
                   <th>MÃ YÊU CẦU</th>
                   <th>NGÀY ĐỀ XUẤT</th>
@@ -347,9 +366,6 @@ export function PurchaseRequisitionsPage() {
                   const config = STATUS_MAP[row.status] ?? STATUS_MAP[0];
                   return (
                     <tr key={row.key} className="asset-row">
-                      <td className="asset-table__cell asset-table__cell--checkbox">
-                        <input type="checkbox" />
-                      </td>
                       <td className="asset-align-right">{row.stt}</td>
                       <td>
                         <button
@@ -390,16 +406,36 @@ export function PurchaseRequisitionsPage() {
                             icon={<EyeOutlined />}
                             size="small"
                             onClick={() => handleViewDetail(row)}
+                            title="Xem chi tiết"
                           />
                           {row.status === -1 && (
+                            <>
+                              <Button
+                                type="text"
+                                icon={<EditOutlined />}
+                                size="small"
+                                onClick={() => handleEditDraft(row)}
+                                title="Chỉnh sửa"
+                              />
+                              <Button
+                                type="text"
+                                icon={<DeleteOutlined />}
+                                size="small"
+                                danger
+                                title="Xóa"
+                              />
+                            </>
+                          )}
+                          {row.status === 0 && (
                             <Button
                               type="text"
-                              icon={<EditOutlined />}
+                              icon={<RollbackOutlined />}
                               size="small"
-                              onClick={() => handleEditDraft(row)}
+                              onClick={() => handleRevertToDraft(row)}
+                              title="Rút về nháp"
+                              style={{ color: '#f59e0b' }}
                             />
                           )}
-                          <Button type="text" icon={<DeleteOutlined />} size="small" danger />
                         </div>
                       </td>
                     </tr>
