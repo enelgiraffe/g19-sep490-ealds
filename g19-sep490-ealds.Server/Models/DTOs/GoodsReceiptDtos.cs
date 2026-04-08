@@ -14,6 +14,9 @@ public class GoodsReceiptCreateLineDto
 
     /// <summary>Optional serial per generated instance (same count as whole units received).</summary>
     public List<string?>? InstanceSerialNumbers { get; set; }
+
+    /// <summary>Optional custom instance codes (same count as whole units received). If null/empty, auto-generated.</summary>
+    public List<string?>? InstanceCodes { get; set; }
 }
 
 public class GoodsReceiptCreateDto
@@ -21,6 +24,9 @@ public class GoodsReceiptCreateDto
     public int ProcurementId { get; set; }
 
     public int WarehouseId { get; set; }
+
+    /// <summary>Posting date for the goods receipt (default: today).</summary>
+    public string? PostingDate { get; set; }
 
     public string? Note { get; set; }
 

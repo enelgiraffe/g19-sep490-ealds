@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useState, type ComponentProps } from 'react';
-import { Button, InputNumber, Select, Table, message } from 'antd';
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { Button, Input, Select, message } from 'antd';
+import { PlusOutlined, SearchOutlined, FilterOutlined, SettingOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
 import {
   procurementPoService,
   PO_STATUS,
   type PurchaseOrderDetail,
   type PurchaseOrderListItem,
 } from '../services/procurementPoService';
-import { PurchaseOrderFormModal } from '../components/PurchaseOrderFormModal';
+import { PurchaseOrderFormModalNew } from '../components/PurchaseOrderFormModalNew';
 import { PurchaseOrderDetailModal } from '../components/PurchaseOrderDetailModal';
 import { supplierService, type SupplierItem } from '../../admin/services/supplierService';
 import './PurchaseOrdersPage.css';
 
 function statusTag(status: number) {
+  if (status === PO_STATUS.draft) return { label: 'Nháp', color: 'gray' as const };
   if (status === PO_STATUS.cancelled) return { label: 'Đã hủy', color: 'red' as const };
   if (status === PO_STATUS.partiallyReceived) return { label: 'Nhận một phần', color: 'orange' as const };
   if (status === PO_STATUS.completed) return { label: 'Đã nhận đủ', color: 'green' as const };
@@ -25,7 +26,7 @@ export function PurchaseOrdersPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [filterId, setFilterId] = useState<number | null>(null);
+  const [filterId, setFilterId] = useState<string>('');
   const [filterSupplierId, setFilterSupplierId] = useState<number | 'all'>('all');
   const [filterStatus, setFilterStatus] = useState<number | 'all'>('all');
   const [suppliers, setSuppliers] = useState<SupplierItem[]>([]);
@@ -39,8 +40,9 @@ export function PurchaseOrdersPage() {
   const loadList = useCallback(async () => {
     setLoading(true);
     try {
+      const parsedId = filterId.trim() ? parseInt(filterId.trim(), 10) : undefined;
       const res = await procurementPoService.getList({
-        procurementId: filterId ?? undefined,
+        procurementId: parsedId && !isNaN(parsedId) ? parsedId : undefined,
         supplierId: filterSupplierId === 'all' ? undefined : filterSupplierId,
         status: filterStatus === 'all' ? undefined : filterStatus,
         page,
@@ -86,21 +88,21 @@ export function PurchaseOrdersPage() {
   };
 
   const handleCreateSubmit = async (
-    payload: Parameters<ComponentProps<typeof PurchaseOrderFormModal>['onSubmit']>[0],
+    payload: Parameters<ComponentProps<typeof PurchaseOrderFormModalNew>['onSubmit']>[0],
   ) => {
     await procurementPoService.create({
       supplierId: payload.supplierId,
       currency: payload.currency,
       assetRequestId: payload.assetRequestId,
       lines: payload.lines,
+      isDraft: payload.isDraft,
     });
-    message.success('Đã tạo đơn mua.');
     setFormOpen(false);
     await loadList();
   };
 
   const handleEditSubmit = async (
-    payload: Parameters<ComponentProps<typeof PurchaseOrderFormModal>['onSubmit']>[0],
+    payload: Parameters<ComponentProps<typeof PurchaseOrderFormModalNew>['onSubmit']>[0],
   ) => {
     if (!selected) return;
     await procurementPoService.update(selected.procurementId, {
@@ -108,8 +110,8 @@ export function PurchaseOrdersPage() {
       currency: payload.currency,
       assetRequestId: payload.assetRequestId,
       lines: payload.lines,
+      isDraft: payload.isDraft,
     });
-    message.success('Đã cập nhật đơn mua.');
     setFormOpen(false);
     setDetailOpen(false);
     setSelected(null);
@@ -129,21 +131,23 @@ export function PurchaseOrdersPage() {
       </div>
 
       <div className="purchase-orders-card">
-        <div className="purchase-orders-filters" style={{ flexWrap: 'wrap', gap: 8 }}>
-          <InputNumber
-            min={1}
-            placeholder="Mã đơn (ID)"
-            value={filterId ?? undefined}
-            onChange={(v) => {
-              setFilterId(v ?? null);
+        <div className="purchase-orders-filters">
+          <Input
+            placeholder="Tìm kiếm mã đơn"
+            prefix={<SearchOutlined />}
+            value={filterId}
+            onChange={(e) => {
+              setFilterId(e.target.value);
               setPage(1);
             }}
-            style={{ width: 160 }}
+            onPressEnter={() => loadList()}
+            className="purchase-orders-search"
+            allowClear
           />
           <Select
             placeholder="Nhà cung cấp"
             allowClear
-            style={{ width: 220 }}
+            className="purchase-orders-select"
             value={filterSupplierId === 'all' ? undefined : filterSupplierId}
             onChange={(v) => {
               setFilterSupplierId(v ?? 'all');
@@ -158,96 +162,162 @@ export function PurchaseOrdersPage() {
           />
           <Select
             placeholder="Trạng thái"
-            style={{ width: 160 }}
+            className="purchase-orders-select"
             value={filterStatus === 'all' ? undefined : filterStatus}
             onChange={(v) => {
               setFilterStatus(v ?? 'all');
               setPage(1);
             }}
             options={[
+              { value: PO_STATUS.draft, label: 'Nháp' },
               { value: PO_STATUS.created, label: 'Đã tạo' },
               { value: PO_STATUS.partiallyReceived, label: 'Nhận một phần' },
               { value: PO_STATUS.completed, label: 'Đã nhận đủ' },
               { value: PO_STATUS.cancelled, label: 'Đã hủy' },
             ]}
           />
-          <Button icon={<SearchOutlined />} onClick={() => loadList()}>
-            Làm mới
+          <Button icon={<FilterOutlined />} className="purchase-orders-filter-advanced">
+            Gỡ bộ lọc
           </Button>
+          <Button icon={<SettingOutlined />} className="purchase-orders-settings" />
         </div>
 
-        <div className="asset-table-wrapper" style={{ marginTop: 16 }}>
-          <Table<PurchaseOrderListItem>
-            loading={loading}
-            rowKey={(r) => String(r.procurementId)}
-            dataSource={items}
-            pagination={{
-              current: page,
-              pageSize,
-              total,
-              showSizeChanger: true,
-              onChange: (p, ps) => {
-                setPage(p);
-                setPageSize(ps);
-              },
-            }}
-            scroll={{ x: 960 }}
-            columns={[
-              {
-                title: 'Mã đơn',
-                dataIndex: 'procurementId',
-                width: 100,
-                render: (id: number) => (
-                  <button
-                    type="button"
-                    className="asset-code asset-code--link"
-                    onClick={() => openDetail(id)}
-                  >
-                    {id}
-                  </button>
-                ),
-              },
-              { title: 'Số chứng từ', dataIndex: 'contractNo', width: 120 },
-              { title: 'Tiêu đề', dataIndex: 'title', ellipsis: true },
-              {
-                title: 'NCC',
-                dataIndex: 'supplierName',
-                width: 200,
-                ellipsis: true,
-                render: (v, r) => v ?? `ID ${r.supplierId}`,
-              },
-              {
-                title: 'Tổng tiền',
-                dataIndex: 'totalAmount',
-                align: 'right',
-                width: 140,
-                render: (v, r) => `${Number(v).toLocaleString('vi-VN')} ${r.currency}`,
-              },
-              {
-                title: 'TT',
-                dataIndex: 'status',
-                width: 100,
-                render: (s: number) => {
-                  const t = statusTag(s);
-                  const color =
-                    t.color === 'red'
-                      ? '#cf1322'
-                      : t.color === 'green'
-                        ? '#389e0d'
-                        : t.color === 'orange'
-                          ? '#d46b08'
-                          : '#1677ff';
-                  return <span style={{ color }}>{t.label}</span>;
-                },
-              },
-              {
-                title: 'Ngày tạo',
-                dataIndex: 'createDate',
-                width: 160,
-                render: (d: string) => new Date(d).toLocaleString('vi-VN'),
-              },
-            ]}
-          />
+        <div className="asset-table-wrapper">
+          {loading ? (
+            <div className="purchase-orders-table-loading">Đang tải danh sách đơn mua...</div>
+          ) : (
+            <table className="asset-table purchase-orders-table">
+              <thead>
+                <tr>
+                  <th>MÃ ĐƠN</th>
+                  <th>SỐ CHỨNG TỪ</th>
+                  <th>TIÊU ĐỀ</th>
+                  <th>NHÀ CUNG CẤP</th>
+                  <th className="asset-align-right">TỔNG TIỀN</th>
+                  <th>TRẠNG THÁI</th>
+                  <th>NGÀY TẠO</th>
+                  <th className="asset-table__cell asset-table__cell--actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => {
+                  const tag = statusTag(item.status);
+                  return (
+                    <tr key={item.procurementId} className="asset-row">
+                      <td>
+                        <button
+                          type="button"
+                          className="asset-code asset-code--link"
+                          onClick={() => openDetail(item.procurementId)}
+                        >
+                          {item.procurementId}
+                        </button>
+                      </td>
+                      <td>{item.contractNo}</td>
+                      <td>{item.title}</td>
+                      <td>{item.supplierName ?? `ID ${item.supplierId}`}</td>
+                      <td className="asset-align-right">
+                        {Number(item.totalAmount).toLocaleString('vi-VN')} {item.currency}
+                      </td>
+                      <td>
+                        <span
+                          className={
+                            tag.color === 'gray'
+                              ? 'asset-status-pill asset-status-pill--inactive'
+                              : tag.color === 'green'
+                                ? 'asset-status-pill asset-status-pill--active'
+                                : tag.color === 'red'
+                                  ? 'asset-status-pill asset-status-pill--danger'
+                                  : tag.color === 'orange'
+                                    ? 'asset-status-pill asset-status-pill--warning'
+                                    : 'asset-status-pill asset-status-pill--processing'
+                          }
+                        >
+                          {tag.label}
+                        </span>
+                      </td>
+                      <td>{new Date(item.createDate).toLocaleDateString('vi-VN')}</td>
+                      <td className="asset-table__cell asset-table__cell--actions">
+                        <div className="purchase-orders-actions">
+                          <Button
+                            type="text"
+                            icon={<EyeOutlined />}
+                            size="small"
+                            onClick={() => openDetail(item.procurementId)}
+                            title="Xem chi tiết"
+                          />
+                          {(item.status === PO_STATUS.created || item.status === PO_STATUS.draft) && (
+                            <Button
+                              type="text"
+                              icon={<EditOutlined />}
+                              size="small"
+                              onClick={async () => {
+                                try {
+                                  const detail = await procurementPoService.getById(item.procurementId);
+                                  setSelected(detail);
+                                  setFormMode('edit');
+                                  setFormOpen(true);
+                                } catch {
+                                  message.error('Không tải được chi tiết đơn mua.');
+                                }
+                              }}
+                              title="Chỉnh sửa"
+                            />
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="purchase-orders-card__footer">
+          <div className="purchase-orders-footer__left">
+            Số lượng trên trang:
+            <select
+              className="purchase-orders-footer__select"
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+          <div className="purchase-orders-footer__center">
+            {total === 0 ? '0-0 trên 0' : `${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, total)} trên ${total}`}
+          </div>
+          <div className="purchase-orders-footer__right">
+            <button
+              className="purchase-orders-footer__pager"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              type="button"
+            >
+              ⟨
+            </button>
+            <button
+              className="purchase-orders-footer__pager purchase-orders-footer__pager--active"
+              type="button"
+            >
+              {page}
+            </button>
+            <button
+              className="purchase-orders-footer__pager"
+              disabled={page >= Math.ceil(total / pageSize)}
+              onClick={() => setPage((p) => p + 1)}
+              type="button"
+            >
+              ⟩
+            </button>
+          </div>
         </div>
       </div>
 
@@ -272,7 +342,7 @@ export function PurchaseOrdersPage() {
         }}
       />
 
-      <PurchaseOrderFormModal
+      <PurchaseOrderFormModalNew
         open={formOpen}
         mode={formMode}
         initial={formMode === 'edit' ? selected : null}

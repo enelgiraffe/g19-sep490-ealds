@@ -80,6 +80,7 @@ export interface SupplierInvoiceCreateLine {
 export interface SupplierInvoiceCreateBody {
   procurementId: number;
   goodsReceiptId?: number | null;
+  supplierId: number;
   invoiceNumber: string;
   invoiceDate: string;
   note?: string | null;

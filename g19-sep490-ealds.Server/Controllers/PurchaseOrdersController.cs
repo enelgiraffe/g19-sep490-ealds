@@ -17,6 +17,8 @@ namespace g19_sep490_ealds.Server.Controllers;
 [Authorize(Roles = "ACCOUNTANT")]
 public class PurchaseOrdersController : ControllerBase
 {
+    public const int StatusDraft = -1;
+
     public const int StatusCreated = 0;
 
     /// <summary>At least one line has received quantity but PO not fully received.</summary>
@@ -199,18 +201,22 @@ public class PurchaseOrdersController : ControllerBase
 
         var total = dto.Lines.Sum(l => l.Quantity * l.UnitPrice);
 
+        var contractNo = string.IsNullOrWhiteSpace(dto.ContractNo)
+            ? string.Empty
+            : dto.ContractNo.Trim();
+
         var entity = new Procurement
         {
             AssetRequestId = dto.AssetRequestId,
             SupplierId = dto.SupplierId,
-            ContractNo = string.Empty,
+            ContractNo = contractNo,
             ContractDate = DateOnly.FromDateTime(DateTime.UtcNow),
             Title = title.Length > 255 ? title[..255] : title,
             Currency = currency,
             TotalAmount = total,
             AdvanceAmount = 0,
             RemainingAmount = total,
-            Status = StatusCreated,
+            Status = dto.IsDraft ? StatusDraft : StatusCreated,
             CreatedBy = userId.Value,
             CreateDate = DateTime.UtcNow,
         };
@@ -218,7 +224,10 @@ public class PurchaseOrdersController : ControllerBase
         _db.Procurements.Add(entity);
         await _db.SaveChangesAsync();
 
-        entity.ContractNo = $"PO-{entity.ProcurementId}";
+        if (string.IsNullOrEmpty(entity.ContractNo))
+        {
+            entity.ContractNo = $"PO-{entity.ProcurementId}";
+        }
         var idx = 0;
         foreach (var line in dto.Lines)
         {

@@ -18,6 +18,7 @@ poApi.interceptors.request.use((config) => {
 
 /** Matches backend PurchaseOrdersController */
 export const PO_STATUS = {
+  draft: -1,
   created: 0,
   partiallyReceived: 1,
   cancelled: 2,
@@ -36,8 +37,10 @@ export interface PurchaseOrderLineWrite {
 export interface PurchaseOrderCreateBody {
   assetRequestId?: number | null;
   supplierId: number;
+  contractNo?: string;
   currency?: string;
   lines: PurchaseOrderLineWrite[];
+  isDraft?: boolean;
 }
 
 export interface PurchaseOrderLineItem {

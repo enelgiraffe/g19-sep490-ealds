@@ -1,0 +1,140 @@
+.supplier-invoices-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+}
+
+.supplier-invoices-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.supplier-invoices-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.supplier-invoices-btn-add {
+  background: #fe3720;
+  border-color: #fe3720;
+  font-size: 14px;
+  font-weight: 500;
+  height: 40px;
+  padding: 0 24px;
+}
+
+.supplier-invoices-btn-add:hover {
+  background: #e5321c;
+  border-color: #e5321c;
+}
+
+.supplier-invoices-card {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #dad9d9;
+  border-radius: 20px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+  padding: 16px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.supplier-invoices-filters {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.supplier-invoices-search {
+  max-width: 260px;
+}
+
+.supplier-invoices-select {
+  width: 200px;
+}
+
+.supplier-invoices-date-picker {
+  width: 180px;
+}
+
+.supplier-invoices-table-wrapper {
+  flex: 1;
+  min-height: 0;
+}
+
+.supplier-invoices-table {
+  font-size: 13px;
+}
+
+.supplier-invoices-table-loading {
+  padding: 24px 16px;
+  font-size: 14px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.supplier-invoices-table-empty {
+  text-align: center;
+  padding: 24px 12px;
+  color: #6b7280;
+}
+
+.supplier-invoices-card__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 8px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.supplier-invoices-footer__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.supplier-invoices-footer__select {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.supplier-invoices-footer__center {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.supplier-invoices-footer__right {
+  display: flex;
+  gap: 6px;
+}
+
+.supplier-invoices-footer__pager {
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  padding: 4px 10px;
+  background: #ffffff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.supplier-invoices-footer__pager--active {
+  background: #fe3720;
+  border-color: #fe3720;
+  color: #ffffff;
+}
+
+.supplier-invoices-footer__pager:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

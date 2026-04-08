@@ -73,11 +73,13 @@ export interface GoodsReceiptCreateLine {
   quantityReceived: number;
   assetId?: number | null;
   instanceSerialNumbers?: (string | null)[] | null;
+  instanceCodes?: (string | null)[] | null;
 }
 
 export interface GoodsReceiptCreateBody {
   procurementId: number;
   warehouseId: number;
+  postingDate?: string;
   note?: string | null;
   lines: GoodsReceiptCreateLine[];
 }

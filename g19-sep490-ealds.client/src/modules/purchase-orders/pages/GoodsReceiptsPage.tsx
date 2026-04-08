@@ -1,50 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  Button,
-  DatePicker,
-  Input,
-  InputNumber,
-  Modal,
-  Select,
-  Table,
-  message,
-} from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { Button, Input, Select, DatePicker, message, InputNumber } from 'antd';
+import { SearchOutlined, FilterOutlined, SettingOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import {
   goodsReceiptService,
   type GoodsReceiptDetail,
-  type GoodsReceiptDetailLine,
   type GoodsReceiptListItem,
 } from '../services/goodsReceiptService';
-import {
-  procurementPoService,
-  type PurchaseOrderDetail,
-  type PurchaseOrderLineItem,
-  type PurchaseOrderListItem,
-} from '../services/procurementPoService';
-import {
-  assetService,
-  type AssetCatalogResponse,
-  type WarehouseItem,
-} from '../../assets/services/assetService';
 import { supplierService, type SupplierItem } from '../../admin/services/supplierService';
+import { GoodsReceiptFormModal } from '../components/GoodsReceiptFormModal';
+import { GoodsReceiptDetailModal } from '../components/GoodsReceiptDetailModal';
+import { PrintQRLabelsModal } from '../components/PrintQRLabelsModal';
 import './GoodsReceiptsPage.css';
-
-function parseSerialTokens(text: string): string[] {
-  return text
-    .split(/[\n,;]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-interface LineEditState {
-  lineId: number;
-  quantityReceived: number;
-  assetId: number | null;
-  serialsText: string;
-}
 
 export function GoodsReceiptsPage() {
   const [loading, setLoading] = useState(false);
@@ -63,16 +30,9 @@ export function GoodsReceiptsPage() {
   const [detail, setDetail] = useState<GoodsReceiptDetail | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [poOptions, setPoOptions] = useState<PurchaseOrderListItem[]>([]);
-  const [poLoading, setPoLoading] = useState(false);
-  const [selectedPoId, setSelectedPoId] = useState<number | null>(null);
-  const [poDetail, setPoDetail] = useState<PurchaseOrderDetail | null>(null);
-  const [warehouseId, setWarehouseId] = useState<number | null>(null);
-  const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
-  const [assets, setAssets] = useState<AssetCatalogResponse[]>([]);
-  const [lineStates, setLineStates] = useState<LineEditState[]>([]);
-  const [note, setNote] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  
+  const [printQROpen, setPrintQROpen] = useState(false);
+  const [printQRId, setPrintQRId] = useState<number | null>(null);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -125,298 +85,40 @@ export function GoodsReceiptsPage() {
     }
   };
 
-  const openCreate = async () => {
-    setCreateOpen(true);
-    setSelectedPoId(null);
-    setPoDetail(null);
-    setLineStates([]);
-    setNote('');
-    setWarehouseId(null);
-    setPoLoading(true);
-    try {
-      const [wh, ast, pos] = await Promise.all([
-        assetService.getWarehouses(),
-        assetService.getAll(),
-        procurementPoService.getList({ receivingEligible: true, pageSize: 200, page: 1 }),
-      ]);
-      setWarehouses(wh);
-      setAssets(ast);
-      setPoOptions(pos.items);
-      if (wh.length > 0) setWarehouseId(wh[0].warehouseId);
-    } catch {
-      message.error('Không tải dữ liệu tạo biên nhận.');
-      setWarehouses([]);
-      setAssets([]);
-      setPoOptions([]);
-    } finally {
-      setPoLoading(false);
-    }
-  };
-
-  const onSelectPo = async (procurementId: number) => {
-    setSelectedPoId(procurementId);
-    setPoLoading(true);
-    try {
-      const d = await procurementPoService.getById(procurementId);
-      setPoDetail(d);
-      setLineStates(
-        d.lines.map((l) => ({
-          lineId: l.lineId,
-          quantityReceived: 0,
-          assetId: l.assetId,
-          serialsText: '',
-        })),
-      );
-    } catch {
-      message.error('Không tải chi tiết đơn mua.');
-      setPoDetail(null);
-      setLineStates([]);
-    } finally {
-      setPoLoading(false);
-    }
-  };
-
-  const updateLine = (lineId: number, patch: Partial<LineEditState>) => {
-    setLineStates((prev) => prev.map((r) => (r.lineId === lineId ? { ...r, ...patch } : r)));
-  };
-
-  const handleCreateSubmit = async () => {
-    if (!selectedPoId || !poDetail) {
-      message.warning('Chọn đơn mua.');
-      return;
-    }
-    if (!warehouseId || warehouseId <= 0) {
-      message.warning('Chọn kho nhập.');
-      return;
-    }
-    const poLineById = new Map(poDetail.lines.map((l) => [l.lineId, l]));
-    const linesPayload: {
+  const handleCreateSubmit = async (payload: {
+    procurementId: number;
+    warehouseId: number;
+    postingDate: string;
+    note: string | null;
+    lines: {
       procurementLineId: number;
       quantityReceived: number;
-      assetId?: number | null;
+      assetId: number;
       instanceSerialNumbers?: (string | null)[] | null;
-    }[] = [];
-
-    for (const row of lineStates) {
-      const q = row.quantityReceived;
-      if (q <= 0) continue;
-      const pl = poLineById.get(row.lineId);
-      if (!pl) continue;
-      if (!Number.isInteger(q)) {
-        message.error(`Dòng ${pl.lineIndex + 1}: số lượng nhận phải là số nguyên.`);
-        return;
-      }
-      const open = Number(pl.openQuantity ?? pl.quantity - (pl.receivedQuantity ?? 0));
-      if (q > open) {
-        message.error(`Dòng ${pl.lineIndex + 1}: vượt số lượng còn nhận (${open}).`);
-        return;
-      }
-      const assetId = row.assetId ?? pl.assetId;
-      if (!assetId || assetId <= 0) {
-        message.error(`Dòng ${pl.lineIndex + 1}: cần chọn tài sản.`);
-        return;
-      }
-      const tokens = parseSerialTokens(row.serialsText);
-      let serials: (string | null)[] | null = null;
-      if (tokens.length > 0) {
-        if (tokens.length !== q) {
-          message.error(
-            `Dòng ${pl.lineIndex + 1}: cần ${q} số seri (hoặc để trống), hiện có ${tokens.length}.`,
-          );
-          return;
-        }
-        serials = tokens;
-      }
-      linesPayload.push({
-        procurementLineId: row.lineId,
-        quantityReceived: q,
-        assetId,
-        instanceSerialNumbers: serials,
-      });
+      instanceCodes?: (string | null)[] | null;
+    }[];
+  }) => {
+    const result = await goodsReceiptService.create(payload);
+    // Mở modal in QR
+    if (result && result.goodsReceiptId) {
+      setPrintQRId(result.goodsReceiptId);
+      setPrintQROpen(true);
     }
-
-    if (linesPayload.length === 0) {
-      message.warning('Nhập số lượng nhận cho ít nhất một dòng.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await goodsReceiptService.create({
-        procurementId: selectedPoId,
-        warehouseId,
-        note: note.trim() || null,
-        lines: linesPayload,
-      });
-      message.success('Đã tạo biên nhận và sinh thể hiện tài sản.');
-      setCreateOpen(false);
-      await loadList();
-    } catch (e: unknown) {
-      const msg =
-        typeof e === 'object' && e !== null && 'response' in e
-          ? String((e as { response?: { data?: unknown } }).response?.data)
-          : 'Không tạo được biên nhận.';
-      message.error(msg.length > 200 ? 'Không tạo được biên nhận.' : msg);
-    } finally {
-      setSubmitting(false);
-    }
+    await loadList();
   };
 
-  const listColumns: ColumnsType<GoodsReceiptListItem> = [
-    {
-      title: 'Mã BN',
-      dataIndex: 'goodsReceiptId',
-      width: 90,
-      render: (id: number) => (
-        <button type="button" className="gr-code-link" onClick={() => openDetail(id)}>
-          {id}
-        </button>
-      ),
-    },
-    { title: 'Đơn mua', dataIndex: 'procurementId', width: 100 },
-    { title: 'Số chứng từ', dataIndex: 'contractNo', width: 120, render: (v) => v || '—' },
-    {
-      title: 'NCC',
-      dataIndex: 'supplierName',
-      ellipsis: true,
-      render: (v) => v || '—',
-    },
-    {
-      title: 'SL nhận',
-      dataIndex: 'totalReceivedQuantity',
-      align: 'right',
-      width: 110,
-      render: (v) => Number(v).toLocaleString('vi-VN'),
-    },
-    {
-      title: 'Ngày tạo',
-      dataIndex: 'createdDate',
-      width: 170,
-      render: (d: string) => new Date(d).toLocaleString('vi-VN'),
-    },
-  ];
+  const handlePrintLabels = (goodsReceiptId: number) => {
+    setPrintQRId(goodsReceiptId);
+    setPrintQROpen(true);
+    setDetailOpen(false);
+  };
 
-  const createColumns: ColumnsType<LineEditState & { pl: PurchaseOrderLineItem }> = [
-    { title: '#', width: 40, render: (_, __, i) => i + 1 },
-    {
-      title: 'Mô tả / TS',
-      render: (_, r) => {
-        const pl = r.pl;
-        const label =
-          pl.description ||
-          [pl.assetCode, pl.assetName].filter(Boolean).join(' ') ||
-          `Dòng ${pl.lineIndex + 1}`;
-        return label;
-      },
-    },
-    {
-      title: 'Đặt',
-      align: 'right',
-      width: 72,
-      render: (_, r) => Number(r.pl.quantity).toLocaleString('vi-VN'),
-    },
-    {
-      title: 'Đã nhận',
-      align: 'right',
-      width: 80,
-      render: (_, r) => Number(r.pl.receivedQuantity ?? 0).toLocaleString('vi-VN'),
-    },
-    {
-      title: 'Còn lại',
-      align: 'right',
-      width: 80,
-      render: (_, r) => Number(r.pl.openQuantity ?? 0).toLocaleString('vi-VN'),
-    },
-    {
-      title: 'Nhận nữa',
-      width: 110,
-      render: (_, r) => (
-        <InputNumber
-          min={0}
-          max={Number(r.pl.openQuantity ?? 0)}
-          precision={0}
-          value={r.quantityReceived}
-          onChange={(v) => updateLine(r.lineId, { quantityReceived: v ?? 0 })}
-          style={{ width: '100%' }}
-        />
-      ),
-    },
-    {
-      title: 'Tài sản',
-      width: 220,
-      render: (_, r) => (
-        <Select
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          placeholder="Theo dòng PO"
-          style={{ width: '100%' }}
-          value={r.assetId ?? undefined}
-          options={assets.map((a) => ({
-            value: a.assetId,
-            label: `${a.code} — ${a.name}`,
-          }))}
-          onChange={(v) => updateLine(r.lineId, { assetId: v ?? null })}
-        />
-      ),
-    },
-    {
-      title: 'Số seri (tuỳ chọn)',
-      render: (_, r) => (
-        <Input.TextArea
-          rows={2}
-          placeholder="Mỗi dòng hoặc dấu phẩy; đủ số với SL nhận"
-          value={r.serialsText}
-          onChange={(e) => updateLine(r.lineId, { serialsText: e.target.value })}
-        />
-      ),
-    },
-  ];
-
-  const mergedRows: (LineEditState & { pl: PurchaseOrderLineItem })[] = lineStates
-    .map((s) => {
-      const pl = poDetail?.lines.find((l) => l.lineId === s.lineId);
-      return pl ? { ...s, pl } : null;
-    })
-    .filter(Boolean) as (LineEditState & { pl: PurchaseOrderLineItem })[];
-
-  const detailLineColumns: ColumnsType<GoodsReceiptDetailLine> = [
-    { title: '#', width: 40, render: (_, __, i) => i + 1 },
-    {
-      title: 'Tài sản',
-      render: (_, r) => [r.assetCode, r.assetName].filter(Boolean).join(' ') || '—',
-    },
-    {
-      title: 'Đặt',
-      dataIndex: 'orderedQuantity',
-      align: 'right',
-      render: (v) => Number(v).toLocaleString('vi-VN'),
-    },
-    {
-      title: 'Nhận (BN này)',
-      dataIndex: 'quantityReceivedOnThisReceipt',
-      align: 'right',
-      render: (v) => Number(v).toLocaleString('vi-VN'),
-    },
-    {
-      title: 'Đã nhận (lũy kế)',
-      dataIndex: 'cumulativeReceivedQuantity',
-      align: 'right',
-      render: (v) => Number(v).toLocaleString('vi-VN'),
-    },
-    {
-      title: 'Còn lại',
-      dataIndex: 'openQuantity',
-      align: 'right',
-      render: (v) => Number(v).toLocaleString('vi-VN'),
-    },
-  ];
 
   return (
     <div className="goods-receipts-page">
       <div className="goods-receipts-header">
         <h1 className="goods-receipts-title">Biên nhận hàng</h1>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => openCreate()}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
           Tạo biên nhận
         </Button>
       </div>
@@ -481,131 +183,139 @@ export function GoodsReceiptsPage() {
         </div>
 
         <div className="asset-table-wrapper" style={{ marginTop: 16 }}>
-          <Table<GoodsReceiptListItem>
-            loading={loading}
-            rowKey={(r) => String(r.goodsReceiptId)}
-            dataSource={items}
-            pagination={{
-              current: page,
-              pageSize,
-              total,
-              showSizeChanger: true,
-              onChange: (p, ps) => {
-                setPage(p);
-                setPageSize(ps);
-              },
-            }}
-            scroll={{ x: 900 }}
-            columns={listColumns}
-          />
+          <table className="asset-table">
+            <thead>
+              <tr>
+                <th style={{ width: '60px' }}>STT</th>
+                <th style={{ width: '120px' }}>Mã BN</th>
+                <th style={{ width: '100px' }}>Đơn mua</th>
+                <th style={{ width: '150px' }}>Số chứng từ</th>
+                <th>Nhà cung cấp</th>
+                <th style={{ width: '100px', textAlign: 'right' }}>SL nhận</th>
+                <th style={{ width: '120px' }}>Ngày tạo</th>
+                <th style={{ width: '80px', textAlign: 'center' }}>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '40px' }}>
+                    Đang tải...
+                  </td>
+                </tr>
+              ) : items.length === 0 ? (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+                    Không có biên nhận nào
+                  </td>
+                </tr>
+              ) : (
+                items.map((item, idx) => (
+                  <tr key={item.goodsReceiptId}>
+                    <td>{(page - 1) * pageSize + idx + 1}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="asset-code-link"
+                        onClick={() => openDetail(item.goodsReceiptId)}
+                      >
+                        #{item.goodsReceiptId}
+                      </button>
+                    </td>
+                    <td>#{item.procurementId}</td>
+                    <td>{item.contractNo || '—'}</td>
+                    <td>{item.supplierName || '—'}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      {item.totalReceivedQuantity.toLocaleString('vi-VN')}
+                    </td>
+                    <td>{new Date(item.createdDate).toLocaleDateString('vi-VN')}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      <EyeOutlined
+                        onClick={() => openDetail(item.goodsReceiptId)}
+                        style={{ cursor: 'pointer', fontSize: '16px', color: '#1890ff' }}
+                      />
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="purchase-orders-card__footer">
+          <div className="purchase-orders-footer__left">
+            Số lượng trên trang:
+            <select
+              className="purchase-orders-footer__select"
+              value={pageSize}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                setPageSize(next);
+                setPage(1);
+              }}
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+          <div className="purchase-orders-footer__center">
+            {total === 0
+              ? '0-0 trên 0'
+              : `${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, total)} trên ${total}`}
+          </div>
+          <div className="purchase-orders-footer__right">
+            <button
+              className="purchase-orders-footer__pager"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              type="button"
+            >
+              ⟨
+            </button>
+            <button
+              className="purchase-orders-footer__pager purchase-orders-footer__pager--active"
+              type="button"
+            >
+              {page}
+            </button>
+            <button
+              className="purchase-orders-footer__pager"
+              disabled={page >= Math.ceil(total / pageSize)}
+              onClick={() => setPage((p) => Math.min(Math.ceil(total / pageSize), p + 1))}
+              type="button"
+            >
+              ⟩
+            </button>
+          </div>
         </div>
       </div>
 
-      <Modal
-        title={detail ? `Biên nhận #${detail.goodsReceiptId}` : 'Chi tiết'}
+      <GoodsReceiptFormModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreateSubmit}
+      />
+
+      <GoodsReceiptDetailModal
         open={detailOpen}
-        onCancel={() => {
+        onClose={() => {
           setDetailOpen(false);
           setDetail(null);
         }}
-        footer={
-          <Button type="primary" onClick={() => setDetailOpen(false)}>
-            Đóng
-          </Button>
-        }
-        width={960}
-      >
-        {detail && (
-          <>
-            <p>
-              <strong>Đơn mua:</strong> {detail.procurementId} — {detail.contractNo ?? '—'} —{' '}
-              {detail.supplierName ?? '—'}
-            </p>
-            <p style={{ marginBottom: 12 }}>
-              <strong>Ngày tạo:</strong> {dayjs(detail.createdDate).format('DD/MM/YYYY HH:mm')}
-            </p>
-            <Table
-              size="small"
-              rowKey={(r) => String(r.goodsReceiptLineId)}
-              columns={detailLineColumns}
-              dataSource={detail.lines}
-              pagination={false}
-              expandable={{
-                expandedRowRender: (r) => (
-                  <Table
-                    size="small"
-                    rowKey={(i) => String(i.assetInstanceId)}
-                    pagination={false}
-                    dataSource={r.instances}
-                    columns={[
-                      { title: 'Mã thể hiện', dataIndex: 'instanceCode' },
-                      { title: 'Serial', dataIndex: 'serialNumber', render: (v) => v || '—' },
-                    ]}
-                  />
-                ),
-                rowExpandable: (r) => r.instances.length > 0,
-              }}
-            />
-          </>
-        )}
-      </Modal>
+        detail={detail}
+        onPrintLabels={handlePrintLabels}
+      />
 
-      <Modal
-        title="Tạo biên nhận hàng"
-        open={createOpen}
-        onCancel={() => setCreateOpen(false)}
-        width={1100}
-        okText="Ghi nhận"
-        confirmLoading={submitting}
-        onOk={() => handleCreateSubmit()}
-      >
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ marginBottom: 8 }}>
-            <strong>Đơn mua</strong>
-          </div>
-          <Select
-            loading={poLoading}
-            showSearch
-            optionFilterProp="label"
-            placeholder="Chọn đơn mua còn nhận hàng"
-            style={{ width: '100%' }}
-            value={selectedPoId ?? undefined}
-            options={poOptions.map((p) => ({
-              value: p.procurementId,
-              label: `${p.contractNo} (#${p.procurementId}) — ${p.title}`,
-            }))}
-            onChange={(v) => onSelectPo(v)}
-          />
-        </div>
-        <div style={{ marginBottom: 12 }}>
-          <strong>Kho nhập</strong>
-          <Select
-            style={{ width: '100%', marginTop: 4 }}
-            placeholder="Kho"
-            value={warehouseId ?? undefined}
-            options={warehouses.map((w) => ({
-              value: w.warehouseId,
-              label: w.name,
-            }))}
-            onChange={(v) => setWarehouseId(v ?? null)}
-          />
-        </div>
-        <div style={{ marginBottom: 12 }}>
-          <strong>Ghi chú</strong>
-          <Input value={note} onChange={(e) => setNote(e.target.value)} style={{ marginTop: 4 }} />
-        </div>
-        {poDetail && (
-          <Table
-            loading={poLoading}
-            size="small"
-            rowKey={(r) => String(r.lineId)}
-            columns={createColumns}
-            dataSource={mergedRows}
-            pagination={false}
-            scroll={{ x: 1000 }}
-          />
-        )}
-      </Modal>
+      <PrintQRLabelsModal
+        open={printQROpen}
+        onClose={() => {
+          setPrintQROpen(false);
+          setPrintQRId(null);
+        }}
+        goodsReceiptId={printQRId}
+      />
     </div>
   );
 }

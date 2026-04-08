@@ -51,7 +51,6 @@ export function LiquidationExecutionModal({
   const [finalizing, setFinalizing] = useState(false);
   const [dto, setDto] = useState<DisposalExecutionDto | null>(null);
 
-  const [plannedAt, setPlannedAt] = useState<Dayjs | null>(null);
   const [executedAt, setExecutedAt] = useState<Dayjs | null>(null);
   const [buyerName, setBuyerName] = useState('');
   const [buyerContact, setBuyerContact] = useState('');
@@ -70,7 +69,6 @@ export function LiquidationExecutionModal({
     }
     let cancelled = false;
 
-    setPlannedAt(null);
     setExecutedAt(null);
     setBuyerName('');
     setBuyerContact('');
@@ -100,7 +98,6 @@ export function LiquidationExecutionModal({
         if (cancelled) return;
         setDto(d);
         setLoadError(null);
-        setPlannedAt(d.plannedExecutionDate ? dayjs(d.plannedExecutionDate) : null);
         setExecutedAt(d.executedDate ? dayjs(d.executedDate) : null);
         setBuyerName(d.buyerName ?? '');
         setBuyerContact(d.buyerContact ?? '');
@@ -155,7 +152,7 @@ export function LiquidationExecutionModal({
     const expense = parseIntegerMoneyInput(expenseText);
     return {
       userId: userId!,
-      plannedExecutionDate: plannedAt?.toISOString() ?? null,
+      plannedExecutionDate: null,
       executedDate: executedAt?.toISOString() ?? null,
       buyerName: buyerName.trim() || null,
       buyerContact: buyerContact.trim() || null,
@@ -223,33 +220,6 @@ export function LiquidationExecutionModal({
     });
   };
 
-  const handleRecordAppraisal = async () => {
-    if (!userId) return;
-    if (!plannedAt) {
-      message.error('Vui lòng nhập ngày thẩm định.');
-      return;
-    }
-    if (!minutesNo.trim() && !executionNote.trim()) {
-      message.error('Vui lòng nhập số biên bản hoặc kết luận thẩm định.');
-      return;
-    }
-    setSaving(true);
-    try {
-      const next = await disposalExecutionService.recordAppraisal(assetRequestId, {
-        userId,
-        appraisalDate: plannedAt.toISOString(),
-        appraisalMinutesNo: minutesNo.trim() || null,
-        appraisalConclusion: executionNote.trim() || null,
-      });
-      setDto(next);
-      message.success('Đã ghi nhận biên bản thẩm định.');
-      await onSuccess();
-    } catch (e) {
-      message.error(axiosErrorDetail(e)?.slice(0, 200) ?? 'Ghi nhận thẩm định thất bại.');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <div className="mark-damaged-modal-overlay" role="dialog" aria-modal="true">
@@ -260,7 +230,7 @@ export function LiquidationExecutionModal({
 
         <div className="mark-damaged-modal__header">
           <h2 className="mark-damaged-modal__title">
-            {isAppraisalStep ? 'Ghi nhận biên bản thẩm định' : 'Ghi nhận biên bản thanh lý'} — {requestCode ?? `YC-${assetRequestId}`}
+            Ghi nhận biên bản thanh lý — {requestCode ?? `YC-${assetRequestId}`}
           </h2>
         </div>
 
@@ -277,157 +247,172 @@ export function LiquidationExecutionModal({
                   {loadError.length > 280 ? '…' : ''}
                 </p>
               )}
-              {dto?.blockFinalizeReason && !loadError && (
+              {isAppraisalStep && (
+                <div style={{ padding: 12, backgroundColor: '#fef3c7', border: '1px solid #fbbf24', borderRadius: 6, marginBottom: 12 }}>
+                  <p style={{ fontSize: 14, color: '#92400e', margin: 0 }}>
+                    ⚠️ Yêu cầu đang ở bước thẩm định. Vui lòng ghi nhận biên bản thẩm định trước khi nhập biên bản thanh lý.
+                  </p>
+                </div>
+              )}
+              {dto?.blockFinalizeReason && !loadError && !isAppraisalStep && (
                 <p className="disposal-appraisal-member-hint" style={{ marginBottom: 12 }}>
                   {dto.blockFinalizeReason}
                 </p>
               )}
               {completed && (
-                <p style={{ marginBottom: 12, color: '#16a34a' }}>Đã hoàn tất thực hiện thanh lý.</p>
+                <p style={{ marginBottom: 12, color: '#16a34a' }}>✓ Đã hoàn tất thực hiện thanh lý.</p>
               )}
 
               <div className="mark-damaged-form-section">
-                <h3 className="mark-damaged-section-title">
-                  {isAppraisalStep ? 'Thông tin biên bản thẩm định' : 'Thông tin biên bản thanh lý'}
-                </h3>
-                  <div className="mark-damaged-form__item">
-                    <label htmlFor="lex-planned">{isAppraisalStep ? 'Ngày thẩm định' : 'Ngày dự kiến'}</label>
+                <h3 className="mark-damaged-section-title">Thông tin biên bản thanh lý</h3>
+                <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
+                  Ghi nhận thông tin thực tế sau khi đã bán/thanh lý tài sản
+                </p>
+                
+                <div className="mark-damaged-form__item">
+                  <label htmlFor="lex-executed">
+                    Ngày thực hiện thanh lý<span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    id="lex-executed"
+                    type="date"
+                    className={canEdit ? 'mark-damaged-input' : 'mark-damaged-input--disabled'}
+                    disabled={!canEdit}
+                    value={executedAt ? executedAt.format('YYYY-MM-DD') : ''}
+                    onChange={(e) =>
+                      setExecutedAt(e.target.value ? dayjs(e.target.value) : null)
+                    }
+                  />
+                </div>
+
+                <div className="mark-damaged-form__item">
+                  <label htmlFor="lex-minutes">Số biên bản giao nhận</label>
+                  <input
+                    id="lex-minutes"
+                    type="text"
+                    className={canEdit ? 'mark-damaged-input' : 'mark-damaged-input--disabled'}
+                    disabled={!canEdit}
+                    value={minutesNo}
+                    onChange={(e) => setMinutesNo(e.target.value)}
+                    placeholder="Ví dụ: BB-TL-001/2026"
+                  />
+                </div>
+
+                <div className="mark-damaged-form__item">
+                  <label htmlFor="lex-buyer">
+                    Bên nhận / đơn vị thu mua<span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    id="lex-buyer"
+                    type="text"
+                    className={canEdit ? 'mark-damaged-input' : 'mark-damaged-input--disabled'}
+                    disabled={!canEdit}
+                    value={buyerName}
+                    onChange={(e) => setBuyerName(e.target.value)}
+                    placeholder="Tên công ty/cá nhân mua tài sản"
+                  />
+                </div>
+
+                <div className="mark-damaged-form__item">
+                  <label htmlFor="lex-contact">Liên hệ</label>
+                  <input
+                    id="lex-contact"
+                    type="text"
+                    className={canEdit ? 'mark-damaged-input' : 'mark-damaged-input--disabled'}
+                    disabled={!canEdit}
+                    value={buyerContact}
+                    onChange={(e) => setBuyerContact(e.target.value)}
+                    placeholder="Số điện thoại, email"
+                  />
+                </div>
+
+                <div className="mark-damaged-form__item">
+                  <label htmlFor="lex-contract">Số hợp đồng</label>
+                  <input
+                    id="lex-contract"
+                    type="text"
+                    className={canEdit ? 'mark-damaged-input' : 'mark-damaged-input--disabled'}
+                    disabled={!canEdit}
+                    value={contractNo}
+                    onChange={(e) => setContractNo(e.target.value)}
+                    placeholder="Số hợp đồng mua bán (nếu có)"
+                  />
+                </div>
+
+                <div className="mark-damaged-form__item">
+                  <label htmlFor="lex-invoice">Số hóa đơn</label>
+                  <input
+                    id="lex-invoice"
+                    type="text"
+                    className={canEdit ? 'mark-damaged-input' : 'mark-damaged-input--disabled'}
+                    disabled={!canEdit}
+                    value={invoiceNo}
+                    onChange={(e) => setInvoiceNo(e.target.value)}
+                    placeholder="Số hóa đơn bán hàng"
+                  />
+                </div>
+
+                <div className="mark-damaged-form__item">
+                  <label htmlFor="lex-actual">
+                    Số tiền thu được thực tế<span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <div className="disposal-appraisal-money-input">
                     <input
-                      id="lex-planned"
-                      type="date"
-                      className={canEdit ? 'mark-damaged-input' : 'mark-damaged-input--disabled'}
-                      disabled={!canEdit}
-                      value={plannedAt ? plannedAt.format('YYYY-MM-DD') : ''}
-                      onChange={(e) =>
-                        setPlannedAt(e.target.value ? dayjs(e.target.value) : null)
-                      }
-                    />
-                  </div>
-                  <div className="mark-damaged-form__item">
-                    <label htmlFor="lex-executed">
-                      Ngày thực hiện<span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <input
-                      id="lex-executed"
-                      type="date"
-                      className={canEdit ? 'mark-damaged-input' : 'mark-damaged-input--disabled'}
-                      disabled={!canEdit}
-                      value={executedAt ? executedAt.format('YYYY-MM-DD') : ''}
-                      onChange={(e) =>
-                        setExecutedAt(e.target.value ? dayjs(e.target.value) : null)
-                      }
-                    />
-                  </div>
-                  <div className="mark-damaged-form__item">
-                    <label htmlFor="lex-buyer">Bên nhận / đơn vị thu mua</label>
-                    <input
-                      id="lex-buyer"
+                      id="lex-actual"
                       type="text"
+                      inputMode="numeric"
                       className={canEdit ? 'mark-damaged-input' : 'mark-damaged-input--disabled'}
                       disabled={!canEdit}
-                      value={buyerName}
-                      onChange={(e) => setBuyerName(e.target.value)}
+                      value={actualValueText}
+                      onChange={(e) => {
+                        const n = parseIntegerMoneyInput(e.target.value);
+                        setActualValueText(
+                          n == null ? '' : Math.floor(n).toLocaleString('en-US'),
+                        );
+                      }}
+                      placeholder="0"
                     />
-                  </div>
-                  <div className="mark-damaged-form__item">
-                    <label htmlFor="lex-contact">Liên hệ</label>
-                    <input
-                      id="lex-contact"
-                      type="text"
-                      className={canEdit ? 'mark-damaged-input' : 'mark-damaged-input--disabled'}
-                      disabled={!canEdit}
-                      value={buyerContact}
-                      onChange={(e) => setBuyerContact(e.target.value)}
-                    />
-                  </div>
-                  <div className="mark-damaged-form__item">
-                    <label htmlFor="lex-contract">Số hợp đồng</label>
-                    <input
-                      id="lex-contract"
-                      type="text"
-                      className={canEdit ? 'mark-damaged-input' : 'mark-damaged-input--disabled'}
-                      disabled={!canEdit}
-                      value={contractNo}
-                      onChange={(e) => setContractNo(e.target.value)}
-                    />
-                  </div>
-                  <div className="mark-damaged-form__item">
-                    <label htmlFor="lex-invoice">Số hóa đơn</label>
-                    <input
-                      id="lex-invoice"
-                      type="text"
-                      className={canEdit ? 'mark-damaged-input' : 'mark-damaged-input--disabled'}
-                      disabled={!canEdit}
-                      value={invoiceNo}
-                      onChange={(e) => setInvoiceNo(e.target.value)}
-                    />
-                  </div>
-                  <div className="mark-damaged-form__item">
-                    <label htmlFor="lex-minutes">
-                      {isAppraisalStep ? 'Số biên bản thẩm định' : 'Số biên bản giao nhận'}
-                    </label>
-                    <input
-                      id="lex-minutes"
-                      type="text"
-                      className={canEdit ? 'mark-damaged-input' : 'mark-damaged-input--disabled'}
-                      disabled={!canEdit}
-                      value={minutesNo}
-                      onChange={(e) => setMinutesNo(e.target.value)}
-                    />
-                  </div>
-                  <div className="mark-damaged-form__item">
-                    <label htmlFor="lex-actual">
-                      Số tiền thu được<span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <div className="disposal-appraisal-money-input">
-                      <input
-                        id="lex-actual"
-                        type="text"
-                        inputMode="numeric"
-                        className={canEdit ? 'mark-damaged-input' : 'mark-damaged-input--disabled'}
-                        disabled={!canEdit}
-                        value={actualValueText}
-                        onChange={(e) => {
-                          const n = parseIntegerMoneyInput(e.target.value);
-                          setActualValueText(
-                            n == null ? '' : Math.floor(n).toLocaleString('en-US'),
-                          );
-                        }}
-                      />
-                      <span className="disposal-appraisal-money-suffix">đ</span>
-                    </div>
-                  </div>
-                  <div className="mark-damaged-form__item">
-                    <label htmlFor="lex-expense">Chi phí liên quan</label>
-                    <div className="disposal-appraisal-money-input">
-                      <input
-                        id="lex-expense"
-                        type="text"
-                        inputMode="numeric"
-                        className={canEdit ? 'mark-damaged-input' : 'mark-damaged-input--disabled'}
-                        disabled={!canEdit}
-                        value={expenseText}
-                        onChange={(e) => {
-                          const n = parseIntegerMoneyInput(e.target.value);
-                          setExpenseText(n == null ? '' : Math.floor(n).toLocaleString('en-US'));
-                        }}
-                      />
-                      <span className="disposal-appraisal-money-suffix">đ</span>
-                    </div>
-                  </div>
-                  <div className="mark-damaged-form__item">
-                    <label htmlFor="lex-note">{isAppraisalStep ? 'Kết luận thẩm định' : 'Ghi chú'}</label>
-                    <textarea
-                      id="lex-note"
-                      className="mark-damaged-textarea"
-                      rows={3}
-                      readOnly={!canEdit}
-                      disabled={!canEdit}
-                      value={executionNote}
-                      onChange={(e) => setExecutionNote(e.target.value)}
-                    />
+                    <span className="disposal-appraisal-money-suffix">đ</span>
                   </div>
                 </div>
+
+                <div className="mark-damaged-form__item">
+                  <label htmlFor="lex-expense">Chi phí liên quan</label>
+                  <div className="disposal-appraisal-money-input">
+                    <input
+                      id="lex-expense"
+                      type="text"
+                      inputMode="numeric"
+                      className={canEdit ? 'mark-damaged-input' : 'mark-damaged-input--disabled'}
+                      disabled={!canEdit}
+                      value={expenseText}
+                      onChange={(e) => {
+                        const n = parseIntegerMoneyInput(e.target.value);
+                        setExpenseText(n == null ? '' : Math.floor(n).toLocaleString('en-US'));
+                      }}
+                      placeholder="0"
+                    />
+                    <span className="disposal-appraisal-money-suffix">đ</span>
+                  </div>
+                  <small style={{ fontSize: 12, color: '#6b7280' }}>
+                    Chi phí vận chuyển, xử lý, v.v.
+                  </small>
+                </div>
+
+                <div className="mark-damaged-form__item">
+                  <label htmlFor="lex-note">Ghi chú</label>
+                  <textarea
+                    id="lex-note"
+                    className="mark-damaged-textarea"
+                    rows={3}
+                    readOnly={!canEdit}
+                    disabled={!canEdit}
+                    value={executionNote}
+                    onChange={(e) => setExecutionNote(e.target.value)}
+                    placeholder="Ghi chú thêm về quá trình thanh lý"
+                  />
+                </div>
+              </div>
             </>
           </div>
         </div>
@@ -436,27 +421,17 @@ export function LiquidationExecutionModal({
           <button type="button" className="mark-damaged-btn-draft" onClick={onClose} disabled={saving || finalizing}>
             Đóng
           </button>
-          {canEdit && (
+          {!isAppraisalStep && canEdit && (
             <button
               type="button"
-              className="mark-damaged-btn-submit"
+              className="mark-damaged-btn-draft"
               disabled={saving || finalizing || !userId}
               onClick={() => void handleSave()}
             >
               {saving ? 'Đang lưu...' : 'Lưu nháp'}
             </button>
           )}
-          {isAppraisalStep && canEdit && (
-            <button
-              type="button"
-              className="mark-damaged-btn-submit"
-              disabled={saving || finalizing || !userId}
-              onClick={() => void handleRecordAppraisal()}
-            >
-              Ghi nhận biên bản thẩm định
-            </button>
-          )}
-          {canFinalize && !isAppraisalStep && (
+          {!isAppraisalStep && canFinalize && (
             <button
               type="button"
               className="mark-damaged-btn-submit"

@@ -1,0 +1,129 @@
+.liquidation-appraisal-modal {
+  max-width: 900px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.appraisal-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.appraisal-hint-error {
+  padding: 8px 12px;
+  background-color: #fef2f2;
+  border-left: 3px solid #ef4444;
+  color: #991b1b;
+  font-size: 13px;
+  border-radius: 4px;
+}
+
+/* Hội đồng định giá */
+.appraisal-members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.appraisal-member-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.appraisal-member-index {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f3f4f6;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.appraisal-member-fields {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.appraisal-member-remove {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #fee;
+  border: 1px solid #fcc;
+  border-radius: 4px;
+  color: #c00;
+  font-size: 20px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.appraisal-member-remove:hover:not(:disabled) {
+  background-color: #fcc;
+  border-color: #f99;
+}
+
+.appraisal-member-remove:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.appraisal-add-member-btn {
+  padding: 8px 16px;
+  background-color: #f3f4f6;
+  border: 1px dashed #9ca3af;
+  border-radius: 4px;
+  color: #4b5563;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: fit-content;
+}
+
+.appraisal-add-member-btn:hover {
+  background-color: #e5e7eb;
+  border-color: #6b7280;
+  color: #1f2937;
+}
+
+/* Money input */
+.disposal-appraisal-money-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.disposal-appraisal-money-input input {
+  padding-right: 32px;
+}
+
+.disposal-appraisal-money-suffix {
+  position: absolute;
+  right: 12px;
+  color: #6b7280;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .liquidation-appraisal-modal {
+    max-width: 95vw;
+  }
+
+  .appraisal-member-fields {
+    grid-template-columns: 1fr;
+  }
+}

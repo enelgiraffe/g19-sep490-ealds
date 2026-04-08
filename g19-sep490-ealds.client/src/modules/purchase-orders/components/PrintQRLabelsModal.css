@@ -1,0 +1,296 @@
+.print-qr-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.print-qr-modal {
+  position: relative;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 90vh;
+  width: 1000px;
+  display: flex;
+  flex-direction: column;
+}
+
+.print-qr-modal__close-btn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.print-qr-modal__close {
+  font-size: 24px;
+  color: #FE3720;
+  font-weight: 300;
+}
+
+.print-qr-modal__header {
+  background: #ffe5e0;
+  padding: 16px 24px;
+  border-bottom: 1px solid #ffd4cc;
+}
+
+.print-qr-modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #FE3720;
+}
+
+.print-qr-modal__body {
+  padding: 24px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.print-qr-loading,
+.print-qr-empty {
+  text-align: center;
+  padding: 40px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.print-qr-info {
+  margin-bottom: 24px;
+}
+
+.print-qr-labels-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.print-qr-label {
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 16px;
+  background: white;
+  page-break-inside: avoid;
+}
+
+.print-qr-label-header {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.print-qr-label-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  text-align: center;
+}
+
+.print-qr-label-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.print-qr-image {
+  width: 150px;
+  height: 150px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+}
+
+.print-qr-label-info {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.print-qr-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  background: #f9fafb;
+  border-radius: 4px;
+}
+
+.print-qr-label-key {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.print-qr-label-value {
+  font-size: 13px;
+  color: #111827;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+}
+
+.print-qr-modal__footer {
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  justify-content: flex-end;
+}
+
+.print-qr-btn-print {
+  background: #10b981;
+  border: 1px solid #10b981;
+  height: 40px;
+  padding: 0 32px;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.print-qr-btn-print:hover:not(:disabled) {
+  background: #059669;
+  border-color: #059669;
+}
+
+.print-qr-btn-print:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.print-qr-btn-close {
+  background: #6b7280;
+  border: 1px solid #6b7280;
+  color: #fff;
+  height: 40px;
+  padding: 0 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.print-qr-btn-close:hover {
+  background: #4b5563;
+  border-color: #4b5563;
+}
+
+/* Print styles */
+@media print {
+  /* Ẩn tất cả ngoại trừ modal */
+  body * {
+    visibility: hidden;
+  }
+
+  .print-qr-modal-overlay,
+  .print-qr-modal-overlay * {
+    visibility: visible;
+  }
+
+  .print-qr-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: white;
+    z-index: 9999;
+  }
+
+  /* Ẩn các phần không cần in */
+  .no-print,
+  .print-qr-modal__close-btn,
+  .print-qr-modal__footer,
+  .print-qr-info {
+    display: none !important;
+  }
+
+  .print-qr-modal {
+    position: static;
+    max-height: none;
+    width: 100%;
+    box-shadow: none;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  .print-qr-modal__header {
+    background: none;
+    border: none;
+    padding: 0 0 10mm 0;
+  }
+
+  .print-qr-modal__title {
+    color: #000;
+    text-align: center;
+    font-size: 18pt;
+  }
+
+  .print-qr-modal__body {
+    padding: 0;
+    overflow: visible;
+  }
+
+  .print-qr-labels-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15mm;
+    width: 100%;
+  }
+
+  .print-qr-label {
+    border: 2px solid #000;
+    page-break-inside: avoid;
+    padding: 8mm;
+    background: white;
+  }
+
+  .print-qr-label-header {
+    border-bottom: 1px solid #000;
+    margin-bottom: 5mm;
+    padding-bottom: 3mm;
+  }
+
+  .print-qr-label-title {
+    font-size: 12pt;
+    font-weight: bold;
+  }
+
+  .print-qr-image {
+    width: 40mm;
+    height: 40mm;
+    border: 1px solid #000;
+  }
+
+  .print-qr-label-info {
+    margin-top: 5mm;
+  }
+
+  .print-qr-label-row {
+    background: none;
+    border: none;
+    padding: 2mm 0;
+  }
+
+  .print-qr-label-key {
+    font-size: 10pt;
+  }
+
+  .print-qr-label-value {
+    font-size: 11pt;
+    font-weight: bold;
+  }
+
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+}

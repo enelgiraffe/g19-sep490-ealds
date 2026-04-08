@@ -285,6 +285,8 @@ public class GoodsReceiptsController : ControllerBase
             var n = (int)row.QuantityReceived;
             if (row.InstanceSerialNumbers != null && row.InstanceSerialNumbers.Count != n)
                 return BadRequest($"Line {row.ProcurementLineId}: instanceSerialNumbers must have {n} entries (or be omitted).");
+            if (row.InstanceCodes != null && row.InstanceCodes.Count != n)
+                return BadRequest($"Line {row.ProcurementLineId}: instanceCodes must have {n} entries (or be omitted).");
         }
 
         var ownsTx = _db.Database.CurrentTransaction == null;
@@ -324,7 +326,11 @@ public class GoodsReceiptsController : ControllerBase
                 .Select(i => i.InstanceCode)
                 .ToListAsync();
 
-            var purchaseDate = DateOnly.FromDateTime(DateTime.UtcNow);
+            DateOnly purchaseDate;
+            if (!string.IsNullOrWhiteSpace(dto.PostingDate) && DateOnly.TryParse(dto.PostingDate, out var parsed))
+                purchaseDate = parsed;
+            else
+                purchaseDate = DateOnly.FromDateTime(DateTime.UtcNow);
             for (var i = 0; i < grLines.Count; i++)
             {
                 var grLine = grLines[i];
@@ -332,13 +338,45 @@ public class GoodsReceiptsController : ControllerBase
                 var pl = lineById[row.ProcurementLineId];
                 var asset = await _db.Assets.AsNoTracking().FirstAsync(a => a.AssetId == grLine.AssetId!.Value);
                 var n = (int)row.QuantityReceived;
-                var prefix = $"GRL{grLine.GoodsReceiptLineId}-";
-                if (prefix.Length > 32)
-                    prefix = prefix[..32];
-
-                var codes = GenerateSequentialCodesForPrefix(prefix, n, existingCodes);
-                foreach (var c in codes)
-                    existingCodes.Add(c);
+                
+                // Sử dụng instanceCodes nếu có, nếu không thì tự sinh
+                List<string> codes;
+                if (row.InstanceCodes != null && row.InstanceCodes.Any(c => !string.IsNullOrWhiteSpace(c)))
+                {
+                    codes = new List<string>(n);
+                    for (var idx = 0; idx < n; idx++)
+                    {
+                        var customCode = row.InstanceCodes[idx];
+                        if (!string.IsNullOrWhiteSpace(customCode))
+                        {
+                            var trimmed = customCode.Trim();
+                            if (existingCodes.Contains(trimmed))
+                                return BadRequest($"Line {row.ProcurementLineId}: instance code '{trimmed}' already exists.");
+                            codes.Add(trimmed);
+                            existingCodes.Add(trimmed);
+                        }
+                        else
+                        {
+                            // Nếu code rỗng, tự sinh
+                            var prefix = $"GRL{grLine.GoodsReceiptLineId}-";
+                            if (prefix.Length > 32)
+                                prefix = prefix[..32];
+                            var generated = GenerateSequentialCodesForPrefix(prefix, 1, existingCodes);
+                            codes.Add(generated[0]);
+                            existingCodes.Add(generated[0]);
+                        }
+                    }
+                }
+                else
+                {
+                    // Tự sinh tất cả
+                    var prefix = $"GRL{grLine.GoodsReceiptLineId}-";
+                    if (prefix.Length > 32)
+                        prefix = prefix[..32];
+                    codes = GenerateSequentialCodesForPrefix(prefix, n, existingCodes);
+                    foreach (var c in codes)
+                        existingCodes.Add(c);
+                }
 
                 var lineTotal = row.QuantityReceived * pl.UnitPrice;
                 var (values, currents) = SplitValueAcrossInstances(lineTotal, n);

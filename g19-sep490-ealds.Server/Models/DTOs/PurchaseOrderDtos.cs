@@ -20,9 +20,14 @@ public class PurchaseOrderCreateDto
 
     public int SupplierId { get; set; }
 
+    public string? ContractNo { get; set; }
+
     public string Currency { get; set; } = "VND";
 
     public List<PurchaseOrderLineWriteDto> Lines { get; set; } = new();
+
+    /// <summary>If true, saves as draft (status=-1). Default false (status=0).</summary>
+    public bool IsDraft { get; set; } = false;
 }
 
 public class PurchaseOrderUpdateDto : PurchaseOrderCreateDto
