@@ -4,6 +4,7 @@ using g19_sep490_ealds.Server.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -13,10 +14,12 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class ProfileController : ControllerBase
 {
     private readonly EaldsDbContext _context;
+    private readonly int _departmentHeadRoleId;
 
-    public ProfileController(EaldsDbContext context)
+    public ProfileController(EaldsDbContext context, IConfiguration configuration)
     {
         _context = context;
+        _departmentHeadRoleId = configuration.GetValue<int>("App:DepartmentHeadRoleId", 4);
     }
 
     [HttpGet]
@@ -44,6 +47,10 @@ public class ProfileController : ControllerBase
             ? "DIRECTOR"
             : codes.FirstOrDefault() ?? string.Empty;
 
+        var isDepartmentHead = await _context.UserRoles
+            .AsNoTracking()
+            .AnyAsync(ur => ur.UserId == userId && ur.RoleId == _departmentHeadRoleId);
+
         var profile = new UserProfileDto
         {
             Id = user.UserId,
@@ -57,7 +64,8 @@ public class ProfileController : ControllerBase
             ImageUrl = employee?.ImageUrl,
             DepartmentName = employee?.Department?.Name,
             DepartmentId = employee?.DepartmentId,
-            Role = profileRole
+            Role = profileRole,
+            IsDepartmentHead = isDepartmentHead
         };
 
         return Ok(profile);
@@ -101,6 +109,10 @@ public class ProfileController : ControllerBase
             ? "DIRECTOR"
             : codesList.FirstOrDefault() ?? string.Empty;
 
+        var isDepartmentHeadUpd = await _context.UserRoles
+            .AsNoTracking()
+            .AnyAsync(ur => ur.UserId == userId && ur.RoleId == _departmentHeadRoleId);
+
         var updatedProfile = new UserProfileDto
         {
             Id = userId,
@@ -114,7 +126,8 @@ public class ProfileController : ControllerBase
             ImageUrl = employee.ImageUrl,
             DepartmentName = employee.Department?.Name,
             DepartmentId = employee.DepartmentId,
-            Role = roleOut
+            Role = roleOut,
+            IsDepartmentHead = isDepartmentHeadUpd
         };
 
         return Ok(updatedProfile);

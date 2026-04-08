@@ -30,6 +30,14 @@ const STATUS_COLOR: Record<number, string> = {
   6: 'purple',      // Chờ xử lý
 };
 
+/** Progress bar fill: red (low) → yellow → green (100%). */
+function inventoryProgressFillColor(percent: number | null | undefined): string {
+  const p = Math.max(0, Math.min(100, Number(percent) || 0));
+  if (p === 0) return '#bfbfbf';
+  const hue = (p / 100) * 120;
+  return `hsl(${hue}, 72%, 44%)`;
+}
+
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '-';
   const d = new Date(dateStr);
@@ -337,7 +345,10 @@ export function InventoryPage() {
                           <div className="inventory-progress__bar">
                             <div
                               className="inventory-progress__fill"
-                              style={{ width: `${row.progressPercent ?? 0}%` }}
+                              style={{
+                                width: `${row.progressPercent ?? 0}%`,
+                                backgroundColor: inventoryProgressFillColor(row.progressPercent),
+                              }}
                             />
                           </div>
                           <span className="inventory-progress__label">

@@ -3,6 +3,15 @@ import { transferRequestService, type AssetLocationOption } from '../services/tr
 import { SelectAssetsModal, type SelectableAsset } from './SelectAssetsModal';
 import './TransferAssetModal.css';
 
+/** Local calendar date YYYY-MM-DD (avoids UTC off-by-one with `toISOString().slice(0, 10)`). */
+function todayLocalISODate(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 interface AssetInfo {
   assetInstanceId?: number;
   assetId?: number;
@@ -27,6 +36,8 @@ interface TransferAssetModalProps {
   onSubmit: (values: any) => void;
   assetInfo: AssetInfo | null;
   fromDepartmentId?: number | null;
+  /** When true with fromDepartmentId, "Từ phòng ban" is fixed (e.g. trưởng phòng chỉ điều chuyển từ đơn vị mình). */
+  lockFromDepartment?: boolean;
   mode?: 'location' | 'department';
 }
 
@@ -36,6 +47,7 @@ export function TransferAssetModal({
   onSubmit,
   assetInfo,
   fromDepartmentId,
+  lockFromDepartment = false,
   mode = 'location',
 }: TransferAssetModalProps) {
   const [locations, setLocations] = useState<AssetLocationOption[]>([]);
@@ -64,7 +76,7 @@ export function TransferAssetModal({
 
   useEffect(() => {
     if (open) {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayLocalISODate();
       const datePart = today.replace(/-/g, '');
       const randomPart = Math.floor(Math.random() * 900 + 100);
       setRecordNumber(`BB-DC-${datePart}-${randomPart}`);
@@ -110,15 +122,37 @@ export function TransferAssetModal({
     setSelectedAssets((prev) => prev.filter((a) => a.currentDepartmentId === deptId));
   }, [open, fromLocationId, assetInfo]);
 
+  useEffect(() => {
+    if (!open) return;
+    if (!fromLocationId || !toLocationId) return;
+    if (fromLocationId === toLocationId) {
+      setToLocationId('');
+      setToError(null);
+    }
+  }, [open, fromLocationId, toLocationId]);
+
   const fromDeptNum = fromLocationId ? Number(fromLocationId) : NaN;
   const validFromDepartmentId =
     Number.isFinite(fromDeptNum) && fromDeptNum > 0 ? fromDeptNum : null;
+  const fromSelectLocked =
+    lockFromDepartment &&
+    fromDepartmentId != null &&
+    fromDepartmentId > 0;
   const canPickAssets = !!assetInfo || validFromDepartmentId != null;
+
+  const minTransferDate = todayLocalISODate();
+  const toLocationOptions =
+    validFromDepartmentId != null
+      ? locations.filter((loc) => loc.locationId !== validFromDepartmentId)
+      : locations;
 
   const handleSubmit = () => {
     let hasError = false;
     if (!transferDate) {
       setDateError('Vui lòng chọn ngày điều chuyển');
+      hasError = true;
+    } else if (transferDate < minTransferDate) {
+      setDateError('Không được chọn ngày trong quá khứ');
       hasError = true;
     }
     if (!assetInfo && selectedAssets.length === 0) {
@@ -187,6 +221,7 @@ export function TransferAssetModal({
                   id="transfer-date"
                   type="date"
                   className="transfer-input"
+                  min={minTransferDate}
                   value={transferDate}
                   onChange={(e) => {
                     setTransferDate(e.target.value);
@@ -224,7 +259,8 @@ export function TransferAssetModal({
                   id="transfer-from-location"
                   className="transfer-select"
                   value={fromLocationId}
-                  disabled={locationsLoading}
+                  disabled={locationsLoading || fromSelectLocked}
+                  aria-readonly={fromSelectLocked || undefined}
                   onChange={(e) => {
                     setFromLocationId(e.target.value);
                     setFromError(null);
@@ -260,7 +296,7 @@ export function TransferAssetModal({
                   <option value="">
                     {mode === 'department' ? 'Chọn phòng ban đích' : 'Chọn vị trí chuyển đến'}
                   </option>
-                  {locations.map((loc) => (
+                  {toLocationOptions.map((loc) => (
                     <option key={loc.locationId} value={loc.locationId}>
                       {loc.displayName}
                     </option>
@@ -355,6 +391,11 @@ export function TransferAssetModal({
         restrictToDepartmentId={validFromDepartmentId}
         onConfirm={(assets) => {
           setSelectedAssets(assets);
+          if (fromSelectLocked && fromDepartmentId != null) {
+            setFromLocationId(String(fromDepartmentId));
+            setFromError(null);
+            return;
+          }
           const deptIds = Array.from(new Set(assets.map((a) => a.currentDepartmentId).filter((x) => x != null)));
           if (deptIds.length === 1) {
             setFromLocationId(String(deptIds[0]));

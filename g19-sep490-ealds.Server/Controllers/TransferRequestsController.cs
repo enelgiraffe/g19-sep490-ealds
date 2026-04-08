@@ -22,6 +22,8 @@ public class TransferRequestsController : ControllerBase
     private readonly EaldsDbContext _db;
     private readonly IAssetRequestNotificationService _requestNotifications;
     private readonly int _transferRequestTypeId;
+    /// <summary>RoleId trưởng phòng ban (seed: 4, giống DisposalRequestsController).</summary>
+    private readonly int _departmentHeadRoleId;
 
     public TransferRequestsController(
         EaldsDbContext db,
@@ -31,6 +33,7 @@ public class TransferRequestsController : ControllerBase
         _db = db;
         _requestNotifications = requestNotifications;
         _transferRequestTypeId = configuration.GetValue<int>("App:TransferRequestTypeId", 3);
+        _departmentHeadRoleId = configuration.GetValue<int>("App:DepartmentHeadRoleId", 4);
     }
 
     /// <summary>
@@ -205,6 +208,24 @@ public class TransferRequestsController : ControllerBase
             return BadRequest("Phòng ban nguồn (FromLocationId) không tồn tại trong hệ thống.");
         if (!toDeptExists)
             return BadRequest("Phòng ban đích (ToLocationId) không tồn tại trong hệ thống.");
+
+        var isAccountant = User.IsInRole("ACCOUNTANT");
+        if (!isAccountant)
+        {
+            var isDepartmentHead = await _db.UserRoles.AsNoTracking()
+                .AnyAsync(ur => ur.UserId == userId && ur.RoleId == _departmentHeadRoleId);
+            if (isDepartmentHead)
+            {
+                var userDeptId = await _db.Employees.AsNoTracking()
+                    .Where(e => e.UserId == userId)
+                    .Select(e => (int?)e.DepartmentId)
+                    .FirstOrDefaultAsync();
+                if (!userDeptId.HasValue)
+                    return BadRequest("Trưởng phòng ban cần được gán phòng ban trong hồ sơ nhân viên để tạo yêu cầu điều chuyển.");
+                if (dto.FromLocationId != userDeptId.Value)
+                    return BadRequest("Phòng ban nguồn phải là phòng ban của bạn (đơn vị đang quản lý tài sản).");
+            }
+        }
 
         var now = dto.TransferDate ?? DateTime.UtcNow;
         var today = DateOnly.FromDateTime(now);

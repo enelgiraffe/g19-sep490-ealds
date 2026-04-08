@@ -21,6 +21,7 @@ import { LiquidationRequestModal } from '../components/LiquidationRequestModal';
 import { TransferAssetModal } from '../components/TransferAssetModal';
 import { MaintenanceProposalModal } from '../components/MaintenanceProposalModal';
 import { profileService, type UserProfile } from '../../profile/services/profileService';
+import { isDepartmentHeadRoleCode } from '../../../shared/utils/departmentHeadRole';
 import './AssetListPage.css';
 
 interface AssetItem {
@@ -168,6 +169,12 @@ export function AssetListPage() {
   const [assetTypes, setAssetTypes] = useState<AssetTypeItem[]>([]);
   const navigate = useNavigate();
 
+  const isDeptHead = profile?.isDepartmentHead ?? isDepartmentHeadRoleCode(profile?.role);
+  const deptHeadFromId =
+    isDeptHead && profile?.departmentId != null && !Number.isNaN(Number(profile.departmentId))
+      ? Number(profile.departmentId)
+      : null;
+
   const assets: AssetItem[] = useMemo(() => {
     if (!apiAssets) return [];
     return apiAssets.map((a) =>
@@ -307,6 +314,16 @@ export function AssetListPage() {
       const assetInfo = instanceToAssetInfo(raw, catalog);
       
       if (actionKey === 'move') {
+        if (
+          deptHeadFromId != null &&
+          raw.currentDepartmentId != null &&
+          Number(raw.currentDepartmentId) !== deptHeadFromId
+        ) {
+          message.warning(
+            'Chỉ có thể tạo yêu cầu điều chuyển cho tài sản đang thuộc phòng ban của bạn.',
+          );
+          return;
+        }
         setSelectedAssetInfo(assetInfo);
         setTransferAssetInstanceId(raw.assetInstanceId);
         setIsTransferModalOpen(true);
@@ -526,8 +543,11 @@ export function AssetListPage() {
         return;
       }
 
-      const fromLocationId = Number(values.fromLocationId);
+      let fromLocationId = Number(values.fromLocationId);
       const toLocationId = Number(values.toLocationId);
+      if (deptHeadFromId != null) {
+        fromLocationId = deptHeadFromId;
+      }
       if (!fromLocationId || !toLocationId) {
         message.error('Vui lòng nhập ID vị trí hợp lệ.');
         return;
@@ -922,7 +942,9 @@ export function AssetListPage() {
         onClose={handleCloseTransferModal}
         onSubmit={handleSubmitTransfer}
         assetInfo={selectedAssetInfo}
-        fromDepartmentId={selectedAssetInfo?.currentDepartmentId ?? null}
+        mode="department"
+        fromDepartmentId={deptHeadFromId ?? selectedAssetInfo?.currentDepartmentId ?? null}
+        lockFromDepartment={deptHeadFromId != null}
       />
 
       <MaintenanceProposalModal

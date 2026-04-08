@@ -16,4 +16,7 @@ public class UserProfileDto
     public int? DepartmentId { get; set; }
 
     public string Role { get; set; } = null!;
+
+    /// <summary>True when the user has the department-head role (RoleId from App:DepartmentHeadRoleId), independent of <see cref="Role"/> display string.</summary>
+    public bool IsDepartmentHead { get; set; }
 }
