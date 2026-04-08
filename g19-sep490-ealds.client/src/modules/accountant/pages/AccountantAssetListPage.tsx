@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Button, message, Spin } from 'antd';
+import { Button, message } from 'antd';
 import { DownloadOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   assetInstanceService,
@@ -132,7 +132,6 @@ export function AccountantAssetListPage() {
     expandedAssetId != null ? assets.find((a) => a.id === expandedAssetId) : undefined;
 
   return (
-    <Spin spinning={loading}>
     <div className="asset-page">
       <div className="accountant-asset-title-row">
         <h1 className="asset-page__title">Tài sản</h1>
@@ -385,6 +384,5 @@ export function AccountantAssetListPage() {
         </div>
       </div>
     </div>
-    </Spin>
   );
 }

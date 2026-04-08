@@ -731,7 +731,6 @@ export function RequestsPage() {
     });
   }, [handoverRequestRows, searchText, statusFilter, sentDateFilter]);
 
->>>>>>> feature/LanN/iter3
   const departmentOptions = useMemo(
     () =>
       Array.from(new Set(transferRows.map((row) => row.fromDepartment)))

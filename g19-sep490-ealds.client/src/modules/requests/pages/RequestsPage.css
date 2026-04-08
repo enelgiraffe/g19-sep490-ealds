@@ -227,3 +227,31 @@
   cursor: default;
 }
 
+.director-equipment-table-wrapper {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.director-equipment-table-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.director-equipment-table-wrapper::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.director-equipment-table-wrapper::-webkit-scrollbar-thumb {
+  background: #919EAB;
+  border-radius: 3px;
+}
+
+.director-equipment-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #7a8693;
+}
+
+.director-equipment-table-wrapper .view-purchase-equipment-table {
+  border: none;
+}
+
