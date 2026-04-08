@@ -31,6 +31,8 @@ export interface UserProfile {
   departmentName?: string | null;
   departmentId?: number | null;
   role: string;
+  /** From API: UserRoles includes department-head role (not inferred from `role` string alone). */
+  isDepartmentHead?: boolean;
 }
 
 export interface UpdateProfilePayload {

@@ -15,6 +15,7 @@ import {
 import { TransferAssetModal } from '../../assets/components/TransferAssetModal';
 import { TransferRequestDetailModal } from '../components/TransferRequestDetailModal';
 import { profileService, type UserProfile } from '../../profile/services/profileService';
+import { isDepartmentHeadRoleCode } from '../../../shared/utils/departmentHeadRole';
 import './TransfersPage.css';
 import '../../assets/components/MarkDamagedAssetModal.css';
 
@@ -104,6 +105,11 @@ export function TransfersPage() {
   }, [confirmModal]);
 
   const isAccountant = (profile?.role ?? '').toUpperCase() === 'ACCOUNTANT';
+  const isDeptHead = profile?.isDepartmentHead ?? isDepartmentHeadRoleCode(profile?.role);
+  const transferFromDeptId =
+    isDeptHead && profile?.departmentId != null && !Number.isNaN(Number(profile.departmentId))
+      ? Number(profile.departmentId)
+      : null;
 
   const filteredData = useMemo(() => {
     return data.filter((row) => {
@@ -387,6 +393,8 @@ export function TransfersPage() {
         open={isTransferModalOpen}
         onClose={() => setIsTransferModalOpen(false)}
         mode="department"
+        fromDepartmentId={transferFromDeptId}
+        lockFromDepartment={transferFromDeptId != null}
         onSubmit={async (values: any) => {
           if (!profile) {
             message.error('Không lấy được thông tin người dùng. Vui lòng đăng nhập lại.');
@@ -401,8 +409,11 @@ export function TransfersPage() {
             return;
           }
 
-          const fromLocationId = Number(values.fromLocationId);
+          let fromLocationId = Number(values.fromLocationId);
           const toLocationId = Number(values.toLocationId);
+          if (transferFromDeptId != null) {
+            fromLocationId = transferFromDeptId;
+          }
           if (!fromLocationId || !toLocationId) {
             message.error('Vui lòng chọn phòng ban/vị trí hợp lệ.');
             return;

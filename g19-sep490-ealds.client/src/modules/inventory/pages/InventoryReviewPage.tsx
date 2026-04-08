@@ -264,20 +264,6 @@ export function InventoryReviewPage() {
         </div>
       </div>
 
-      {awaitingDirector && (
-        <p className="inv-review__hint">
-          Phiên đang <strong>Chờ xác nhận</strong> (thường gặp với phiên tạo trước khi đổi quy trình).
-        </p>
-      )}
-      {awaitingHeadResolution && (
-        <p className="inv-review__hint">
-          Phiên đang <strong>Chờ xử lý</strong>: chọn các dòng chênh lệch (cột đầu), sau đó bấm{' '}
-          <strong>Cập nhật sổ đã chọn</strong> ở cuối bảng. Ô tiêu đề cột chọn có thể chọn nhanh tất cả dòng
-          chưa xử lý trên trang hiện tại. Khi không còn dòng chưa xử lý, bấm <strong>Hoàn tất</strong> (góc trên
-          bên phải) để kết thúc với trạng thái <strong>Đã xử lý</strong>.
-        </p>
-      )}
-
       <div className="inv-review__table-wrap">
         <h2 className="inv-review__section-title">Chi tiết chênh lệch</h2>
         <Table<InventoryDiscrepancyDetail>
