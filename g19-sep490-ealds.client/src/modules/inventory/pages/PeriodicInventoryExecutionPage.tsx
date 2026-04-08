@@ -42,6 +42,17 @@ function formatStatusMatch(match: boolean | null): string {
   return match ? '✓' : '✗';
 }
 
+/** Thực tế chưa lưu thì mặc định theo sổ sách (vị trí / trạng thái). */
+function defaultActualsFromDetail(detail: AssetInventoryDetail): {
+  status: number;
+  locationId: number | null;
+} {
+  return {
+    status: detail.actualStatus ?? detail.bookStatus,
+    locationId: detail.actualLocationId ?? detail.bookLocationId ?? null,
+  };
+}
+
 export function PeriodicInventoryExecutionPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
@@ -54,7 +65,6 @@ export function PeriodicInventoryExecutionPage() {
 
   const [actualStatus, setActualStatus] = useState<number>(0);
   const [actualLocationId, setActualLocationId] = useState<number | null>(null);
-  const [actualManagerId, setActualManagerId] = useState<number | null>(null);
 
   const [searchText, setSearchText] = useState('');
   const [checkStatusFilter, setCheckStatusFilter] = useState<number | undefined>(undefined);
@@ -110,9 +120,9 @@ export function PeriodicInventoryExecutionPage() {
     try {
       const detail = await inventoryService.getAssetInventoryDetail(sessionIdNum, assetInstanceId);
       setAssetDetail(detail);
-      setActualStatus(detail.actualStatus ?? detail.bookStatus);
-      setActualLocationId(detail.actualLocationId);
-      setActualManagerId(detail.actualManagerId);
+      const defaults = defaultActualsFromDetail(detail);
+      setActualStatus(defaults.status);
+      setActualLocationId(defaults.locationId);
     } catch {
       message.error('Không thể tải chi tiết tài sản.');
     } finally {
@@ -122,9 +132,9 @@ export function PeriodicInventoryExecutionPage() {
 
   const handleReset = () => {
     if (!assetDetail) return;
-    setActualStatus(assetDetail.actualStatus ?? assetDetail.bookStatus);
-    setActualLocationId(assetDetail.actualLocationId);
-    setActualManagerId(assetDetail.actualManagerId);
+    const defaults = defaultActualsFromDetail(assetDetail);
+    setActualStatus(defaults.status);
+    setActualLocationId(defaults.locationId);
   };
 
   const handleSave = async () => {
@@ -135,10 +145,21 @@ export function PeriodicInventoryExecutionPage() {
         assetInstanceId: assetDetail.assetInstanceId,
         actualStatus,
         actualLocationId,
-        actualManagerId,
         checkedBy: getCurrentUserId(),
       });
       message.success('Đã lưu thông tin kiểm kê.');
+      try {
+        const refreshed = await inventoryService.getAssetInventoryDetail(
+          sessionIdNum,
+          assetDetail.assetInstanceId,
+        );
+        setAssetDetail(refreshed);
+        const afterSave = defaultActualsFromDetail(refreshed);
+        setActualStatus(afterSave.status);
+        setActualLocationId(afterSave.locationId);
+      } catch {
+        /* saved OK; form giữ nguyên nếu tải lại chi tiết lỗi */
+      }
       fetchAssets();
       fetchSession();
     } catch {
@@ -187,43 +208,9 @@ export function PeriodicInventoryExecutionPage() {
     }
   };
 
-  const getComparisonRows = () => {
-    if (!assetDetail) return [];
-    const selectedLocation = assetDetail.locations.find((l) => l.id === actualLocationId);
-    const selectedManager = assetDetail.managers.find((m) => m.id === actualManagerId);
-    const locActual = selectedLocation?.name ?? '-';
-    const locBook = assetDetail.bookLocationName || '-';
-    const mgrActual = selectedManager?.name ?? '-';
-    const mgrBook = assetDetail.bookManagerName || '-';
-    return [
-      {
-        field: 'Vị trí',
-        book: locBook,
-        actual: locActual,
-        isMatch: locActual !== '-' && locActual === locBook,
-        hasActual: locActual !== '-',
-      },
-      {
-        field: 'Người quản lý',
-        book: mgrBook,
-        actual: mgrActual,
-        isMatch: mgrActual !== '-' && mgrActual === mgrBook,
-        hasActual: mgrActual !== '-',
-      },
-      {
-        field: 'Trạng thái',
-        book: formatAssetStatusVi(assetDetail.bookStatus),
-        actual: formatAssetStatusVi(actualStatus),
-        isMatch: actualStatus === assetDetail.bookStatus,
-        hasActual: true,
-      },
-    ];
-  };
-
   const isEditable = sessionDetail?.status === 1;
   const progressPct = sessionDetail?.progressPercent ?? 0;
   const canCompleteInventory = progressPct >= 100;
-  const comparisonRows = getComparisonRows();
 
   const renderComparisonStatus = (row: { hasActual: boolean; isMatch: boolean }) => {
     if (row.hasActual && row.isMatch) {
@@ -246,6 +233,19 @@ export function PeriodicInventoryExecutionPage() {
         </div>
       );
     }
+    const selectedLocation = assetDetail.locations.find((l) => l.id === actualLocationId);
+    const locActual = selectedLocation?.name ?? '-';
+    const locBook = assetDetail.bookLocationName || '-';
+
+    const locRow = {
+      hasActual: locActual !== '-',
+      isMatch: locActual !== '-' && locActual === locBook,
+    };
+    const statusRow = {
+      hasActual: true,
+      isMatch: actualStatus === assetDetail.bookStatus,
+    };
+
     return (
       <>
         <div className="exec-detail-content">
@@ -279,83 +279,6 @@ export function PeriodicInventoryExecutionPage() {
             </div>
           </div>
 
-          {/* Per-instance: reported status vs book */}
-          <div className="exec-instance-check">
-            <div className="exec-instance-check__head">
-              <span className="exec-instance-check__title">Trạng thái thực tế (so với sổ sách)</span>
-              <span className="exec-instance-check__hint">
-                Sổ sách: {formatAssetStatusVi(assetDetail.bookStatus)}
-              </span>
-            </div>
-            <div className="exec-instance-use-row">
-              <div className="exec-condition-field exec-condition-field--full">
-                <label htmlFor="exec-actual-status" className="exec-condition-field__label">
-                  Trạng thái kiểm kê
-                  {isEditable ? <span className="exec-condition-field__required"> *</span> : null}
-                </label>
-                {isEditable ? (
-                  <Select
-                    id="exec-actual-status"
-                    className="exec-condition-field__select"
-                    value={actualStatus}
-                    onChange={(v) => setActualStatus(v ?? assetDetail.bookStatus)}
-                    placeholder="Chọn trạng thái thể hiện"
-                    options={INVENTORY_STATUS_SELECT_OPTIONS}
-                  />
-                ) : (
-                  <span className="exec-condition-field__readonly">
-                    {formatAssetStatusVi(actualStatus)}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Location and Manager */}
-          <div className="exec-loc-mgr">
-            <div className="exec-loc-mgr__col">
-              <label htmlFor="exec-location-select" className="exec-loc-mgr__label">
-                Vị trí tài sản
-              </label>
-              <Select
-                id="exec-location-select"
-                className="exec-loc-mgr__select"
-                value={actualLocationId}
-                onChange={setActualLocationId}
-                placeholder="Chọn vị trí"
-                disabled={!isEditable}
-                options={assetDetail.locations.map((l) => ({
-                  value: l.id,
-                  label: l.name,
-                }))}
-              />
-              <span className="exec-loc-mgr__book">
-                Số sách: {assetDetail.bookLocationName || '-'}
-              </span>
-            </div>
-            <div className="exec-loc-mgr__col">
-              <label htmlFor="exec-manager-select" className="exec-loc-mgr__label">
-                Người quản lý
-              </label>
-              <Select
-                id="exec-manager-select"
-                className="exec-loc-mgr__select"
-                value={actualManagerId}
-                onChange={setActualManagerId}
-                placeholder="Chọn người quản lý"
-                disabled={!isEditable}
-                options={assetDetail.managers.map((m) => ({
-                  value: m.id,
-                  label: m.name,
-                }))}
-              />
-              <span className="exec-loc-mgr__book">
-                Số sách: {assetDetail.bookManagerName || '-'}
-              </span>
-            </div>
-          </div>
-
-          {/* Comparison table */}
           <table className="exec-comparison-table">
             <thead>
               <tr>
@@ -366,14 +289,47 @@ export function PeriodicInventoryExecutionPage() {
               </tr>
             </thead>
             <tbody>
-              {comparisonRows.map((row) => (
-                <tr key={row.field}>
-                  <td>{row.field}</td>
-                  <td>{row.book}</td>
-                  <td>{row.actual}</td>
-                  <td>{renderComparisonStatus(row)}</td>
-                </tr>
-              ))}
+              <tr>
+                <td>Vị trí</td>
+                <td>{locBook}</td>
+                <td className="exec-comparison-table__actual-cell">
+                  {isEditable ? (
+                    <Select
+                      id="exec-location-select"
+                      className="exec-comparison-table__select"
+                      value={actualLocationId}
+                      onChange={setActualLocationId}
+                      placeholder="Chọn vị trí"
+                      options={assetDetail.locations.map((l) => ({
+                        value: l.id,
+                        label: l.name,
+                      }))}
+                    />
+                  ) : (
+                    locActual
+                  )}
+                </td>
+                <td>{renderComparisonStatus(locRow)}</td>
+              </tr>
+              <tr>
+                <td>Trạng thái</td>
+                <td>{formatAssetStatusVi(assetDetail.bookStatus)}</td>
+                <td className="exec-comparison-table__actual-cell">
+                  {isEditable ? (
+                    <Select
+                      id="exec-actual-status"
+                      className="exec-comparison-table__select"
+                      value={actualStatus}
+                      onChange={(v) => setActualStatus(v ?? assetDetail.bookStatus)}
+                      placeholder="Chọn trạng thái kiểm kê"
+                      options={INVENTORY_STATUS_SELECT_OPTIONS}
+                    />
+                  ) : (
+                    formatAssetStatusVi(actualStatus)
+                  )}
+                </td>
+                <td>{renderComparisonStatus(statusRow)}</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -602,7 +558,9 @@ export function PeriodicInventoryExecutionPage() {
             </p>
           </div>
           <p className="exec-complete-modal__notify">
-            Hệ thống đã gửi thông báo tới Kế toán (xử lý chênh lệch) và Giám đốc (xem báo cáo).
+            Phiên chuyển sang <strong>Chờ xử lý</strong>. Vào danh sách kiểm kê, mở báo cáo phiên này để cập nhật sổ
+            theo từng chênh lệch (nếu có); khi xong, bấm <strong>Hoàn tất</strong> trên báo cáo để đánh dấu{' '}
+            <strong>Đã xử lý</strong>. Giám đốc có thể xem kết quả trong báo cáo, không cần xác nhận.
           </p>
           <div className="exec-complete-modal__footer">
             <Button onClick={() => setIsCompleteModalOpen(false)}>Đóng</Button>

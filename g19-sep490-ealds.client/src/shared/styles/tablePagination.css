@@ -1,0 +1,81 @@
+/**
+ * Shared table pagination footer (list pages: inventory, maintenance, requests, …).
+ * Use: ealds-table-pagination + __left | __center | __right | __select | __pager
+ */
+
+.ealds-table-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 16px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.ealds-table-pagination--tight {
+  padding-top: 8px;
+}
+
+.ealds-table-pagination--divider {
+  border-top: 1px solid #f0f0f0;
+  padding: 16px 20px 0;
+  margin-top: 0;
+}
+
+.ealds-table-pagination__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ealds-table-pagination__select {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  font-size: 13px;
+  color: #213547;
+  background: #fff;
+}
+
+.ealds-table-pagination__center {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.ealds-table-pagination__right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+button.ealds-table-pagination__pager,
+span.ealds-table-pagination__pager {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+}
+
+.ealds-table-pagination__pager {
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  padding: 4px 10px;
+  background: #ffffff;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.2;
+}
+
+.ealds-table-pagination__pager--active {
+  background: #1677ff;
+  border-color: #1677ff;
+  color: #ffffff;
+  cursor: default;
+}
+
+.ealds-table-pagination__pager:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

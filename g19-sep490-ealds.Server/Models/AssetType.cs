@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace g19_sep490_ealds.Server.Models;
@@ -18,4 +18,6 @@ public partial class AssetType
     public virtual ICollection<InventorySession> InventorySessions { get; set; } = new List<InventorySession>();
 
     public virtual ICollection<MaintenanceTemplate> MaintenanceTemplates { get; set; } = new List<MaintenanceTemplate>();
+
+    public virtual ICollection<AssetAllocationOrderLine> AssetAllocationOrderLines { get; set; } = new List<AssetAllocationOrderLine>();
 }

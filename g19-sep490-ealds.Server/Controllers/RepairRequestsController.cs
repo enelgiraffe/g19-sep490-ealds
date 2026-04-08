@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -35,10 +37,20 @@ public class RepairRequestsController : ControllerBase
     /// <summary>
     /// GET /api/Assets/Requests/repair - Danh sách yêu cầu sửa chữa.
     /// </summary>
+    [Authorize]
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TransferRequestListItemDTO>>> GetList()
     {
-        var list = await _db.RepairTasks
+        var userId = GetUserIdOrZero();
+        if (userId <= 0)
+            return Unauthorized();
+
+        var privileged = await IsPrivilegedRepairViewerAsync(userId);
+        var filterDeptId = privileged ? null : await GetEmployeeDepartmentIdAsync(userId);
+        if (!privileged && !filterDeptId.HasValue)
+            return Ok(Array.Empty<TransferRequestListItemDTO>());
+
+        var query = _db.RepairTasks
             .AsNoTracking()
             .Include(t => t.AssetInstance)
                 .ThenInclude(ai => ai.Asset)
@@ -46,7 +58,16 @@ public class RepairRequestsController : ControllerBase
                 .ThenInclude(ai => ai.AssetLocations)
                     .ThenInclude(al => al.Department)
             .Include(t => t.AssetRequest)
-            .Where(t => t.AssetRequest != null && t.AssetRequest.RequestTypeId == _repairRequestTypeId)
+            .Where(t => t.AssetRequest != null && t.AssetRequest.RequestTypeId == _repairRequestTypeId);
+
+        if (!privileged && filterDeptId.HasValue)
+        {
+            var deptId = filterDeptId.Value;
+            query = query.Where(t =>
+                t.AssetInstance.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == deptId));
+        }
+
+        var list = await query
             .OrderByDescending(t => t.AssetRequest!.CreateDate)
             .Select(t => new TransferRequestListItemDTO
             {
@@ -73,7 +94,9 @@ public class RepairRequestsController : ControllerBase
                     t.AssetRequest.Status == 4 ? "Đang sửa chữa" :
                     t.AssetRequest.Status == 5 ? "Hoàn thành" :
                     "Không xác định",
-                Reason = t.Reason,
+                Reason = null,
+                DamageCondition = t.Reason,
+                RequestDescription = t.AssetRequest.Description,
                 FromDepartmentId = t.AssetInstance.AssetLocations
                     .Where(al => al.IsCurrent)
                     .Select(al => al.DepartmentId)
@@ -88,14 +111,86 @@ public class RepairRequestsController : ControllerBase
         return Ok(list);
     }
 
+    /// <summary>
+    /// Cá thể đang trạng thái hỏng, chưa có đơn sửa chữa đang trong luồng phê duyệt / thực hiện.
+    /// </summary>
+    [Authorize]
+    [HttpGet("damaged-pending")]
+    public async Task<ActionResult<IEnumerable<DamagedInstancePendingRepairDto>>> GetDamagedPending()
+    {
+        var userId = GetUserIdOrZero();
+        if (userId <= 0)
+            return Unauthorized();
+
+        var privileged = await IsPrivilegedRepairViewerAsync(userId);
+        var filterDeptId = privileged ? null : await GetEmployeeDepartmentIdAsync(userId);
+        if (!privileged && !filterDeptId.HasValue)
+            return Ok(Array.Empty<DamagedInstancePendingRepairDto>());
+
+        var blockingStatuses = new[] { 0, 1, 2, 4 };
+        var blockingIds = await _db.RepairTasks
+            .AsNoTracking()
+            .Where(t => t.AssetRequest != null && t.AssetRequest.RequestTypeId == _repairRequestTypeId)
+            .Where(t => blockingStatuses.Contains(t.AssetRequest!.Status))
+            .Select(t => t.AssetInstanceId)
+            .Distinct()
+            .ToListAsync();
+        var blocking = blockingIds.ToHashSet();
+
+        var query = _db.AssetInstances
+            .AsNoTracking()
+            .Include(i => i.Asset)
+            .Include(i => i.AssetLocations)
+                .ThenInclude(al => al.Department)
+            .Include(i => i.Warehouse)
+            .Where(i => i.Status == (int)AssetStatus.Damaged)
+            .Where(i => !blocking.Contains(i.AssetInstanceId));
+
+        if (!privileged && filterDeptId.HasValue)
+        {
+            var deptId = filterDeptId.Value;
+            query = query.Where(i => i.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == deptId));
+        }
+
+        var rows = await query
+            .OrderByDescending(i => i.AssetInstanceId)
+            .Select(i => new DamagedInstancePendingRepairDto
+            {
+                AssetInstanceId = i.AssetInstanceId,
+                AssetId = i.AssetId,
+                InstanceCode = i.InstanceCode,
+                AssetCode = i.Asset != null ? i.Asset.Code : string.Empty,
+                AssetName = i.Asset != null ? i.Asset.Name : string.Empty,
+                DamageNote = i.Note,
+                FromDepartment = i.AssetLocations
+                    .Where(al => al.IsCurrent)
+                    .Select(al => al.Department != null ? al.Department.Name : string.Empty)
+                    .FirstOrDefault() ?? string.Empty,
+                FromDepartmentId = i.AssetLocations
+                    .Where(al => al.IsCurrent)
+                    .Select(al => al.DepartmentId)
+                    .FirstOrDefault(),
+                Location = i.AssetLocations
+                    .Where(al => al.IsCurrent)
+                    .Select(al => al.Note)
+                    .FirstOrDefault() ?? (i.Warehouse != null ? i.Warehouse.Name : string.Empty) ?? string.Empty
+            })
+            .ToListAsync();
+
+        return Ok(rows);
+    }
+
     [HttpPost]
     public async Task<IActionResult> CreateRepairRequest([FromBody] RepairRequestDTO dto)
     {
         if (dto == null)
             return BadRequest("Request body is required.");
 
-        if (string.IsNullOrWhiteSpace(dto.Reason))
-            return BadRequest("Reason is required.");
+        if (string.IsNullOrWhiteSpace(dto.DamageCondition))
+            return BadRequest("Tình trạng hỏng hóc là bắt buộc.");
+
+        if (string.IsNullOrWhiteSpace(dto.RepairKind))
+            return BadRequest("Phương án sửa chữa (repairKind) là bắt buộc.");
 
         if (dto.DamageDate.HasValue && dto.DamageDate.Value.Date > DateTime.UtcNow.Date)
             return BadRequest("Ngày hỏng không được lớn hơn ngày hiện tại.");
@@ -104,6 +199,20 @@ public class RepairRequestsController : ControllerBase
             .FirstOrDefaultAsync(ai => ai.AssetInstanceId == dto.AssetInstanceId);
         if (instance == null)
             return NotFound($"AssetInstanceId {dto.AssetInstanceId} not found.");
+
+        if (instance.Status != (int)AssetStatus.Damaged)
+            return BadRequest("Chỉ có thể tạo đơn sửa chữa khi tài sản đang ở trạng thái hỏng.");
+
+        var blockingStatuses = new[] { 0, 1, 2, 4 };
+        var hasBlocking = await _db.RepairTasks
+            .AsNoTracking()
+            .AnyAsync(t =>
+                t.AssetInstanceId == dto.AssetInstanceId
+                && t.AssetRequest != null
+                && t.AssetRequest.RequestTypeId == _repairRequestTypeId
+                && blockingStatuses.Contains(t.AssetRequest.Status));
+        if (hasBlocking)
+            return BadRequest("Tài sản này đã có đơn sửa chữa đang trong luồng xử lý.");
 
         var title = dto.Title ?? $"Repair request for instance {dto.AssetInstanceId}";
         var initialStepId = await _db.RequestTypes
@@ -123,7 +232,7 @@ public class RepairRequestsController : ControllerBase
             AssetId = instance.AssetId,
             AssetInstanceId = dto.AssetInstanceId,
             Title = title,
-            Description = dto.Description ?? dto.Reason,
+            Description = dto.RepairKind!.Trim(),
             ProposedData = null,
             // Align with director workflow: newly created repair requests are considered "submitted"
             // so they can be approved/rejected by director (DirectorApproveController expects status=1).
@@ -141,7 +250,7 @@ public class RepairRequestsController : ControllerBase
             AssetRequestId = assetRequest.AssetRequestId,
             AssetInstanceId = dto.AssetInstanceId,
             EstimatedCost = dto.EstimatedCost,
-            Reason = dto.Reason,
+            Reason = dto.DamageCondition.Trim(),
             Status = 0
         };
 
@@ -490,5 +599,31 @@ public class RepairRequestsController : ControllerBase
         await _db.SaveChangesAsync();
 
         return Ok(new { recordId = rr.RepairId, taskId = task.TaskId });
+    }
+
+    private int GetUserIdOrZero()
+    {
+        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return int.TryParse(claim, out var uid) ? uid : 0;
+    }
+
+    private async Task<bool> IsPrivilegedRepairViewerAsync(int userId)
+    {
+        return await _db.UserRoles
+            .AsNoTracking()
+            .Where(ur => ur.UserId == userId)
+            .Join(_db.Roles.AsNoTracking(), ur => ur.RoleId, r => r.RoleId, (ur, r) => r)
+            .AnyAsync(r =>
+                r.Code != null &&
+                (r.Code.ToUpper() == "DIRECTOR" || r.Code.ToUpper() == "ACCOUNTANT"));
+    }
+
+    private async Task<int?> GetEmployeeDepartmentIdAsync(int userId)
+    {
+        return await _db.Employees
+            .AsNoTracking()
+            .Where(e => e.UserId == userId)
+            .Select(e => (int?)e.DepartmentId)
+            .FirstOrDefaultAsync();
     }
 }

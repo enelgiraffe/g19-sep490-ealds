@@ -1,6 +1,7 @@
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace g19_sep490_ealds.Server.Services.Implementation;
 
@@ -11,11 +12,20 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
 
     private readonly EaldsDbContext _db;
     private readonly ILogger<AssetRequestNotificationService> _logger;
+    private readonly int _allocationRequestTypeId;
+    private readonly int _handoverRequestTypeId;
+    private readonly int _repairRequestTypeId;
 
-    public AssetRequestNotificationService(EaldsDbContext db, ILogger<AssetRequestNotificationService> logger)
+    public AssetRequestNotificationService(
+        EaldsDbContext db,
+        ILogger<AssetRequestNotificationService> logger,
+        IConfiguration configuration)
     {
         _db = db;
         _logger = logger;
+        _allocationRequestTypeId = configuration.GetValue<int>("App:AllocationRequestTypeId", 6);
+        _handoverRequestTypeId = configuration.GetValue<int>("App:HandoverRequestTypeId", 7);
+        _repairRequestTypeId = configuration.GetValue<int>("App:RepairRequestTypeId", 4);
     }
 
     public async Task NotifyFirstApproversAsync(int assetRequestId, CancellationToken cancellationToken = default)
@@ -26,9 +36,28 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
             return;
 
         var requestType = await _db.RequestTypes.AsNoTracking()
+            .Include(rt => rt.Workflow)
             .FirstOrDefaultAsync(rt => rt.RequestTypeId == ar.RequestTypeId, cancellationToken);
 
-        var recipientIds = await ResolveFirstStepApproverUserIdsAsync(requestType?.WorkflowId, cancellationToken);
+        // Cấp phát / hoàn trả: bước xử lý đầu là kế toán.
+        // Sửa chữa: ưu tiên thông báo Giám đốc (không phụ thuộc RoleId bước 1 workflow — thường là kế toán).
+        List<int> recipientIds;
+        if (IsAllocationOrHandoverRequestType(ar.RequestTypeId))
+            recipientIds = await UserIdsForRolesAsync(await AccountantRoleIdsAsync(cancellationToken), cancellationToken);
+        else if (ar.RequestTypeId == _repairRequestTypeId)
+        {
+            recipientIds = await DirectorUserIdsAsync(cancellationToken);
+            if (recipientIds.Count == 0)
+            {
+                _logger.LogWarning(
+                    "No users with DIRECTOR role for repair request AssetRequestId={Id}; using workflow first step / fallback.",
+                    assetRequestId);
+                recipientIds = await ResolveFirstStepApproverUserIdsAsync(requestType?.WorkflowId, cancellationToken);
+            }
+        }
+        else
+            recipientIds = await ResolveFirstStepApproverUserIdsAsync(requestType?.WorkflowId, cancellationToken);
+
         recipientIds = await FilterExistingUserIdsAsync(recipientIds, cancellationToken);
         recipientIds = recipientIds.Where(id => id != ar.CreatedBy).Distinct().ToList();
 
@@ -40,8 +69,18 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
             return;
         }
 
-        var title = TruncateTitle($"YC #{ar.AssetRequestId} cần xử lý");
-        var content = TruncateContent($"Loại #{ar.RequestTypeId}. Người gửi: #{ar.CreatedBy}.");
+        if (IsAllocationOrHandoverRequestType(ar.RequestTypeId))
+        {
+            _logger.LogInformation(
+                "Notifying accountants for allocation/handover request AssetRequestId={Id} RequestTypeId={TypeId} (recipients={Count}).",
+                assetRequestId, ar.RequestTypeId, recipientIds.Count);
+        }
+
+        var typeLabel = GetRequestTypeDisplayLabel(ar.RequestTypeId, requestType?.Workflow?.Name);
+        var requestTitle = await BuildNotificationRequestTitleAsync(ar, cancellationToken);
+        var title = TruncateTitle($"{typeLabel}: {requestTitle}");
+        var content = TruncateContent(
+            $"Người gửi: #{ar.CreatedBy}.");
 
         foreach (var userId in recipientIds)
         {
@@ -59,7 +98,7 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
         await _db.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task NotifySenderDecisionAsync(int assetRequestId, bool approved, int decidedByUserId, CancellationToken cancellationToken = default)
+    public async Task NotifySenderDecisionAsync(int assetRequestId, bool approved, int decidedByUserId, string? comment = null, CancellationToken cancellationToken = default)
     {
         var ar = await _db.AssetRequests.AsNoTracking()
             .FirstOrDefaultAsync(x => x.AssetRequestId == assetRequestId, cancellationToken);
@@ -70,16 +109,25 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
         if (senderId <= 0 || !await _db.Users.AnyAsync(u => u.UserId == senderId, cancellationToken))
             return;
 
+        var requestType = await _db.RequestTypes.AsNoTracking()
+            .Include(rt => rt.Workflow)
+            .FirstOrDefaultAsync(rt => rt.RequestTypeId == ar.RequestTypeId, cancellationToken);
+
+        var typeLabel = GetRequestTypeDisplayLabel(ar.RequestTypeId, requestType?.Workflow?.Name);
+        var requestTitle = await BuildNotificationRequestTitleAsync(ar, cancellationToken);
         var actorLabel = await GetActorShortLabelAsync(decidedByUserId, cancellationToken);
-        var title = TruncateTitle($"YC #{ar.AssetRequestId}: {(approved ? "Đã duyệt" : "Từ chối")}");
+        var title = TruncateTitle(
+            $"{typeLabel}: {requestTitle} (YC #{ar.AssetRequestId}) — {(approved ? "Đã duyệt" : "Từ chối")}");
         var approveVerb = actorLabel == "Giám đốc" ? "phê duyệt" : "đồng ý";
-        // Prefix with Loại # so the client can open /requests on the right tab (same as new-request notifications).
-        var body = string.IsNullOrEmpty(actorLabel)
-            ? (approved ? $"Đã xử lý đồng ý YC #{ar.AssetRequestId}." : $"YC #{ar.AssetRequestId} bị từ chối.")
+        var defaultBody = string.IsNullOrEmpty(actorLabel)
+            ? (approved ? "Đã xử lý đồng ý." : "Yêu cầu bị từ chối.")
             : (approved
-                ? $"{actorLabel} {approveVerb} YC #{ar.AssetRequestId}."
-                : $"{actorLabel} từ chối YC #{ar.AssetRequestId}.");
-        var content = TruncateContent($"Loại #{ar.RequestTypeId}. {body}");
+                ? $"{actorLabel} {approveVerb}."
+                : $"{actorLabel} từ chối.");
+        var note = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+        var bodyPart = note ?? defaultBody;
+        // Giữ "Loại #…" ở đầu để client suy ra tab / màn hình đúng (repair → /repairs).
+        var content = TruncateContent($"{bodyPart}");
 
         _db.Notifications.Add(new Notification
         {
@@ -130,6 +178,41 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
             .ToListAsync(cancellationToken);
     }
 
+    private async Task<List<int>> DirectorUserIdsAsync(CancellationToken cancellationToken)
+    {
+        var roleIds = await _db.Roles.AsNoTracking()
+            .Where(r => r.Code != null && r.Code.Trim().ToUpper() == "DIRECTOR")
+            .Select(r => r.RoleId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (roleIds.Count == 0)
+            return new List<int>();
+
+        return await UserIdsForRolesAsync(roleIds, cancellationToken);
+    }
+
+    private async Task<string> BuildNotificationRequestTitleAsync(AssetRequest ar, CancellationToken cancellationToken)
+    {
+        var baseTitle = string.IsNullOrWhiteSpace(ar.Title) ? "Không tiêu đề" : ar.Title.Trim();
+
+        if (ar.RequestTypeId != _repairRequestTypeId || !ar.AssetInstanceId.HasValue || ar.AssetInstanceId.Value <= 0)
+            return baseTitle;
+
+        var instanceCode = await _db.AssetInstances.AsNoTracking()
+            .Where(i => i.AssetInstanceId == ar.AssetInstanceId.Value)
+            .Select(i => i.InstanceCode)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(instanceCode))
+            return baseTitle;
+
+        if (baseTitle.StartsWith("Repair request for instance", StringComparison.OrdinalIgnoreCase))
+            return $"Cá thể {instanceCode}";
+
+        return $"{baseTitle} ({instanceCode})";
+    }
+
     private async Task<List<int>> UserIdsForRolesAsync(IReadOnlyList<int> roleIds, CancellationToken cancellationToken)
     {
         if (roleIds.Count == 0)
@@ -170,6 +253,25 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
             _ => null
         };
     }
+
+    private bool IsAllocationOrHandoverRequestType(int requestTypeId) =>
+        requestTypeId == _allocationRequestTypeId || requestTypeId == _handoverRequestTypeId;
+
+    /// <summary>Labels aligned with client request tabs (RequestTypeId 1–7); unknown ids use workflow name from DB.</summary>
+    private static string GetRequestTypeDisplayLabel(int requestTypeId, string? workflowNameFallback) =>
+        requestTypeId switch
+        {
+            1 => "Yêu cầu mua",
+            2 => "Yêu cầu bảo dưỡng",
+            3 => "Yêu cầu điều chuyển",
+            4 => "Yêu cầu sửa chữa",
+            5 => "Yêu cầu thanh lý",
+            6 => "Yêu cầu cấp phát",
+            7 => "Yêu cầu hoàn trả",
+            _ => string.IsNullOrWhiteSpace(workflowNameFallback)
+                ? $"Yêu cầu (loại {requestTypeId})"
+                : workflowNameFallback.Trim()
+        };
 
     private static string TruncateTitle(string title) =>
         title.Length > MaxTitleLength ? title[..MaxTitleLength] : title;

@@ -21,7 +21,6 @@ damageReportApi.interceptors.request.use((config) => {
 export interface ReportDamagePayload {
   assetInstanceId: number;
   reportedBy: number;
-  requestTypeId?: number | null;
   /** ISO date string or value parsable by backend DateTime (ngày hỏng/ghi nhận) */
   reportDate: string;
   description?: string | null;
@@ -30,7 +29,7 @@ export interface ReportDamagePayload {
 }
 
 export interface ReportDamageResponse {
-  assetRequestId: number;
+  assetInstanceId: number;
 }
 
 export interface AssetRequestListItem {
@@ -60,18 +59,11 @@ export interface PagedAssetRequestResult {
   totalPages: number;
 }
 
-/**
- * RequestTypeId theo config hiện có: 1=Mua, 2=Bảo dưỡng, 3=Điều chuyển, 4=Sửa chữa.
- * Báo hỏng hiện được dùng để dẫn tới luồng sửa chữa, nên default = 4 nếu không truyền.
- */
-const DEFAULT_DAMAGE_REQUEST_TYPE_ID = 4;
-
 export const damageReportService = {
   async report(payload: ReportDamagePayload): Promise<ReportDamageResponse> {
     const body = {
       assetInstanceId: payload.assetInstanceId,
       reportedBy: payload.reportedBy,
-      requestTypeId: payload.requestTypeId ?? DEFAULT_DAMAGE_REQUEST_TYPE_ID,
       description: payload.description ?? null,
       severity: payload.severity ?? null,
       reportDate: payload.reportDate,

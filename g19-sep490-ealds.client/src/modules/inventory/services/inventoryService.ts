@@ -1,6 +1,20 @@
 import axios from 'axios';
+import type { Dayjs } from 'dayjs';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+/**
+ * Inventory sessions use calendar days; avoid Date#toISOString() on local midnight
+ * (it becomes the previous UTC date in GMT+x, shifting start/end by one day in the UI/API).
+ */
+export function inventorySessionDateToUtcIso(d: Dayjs): string {
+  return `${d.format('YYYY-MM-DD')}T00:00:00.000Z`;
+}
+
+/** Inclusive end of the picked calendar day in UTC (pairs with {@link inventorySessionDateToUtcIso} for windows). */
+export function inventorySessionEndOfDayUtcIso(d: Dayjs): string {
+  return `${d.format('YYYY-MM-DD')}T23:59:59.999Z`;
+}
 
 const inventoryApi = axios.create({
   baseURL: API_BASE_URL,
@@ -20,9 +34,11 @@ inventoryApi.interceptors.response.use((response) => {
   const url = response.config.url ?? '';
   if (
     url.includes('/complete') ||
+    url.includes('/confirm') ||
     url.includes('/director-approve') ||
     url.includes('/reject') ||
-    url.includes('/cancel')
+    url.includes('/cancel') ||
+    url.includes('/apply-actual')
   ) {
     window.dispatchEvent(new Event('ealds-notifications-changed'));
   }
@@ -98,11 +114,7 @@ export interface AssetInventoryDetail {
   bookLocationId: number | null;
   bookLocationName: string;
   actualLocationId: number | null;
-  bookManagerId: number | null;
-  bookManagerName: string;
-  actualManagerId: number | null;
   locations: DropdownItem[];
-  managers: DropdownItem[];
 }
 
 export interface SaveAssetInventoryPayload {
@@ -110,7 +122,6 @@ export interface SaveAssetInventoryPayload {
   /** Reported AssetStatus int */
   actualStatus: number;
   actualLocationId: number | null;
-  actualManagerId: number | null;
   checkedBy: number;
 }
 

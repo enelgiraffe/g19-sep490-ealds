@@ -45,12 +45,15 @@ export function SelectAssetsModal({
   initialSelectedIds,
   onConfirm,
   enforceSameDepartment = true,
+  restrictToDepartmentId,
 }: {
   open: boolean;
   onClose: () => void;
   initialSelectedIds?: number[];
   onConfirm: (assets: SelectableAsset[]) => void;
   enforceSameDepartment?: boolean;
+  /** When set, only load instances currently assigned to this department (GET currentDepartmentId). */
+  restrictToDepartmentId?: number | null;
 }) {
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
@@ -73,7 +76,16 @@ export function SelectAssetsModal({
     }
     searchDebounceRef.current = window.setTimeout(() => {
       setLoading(true);
-      const params: GetAssetInstancesParams = { keyword: kw || undefined };
+      const deptFilter =
+        restrictToDepartmentId != null &&
+        Number.isFinite(restrictToDepartmentId) &&
+        restrictToDepartmentId > 0
+          ? restrictToDepartmentId
+          : undefined;
+      const params: GetAssetInstancesParams = {
+        keyword: kw || undefined,
+        ...(deptFilter != null ? { currentDepartmentId: deptFilter } : {}),
+      };
       assetInstanceService
         .getAll(params)
         .then((data) => setRows(data.map(toSelectableAsset)))
@@ -90,7 +102,7 @@ export function SelectAssetsModal({
         searchDebounceRef.current = null;
       }
     };
-  }, [open, keyword]);
+  }, [open, keyword, restrictToDepartmentId]);
 
   const selectedAssets = useMemo(() => {
     const byId = new Map(rows.map((r) => [r.assetId, r]));
@@ -136,9 +148,9 @@ export function SelectAssetsModal({
             </div>
           </div>
 
-          {enforceSameDepartment && lockedDepartmentId != null && (
+          {restrictToDepartmentId != null && restrictToDepartmentId > 0 && (
             <div className="select-assets__hint">
-              Đang chọn theo <strong>1 phòng ban nguồn</strong>. Các tài sản thuộc phòng ban khác sẽ không thể chọn.
+              Chỉ hiển thị cá thể đang thuộc <strong>phòng ban nguồn</strong> đã chọn trên form điều chuyển.
             </div>
           )}
 

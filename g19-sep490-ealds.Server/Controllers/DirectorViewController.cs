@@ -151,6 +151,17 @@ public class DirectorViewController : ControllerBase
                 DisposalReason = _db.DisposalRecords
                     .Where(dr => dr.AssetRequestId == ar.AssetRequestId)
                     .Select(dr => dr.Reason)
+                    .FirstOrDefault(),
+                // Sửa chữa: tình trạng hỏng hóc trên RepairTask; Description trên AssetRequest = phương án sửa chữa đề xuất
+                RepairDamageCondition = _db.RepairTasks
+                    .Where(t => t.AssetRequestId == ar.AssetRequestId)
+                    .OrderBy(t => t.TaskId)
+                    .Select(t => t.Reason)
+                    .FirstOrDefault(),
+                RepairEstimatedCost = _db.RepairTasks
+                    .Where(t => t.AssetRequestId == ar.AssetRequestId)
+                    .OrderBy(t => t.TaskId)
+                    .Select(t => (decimal?)t.EstimatedCost)
                     .FirstOrDefault()
             })
             .ToListAsync();

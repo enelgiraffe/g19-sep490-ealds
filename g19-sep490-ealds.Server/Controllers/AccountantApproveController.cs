@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Services;
 using g19_sep490_ealds.Server.Services.Interface;
 
 namespace g19_sep490_ealds.Server.Controllers;
@@ -17,6 +18,8 @@ public class AccountantApproveController : ControllerBase
     private readonly EaldsDbContext _db;
     private readonly IAssetRequestNotificationService _requestNotifications;
     private readonly int _transferRequestTypeId;
+    private readonly int _allocationRequestTypeId;
+    private readonly int _handoverRequestTypeId;
 
     public AccountantApproveController(
         EaldsDbContext db,
@@ -26,6 +29,8 @@ public class AccountantApproveController : ControllerBase
         _db = db;
         _requestNotifications = requestNotifications;
         _transferRequestTypeId = configuration.GetValue<int>("App:TransferRequestTypeId", 3);
+        _allocationRequestTypeId = configuration.GetValue<int>("App:AllocationRequestTypeId", 6);
+        _handoverRequestTypeId = configuration.GetValue<int>("App:HandoverRequestTypeId", 7);
     }
 
     [HttpPost("{id}/approve")]
@@ -37,8 +42,63 @@ public class AccountantApproveController : ControllerBase
         var isTransfer =
             ar.RequestTypeId == _transferRequestTypeId
             || await _db.TransferRecords.AsNoTracking().AnyAsync(tr => tr.AssetRequestId == ar.AssetRequestId);
+        var isAllocation = ar.RequestTypeId == _allocationRequestTypeId;
+        var isHandover = ar.RequestTypeId == _handoverRequestTypeId;
         if (!(ar.Status == 0 || (isTransfer && ar.Status == 1)))
             return BadRequest("Only requests with status=0 (Sent) can be approved by accountant.");
+
+        if (isAllocation || isHandover)
+        {
+            if (ar.Status != 0)
+                return BadRequest(isHandover
+                    ? "Yêu cầu hoàn trả không ở trạng thái chờ kế toán."
+                    : "Yêu cầu cấp phát không ở trạng thái chờ kế toán.");
+            var orderErr = isHandover
+                ? await AllocationOrderWorkflow.TryCreateHandoverOrderOnAccountantApproveAsync(_db, ar)
+                : await AllocationOrderWorkflow.TryCreateOrderOnAccountantApproveAsync(_db, ar);
+            if (orderErr != null)
+                return BadRequest(new { message = orderErr });
+
+            var rtAlloc = await _db.RequestTypes.FindAsync(ar.RequestTypeId);
+            var workflowIdAlloc = rtAlloc?.WorkflowId ?? 0;
+            var stepsAlloc = await _db.WorkflowSteps.Where(s => s.WorkflowId == workflowIdAlloc).OrderBy(s => s.StepOrder).ToListAsync();
+            var currentStepAlloc = ar.StepId == 0
+                ? stepsAlloc.FirstOrDefault()
+                : stepsAlloc.FirstOrDefault(s => s.StepId == ar.StepId) ?? stepsAlloc.FirstOrDefault();
+
+            ar.Status = AllocationOrderWorkflow.RequestStatusAccountantApproved;
+            ar.ApproveDate = DateTime.UtcNow;
+            if (currentStepAlloc != null)
+            {
+                var userRoleAlloc = await _db.UserRoles.AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.ApprovedBy);
+                _db.Approvals.Add(new Approval
+                {
+                    StepId = currentStepAlloc.StepId,
+                    AssetRequestId = ar.AssetRequestId,
+                    Decision = 1,
+                    DecisionDate = DateTime.UtcNow,
+                    ApprovedUserId = dto.ApprovedBy,
+                    ApprovedRoleId = userRoleAlloc?.RoleId ?? 0,
+                    Comment = dto.Comment
+                });
+            }
+
+            _db.AssetRequestRecords.Add(new AssetRequestRecord
+            {
+                AssetRequestId = ar.AssetRequestId,
+                FromStatus = fromStatus,
+                ToStatus = ar.Status,
+                Action = 1,
+                ActionByUserId = dto.ApprovedBy,
+                ActionRoleId = (await _db.UserRoles.AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == dto.ApprovedBy))?.RoleId ?? 0,
+                Comment = dto.Comment,
+                OccurredAt = DateTime.UtcNow
+            });
+
+            await _db.SaveChangesAsync();
+            await _requestNotifications.NotifySenderDecisionAsync(ar.AssetRequestId, true, dto.ApprovedBy, dto.Comment);
+            return Ok(new { assetRequestId = ar.AssetRequestId, status = ar.Status });
+        }
 
         var rt = await _db.RequestTypes.FindAsync(ar.RequestTypeId);
         int workflowId = rt?.WorkflowId ?? 0;
@@ -84,7 +144,7 @@ public class AccountantApproveController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        await _requestNotifications.NotifySenderDecisionAsync(ar.AssetRequestId, true, dto.ApprovedBy);
+        await _requestNotifications.NotifySenderDecisionAsync(ar.AssetRequestId, true, dto.ApprovedBy, dto.Comment);
 
         return Ok(new { assetRequestId = ar.AssetRequestId, status = ar.Status });
     }

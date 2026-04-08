@@ -436,34 +436,14 @@ public class UsersController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// User deletion is disabled; use status/deactivate to revoke access.
+    /// </summary>
     [HttpDelete("{id:int}")]
-    public async Task<IActionResult> DeleteUser(int id)
+    public IActionResult DeleteUser(int id)
     {
-        var user = await _context.Users
-            .Include(u => u.EmployeeUsers)
-            .FirstOrDefaultAsync(u => u.UserId == id);
-        if (user == null)
-        {
-            return NotFound();
-        }
-
-        await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM UserRole WHERE UserId = {id}");
-        if (user.EmployeeUsers.Any())
-        {
-            _context.Employees.RemoveRange(user.EmployeeUsers);
-        }
-        _context.Users.Remove(user);
-
-        try
-        {
-            await _context.SaveChangesAsync();
-        }
-        catch (DbUpdateException)
-        {
-            return BadRequest("Không thể xóa người dùng vì dữ liệu đang được sử dụng ở chức năng khác.");
-        }
-
-        return NoContent();
+        _ = id;
+        return StatusCode(StatusCodes.Status403Forbidden, "Không được phép xóa người dùng.");
     }
 
     private bool UserExists(int id)

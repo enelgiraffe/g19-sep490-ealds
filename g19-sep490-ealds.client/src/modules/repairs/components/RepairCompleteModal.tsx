@@ -43,8 +43,12 @@ function formatVndValue(value?: number | null): string {
   return `${value.toLocaleString('vi-VN')} ₫`;
 }
 
+function parseDigitsOnly(value: string): string {
+  return value.replace(/[^\d]/g, '');
+}
+
 function parseNumberInput(value: string): number | undefined {
-  const normalized = value.replace(/[^\d]/g, '');
+  const normalized = parseDigitsOnly(value);
   if (!normalized) return undefined;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : undefined;
@@ -67,7 +71,8 @@ function RepairCompleteModalInner({
   const [reportNumber, setReportNumber] = useState('');
   const [completionDate, setCompletionDate] = useState('');
   const [returnDate, setReturnDate] = useState('');
-  const [actualCost, setActualCost] = useState<number | null>(null);
+  /** Chỉ chữ số, không format dấu phẩy trong lúc gõ (tránh lỗi con trỏ / chèn ký tự sai). */
+  const [actualCostInput, setActualCostInput] = useState('');
   const [result, setResult] = useState('');
   const [detail, setDetail] = useState('');
 
@@ -77,7 +82,7 @@ function RepairCompleteModalInner({
     setReportNumber(defaultReportNumber ?? '');
     setCompletionDate(today);
     setReturnDate(today);
-    setActualCost(null);
+    setActualCostInput('');
     setResult('');
     setDetail(row.condition || '');
   }, [open, row, defaultReportNumber]);
@@ -124,6 +129,7 @@ function RepairCompleteModalInner({
   if (!open) return null;
 
   const handleSubmit = () => {
+    const actualCost = parseNumberInput(actualCostInput);
     if (!completionDate || !returnDate || actualCost == null) return;
     onSubmit({
       reportNumber: reportNumber.trim(),
@@ -256,9 +262,9 @@ function RepairCompleteModalInner({
                           type="text"
                           className="repair-complete-input"
                           inputMode="numeric"
-                          value={actualCost != null ? actualCost.toLocaleString('en-US') : ''}
-                          onChange={(e) => setActualCost(parseNumberInput(e.target.value) ?? null)}
-                          placeholder="Nhập chi phí"
+                          value={actualCostInput}
+                          onChange={(e) => setActualCostInput(parseDigitsOnly(e.target.value))}
+                          placeholder="Nhập chi phí (VNĐ)"
                         />
                         <span className="repair-complete-money-suffix">đ</span>
                       </div>

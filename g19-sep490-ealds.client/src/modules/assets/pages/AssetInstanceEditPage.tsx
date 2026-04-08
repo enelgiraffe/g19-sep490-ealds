@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { message } from 'antd';
 import {
@@ -8,8 +8,10 @@ import {
   type GuaranteeItem,
   type UpdateAssetInstancePayload,
 } from '../services/assetService';
+import { transferRequestService, type AssetLocationOption } from '../services/transferRequestService';
 import { profileService } from '../../profile/services/profileService';
 import { mapBackendRoleToAppRole } from '../../auth/types/auth.types';
+import { useAppStore } from '../../../stores/appStore';
 import './AssetCreatePage.css';
 
 function toDateOnly(value: string): string | undefined {
@@ -42,18 +44,6 @@ function computeWarrantyEndDate(startDate: string, periodValue: string, periodUn
   else return '';
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${result.getFullYear()}-${pad(result.getMonth() + 1)}-${pad(result.getDate())}`;
-}
-
-function parseNumberInput(value: string): number | undefined {
-  const normalized = value.replace(/[^\d]/g, '');
-  if (!normalized) return undefined;
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function formatMoneyInput(value?: number | null): string {
-  if (value == null) return '';
-  return value.toLocaleString('en-US');
 }
 
 const EXTERNAL_WARRANTY_CODE_PREFIX = 'Mã BH ngoài:';
@@ -90,12 +80,30 @@ export function AssetInstanceEditPage() {
   const navigate = useNavigate();
   const { instanceId } = useParams<{ instanceId: string }>();
   const parsedInstanceId = Number(instanceId);
+  const currentRole = useAppStore((s) => s.currentRole);
+  const backToListPath = currentRole === 'accountant' ? '/accountant-assets' : '/assets';
+  const prevDeptRef = useRef<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [instance, setInstance] = useState<AssetInstanceResponse | null>(null);
   const [isAccountant, setIsAccountant] = useState(false);
+
+  const [departments, setDepartments] = useState<AssetLocationOption[]>([]);
+  const [deptEmployees, setDeptEmployees] = useState<
+    { employeeId: number; name: string; code: string }[]
+  >([]);
+  const [warehouses, setWarehouses] = useState<{ warehouseId: number; name: string }[]>([]);
+  const [suppliers, setSuppliers] = useState<{ supplierId: number; name: string; code: string }[]>(
+    []
+  );
+  const [loadMetaError, setLoadMetaError] = useState<string | null>(null);
+
+  const [departmentId, setDepartmentId] = useState('');
+  const [managerEmployeeId, setManagerEmployeeId] = useState('');
+  const [warehouseId, setWarehouseId] = useState('');
+  const [supplierId, setSupplierId] = useState('');
 
   const [serialNumber, setSerialNumber] = useState('');
   const [contractNo, setContractNo] = useState('');
@@ -129,6 +137,7 @@ export function AssetInstanceEditPage() {
     async function loadData() {
       setLoading(true);
       setError(null);
+      prevDeptRef.current = null;
       try {
         const [inst, profile] = await Promise.all([
           assetInstanceService.getById(parsedInstanceId),
@@ -151,20 +160,50 @@ export function AssetInstanceEditPage() {
 
         const latestGuarantee = getLatestGuarantee(inst);
         setInstance(inst);
+        setWarehouseId(String(inst.warehouseId));
+        setDepartmentId(
+          inst.currentDepartmentId != null && inst.currentDepartmentId > 0
+            ? String(inst.currentDepartmentId)
+            : ''
+        );
+        setManagerEmployeeId(
+          inst.currentResponsibleEmployeeId != null && inst.currentResponsibleEmployeeId > 0
+            ? String(inst.currentResponsibleEmployeeId)
+            : ''
+        );
+        setSupplierId(inst.supplierId != null && inst.supplierId > 0 ? String(inst.supplierId) : '');
+
+        try {
+          const [deptList, wh, sup] = await Promise.all([
+            transferRequestService.getAssetLocations(),
+            assetService.getWarehouses(),
+            assetService.getSuppliers(),
+          ]);
+          if (cancelled) return;
+          setDepartments(deptList);
+          setWarehouses(wh);
+          setSuppliers(sup.map((s) => ({ supplierId: s.supplierId, name: s.name, code: s.code })));
+          setLoadMetaError(null);
+        } catch {
+          if (!cancelled) {
+            setLoadMetaError(
+              'Không tải được danh mục (phòng ban, kho, nhà cung cấp).'
+            );
+          }
+        }
+
         setSerialNumber(inst.serialNumber ?? '');
         setContractNo(inst.contractNo ?? '');
         setPurchaseDate(toDateInput(inst.purchaseDate));
-        setOriginalPriceInput(formatMoneyInput(inst.originalPrice));
-        setCurrentValueInput(formatMoneyInput(inst.currentValue));
+        setOriginalPriceInput(inst.originalPrice != null ? String(inst.originalPrice) : '');
+        setCurrentValueInput(inst.currentValue != null ? String(inst.currentValue) : '');
         setCondition(inst.condition ?? '');
         setNote(inst.note ?? '');
 
         setWarrantyPeriodValue(
           String(latestGuarantee?.warrantyPeriodValue ?? inst.warrantyPeriodValue ?? '')
         );
-        setWarrantyPeriodUnit(
-          String(latestGuarantee?.warrantyPeriodUnit ?? inst.warrantyPeriodUnit ?? 'month').toLowerCase()
-        );
+        setWarrantyPeriodUnit('month');
         const parsedWarranty = splitWarrantyConditions(
           latestGuarantee?.warrantyConditions ?? inst.warrantyConditions ?? '',
         );
@@ -174,9 +213,13 @@ export function AssetInstanceEditPage() {
         setWarrantyEndDate(toDateInput(latestGuarantee?.warrantyEndDate ?? inst.warrantyEndDate));
 
         setDepreciationPeriod(toDateInput(inst.depreciationPeriod));
-        setDepreciationAmountInput(formatMoneyInput(inst.depreciationAmount));
-        setAccumulatedDepInput(formatMoneyInput(inst.accumulatedDepreciation));
-        setRemainingValueInput(formatMoneyInput(inst.remainingValue));
+        setDepreciationAmountInput(
+          inst.depreciationAmount != null ? String(inst.depreciationAmount) : ''
+        );
+        setAccumulatedDepInput(
+          inst.accumulatedDepreciation != null ? String(inst.accumulatedDepreciation) : ''
+        );
+        setRemainingValueInput(inst.remainingValue != null ? String(inst.remainingValue) : '');
       } catch {
         if (!cancelled) setError('Không tải được thông tin cá thể.');
       } finally {
@@ -195,6 +238,49 @@ export function AssetInstanceEditPage() {
     setWarrantyEndDate(computed);
   }, [warrantyStartDate, warrantyPeriodValue, warrantyPeriodUnit]);
 
+  useEffect(() => {
+    const deptId = departmentId;
+    if (!deptId || Number(deptId) <= 0) {
+      setDeptEmployees([]);
+      setManagerEmployeeId('');
+      prevDeptRef.current = null;
+      return;
+    }
+
+    const isUserDeptChange =
+      prevDeptRef.current !== null && prevDeptRef.current !== deptId;
+    prevDeptRef.current = deptId;
+
+    let cancelled = false;
+    setDeptEmployees([]);
+    (async () => {
+      try {
+        const list = await assetService.getEmployeesByDepartment(Number(deptId));
+        if (cancelled) return;
+        const sorted = [...list].sort((a, b) => {
+          const ua = a.userId ?? Number.MAX_SAFE_INTEGER;
+          const ub = b.userId ?? Number.MAX_SAFE_INTEGER;
+          if (ua !== ub) return ua - ub;
+          return a.employeeId - b.employeeId;
+        });
+        setDeptEmployees(sorted);
+        setManagerEmployeeId((prev) => {
+          if (sorted.some((e) => String(e.employeeId) === prev)) return prev;
+          if (isUserDeptChange && sorted.length > 0) return String(sorted[0].employeeId);
+          return '';
+        });
+      } catch {
+        if (!cancelled) {
+          setDeptEmployees([]);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [departmentId]);
+
   const displayGuaranteeId = useMemo(() => {
     if (!instance) return '—';
     const latest = getLatestGuarantee(instance);
@@ -203,17 +289,26 @@ export function AssetInstanceEditPage() {
   }, [instance]);
 
   const validateForm = (): string | null => {
-    const originalPrice = parseNumberInput(originalPriceInput);
-    const currentValue = parseNumberInput(currentValueInput);
-    const depAmount = parseNumberInput(depreciationAmountInput);
-    const depAccumulated = parseNumberInput(accumulatedDepInput);
-    const depRemaining = parseNumberInput(remainingValueInput);
+    const originalPrice =
+      originalPriceInput.trim() === '' ? NaN : Number(originalPriceInput);
+    const currentValue =
+      currentValueInput.trim() === '' ? NaN : Number(currentValueInput);
+    const depAmount =
+      depreciationAmountInput.trim() === '' ? undefined : Number(depreciationAmountInput);
+    const depAccumulated =
+      accumulatedDepInput.trim() === '' ? undefined : Number(accumulatedDepInput);
+    const depRemaining =
+      remainingValueInput.trim() === '' ? undefined : Number(remainingValueInput);
     const warrantyValue = Number(warrantyPeriodValue || 0);
 
     if (!purchaseDate) return 'Vui lòng chọn ngày mua.';
-    if (originalPrice == null) return 'Vui lòng nhập giá gốc hợp lệ.';
-    if (currentValue == null) return 'Vui lòng nhập giá trị hiện tại hợp lệ.';
+    if (!Number.isFinite(originalPrice)) return 'Vui lòng nhập giá gốc hợp lệ.';
+    if (!Number.isFinite(currentValue)) return 'Vui lòng nhập giá trị hiện tại hợp lệ.';
     if (currentValue > originalPrice) return 'Giá trị hiện tại không được lớn hơn giá gốc.';
+    if (!warehouseId || Number(warehouseId) <= 0) return 'Vui lòng chọn kho.';
+    if (isAccountant && (!departmentId || Number(departmentId) <= 0)) {
+      return 'Vui lòng chọn vị trí tài sản (phòng ban).';
+    }
 
     const hasAnyWarranty =
       warrantyPeriodValue.trim() ||
@@ -232,9 +327,15 @@ export function AssetInstanceEditPage() {
       }
     }
 
-    if (depAmount != null && depAmount < 0) return 'Mức khấu hao kỳ gần nhất không hợp lệ.';
-    if (depAccumulated != null && depAccumulated < 0) return 'Khấu hao lũy kế không hợp lệ.';
-    if (depRemaining != null && depRemaining < 0) return 'Giá trị còn lại không hợp lệ.';
+    if (depAmount != null && Number.isFinite(depAmount) && depAmount < 0) {
+      return 'Mức khấu hao kỳ gần nhất không hợp lệ.';
+    }
+    if (depAccumulated != null && Number.isFinite(depAccumulated) && depAccumulated < 0) {
+      return 'Khấu hao lũy kế không hợp lệ.';
+    }
+    if (depRemaining != null && Number.isFinite(depRemaining) && depRemaining < 0) {
+      return 'Giá trị còn lại không hợp lệ.';
+    }
     return null;
   };
 
@@ -258,17 +359,32 @@ export function AssetInstanceEditPage() {
       !!accumulatedDepInput.trim() ||
       !!remainingValueInput.trim();
 
+    const deptId =
+      isAccountant && departmentId && Number(departmentId) > 0 ? Number(departmentId) : null;
+    const managerId =
+      isAccountant && managerEmployeeId && Number(managerEmployeeId) > 0
+        ? Number(managerEmployeeId)
+        : null;
+    const supId = supplierId && Number(supplierId) > 0 ? Number(supplierId) : null;
+    const purchaseOnly = toDateOnly(purchaseDate);
+
     const sharedAdvancedPayload: UpdateAssetInstancePayload = {
+      warehouseId: Number(warehouseId),
+      supplierId: supId,
+      assignedDepartmentId: deptId,
+      responsibleEmployeeId: managerId,
+      assignmentEffectiveDate:
+        isAccountant && (deptId != null || managerId != null) ? purchaseOnly ?? null : null,
       contractNo: contractNo.trim() || null,
-      purchaseDate: toDateOnly(purchaseDate),
-      originalPrice: parseNumberInput(originalPriceInput),
-      currentValue: parseNumberInput(currentValueInput),
+      purchaseDate: purchaseOnly,
+      originalPrice: Number(originalPriceInput),
+      currentValue: Number(currentValueInput),
       condition: condition.trim() || null,
       note: note.trim() || null,
       ...(hasWarrantyGroup
         ? {
             warrantyPeriodValue: Number(warrantyPeriodValue),
-            warrantyPeriodUnit: warrantyPeriodUnit.trim() || 'month',
+            warrantyPeriodUnit: 'month',
             warrantyConditions: buildWarrantyConditions(warrantyExternalCode, warrantyConditions),
             warrantyStartDate: toDateOnly(warrantyStartDate),
             warrantyEndDate: toDateOnly(warrantyEndDate),
@@ -277,9 +393,15 @@ export function AssetInstanceEditPage() {
       ...(hasDepreciationGroup
         ? {
             depreciationPeriod: toDateOnly(depreciationPeriod),
-            depreciationAmount: parseNumberInput(depreciationAmountInput),
-            accumulatedDepreciation: parseNumberInput(accumulatedDepInput),
-            remainingValue: parseNumberInput(remainingValueInput),
+            depreciationAmount: depreciationAmountInput.trim()
+              ? Number(depreciationAmountInput)
+              : undefined,
+            accumulatedDepreciation: accumulatedDepInput.trim()
+              ? Number(accumulatedDepInput)
+              : undefined,
+            remainingValue: remainingValueInput.trim()
+              ? Number(remainingValueInput)
+              : undefined,
           }
         : {}),
     };
@@ -318,7 +440,7 @@ export function AssetInstanceEditPage() {
       message.success('Cập nhật thông tin cá thể thành công.');
       navigate(`/asset-instances/${instance.assetInstanceId}`, {
         state: {
-          backToPath: '/accountant-assets',
+          backToPath: backToListPath,
           backLabel: '← Quay lại danh sách tài sản',
         },
       });
@@ -358,7 +480,7 @@ export function AssetInstanceEditPage() {
   return (
     <div className="asset-create-page">
       <div className="asset-create__header">
-        <Link to="/accountant-assets" className="asset-create__back">
+        <Link to={backToListPath} className="asset-create__back">
           ← Tất cả tài sản
         </Link>
         <div className="asset-create__title-row">
@@ -384,6 +506,11 @@ export function AssetInstanceEditPage() {
       </div>
 
       <form id="asset-instance-edit-form" className="asset-create__card" onSubmit={handleSubmit}>
+        {loadMetaError && (
+          <div className="asset-create__error" role="alert">
+            {loadMetaError}
+          </div>
+        )}
         {error && <div className="asset-create__error">{error}</div>}
 
         <section className="asset-create__section">
@@ -403,12 +530,142 @@ export function AssetInstanceEditPage() {
                 <input className="asset-create__input" value={instance?.instanceCode ?? ''} disabled />
               </div>
               <div className="asset-create__field">
+                <label className="asset-create__label">Tên tài sản (danh mục)</label>
+                <input
+                  className="asset-create__input"
+                  value={instance?.assetName ?? '—'}
+                  disabled
+                />
+              </div>
+              <div className="asset-create__field">
                 <label className="asset-create__label">Số serial</label>
                 <input
                   className="asset-create__input"
                   value={serialNumber}
                   onChange={(e) => setSerialNumber(e.target.value)}
                 />
+              </div>
+              <div className="asset-create__field">
+                <label className="asset-create__label">Giá trị</label>
+                <input
+                  type="number"
+                  min={0}
+                  className="asset-create__input"
+                  value={originalPriceInput}
+                  onChange={(e) => setOriginalPriceInput(e.target.value)}
+                />
+              </div>
+              <div className="asset-create__field">
+                <label className="asset-create__label">Giá trị hiện tại</label>
+                <input
+                  type="number"
+                  min={0}
+                  className="asset-create__input"
+                  value={currentValueInput}
+                  onChange={(e) => setCurrentValueInput(e.target.value)}
+                />
+              </div>
+              <div className="asset-create__field">
+                <label className="asset-create__label">Quy cách tài sản</label>
+                <input
+                  className="asset-create__input"
+                  value={condition}
+                  onChange={(e) => setCondition(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="asset-create__column">
+              <div className="asset-create__field">
+                <label className="asset-create__label">
+                  Vị trí tài sản
+                  <span className="asset-create__required">*</span>
+                </label>
+                <select
+                  className="asset-create__select"
+                  value={departmentId}
+                  onChange={(e) => {
+                    setDepartmentId(e.target.value);
+                    setManagerEmployeeId('');
+                  }}
+                >
+                  <option value="">Chọn phòng ban</option>
+                  {departments.map((d) => (
+                    <option key={d.locationId} value={d.locationId}>
+                      {d.displayName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="asset-create__field">
+                <label className="asset-create__label">Người quản lý</label>
+                <select
+                  className="asset-create__select"
+                  value={
+                    !departmentId || deptEmployees.length === 0
+                      ? ''
+                      : deptEmployees.some(
+                            (e) => String(e.employeeId) === managerEmployeeId
+                          )
+                        ? managerEmployeeId
+                        : String(deptEmployees[0].employeeId)
+                  }
+                  disabled={!departmentId || deptEmployees.length === 0}
+                  onChange={(e) => setManagerEmployeeId(e.target.value)}
+                >
+                  {!departmentId && <option value="">Chọn phòng ban trước</option>}
+                  {departmentId && deptEmployees.length === 0 && (
+                    <option value="">Không có nhân viên trong phòng ban</option>
+                  )}
+                  {deptEmployees.map((emp) => (
+                    <option key={emp.employeeId} value={emp.employeeId}>
+                      {emp.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="asset-create__field">
+                <label className="asset-create__label">
+                  Kho<span className="asset-create__required">*</span>
+                </label>
+                <select
+                  className="asset-create__select"
+                  value={warehouseId}
+                  onChange={(e) => setWarehouseId(e.target.value)}
+                >
+                  <option value="">Chọn kho</option>
+                  {warehouses.map((w) => (
+                    <option key={w.warehouseId} value={w.warehouseId}>
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="asset-create__field">
+                <label className="asset-create__label">
+                  Ngày mua<span className="asset-create__required">*</span>
+                </label>
+                <input
+                  type="date"
+                  className="asset-create__input"
+                  value={purchaseDate}
+                  onChange={(e) => setPurchaseDate(e.target.value)}
+                />
+              </div>
+              <div className="asset-create__field">
+                <label className="asset-create__label">Nhà cung cấp</label>
+                <select
+                  className="asset-create__select"
+                  value={supplierId}
+                  onChange={(e) => setSupplierId(e.target.value)}
+                >
+                  <option value="">Chọn nhà cung cấp</option>
+                  {suppliers.map((s) => (
+                    <option key={s.supplierId} value={s.supplierId}>
+                      {s.name}
+                      {s.code ? ` (${s.code})` : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="asset-create__field">
                 <label className="asset-create__label">Số hợp đồng</label>
@@ -419,52 +676,10 @@ export function AssetInstanceEditPage() {
                 />
               </div>
               <div className="asset-create__field">
-                <label className="asset-create__label">Ngày mua</label>
-                <input
-                  type="date"
-                  className="asset-create__input"
-                  value={purchaseDate}
-                  onChange={(e) => setPurchaseDate(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="asset-create__column">
-              <div className="asset-create__field">
-                <label className="asset-create__label">Giá gốc</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  className="asset-create__input"
-                  value={originalPriceInput}
-                  onChange={(e) => setOriginalPriceInput(formatMoneyInput(parseNumberInput(e.target.value)))}
-                  placeholder="Nhập giá gốc"
-                />
-              </div>
-              <div className="asset-create__field">
-                <label className="asset-create__label">Giá trị hiện tại</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  className="asset-create__input"
-                  value={currentValueInput}
-                  onChange={(e) => setCurrentValueInput(formatMoneyInput(parseNumberInput(e.target.value)))}
-                  placeholder="Nhập giá trị hiện tại"
-                />
-              </div>
-              <div className="asset-create__field">
-                <label className="asset-create__label">Tình trạng (mô tả thực tế)</label>
-                <input
-                  className="asset-create__input"
-                  value={condition}
-                  onChange={(e) => setCondition(e.target.value)}
-                  placeholder="Ví dụ: Hoạt động tốt, trầy xước nhẹ..."
-                />
-              </div>
-              <div className="asset-create__field">
                 <label className="asset-create__label">Ghi chú</label>
                 <textarea
                   className="asset-create__textarea"
-                  rows={3}
+                  rows={2}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                 />
@@ -474,145 +689,148 @@ export function AssetInstanceEditPage() {
         </section>
 
         <section className="asset-create__section">
-          <h2 className="asset-create__section-title">Bảo hành và khấu hao</h2>
-          <div className="asset-create__grid asset-create__grid--two">
-            <div className="asset-create__column">
-              <h3 className="asset-create__section-title" style={{ fontSize: 16 }}>Thông tin bảo hành</h3>
-              <div className="asset-create__field">
-                <label className="asset-create__label">Mã bảo hành nội bộ</label>
-                <input className="asset-create__input" value={displayGuaranteeId} disabled />
-              </div>
-              <div className="asset-create__field">
-                <label className="asset-create__label">Mã bảo hành ngoài (theo giấy tờ)</label>
+          <h2 className="asset-create__section-title">Bảo hành</h2>
+          <div className="asset-create__field">
+            <label className="asset-create__label">Mã bảo hành nội bộ</label>
+            <input className="asset-create__input" value={displayGuaranteeId} disabled />
+          </div>
+          <div className="asset-create__field">
+            <label className="asset-create__label">Mã bảo hành ngoài (theo giấy tờ)</label>
+            <input
+              className="asset-create__input"
+              value={warrantyExternalCode}
+              onChange={(e) => setWarrantyExternalCode(e.target.value)}
+              placeholder="Nhập mã từ nhà cung cấp"
+            />
+          </div>
+          <div className="asset-create__grid asset-create__grid--three">
+            <div className="asset-create__field">
+              <label className="asset-create__label">Thời gian bảo hành</label>
+              <div className="asset-create__field--inline">
                 <input
+                  type="number"
+                  min={0}
                   className="asset-create__input"
-                  value={warrantyExternalCode}
-                  onChange={(e) => setWarrantyExternalCode(e.target.value)}
-                  placeholder="Nhập mã từ nhà cung cấp"
+                  value={warrantyPeriodValue}
+                  onChange={(e) => setWarrantyPeriodValue(e.target.value)}
                 />
-              </div>
-              <div className="asset-create__field asset-create__field--quantity-unit-row">
-                <div className="asset-create__quantity-unit-cell">
-                  <label className="asset-create__label">Thời hạn bảo hành</label>
-                  <input
-                    type="number"
-                    min={1}
-                    className="asset-create__input"
-                    value={warrantyPeriodValue}
-                    onChange={(e) => setWarrantyPeriodValue(e.target.value)}
-                  />
-                </div>
-                <div className="asset-create__quantity-unit-cell">
-                  <label className="asset-create__label">Đơn vị</label>
-                  <select
-                    className="asset-create__select"
-                    value={warrantyPeriodUnit}
-                    onChange={(e) => setWarrantyPeriodUnit(e.target.value)}
-                  >
-                    <option value="day">Ngày</option>
-                    <option value="week">Tuần</option>
-                    <option value="month">Tháng</option>
-                    <option value="year">Năm</option>
-                  </select>
-                </div>
-              </div>
-              <div className="asset-create__field">
-                <label className="asset-create__label">Ngày bắt đầu</label>
-                <input
-                  type="date"
-                  className="asset-create__input"
-                  value={warrantyStartDate}
-                  onChange={(e) => setWarrantyStartDate(e.target.value)}
-                />
-              </div>
-              <div className="asset-create__field">
-                <label className="asset-create__label">Ngày kết thúc</label>
-                <input
-                  type="date"
-                  className="asset-create__input"
-                  value={warrantyEndDate}
-                  readOnly
-                  disabled
-                />
-              </div>
-              <div className="asset-create__field">
-                <label className="asset-create__label">Điều kiện bảo hành</label>
-                <textarea
-                  className="asset-create__textarea"
-                  rows={2}
-                  value={warrantyConditions}
-                  onChange={(e) => setWarrantyConditions(e.target.value)}
-                />
+                <span className="asset-create__suffix">Tháng</span>
               </div>
             </div>
+            <div className="asset-create__field">
+              <label className="asset-create__label">Điều kiện bảo hành</label>
+              <input
+                className="asset-create__input"
+                value={warrantyConditions}
+                onChange={(e) => setWarrantyConditions(e.target.value)}
+              />
+            </div>
+            <div className="asset-create__field">
+              <label className="asset-create__label">Hạn bảo hành</label>
+              <input
+                type="date"
+                className="asset-create__input"
+                value={warrantyEndDate}
+                readOnly
+                disabled
+              />
+            </div>
+          </div>
+          <div className="asset-create__field">
+            <label className="asset-create__label">Ngày bắt đầu bảo hành</label>
+            <input
+              type="date"
+              className="asset-create__input"
+              value={warrantyStartDate}
+              onChange={(e) => setWarrantyStartDate(e.target.value)}
+            />
+            <p className="asset-create__hint">
+              Hạn bảo hành được tính từ ngày bắt đầu và thời gian bảo hành (tháng).
+            </p>
+          </div>
+        </section>
 
-            <div className="asset-create__column">
-              <h3 className="asset-create__section-title" style={{ fontSize: 16 }}>Thông tin khấu hao</h3>
-              <div className="asset-create__field">
-                <label className="asset-create__label">Chính sách</label>
-                <input className="asset-create__input" value={instance?.depreciationPolicyName ?? '—'} disabled />
+        <section className="asset-create__section">
+          <h2 className="asset-create__section-title">Thông tin khấu hao</h2>
+          <div className="asset-create__grid asset-create__grid--three">
+            <div className="asset-create__field">
+              <label className="asset-create__label">Giá trị tính khấu hao</label>
+              <input
+                type="number"
+                min={0}
+                className="asset-create__input"
+                value={depreciationAmountInput}
+                onChange={(e) => setDepreciationAmountInput(e.target.value)}
+              />
+            </div>
+            <div className="asset-create__field">
+              <label className="asset-create__label">Thời gian còn lại</label>
+              <div className="asset-create__field--inline">
+                <input className="asset-create__input" value="—" disabled readOnly />
+                <span className="asset-create__suffix">Tháng</span>
               </div>
-              <div className="asset-create__field">
-                <label className="asset-create__label">Thời gian hữu ích (tháng)</label>
+            </div>
+            <div className="asset-create__field">
+              <label className="asset-create__label">Giá trị còn lại</label>
+              <input
+                type="number"
+                min={0}
+                className="asset-create__input"
+                value={remainingValueInput}
+                onChange={(e) => setRemainingValueInput(e.target.value)}
+              />
+            </div>
+            <div className="asset-create__field">
+              <label className="asset-create__label">Ngày bắt đầu khấu hao</label>
+              <input
+                type="date"
+                className="asset-create__input"
+                value={depreciationPeriod}
+                onChange={(e) => setDepreciationPeriod(e.target.value)}
+              />
+            </div>
+            <div className="asset-create__field">
+              <label className="asset-create__label">Khấu hao lũy kế</label>
+              <input
+                type="number"
+                min={0}
+                className="asset-create__input"
+                value={accumulatedDepInput}
+                onChange={(e) => setAccumulatedDepInput(e.target.value)}
+              />
+            </div>
+            <div className="asset-create__field">
+              <label className="asset-create__label">Thời gian khấu hao</label>
+              <div className="asset-create__field--inline">
                 <input
                   className="asset-create__input"
                   value={
                     instance?.depreciationUsefulLifeMonths != null
                       ? String(instance.depreciationUsefulLifeMonths)
-                      : '—'
+                      : ''
                   }
                   disabled
                 />
+                <span className="asset-create__suffix">Tháng</span>
               </div>
-              <div className="asset-create__field">
-                <label className="asset-create__label">Giá trị thu hồi ước tính</label>
-                <input
-                  className="asset-create__input"
-                  value={formatMoneyInput(instance?.depreciationSalvageValue)}
-                  disabled
-                />
-              </div>
-              <div className="asset-create__field">
-                <label className="asset-create__label">Kỳ khấu hao gần nhất</label>
-                <input
-                  type="date"
-                  className="asset-create__input"
-                  value={depreciationPeriod}
-                  onChange={(e) => setDepreciationPeriod(e.target.value)}
-                />
-              </div>
-              <div className="asset-create__field">
-                <label className="asset-create__label">Mức khấu hao kỳ gần nhất</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  className="asset-create__input"
-                  value={depreciationAmountInput}
-                  onChange={(e) =>
-                    setDepreciationAmountInput(formatMoneyInput(parseNumberInput(e.target.value)))
-                  }
-                />
-              </div>
-              <div className="asset-create__field">
-                <label className="asset-create__label">Lũy kế</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  className="asset-create__input"
-                  value={accumulatedDepInput}
-                  onChange={(e) => setAccumulatedDepInput(formatMoneyInput(parseNumberInput(e.target.value)))}
-                />
-              </div>
-              <div className="asset-create__field">
-                <label className="asset-create__label">Giá trị còn lại (KH)</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  className="asset-create__input"
-                  value={remainingValueInput}
-                  onChange={(e) => setRemainingValueInput(formatMoneyInput(parseNumberInput(e.target.value)))}
-                />
-              </div>
+            </div>
+          </div>
+          <div className="asset-create__grid asset-create__grid--two">
+            <div className="asset-create__field">
+              <label className="asset-create__label">Chính sách</label>
+              <input className="asset-create__input" value={instance?.depreciationPolicyName ?? '—'} disabled />
+            </div>
+            <div className="asset-create__field">
+              <label className="asset-create__label">Giá trị hoàn trả ước tính</label>
+              <input
+                className="asset-create__input"
+                value={
+                  instance?.depreciationSalvageValue != null
+                    ? String(instance.depreciationSalvageValue)
+                    : '—'
+                }
+                disabled
+              />
             </div>
           </div>
         </section>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Button,
+  Checkbox,
   Input,
   Modal,
   Select,
@@ -14,7 +15,6 @@ import {
   SettingOutlined,
 } from '@ant-design/icons';
 import './RepairsPage.css';
-import { damageReportService } from '../../assets/services/damageReportService';
 import { assetRequestService } from '../../assets/services/assetRequestService';
 import {
   assetInstanceService,
@@ -23,6 +23,8 @@ import {
 } from '../../assets/services/assetService';
 import {
   repairRequestService,
+  type DamagedInstancePendingItem,
+  type RepairRequestListItem,
   type RepairStartPayload,
   type RepairCompletePayload,
 } from '../../assets/services/repairRequestService';
@@ -30,8 +32,14 @@ import { directorRequestService } from '../../requests/services/directorRequestS
 import { profileService, type UserProfile } from '../../profile/services/profileService';
 import { RepairStartModal, type RepairStartFormValues } from '../components/RepairStartModal';
 import { RepairCompleteModal, type RepairCompleteFormValues } from '../components/RepairCompleteModal';
+import {
+  RepairProposalModal,
+  type RepairProposalFormValues,
+} from '../components/RepairProposalModal';
+import { isDepartmentHeadRoleCode } from '../../../shared/utils/departmentHeadRole';
 
 type RepairStatus =
+  | 'needsProposal'
   | 'draft'
   | 'submitted'
   | 'pending'
@@ -40,9 +48,13 @@ type RepairStatus =
   | 'inProgress'
   | 'completed';
 
+export type RepairRowSource = 'damaged' | 'repair';
+
 export interface RepairRow {
+  rowSource: RepairRowSource;
   id: string;
-  assetRequestId: number;
+  assetRequestId: number | null;
+  taskId?: number;
   assetId: number;
   assetInstanceId: number | null;
   assetCode: string;
@@ -54,6 +66,7 @@ export interface RepairRow {
   department: string;
   status: RepairStatus;
   rawStatus: number;
+  repairKind?: string | null;
 }
 
 function formatDate(value?: string | null): string {
@@ -82,7 +95,8 @@ function parseDamageDescription(description?: string | null): {
 }
 
 function mapStatus(status: number): RepairStatus {
-  // -1=Nháp, 0=Đã gửi, 1=Chờ phê duyệt, 2=Đã duyệt, 3=Từ chối, 4=Đang sửa chữa, 5=Hoàn thành
+  // -2=Chưa lập đơn (chỉ cá thể hỏng), -1=Nháp, 0=Đã gửi, 1=Chờ phê duyệt, 2=Đã duyệt, 3=Từ chối, 4=Đang sửa chữa, 5=Hoàn thành
+  if (status === -2) return 'needsProposal';
   if (status === -1) return 'draft';
   if (status === 0) return 'submitted';
   if (status === 1) return 'pending';
@@ -94,6 +108,7 @@ function mapStatus(status: number): RepairStatus {
 }
 
 function getStatusLabel(status: RepairStatus): string {
+  if (status === 'needsProposal') return 'Chưa lập đơn';
   if (status === 'draft') return 'Chưa gửi';
   if (status === 'submitted') return 'Đã gửi';
   if (status === 'pending') return 'Chờ phê duyệt';
@@ -105,6 +120,7 @@ function getStatusLabel(status: RepairStatus): string {
 
 function getStatusClass(status: RepairStatus): string {
   // Reuse the same status pill styles used across Purchase/Transfer pages
+  if (status === 'needsProposal') return 'asset-status-pill asset-status-pill--inactive';
   if (status === 'submitted') return 'asset-status-pill asset-status-pill--processing';
   if (status === 'pending') return 'asset-status-pill asset-status-pill--warning';
   if (status === 'approved') return 'asset-status-pill asset-status-pill--active';
@@ -114,11 +130,55 @@ function getStatusClass(status: RepairStatus): string {
   return 'asset-status-pill asset-status-pill--danger';
 }
 
+function transferItemToRepairRow(t: RepairRequestListItem): RepairRow {
+  const code = t.instanceCode ?? t.assetCode ?? '';
+  return {
+    rowSource: 'repair',
+    id: `repair-${t.assetRequestId}`,
+    assetRequestId: t.assetRequestId,
+    taskId: t.recordId,
+    assetId: 0,
+    assetInstanceId: t.assetInstanceId ?? null,
+    assetCode: code || String(t.assetInstanceId ?? t.assetRequestId),
+    assetName: t.assetName || '(Không có tên)',
+    condition: (t.damageCondition ?? '').trim(),
+    brokenDate: formatDate(t.transferDate),
+    quantity: 1,
+    location: t.fromDepartment ?? '',
+    department: t.fromDepartment ?? '',
+    status: mapStatus(t.status),
+    rawStatus: t.status,
+    repairKind: t.requestDescription ?? null,
+  };
+}
+
+function damagedPendingToRepairRow(d: DamagedInstancePendingItem): RepairRow {
+  const parsed = parseDamageDescription(d.damageNote);
+  return {
+    rowSource: 'damaged',
+    id: `damaged-${d.assetInstanceId}`,
+    assetRequestId: null,
+    assetId: d.assetId,
+    assetInstanceId: d.assetInstanceId,
+    assetCode: d.instanceCode || d.assetCode || String(d.assetInstanceId),
+    assetName: d.assetName || '(Không có tên)',
+    condition: parsed.condition,
+    brokenDate: formatDate(parsed.damageDate),
+    quantity: 1,
+    location: d.location ?? '',
+    department: d.fromDepartment ?? '',
+    status: mapStatus(-2),
+    rawStatus: -2,
+    repairKind: null,
+  };
+}
+
 export function RepairsPage() {
   const [activeTab, setActiveTab] = useState<'need-repair' | 'in-repair'>('need-repair');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | RepairStatus>('all');
-  const [rows, setRows] = useState<RepairRow[]>([]);
+  const [repairList, setRepairList] = useState<RepairRequestListItem[]>([]);
+  const [damagedPending, setDamagedPending] = useState<DamagedInstancePendingItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [selected, setSelected] = useState<RepairRow | null>(null);
@@ -142,63 +202,65 @@ export function RepairsPage() {
   const [repairCompleteSubmitting, setRepairCompleteSubmitting] = useState(false);
   const [repairCompleteReportNumber, setRepairCompleteReportNumber] = useState('');
 
+  const [proposalOpen, setProposalOpen] = useState(false);
+  const [proposalRows, setProposalRows] = useState<RepairRow[]>([]);
+  const [proposalSubmitting, setProposalSubmitting] = useState(false);
+  const [selectedDamagedRowIds, setSelectedDamagedRowIds] = useState<Set<string>>(() => new Set());
+
   useEffect(() => {
     let cancelled = false;
 
-    async function loadRepairList() {
+    async function loadAll() {
       setLoading(true);
       try {
-        const res = await damageReportService.list({
-          requestTypeId: 4,
-          page: 1,
-          pageSize: 200,
-        });
-
-        const mapped: RepairRow[] = (res.items ?? []).map((it) => {
-          const assetCode = it.assetInstanceCode ?? it.assetCode ?? '';
-          const assetName = it.assetName ?? '';
-          const parsed = parseDamageDescription(it.description);
-          const brokenDateSource = parsed.damageDate || it.createDate;
-
-          return {
-            id: String(it.id),
-            assetRequestId: it.id,
-            assetId: it.assetId,
-            assetInstanceId: it.assetInstanceId ?? null,
-            assetCode: assetCode || String(it.assetInstanceId ?? it.assetId ?? ''),
-            assetName:
-              assetName ||
-              (it.title
-                ? it.title.replace(/^Báo hỏng tài sản\s*/i, '').trim() || it.title
-                : '(Không có tên)'),
-            condition: parsed.condition,
-            brokenDate: formatDate(brokenDateSource),
-            quantity: it.assetQuantity && it.assetQuantity > 0 ? it.assetQuantity : 1,
-            location: it.currentLocation ?? it.currentDepartmentName ?? '',
-            department: it.currentDepartmentName ?? '',
-            status: mapStatus(it.status),
-            rawStatus: it.status,
-          };
-        });
-
-        if (!cancelled) setRows(mapped);
+        const [repairs, damaged] = await Promise.all([
+          repairRequestService.list(),
+          repairRequestService.listDamagedPending(),
+        ]);
+        if (!cancelled) {
+          setRepairList(repairs);
+          setDamagedPending(damaged);
+        }
       } catch (e: any) {
         const msg = e?.response?.data?.title ?? e?.response?.data ?? e?.message;
         message.error(typeof msg === 'string' ? msg : 'Không tải được danh sách sửa chữa.');
-        if (!cancelled) setRows([]);
+        if (!cancelled) {
+          setRepairList([]);
+          setDamagedPending([]);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
-    if (activeTab === 'need-repair' || activeTab === 'in-repair') {
-      loadRepairList();
-    }
+    loadAll();
 
     return () => {
       cancelled = true;
     };
-  }, [activeTab]);
+  }, []);
+
+  const needRepairRows: RepairRow[] = useMemo(() => {
+    const repairPart = repairList
+      .filter((t) => t.status !== 4 && t.status !== 5)
+      .map(transferItemToRepairRow);
+    const busyIds = new Set(
+      repairPart.map((r) => r.assetInstanceId).filter((x): x is number => x != null)
+    );
+    const damagedPart = damagedPending
+      .filter((d) => !busyIds.has(d.assetInstanceId))
+      .map(damagedPendingToRepairRow);
+    return [...repairPart, ...damagedPart].sort((a, b) =>
+      (b.brokenDate || '').localeCompare(a.brokenDate || '')
+    );
+  }, [repairList, damagedPending]);
+
+  const inRepairRows: RepairRow[] = useMemo(
+    () => repairList.filter((t) => t.status === 4).map(transferItemToRepairRow),
+    [repairList]
+  );
+
+  const tabRows = activeTab === 'in-repair' ? inRepairRows : needRepairRows;
 
   useEffect(() => {
     (async () => {
@@ -212,37 +274,30 @@ export function RepairsPage() {
   }, []);
 
   const isDirector = String(profile?.role ?? '').toUpperCase() === 'DIRECTOR';
-  const canDirectorApprove = isDirector && !!selected && selected.rawStatus === 1;
+  const isDeptHead = isDepartmentHeadRoleCode(profile?.role);
+  const showDeptHeadProposalUi = isDeptHead && activeTab === 'need-repair';
+  const canDirectorApprove =
+    isDirector &&
+    !!selected &&
+    selected.rowSource === 'repair' &&
+    selected.assetRequestId != null &&
+    selected.rawStatus === 1;
 
   const reload = async () => {
     try {
-      const res = await damageReportService.list({ requestTypeId: 4, page: 1, pageSize: 200 });
-      const mapped: RepairRow[] = (res.items ?? []).map((it) => ({
-        id: String(it.id),
-        assetRequestId: it.id,
-        assetId: it.assetId,
-        assetInstanceId: it.assetInstanceId ?? null,
-        assetCode: (it.assetInstanceCode ?? it.assetCode ?? '') || String(it.assetInstanceId ?? it.assetId ?? ''),
-        assetName:
-          (it.assetName ?? '') ||
-          (it.title
-            ? it.title.replace(/^Báo hỏng tài sản\s*/i, '').trim() || it.title
-            : '(Không có tên)'),
-        condition: parseDamageDescription(it.description).condition,
-        brokenDate: formatDate(parseDamageDescription(it.description).damageDate || it.createDate),
-        quantity: it.assetQuantity && it.assetQuantity > 0 ? it.assetQuantity : 1,
-        location: it.currentLocation ?? it.currentDepartmentName ?? '',
-        department: it.currentDepartmentName ?? '',
-        status: mapStatus(it.status),
-        rawStatus: it.status,
-      }));
-      setRows(mapped);
+      const [repairs, damaged] = await Promise.all([
+        repairRequestService.list(),
+        repairRequestService.listDamagedPending(),
+      ]);
+      setRepairList(repairs);
+      setDamagedPending(damaged);
     } catch {
       // ignore
     }
   };
 
   const openRepairStart = async (row: RepairRow) => {
+    if (row.assetRequestId == null) return;
     // Backend only allows start when request is approved at final workflow step.
     if (row.rawStatus !== 2) {
       message.warning('Chỉ có thể bắt đầu sửa chữa khi yêu cầu đã được duyệt ở bước cuối.');
@@ -252,7 +307,7 @@ export function RepairsPage() {
     setRepairStartLoading(true);
     setRepairStartOpen(true);
     try {
-      const det = await assetRequestService.getById(row.assetRequestId);
+      const det = await assetRequestService.getById(row.assetRequestId!);
       const aid = det.asset?.assetId ?? row.assetId;
       if (aid) {
         const asset = await assetService.getById(aid);
@@ -288,7 +343,7 @@ export function RepairsPage() {
   };
 
   const submitRepairStart = async (values: RepairStartFormValues) => {
-    if (!repairStartRow || !profile?.id) return;
+    if (!repairStartRow?.assetRequestId || !profile?.id) return;
     if (!values.damageDate) {
       message.warning('Vui lòng chọn ngày hỏng.');
       return;
@@ -316,7 +371,7 @@ export function RepairsPage() {
         comment: null,
       };
 
-      await repairRequestService.start(repairStartRow.assetRequestId, payload);
+      await repairRequestService.start(repairStartRow.assetRequestId!, payload);
       message.success('Đã bắt đầu sửa chữa.');
       setRepairStartOpen(false);
       setRepairStartRow(null);
@@ -331,6 +386,7 @@ export function RepairsPage() {
   };
 
   const openRepairComplete = async (row: RepairRow) => {
+    if (row.assetRequestId == null) return;
     if (row.rawStatus !== 4) {
       message.warning('Chỉ có thể hoàn thành khi đơn đang trong trạng thái đang sửa chữa.');
       return;
@@ -339,7 +395,7 @@ export function RepairsPage() {
     setRepairCompleteLoading(true);
     setRepairCompleteOpen(true);
     try {
-      const det = await assetRequestService.getById(row.assetRequestId);
+      const det = await assetRequestService.getById(row.assetRequestId!);
       const task =
         det.repairTasks?.find((t) => t.status === 1) ?? det.repairTasks?.[0] ?? null;
       if (!task?.taskId) {
@@ -441,15 +497,15 @@ export function RepairsPage() {
   };
 
   const submitDirectorDecision = async () => {
-    if (!selected || !profile?.id) return;
+    if (!selected?.assetRequestId || !profile?.id) return;
     setSubmitting(true);
     try {
       const payload = { approvedBy: profile.id, comment: comment.trim() || null };
       if (decision === 'approved') {
-        await directorRequestService.approve(selected.assetRequestId, payload);
+        await directorRequestService.approve(selected.assetRequestId!, payload);
         message.success('Đã phê duyệt yêu cầu sửa chữa.');
       } else {
-        await directorRequestService.reject(selected.assetRequestId, payload);
+        await directorRequestService.reject(selected.assetRequestId!, payload);
         message.success('Đã từ chối yêu cầu sửa chữa.');
       }
       setApproveOpen(false);
@@ -464,37 +520,41 @@ export function RepairsPage() {
     }
   };
 
-  const handleDeleteDamageReport = (row: RepairRow) => {
-    const idNum = Number(row.id);
-    if (!Number.isFinite(idNum) || idNum <= 0) {
-      message.error('Không xác định được mã đơn báo hỏng.');
-      return;
+  const submitRepairProposal = async (values: RepairProposalFormValues) => {
+    const rows = proposalRows.filter((r) => r.assetInstanceId != null);
+    if (!rows.length || !profile?.id) return;
+    setProposalSubmitting(true);
+    try {
+      const damageCondition = values.damageCondition.trim();
+      const repairKind = values.repairKind.trim();
+      for (const row of rows) {
+        await repairRequestService.create({
+          assetInstanceId: row.assetInstanceId!,
+          createdBy: profile.id,
+          damageCondition,
+          repairKind,
+        });
+      }
+      message.success(
+        rows.length > 1
+          ? `Đã gửi ${rows.length} đơn sửa chữa, chờ giám đốc phê duyệt.`
+          : 'Đã gửi đơn sửa chữa, chờ giám đốc phê duyệt.',
+      );
+      setProposalOpen(false);
+      setProposalRows([]);
+      setSelectedDamagedRowIds(new Set());
+      await reload();
+    } catch (e: any) {
+      const msg = e?.response?.data ?? 'Gửi đơn sửa chữa thất bại.';
+      message.error(typeof msg === 'string' ? msg : 'Gửi đơn sửa chữa thất bại.');
+    } finally {
+      setProposalSubmitting(false);
     }
-
-    Modal.confirm({
-      title: 'Xóa đơn báo hỏng?',
-      content: `Bạn có chắc muốn xóa đơn báo hỏng của tài sản ${row.assetCode || ''}?`,
-      okText: 'Xóa',
-      okButtonProps: { danger: true },
-      cancelText: 'Hủy',
-      onOk: async () => {
-        try {
-          await damageReportService.delete(idNum);
-          message.success('Đã xóa đơn báo hỏng.');
-          setRows((prev) => prev.filter((x) => x.id !== row.id));
-        } catch (e: any) {
-          const data = e?.response?.data;
-          const msg = data?.title ?? data ?? e?.message ?? 'Xóa đơn báo hỏng thất bại.';
-          message.error(typeof msg === 'string' ? msg : 'Xóa đơn báo hỏng thất bại.');
-        }
-      },
-    });
   };
 
   const filteredData: RepairRow[] = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    const byTab = activeTab === 'in-repair' ? rows.filter((r) => r.rawStatus === 4) : rows;
-    return byTab.filter((row) => {
+    return tabRows.filter((row) => {
       const matchStatus = statusFilter === 'all' || row.status === statusFilter;
       const matchKeyword =
         !keyword ||
@@ -503,22 +563,69 @@ export function RepairsPage() {
         row.condition.toLowerCase().includes(keyword);
       return matchStatus && matchKeyword;
     });
-  }, [rows, search, statusFilter, activeTab]);
+  }, [tabRows, search, statusFilter]);
+
+  const damagedRowsInView = useMemo(
+    () => filteredData.filter((r) => r.rowSource === 'damaged'),
+    [filteredData],
+  );
+
+  useEffect(() => {
+    if (!showDeptHeadProposalUi) {
+      setSelectedDamagedRowIds(new Set());
+      return;
+    }
+    const allowed = new Set(damagedRowsInView.map((r) => r.id));
+    setSelectedDamagedRowIds((prev) => {
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (allowed.has(id)) next.add(id);
+      }
+      return next.size === prev.size && [...prev].every((id) => allowed.has(id)) ? prev : next;
+    });
+  }, [showDeptHeadProposalUi, damagedRowsInView]);
+
+  const tableColCount = showDeptHeadProposalUi ? 10 : 9;
+  const allDamagedInViewSelected =
+    damagedRowsInView.length > 0 &&
+    damagedRowsInView.every((r) => selectedDamagedRowIds.has(r.id));
+  const someDamagedInViewSelected = damagedRowsInView.some((r) =>
+    selectedDamagedRowIds.has(r.id),
+  );
 
   return (
     <div className="repairs-page">
       <h1 className="repairs-page__title">Sửa chữa</h1>
 
       <div className="repairs-card">
-        <Tabs
-          activeKey={activeTab}
-          onChange={(key) => setActiveTab(key as 'need-repair' | 'in-repair')}
-          className="repairs-tabs"
-          items={[
-            { key: 'need-repair', label: 'Tài sản cần sửa chữa' },
-            { key: 'in-repair', label: 'Đang sửa chữa' },
-          ]}
-        />
+        <div className="repairs-card__tabs-row">
+          <Tabs
+            activeKey={activeTab}
+            onChange={(key) => setActiveTab(key as 'need-repair' | 'in-repair')}
+            className="repairs-tabs"
+            items={[
+              { key: 'need-repair', label: 'Tài sản cần sửa chữa' },
+              { key: 'in-repair', label: 'Đang sửa chữa' },
+            ]}
+          />
+          {showDeptHeadProposalUi ? (
+            <Button
+              type="primary"
+              className="repairs-card__proposal-action"
+              disabled={selectedDamagedRowIds.size === 0}
+              onClick={() => {
+                const picked = filteredData.filter(
+                  (r) => r.rowSource === 'damaged' && selectedDamagedRowIds.has(r.id),
+                );
+                if (!picked.length) return;
+                setProposalRows(picked);
+                setProposalOpen(true);
+              }}
+            >
+              Tạo đơn sửa chữa
+            </Button>
+          ) : null}
+        </div>
 
         <div className="repairs-filters">
           <Input
@@ -536,6 +643,7 @@ export function RepairsPage() {
             onChange={(v) => setStatusFilter(v)}
             options={[
               { value: 'all', label: 'Tất cả' },
+              { value: 'needsProposal', label: 'Chưa lập đơn' },
               { value: 'draft', label: 'Chưa gửi' },
               { value: 'submitted', label: 'Đã gửi' },
               { value: 'pending', label: 'Chờ phê duyệt' },
@@ -562,6 +670,23 @@ export function RepairsPage() {
           <table className="asset-table repairs-table">
             <thead>
               <tr>
+                {showDeptHeadProposalUi ? (
+                  <th className="repairs-table__th-select">
+                    <Checkbox
+                      aria-label="Chọn tất cả tài sản chưa lập đơn"
+                      indeterminate={someDamagedInViewSelected && !allDamagedInViewSelected}
+                      checked={allDamagedInViewSelected}
+                      disabled={damagedRowsInView.length === 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedDamagedRowIds(new Set(damagedRowsInView.map((r) => r.id)));
+                        } else {
+                          setSelectedDamagedRowIds(new Set());
+                        }
+                      }}
+                    />
+                  </th>
+                ) : null}
                 <th>MÃ CÁ THỂ</th>
                 <th>TÊN TÀI SẢN</th>
                 <th>TÌNH TRẠNG</th>
@@ -576,19 +701,37 @@ export function RepairsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="repairs-table-empty">
+                  <td colSpan={tableColCount} className="repairs-table-empty">
                     Đang tải dữ liệu...
                   </td>
                 </tr>
               ) : filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="repairs-table-empty">
+                  <td colSpan={tableColCount} className="repairs-table-empty">
                     Không có dữ liệu.
                   </td>
                 </tr>
               ) : (
                 filteredData.map((row) => (
                   <tr key={row.id} className="asset-row">
+                    {showDeptHeadProposalUi ? (
+                      <td className="repairs-table__td-select">
+                        {row.rowSource === 'damaged' ? (
+                          <Checkbox
+                            aria-label={`Chọn ${row.assetCode}`}
+                            checked={selectedDamagedRowIds.has(row.id)}
+                            onChange={(e) => {
+                              setSelectedDamagedRowIds((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(row.id);
+                                else next.delete(row.id);
+                                return next;
+                              });
+                            }}
+                          />
+                        ) : null}
+                      </td>
+                    ) : null}
                     <td>
                       <button type="button" className="asset-code asset-code--link">
                         {row.assetCode}
@@ -612,7 +755,23 @@ export function RepairsPage() {
                           setDetailOpen(true);
                         }}
                       />
-                      {activeTab === 'need-repair' && row.status === 'approved' ? (
+                      {activeTab === 'need-repair' &&
+                      row.rowSource === 'damaged' &&
+                      !isDeptHead ? (
+                        <Button
+                          type="link"
+                          size="small"
+                          onClick={() => {
+                            setProposalRows([row]);
+                            setProposalOpen(true);
+                          }}
+                        >
+                          Tạo đơn sửa chữa
+                        </Button>
+                      ) : null}
+                      {activeTab === 'need-repair' &&
+                      row.rowSource === 'repair' &&
+                      row.status === 'approved' ? (
                         <Button type="link" size="small" onClick={() => openRepairStart(row)}>
                           Bắt đầu SC
                         </Button>
@@ -620,11 +779,6 @@ export function RepairsPage() {
                       {activeTab === 'in-repair' && row.status === 'inProgress' ? (
                         <Button type="link" size="small" onClick={() => openRepairComplete(row)}>
                           Hoàn thành SC
-                        </Button>
-                      ) : null}
-                      {activeTab === 'need-repair' ? (
-                        <Button danger type="text" onClick={() => handleDeleteDamageReport(row)}>
-                          Xóa
                         </Button>
                       ) : null}
                     </td>
@@ -682,7 +836,9 @@ export function RepairsPage() {
               <div className="repair-detail-modal__header-row">
                 <h2 className="repair-detail-modal__title">
                   {selected
-                    ? `Chi tiết yêu cầu SC - YC-${selected.assetRequestId}`
+                    ? selected.rowSource === 'repair' && selected.assetRequestId != null
+                      ? `Chi tiết yêu cầu SC - YC-${selected.assetRequestId}`
+                      : 'Tài sản chờ lập đơn sửa chữa'
                     : 'Chi tiết yêu cầu sửa chữa'}
                 </h2>
                 {selected ? (
@@ -699,7 +855,11 @@ export function RepairsPage() {
               ) : (
                 <div className="repair-detail-modal__content">
                   <div className="repair-detail-info-section">
-                    <h3 className="repair-detail-section-title">Thông tin yêu cầu sửa chữa</h3>
+                    <h3 className="repair-detail-section-title">
+                      {selected.rowSource === 'repair'
+                        ? 'Thông tin yêu cầu sửa chữa'
+                        : 'Thông tin tài sản hỏng'}
+                    </h3>
                     <div className="repair-detail-info-grid">
                       <div className="repair-detail-info-row">
                         <div className="repair-detail-info-item">
@@ -713,7 +873,11 @@ export function RepairsPage() {
                       </div>
                       <div className="repair-detail-info-row">
                         <div className="repair-detail-info-item">
-                          <label>Tình trạng</label>
+                          <label>
+                            {selected.rowSource === 'repair'
+                              ? 'Tình trạng hỏng hóc'
+                              : 'Ghi nhận khi đánh dấu hỏng'}
+                          </label>
                           <div className="repair-detail-info-value">{selected.condition || '—'}</div>
                         </div>
                         <div className="repair-detail-info-item">
@@ -721,6 +885,14 @@ export function RepairsPage() {
                           <div className="repair-detail-info-value">{selected.brokenDate || '—'}</div>
                         </div>
                       </div>
+                      {selected.rowSource === 'repair' && selected.repairKind ? (
+                        <div className="repair-detail-info-row">
+                          <div className="repair-detail-info-item repair-detail-info-item--full">
+                            <label>Phương án sửa chữa đề xuất</label>
+                            <div className="repair-detail-info-value">{selected.repairKind}</div>
+                          </div>
+                        </div>
+                      ) : null}
                       <div className="repair-detail-info-row">
                         <div className="repair-detail-info-item">
                           <label>Vị trí tài sản</label>
@@ -800,6 +972,20 @@ export function RepairsPage() {
           setRepairCompleteAsset(null);
         }}
         onSubmit={submitRepairComplete}
+      />
+
+      <RepairProposalModal
+        open={proposalOpen}
+        loading={proposalSubmitting}
+        items={proposalRows.map((r) => ({
+          assetCode: r.assetCode,
+          assetName: r.assetName,
+        }))}
+        onClose={() => {
+          setProposalOpen(false);
+          setProposalRows([]);
+        }}
+        onSubmit={submitRepairProposal}
       />
 
       <Modal

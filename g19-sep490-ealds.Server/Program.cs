@@ -127,7 +127,7 @@ builder.Services.AddQuartz(q =>
     q.AddTrigger(opts => opts
         .ForJob(inventoryNotifyJobKey)
         .WithIdentity("InventoryScheduledCheckNotificationJob-trigger")
-        .WithCronSchedule("0 0 * * * ?")); // mỗi giờ — gửi TB khi đến khung lịch kiểm kê
+        .WithCronSchedule("0 */15 * * * ?")); // 15 phút/lần — nhắc trong khung Đến lịch (tối đa 1 TB/ngày/user/phiên)
 });
 //dky host service cho Quarzt
 builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);

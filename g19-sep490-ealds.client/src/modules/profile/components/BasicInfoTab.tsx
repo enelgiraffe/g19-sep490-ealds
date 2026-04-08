@@ -194,10 +194,10 @@ export function BasicInfoTab() {
                   validator: (_, value: string | undefined) => {
                     if (!value) return Promise.resolve();
                     const trimmed = value.trim();
-                    const phoneRegex = /^\d{11}$/;
+                    const phoneRegex = /^\d{10}$/;
                     if (!phoneRegex.test(trimmed)) {
                       return Promise.reject(
-                        new Error('Số điện thoại không hợp lệ. Vui lòng nhập đúng 11 chữ số.'),
+                        new Error('Số điện thoại không hợp lệ. Vui lòng nhập đúng 10 chữ số.'),
                       );
                     }
                     return Promise.resolve();

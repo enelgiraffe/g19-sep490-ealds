@@ -1,5 +1,6 @@
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
+using g19_sep490_ealds.Server.Utils;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,7 +16,6 @@ public class InventoryNotificationService : IInventoryNotificationService
     /// Resolving users by <c>RoleId</c> avoids EF failing to translate custom string helpers in SQL.
     /// </summary>
     private const int RoleIdDirector = 2;
-    private const int RoleIdAccountant = 3;
     private const int RoleIdDepartmentHead = 4;
 
     private readonly EaldsDbContext _db;
@@ -30,13 +30,15 @@ public class InventoryNotificationService : IInventoryNotificationService
     public async Task ProcessScheduledCheckArrivalsAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
-        var sessions = await _db.InventorySessions
+        var utcDayStart = now.Date;
+        var utcDayEnd = utcDayStart.AddDays(1);
+        var candidates = await _db.InventorySessions
             .Include(s => s.Department)
-            .Where(s =>
-                s.Status == (int)InventorySessionStatus.Scheduled &&
-                s.StartDate <= now &&
-                s.EndDate >= now)
+            .Where(s => s.Status == (int)InventorySessionStatus.Scheduled)
             .ToListAsync(cancellationToken);
+        var sessions = candidates
+            .Where(s => InventoryScheduleWindow.UtcCalendarDayInInclusiveRange(s.StartDate, s.EndDate, now))
+            .ToList();
 
         foreach (var session in sessions)
         {
@@ -51,22 +53,28 @@ public class InventoryNotificationService : IInventoryNotificationService
                 continue;
             }
 
+            var title = TruncateTitle($"{ScheduledArrivalTitle}: {session.Code}");
+            var deptName = session.Department?.Name ?? "?";
+            var content = TruncateContent($"KK {session.Code} ({deptName}). Đã đến khung lịch kiểm kê — vui lòng bắt đầu phiên.");
+
             foreach (var userId in headUserIds)
             {
-                var already = await _db.Notifications.AnyAsync(
-                    n => n.RefId == session.SessionId &&
-                         n.UserId == userId &&
-                         n.Title == ScheduledArrivalTitle,
+                // One reminder per recipient per session per UTC day while still in window.
+                // RefId must stay null: schema FK points RefId → User, not inventory session.
+                var alreadyToday = await _db.Notifications.AnyAsync(
+                    n => n.UserId == userId &&
+                         n.Title == title &&
+                         n.SentDate >= utcDayStart &&
+                         n.SentDate < utcDayEnd,
                     cancellationToken);
-                if (already)
+                if (alreadyToday)
                     continue;
 
-                var deptName = session.Department?.Name ?? "?";
                 _db.Notifications.Add(new Notification
                 {
-                    Title = ScheduledArrivalTitle,
-                    Content = TruncateContent($"KK {session.Code} ({deptName}). Đã đến ngày kiểm kê trong khung lịch."),
-                    RefId = session.SessionId,
+                    Title = title,
+                    Content = content,
+                    RefId = null,
                     UserId = userId,
                     SentDate = DateTime.UtcNow,
                     IsSend = true
@@ -92,8 +100,9 @@ public class InventoryNotificationService : IInventoryNotificationService
             _db.Notifications.Add(new Notification
             {
                 Title = TruncateTitle($"Chờ xác nhận kiểm kê: {session.Code}"),
-                Content = TruncateContent($"Trưởng phòng đã hoàn thành phiên {session.Code}. Vui lòng xác nhận."),
-                RefId = session.SessionId,
+                Content = TruncateContent(
+                    $"Trưởng phòng đã xử lý chênh lệch / báo cáo phiên {session.Code}. Vui lòng xác nhận."),
+                RefId = null,
                 UserId = userId,
                 SentDate = DateTime.UtcNow,
                 IsSend = true
@@ -118,30 +127,13 @@ public class InventoryNotificationService : IInventoryNotificationService
                 Title = TruncateTitle($"Đã xác nhận kiểm kê: {session.Code}"),
                 Content = TruncateContent(
                     hasQuantityOrUserMismatch
-                        ? $"GD đã xác nhận {session.Code}. Có chênh lệch — kế toán xử lý."
-                        : $"GD đã xác nhận {session.Code}. Không có chênh lệch SL/người PT."),
-                RefId = session.SessionId,
+                        ? $"GD đã xác nhận {session.Code}. Có chênh lệch — trưởng phòng xử lý trên sổ (Chờ xử lý)."
+                        : $"GD đã xác nhận {session.Code}. Không có chênh lệch cần xử lý thêm."),
+                RefId = null,
                 UserId = userId,
                 SentDate = DateTime.UtcNow,
                 IsSend = true
             });
-        }
-
-        if (hasQuantityOrUserMismatch)
-        {
-            var accountantIds = await FilterExistingUserIdsAsync(await GetAccountantUserIdsAsync(cancellationToken), cancellationToken);
-            foreach (var userId in accountantIds)
-            {
-                _db.Notifications.Add(new Notification
-                {
-                    Title = TruncateTitle($"Xử lý chênh lệch kiểm kê: {session.Code}"),
-                    Content = TruncateContent($"GD xác nhận {session.Code}. Có chênh lệch — xử lý trên sổ."),
-                    RefId = session.SessionId,
-                    UserId = userId,
-                    SentDate = DateTime.UtcNow,
-                    IsSend = true
-                });
-            }
         }
 
         if (_db.ChangeTracker.HasChanges())
@@ -159,7 +151,7 @@ public class InventoryNotificationService : IInventoryNotificationService
             {
                 Title = TruncateTitle($"Kiểm kê lại: {session.Code}"),
                 Content = TruncateContent($"GD yêu cầu kiểm kê lại phiên {session.Code}."),
-                RefId = session.SessionId,
+                RefId = null,
                 UserId = userId,
                 SentDate = DateTime.UtcNow,
                 IsSend = true
@@ -232,33 +224,6 @@ public class InventoryNotificationService : IInventoryNotificationService
             .Where(r =>
                 r.RoleId == RoleIdDirector ||
                 (r.Code != null && r.Code.ToUpper() == "DIRECTOR"))
-            .Select(r => r.RoleId)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-    }
-
-    private async Task<List<int>> GetAccountantUserIdsAsync(CancellationToken cancellationToken)
-    {
-        var roleIds = await GetAccountantRoleIdsAsync(cancellationToken);
-        if (roleIds.Count == 0)
-        {
-            _logger.LogWarning("No Role row found for accountant (expected id {RoleId} or Code ACCOUNTANT).", RoleIdAccountant);
-            return new List<int>();
-        }
-
-        return await _db.UserRoles.AsNoTracking()
-            .Where(ur => roleIds.Contains(ur.RoleId))
-            .Select(ur => ur.UserId)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-    }
-
-    private async Task<List<int>> GetAccountantRoleIdsAsync(CancellationToken cancellationToken)
-    {
-        return await _db.Roles.AsNoTracking()
-            .Where(r =>
-                r.RoleId == RoleIdAccountant ||
-                (r.Code != null && r.Code.ToUpper() == "ACCOUNTANT"))
             .Select(r => r.RoleId)
             .Distinct()
             .ToListAsync(cancellationToken);

@@ -1,9 +1,11 @@
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Utils;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -15,10 +17,12 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class AssetInstancesController : ControllerBase
 {
     private readonly EaldsDbContext _context;
+    private readonly int _departmentHeadRoleId;
 
-    public AssetInstancesController(EaldsDbContext context)
+    public AssetInstancesController(EaldsDbContext context, IConfiguration configuration)
     {
         _context = context;
+        _departmentHeadRoleId = configuration.GetValue<int>("App:DepartmentHeadRoleId", 4);
     }
 
     /// <summary>
@@ -30,6 +34,7 @@ public class AssetInstancesController : ControllerBase
         [FromQuery] AssetStatus? status,
         [FromQuery] int? assetTypeId,
         [FromQuery] int? warehouseId,
+        [FromQuery] int? currentDepartmentId,
         [FromQuery] decimal? minPrice,
         [FromQuery] decimal? maxPrice,
         [FromQuery] DateOnly? fromDate,
@@ -55,28 +60,17 @@ public class AssetInstancesController : ControllerBase
         }
 
         if (status.HasValue)
-        {
-            if (status.Value == AssetStatus.Damaged)
-            {
-                query = query.Where(i =>
-                    i.Status == (int)AssetStatus.Damaged ||
-                    (i.Asset != null && _context.AssetRequests.Any(r =>
-                        r.AssetId == i.Asset.AssetId &&
-                        r.Title != null &&
-                        r.Title.StartsWith("Damage report") &&
-                        r.Status == 0)));
-            }
-            else
-            {
-                query = query.Where(i => i.Status == (int)status.Value);
-            }
-        }
+            query = query.Where(i => i.Status == (int)status.Value);
 
         if (assetTypeId.HasValue)
             query = query.Where(i => i.Asset != null && i.Asset.AssetTypeId == assetTypeId.Value);
 
         if (warehouseId.HasValue)
             query = query.Where(i => i.WarehouseId == warehouseId.Value);
+
+        if (currentDepartmentId.HasValue)
+            query = query.Where(i =>
+                i.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == currentDepartmentId.Value));
 
         if (minPrice.HasValue)
             query = query.Where(i => i.CurrentValue >= minPrice.Value);
@@ -88,30 +82,25 @@ public class AssetInstancesController : ControllerBase
         if (toDate.HasValue)
             query = query.Where(i => i.PurchaseDate <= toDate.Value);
 
-        var instances = await query.ToListAsync();
+        var scope = await DepartmentAssetScope.ResolveForUserAsync(User, _context, _departmentHeadRoleId);
+        if (scope.IsRestricted && !scope.DepartmentId.HasValue)
+            return Ok(Array.Empty<AssetInstanceResponseDTO>());
 
-        var assetIds = instances.Select(i => i.AssetId).Distinct().ToList();
-        var damagedAssetIds = await _context.AssetRequests
-            .AsNoTracking()
-            .Where(r =>
-                r.AssetId.HasValue &&
-                assetIds.Contains(r.AssetId.Value) &&
-                r.Title != null &&
-                r.Title.StartsWith("Damage report") &&
-                r.Status == 0)
-            .Select(r => r.AssetId!.Value)
-            .Distinct()
-            .ToListAsync();
-        var damagedSet = damagedAssetIds.ToHashSet();
+        if (scope.IsRestricted && scope.DepartmentId is int headDeptId && headDeptId > 0)
+        {
+            query = query.Where(i =>
+                i.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == headDeptId) &&
+                i.Status != (int)AssetStatus.Disposed &&
+                i.Status != (int)AssetStatus.Lost &&
+                i.Status != (int)AssetStatus.Liquidated);
+        }
+
+        var instances = await query.ToListAsync();
 
         var instanceIds = instances.Select(i => i.AssetInstanceId).ToList();
         var latestDeps = await LoadLatestDepreciationByInstanceAsync(instanceIds);
 
-        return Ok(instances.Select(i =>
-        {
-            var forced = damagedSet.Contains(i.AssetId) ? AssetStatus.Damaged : (AssetStatus?)null;
-            return ToDto(i, latestDeps.GetValueOrDefault(i.AssetInstanceId), forced);
-        }));
+        return Ok(instances.Select(i => ToDto(i, latestDeps.GetValueOrDefault(i.AssetInstanceId), null)));
     }
 
     /// <summary>
@@ -186,6 +175,10 @@ public class AssetInstancesController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<AssetInstanceResponseDTO>> GetById(int id)
     {
+        var scope = await DepartmentAssetScope.ResolveForUserAsync(User, _context, _departmentHeadRoleId);
+        if (scope.IsRestricted && !scope.DepartmentId.HasValue)
+            return NotFound();
+
         var instance = await _context.AssetInstances
             .Include(i => i.Asset).ThenInclude(a => a!.AssetType)
             .Include(i => i.Warehouse)
@@ -198,13 +191,9 @@ public class AssetInstancesController : ControllerBase
         if (instance == null)
             return NotFound();
 
-        var hasDamageReport = instance.Asset != null && await _context.AssetRequests
-            .AsNoTracking()
-            .AnyAsync(r =>
-                r.AssetId == instance.Asset.AssetId &&
-                r.Title != null &&
-                r.Title.StartsWith("Damage report") &&
-                r.Status == 0);
+        if (scope.IsRestricted && scope.DepartmentId is int allowedDeptId &&
+            !DepartmentAssetScope.InstanceBelongsToDepartment(instance, allowedDeptId))
+            return NotFound();
 
         var latestDepSnapshot = await _context.DepreciationRecords
             .Include(r => r.Policy)
@@ -214,8 +203,7 @@ public class AssetInstancesController : ControllerBase
             .ThenByDescending(r => r.CreateDate)
             .FirstOrDefaultAsync();
 
-        var forced = hasDamageReport ? AssetStatus.Damaged : (AssetStatus?)null;
-        return Ok(ToDto(instance, latestDepSnapshot, forced));
+        return Ok(ToDto(instance, latestDepSnapshot, null));
     }
 
     /// <summary>
@@ -552,15 +540,7 @@ public class AssetInstancesController : ControllerBase
             .AsNoTracking()
             .FirstAsync(i => i.AssetInstanceId == id);
 
-        var hasDamageReport = reloaded.Asset != null && await _context.AssetRequests
-            .AsNoTracking()
-            .AnyAsync(r =>
-                r.AssetId == reloaded.Asset.AssetId &&
-                r.Title != null &&
-                r.Title.StartsWith("Damage report") &&
-                r.Status == 0);
-
-        return Ok(ToDto(reloaded, latestDep, hasDamageReport ? AssetStatus.Damaged : null));
+        return Ok(ToDto(reloaded, latestDep, null));
     }
 
     /// <summary>

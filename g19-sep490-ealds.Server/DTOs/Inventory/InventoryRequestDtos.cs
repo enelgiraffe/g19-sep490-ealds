@@ -33,7 +33,6 @@ public class SaveAssetInventoryDTO
     public int ActualStatus { get; set; }
 
     public int? ActualLocationId { get; set; }
-    public int? ActualManagerId { get; set; }
     public int CheckedBy { get; set; }
 }
 

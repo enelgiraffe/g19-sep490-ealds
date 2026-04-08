@@ -60,8 +60,6 @@ export function UsersPage() {
   const [roleFilter, setRoleFilter] = useState<string | 'all'>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isDeletingId, setIsDeletingId] = useState<number | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
   const hasLoadedRef = useRef(false);
   const [createDraft, setCreateDraft] = useState({
     fullName: '',
@@ -187,30 +185,6 @@ export function UsersPage() {
     }
   };
 
-  const handleConfirmDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      setIsDeletingId(deleteTarget.userId);
-      await userService.delete(deleteTarget.userId);
-      message.success('Xóa người dùng thành công.');
-      setDeleteTarget(null);
-      await loadUsers();
-    } catch (error) {
-      if (isAxiosError(error)) {
-        const data = error.response?.data;
-        if (typeof data === 'string' && data) {
-          message.error(data);
-        } else {
-          message.error('Không thể xóa người dùng.');
-        }
-      } else {
-        message.error('Không thể xóa người dùng.');
-      }
-    } finally {
-      setIsDeletingId(null);
-    }
-  };
-
   return (
     <div className="users-page">
       <div className="users-header">
@@ -289,15 +263,6 @@ export function UsersPage() {
                         onClick={() => navigate(`/users/${row.userId}`)}
                       >
                         <EyeOutlined />
-                      </button>
-                      <button
-                        type="button"
-                        className="users-action-btn users-action-btn--danger"
-                        disabled={isDeletingId === row.userId}
-                        onClick={() => setDeleteTarget(row)}
-                        aria-label="Xóa người dùng"
-                      >
-                        {isDeletingId === row.userId ? '...' : '🗑'}
                       </button>
                     </td>
                   </tr>
@@ -406,34 +371,6 @@ export function UsersPage() {
                 onClick={() => setIsCreateModalOpen(false)}
               >
                 ✕ Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {deleteTarget && (
-        <div className="users-confirm-overlay" role="dialog" aria-modal="true">
-          <div className="users-confirm-modal">
-            <div className="users-confirm-header">Xóa người dùng</div>
-            <div className="users-confirm-body">
-              Bạn có chắc chắn muốn xóa người dùng <strong>{deleteTarget.fullName}</strong> ({deleteTarget.employeeCode})?
-            </div>
-            <div className="users-confirm-footer">
-              <button
-                type="button"
-                className="users-confirm-btn users-confirm-btn--danger"
-                onClick={handleConfirmDelete}
-                disabled={isDeletingId === deleteTarget.userId}
-              >
-                {isDeletingId === deleteTarget.userId ? 'Đang xóa...' : 'Xóa'}
-              </button>
-              <button
-                type="button"
-                className="users-confirm-btn users-confirm-btn--cancel"
-                onClick={() => setDeleteTarget(null)}
-              >
-                Hủy
               </button>
             </div>
           </div>

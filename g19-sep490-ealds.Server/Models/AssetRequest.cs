@@ -31,7 +31,12 @@ public partial class AssetRequest
 
     public int StepId { get; set; }
 
+    /// <summary>When set (e.g. allocation requests), filters list queries by requesting department.</summary>
+    public int? AllocationTargetDepartmentId { get; set; }
+
     public virtual ICollection<Approval> Approvals { get; set; } = new List<Approval>();
+
+    public virtual AssetAllocationOrder? AssetAllocationOrder { get; set; }
 
     public virtual Asset? Asset { get; set; }
 

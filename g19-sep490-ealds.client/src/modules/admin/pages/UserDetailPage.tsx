@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Input, Select, message, Switch } from 'antd';
-import { isAxiosError } from 'axios';
-import { LeftOutlined } from '@ant-design/icons';
+import { Button, Input, Select, message, Tag } from 'antd';
+import { CloseOutlined, EditOutlined, LeftOutlined, LockOutlined, SaveOutlined } from '@ant-design/icons';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { mapBackendRoleToAppRole } from '../../auth/types/auth.types';
 import { userService, type UserItem, type UserMetadata } from '../services/userService';
@@ -27,10 +26,8 @@ export function UserDetailPage() {
   const [metadata, setMetadata] = useState<UserMetadata>({ roles: [], departments: [] });
   const [isEditing, setIsEditing] = useState(false);
   const [isPasswordOpen, setIsPasswordOpen] = useState(false);
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [editDraft, setEditDraft] = useState({
     fullName: '',
     email: '',
@@ -152,190 +149,187 @@ export function UserDetailPage() {
     }
   };
 
-  const handleDeleteUser = async () => {
-    if (!user) return;
-    try {
-      setIsDeleting(true);
-      await userService.delete(user.userId);
-      message.success('Xóa người dùng thành công.');
-      navigate('/users');
-    } catch (error) {
-      if (isAxiosError(error) && typeof error.response?.data === 'string') {
-        message.error(error.response.data);
-      } else {
-        message.error('Không thể xóa người dùng.');
-      }
-    } finally {
-      setIsDeleting(false);
-      setIsDeleteOpen(false);
+  const resetEditDraft = () => {
+    if (user) {
+      setEditDraft({
+        fullName: user.fullName ?? '',
+        email: user.email ?? '',
+        phone: user.phone ?? '',
+        departmentId: user.departmentId ?? 0,
+        roleId: user.roleIds?.[0] ?? 0,
+        status: user.status ?? 1,
+      });
     }
+    setIsEditing(false);
   };
 
   return (
     <div className="user-detail-page">
-      <div className="user-detail-header">
-        <button type="button" className="user-detail-back" onClick={() => navigate('/users')}>
+      <header className="user-detail-toolbar">
+        <button type="button" className="user-detail-back" onClick={() => navigate('/users')} aria-label="Quay lại danh sách">
           <LeftOutlined />
         </button>
-        <h1>Quản lý người dùng</h1>
-      </div>
-
-      <div className="user-detail-tabs">
-        <button
-          type="button"
-          className={activeTab === 'profile' ? 'user-detail-tab user-detail-tab--active' : 'user-detail-tab'}
-          onClick={() => setActiveTab('profile')}
-        >
-          Hồ sơ
-        </button>
-        <button
-          type="button"
-          className={activeTab === 'history' ? 'user-detail-tab user-detail-tab--active' : 'user-detail-tab'}
-          onClick={() => setActiveTab('history')}
-        >
-          Lịch sử hoạt động
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="user-detail-loading">Đang tải dữ liệu...</div>
-      ) : activeTab === 'history' ? (
-        <div className="user-detail-loading">Lịch sử hoạt động sẽ được bổ sung sau.</div>
-      ) : (
-        <div className="user-detail-content">
-          <div className="user-detail-top">
-            <div>
-              <div className="user-detail-label">Mã nhân viên</div>
-              <div className="user-detail-value">{user?.employeeCode || '—'}</div>
-            </div>
-          </div>
-
-          <div className="user-detail-grid">
-            <div>
-              <div className="user-detail-label">Họ tên</div>
-              {isEditing ? (
-                <Input
-                  value={editDraft.fullName}
-                  onChange={(e) => setEditDraft((d) => ({ ...d, fullName: e.target.value }))}
-                />
-              ) : (
-                <div className="user-detail-value">{user?.fullName || '—'}</div>
-              )}
-            </div>
-            <div>
-              <div className="user-detail-label">Email</div>
-              {isEditing ? (
-                <Input
-                  value={editDraft.email}
-                  onChange={(e) => setEditDraft((d) => ({ ...d, email: e.target.value }))}
-                />
-              ) : (
-                <div className="user-detail-value">{user?.email || '—'}</div>
-              )}
-            </div>
-            <div>
-              <div className="user-detail-label">Vị trí công việc</div>
-              {isEditing ? (
-                <Select
-                  value={editDraft.roleId || undefined}
-                  onChange={(value) => setEditDraft((d) => ({ ...d, roleId: value }))}
-                  options={metadata.roles.map((r) => ({ value: r.roleId, label: r.name }))}
-                  getPopupContainer={(trigger) => trigger.parentElement ?? document.body}
-                />
-              ) : (
-                <div className="user-detail-value">
-                  {Array.isArray(user?.roles) && user.roles.length > 0 ? user.roles.join(', ') : '—'}
-                </div>
-              )}
-            </div>
-            <div>
-              <div className="user-detail-label">Phòng ban</div>
-              {isEditing ? (
-                <Select
-                  value={editDraft.departmentId || undefined}
-                  onChange={(value) => setEditDraft((d) => ({ ...d, departmentId: value }))}
-                  options={departmentSelectOptions}
-                  getPopupContainer={(trigger) => trigger.parentElement ?? document.body}
-                />
-              ) : (
-                <div className="user-detail-value">{user?.departmentName || '—'}</div>
-              )}
-            </div>
-            <div>
-              <div className="user-detail-label">Số điện thoại</div>
-              {isEditing ? (
-                <Input
-                  value={editDraft.phone}
-                  onChange={(e) => setEditDraft((d) => ({ ...d, phone: e.target.value }))}
-                />
-              ) : (
-                <div className="user-detail-value">{user?.phone || '—'}</div>
-              )}
-            </div>
-            <div>
-              <div className="user-detail-label">Trạng thái</div>
-              {isEditing ? (
-                <Select
-                  value={editDraft.status}
-                  onChange={(value) => setEditDraft((d) => ({ ...d, status: value }))}
-                  options={[
-                    { value: 1, label: 'Kích hoạt' },
-                    { value: 0, label: 'Không kích hoạt' },
-                  ]}
-                  getPopupContainer={(trigger) => trigger.parentElement ?? document.body}
-                />
-              ) : (
-                <div className="user-detail-value">{user?.status === 1 ? 'Kích hoạt' : 'Không kích hoạt'}</div>
-              )}
-            </div>
-          </div>
-
-          {!isEditing && (
-            <div className="user-detail-status">
-            <Switch checked={user?.status === 1} disabled />
-            <span>Kích hoạt</span>
-            </div>
+        <div className="user-detail-toolbar__text">
+          <h1 className="user-detail-toolbar__title">Chi tiết người dùng</h1>
+          {!loading && user && (
+            <p className="user-detail-toolbar__subtitle">
+              <span className="user-detail-toolbar__code">{user.employeeCode ?? `NV${String(user.userId).padStart(3, '0')}`}</span>
+              <span className="user-detail-toolbar__sep">·</span>
+              <span>{user.fullName || user.email || '—'}</span>
+            </p>
           )}
         </div>
-      )}
+      </header>
 
-      <div className="user-detail-footer">
-        {isEditing ? (
-          <>
-            <button type="button" className="user-detail-btn user-detail-btn--primary" onClick={handleSaveEdit} disabled={isSavingEdit}>
-              {isSavingEdit ? 'Đang lưu...' : '✓ Lưu'}
-            </button>
-            <button
-              type="button"
-              className="user-detail-btn user-detail-btn--secondary"
-              onClick={() => {
-                if (user) {
-                  setEditDraft({
-                    fullName: user.fullName ?? '',
-                    email: user.email ?? '',
-                    phone: user.phone ?? '',
-                    departmentId: user.departmentId ?? 0,
-                    roleId: user.roleIds?.[0] ?? 0,
-                    status: user.status ?? 1,
-                  });
-                }
-                setIsEditing(false);
-              }}
-            >
-              ✕ Hủy
-            </button>
-          </>
-        ) : (
-          <button type="button" className="user-detail-btn user-detail-btn--primary" onClick={() => setIsEditing(true)}>
-            ✎ Chỉnh sửa
+      <div className="user-detail-card">
+        <div className="user-detail-tabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'profile'}
+            className={activeTab === 'profile' ? 'user-detail-tab user-detail-tab--active' : 'user-detail-tab'}
+            onClick={() => setActiveTab('profile')}
+          >
+            Hồ sơ
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'history'}
+            className={activeTab === 'history' ? 'user-detail-tab user-detail-tab--active' : 'user-detail-tab'}
+            onClick={() => setActiveTab('history')}
+          >
+            Lịch sử hoạt động
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="user-detail-loading">Đang tải dữ liệu...</div>
+        ) : activeTab === 'history' ? (
+          <div className="user-detail-placeholder">Lịch sử hoạt động sẽ được bổ sung sau.</div>
+        ) : (
+          <>
+            <div className="user-detail-content">
+              <div className="user-detail-grid">
+                <div className="user-detail-field">
+                  <div className="user-detail-label">Mã nhân viên</div>
+                  <div className="user-detail-value user-detail-value--readonly">{user?.employeeCode || '—'}</div>
+                </div>
+                <div className="user-detail-field">
+                  <div className="user-detail-label">Họ tên</div>
+                  {isEditing ? (
+                    <Input
+                      value={editDraft.fullName}
+                      onChange={(e) => setEditDraft((d) => ({ ...d, fullName: e.target.value }))}
+                      placeholder="Họ và tên"
+                    />
+                  ) : (
+                    <div className="user-detail-value">{user?.fullName || '—'}</div>
+                  )}
+                </div>
+                <div className="user-detail-field">
+                  <div className="user-detail-label">Email</div>
+                  {isEditing ? (
+                    <Input
+                      value={editDraft.email}
+                      onChange={(e) => setEditDraft((d) => ({ ...d, email: e.target.value }))}
+                      placeholder="email@example.com"
+                    />
+                  ) : (
+                    <div className="user-detail-value">{user?.email || '—'}</div>
+                  )}
+                </div>
+                <div className="user-detail-field">
+                  <div className="user-detail-label">Vị trí công việc</div>
+                  {isEditing ? (
+                    <Select
+                      className="user-detail-select"
+                      value={editDraft.roleId || undefined}
+                      onChange={(value) => setEditDraft((d) => ({ ...d, roleId: value }))}
+                      options={metadata.roles.map((r) => ({ value: r.roleId, label: r.name }))}
+                      getPopupContainer={(trigger) => trigger.parentElement ?? document.body}
+                      placeholder="Chọn vai trò"
+                    />
+                  ) : (
+                    <div className="user-detail-value">
+                      {Array.isArray(user?.roles) && user.roles.length > 0 ? user.roles.join(', ') : '—'}
+                    </div>
+                  )}
+                </div>
+                <div className="user-detail-field">
+                  <div className="user-detail-label">Phòng ban</div>
+                  {isEditing ? (
+                    <Select
+                      className="user-detail-select"
+                      value={editDraft.departmentId || undefined}
+                      onChange={(value) => setEditDraft((d) => ({ ...d, departmentId: value }))}
+                      options={departmentSelectOptions}
+                      getPopupContainer={(trigger) => trigger.parentElement ?? document.body}
+                      placeholder="Chọn phòng ban"
+                    />
+                  ) : (
+                    <div className="user-detail-value">{user?.departmentName || '—'}</div>
+                  )}
+                </div>
+                <div className="user-detail-field">
+                  <div className="user-detail-label">Số điện thoại</div>
+                  {isEditing ? (
+                    <Input
+                      value={editDraft.phone}
+                      onChange={(e) => setEditDraft((d) => ({ ...d, phone: e.target.value }))}
+                      placeholder="Số điện thoại"
+                    />
+                  ) : (
+                    <div className="user-detail-value">{user?.phone || '—'}</div>
+                  )}
+                </div>
+                <div className="user-detail-field user-detail-field--span">
+                  <div className="user-detail-label">Trạng thái</div>
+                  {isEditing ? (
+                    <Select
+                      className="user-detail-select user-detail-select--status"
+                      value={editDraft.status}
+                      onChange={(value) => setEditDraft((d) => ({ ...d, status: value }))}
+                      options={[
+                        { value: 1, label: 'Kích hoạt' },
+                        { value: 0, label: 'Không kích hoạt' },
+                      ]}
+                      getPopupContainer={(trigger) => trigger.parentElement ?? document.body}
+                    />
+                  ) : (
+                    <div className="user-detail-value">
+                      <Tag className={user?.status === 1 ? 'user-detail-tag user-detail-tag--active' : 'user-detail-tag user-detail-tag--inactive'}>
+                        {user?.status === 1 ? 'Kích hoạt' : 'Không kích hoạt'}
+                      </Tag>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <footer className="user-detail-footer">
+              {isEditing ? (
+                <>
+                  <Button type="primary" icon={<SaveOutlined />} loading={isSavingEdit} onClick={handleSaveEdit}>
+                    Lưu thay đổi
+                  </Button>
+                  <Button icon={<CloseOutlined />} onClick={resetEditDraft} disabled={isSavingEdit}>
+                    Hủy
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button type="primary" icon={<EditOutlined />} onClick={() => setIsEditing(true)}>
+                    Chỉnh sửa
+                  </Button>
+                  <Button icon={<LockOutlined />} onClick={() => setIsPasswordOpen(true)}>
+                    Đổi mật khẩu
+                  </Button>
+                </>
+              )}
+            </footer>
+          </>
         )}
-        <button type="button" className="user-detail-btn user-detail-btn--secondary" onClick={() => setIsPasswordOpen(true)}>
-          🔒 Đổi mật khẩu
-        </button>
-        <button type="button" className="user-detail-btn user-detail-btn--danger" onClick={() => setIsDeleteOpen(true)}>
-          🗑 Xóa
-        </button>
       </div>
 
       {isPasswordOpen && (
@@ -356,68 +350,18 @@ export function UserDetailPage() {
 
             <div className="user-password-modal__body">
               <div className="user-detail-form">
-                <label>Mật khẩu mới</label>
-                <Input.Password value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-                <label>Xác nhận mật khẩu</label>
-                <Input.Password value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+                <label htmlFor="user-new-password">Mật khẩu mới</label>
+                <Input.Password id="user-new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                <label htmlFor="user-confirm-password">Xác nhận mật khẩu</label>
+                <Input.Password id="user-confirm-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
               </div>
             </div>
 
             <div className="user-password-modal__footer">
-              <button
-                type="button"
-                className="user-password-btn-submit"
-                onClick={handleChangePassword}
-                disabled={isSavingPassword}
-              >
+              <button type="button" className="user-password-btn-submit" onClick={handleChangePassword} disabled={isSavingPassword}>
                 {isSavingPassword ? 'Đang cập nhật...' : 'Cập nhật'}
               </button>
-              <button
-                type="button"
-                className="user-password-btn-cancel"
-                onClick={() => setIsPasswordOpen(false)}
-              >
-                Hủy
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isDeleteOpen && (
-        <div className="user-password-modal-overlay" role="dialog" aria-modal="true">
-          <div className="user-password-modal">
-            <button
-              type="button"
-              className="user-password-modal__close-btn"
-              onClick={() => setIsDeleteOpen(false)}
-              aria-label="Đóng"
-            >
-              <span className="user-password-modal__close">×</span>
-            </button>
-
-            <div className="user-password-modal__header">
-              <h2 className="user-password-modal__title">Xóa người dùng</h2>
-            </div>
-
-            <div className="user-password-modal__body">
-              Bạn có chắc chắn muốn xóa người dùng <strong>{user?.fullName ?? user?.email ?? ''}</strong> không?
-            </div>
-
-            <div className="user-password-modal__footer">
-              <button
-                type="button"
-                className="user-password-btn-submit user-password-btn-submit--danger"
-                onClick={handleDeleteUser}
-                disabled={isDeleting}
-              >
-                {isDeleting ? 'Đang xóa...' : 'Xóa'}
-              </button>
-              <button
-                type="button"
-                className="user-password-btn-cancel"
-                onClick={() => setIsDeleteOpen(false)}
-              >
+              <button type="button" className="user-password-btn-cancel" onClick={() => setIsPasswordOpen(false)}>
                 Hủy
               </button>
             </div>
@@ -427,4 +371,3 @@ export function UserDetailPage() {
     </div>
   );
 }
-

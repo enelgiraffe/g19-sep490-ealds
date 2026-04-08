@@ -111,10 +111,6 @@ export const userService = {
     await userApi.put<void>(`/api/users/${id}/password`, payload);
   },
 
-  async delete(id: number): Promise<void> {
-    await userApi.delete<void>(`/api/users/${id}`);
-  },
-
   async deactivate(id: number): Promise<void> {
     await userApi.put<void>(`/api/users/${id}/deactivate`);
   },

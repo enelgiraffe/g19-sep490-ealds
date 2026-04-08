@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace g19_sep490_ealds.Server.Models;
@@ -38,4 +38,6 @@ public partial class Asset
     public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
 
     public virtual ICollection<MaintenanceSchedule> MaintenanceSchedules { get; set; } = new List<MaintenanceSchedule>();
+
+    public virtual ICollection<AssetAllocationOrderLine> AssetAllocationOrderLines { get; set; } = new List<AssetAllocationOrderLine>();
 }

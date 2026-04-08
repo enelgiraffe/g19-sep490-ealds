@@ -53,6 +53,10 @@ export interface DirectorRequestListItem {
   directorDecisionDate?: string | null;
   /** Thanh lý: lý do trên DisposalRecord (khác AssetRequest.Description). */
   disposalReason?: string | null;
+  /** Sửa chữa: tình trạng hỏng hóc (RepairTask.Reason). */
+  repairDamageCondition?: string | null;
+  /** Sửa chữa: chi phí dự kiến. */
+  repairEstimatedCost?: number | null;
 }
 
 export interface DirectorViewParams {

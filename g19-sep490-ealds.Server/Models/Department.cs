@@ -31,5 +31,7 @@ public partial class Department
 
     public virtual ICollection<BudgetAllocation> BudgetAllocations { get; set; } = new List<BudgetAllocation>();
 
+    public virtual ICollection<AssetAllocationOrder> AssetAllocationOrders { get; set; } = new List<AssetAllocationOrder>();
+
     public virtual User? UpdatedByNavigation { get; set; }
 }
