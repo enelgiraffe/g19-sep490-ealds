@@ -18,6 +18,9 @@ import { AssetCreatePage } from './modules/assets/pages/AssetCreatePage';
 import { AssetEditPage } from './modules/assets/pages/AssetEditPage';
 import { ProfilePage } from './modules/profile/pages/ProfilePage';
 import { PurchaseOrdersPage } from './modules/purchase-orders/pages/PurchaseOrdersPage';
+import { GoodsReceiptsPage } from './modules/purchase-orders/pages/GoodsReceiptsPage';
+import { SupplierInvoicesPage } from './modules/purchase-orders/pages/SupplierInvoicesPage';
+import { PurchaseRequisitionsPage } from './modules/purchase-orders/pages/PurchaseRequisitionsPage';
 import { TransfersPage } from './modules/transfers/pages/TransfersPage';
 import { AccountantAssetListPage } from './modules/accountant/pages/AccountantAssetListPage';
 import { RepairsPage } from './modules/repairs/pages/RepairsPage';
@@ -85,6 +88,9 @@ function App() {
           <Route path="assets" element={<AssetListPage />} />
           <Route path="accountant-assets" element={<AccountantAssetListPage />} />
           <Route path="purchase-orders" element={<PurchaseOrdersPage />} />
+          <Route path="goods-receipts" element={<GoodsReceiptsPage />} />
+          <Route path="supplier-invoices" element={<SupplierInvoicesPage />} />
+          <Route path="purchase-requisitions" element={<PurchaseRequisitionsPage />} />
           <Route path="transfers" element={<TransfersPage />} />
           <Route path="repairs" element={<RepairsPage />} />
           <Route path="maintenance" element={<MaintenancePage />} />

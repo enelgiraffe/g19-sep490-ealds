@@ -1,321 +1,181 @@
-import { useState, useEffect } from 'react';
-import { Button, Input, Select, Tag, message } from 'antd';
-import { SearchOutlined, FilterOutlined, SettingOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { CreatePurchaseOrderModal } from '../components/CreatePurchaseOrderModal';
-import { ViewPurchaseOrderModal } from '../components/ViewPurchaseOrderModal';
-import { purchaseOrderService, type PurchaseOrderListItem, type PurchaseOrderDetail } from '../services/purchaseOrderService';
-import dayjs from 'dayjs';
-import type { Dayjs } from 'dayjs';
-import { profileService, type UserProfile } from '../../profile/services/profileService';
+import { useCallback, useEffect, useState, type ComponentProps } from 'react';
+import { Button, Input, Select, message } from 'antd';
+import { PlusOutlined, SearchOutlined, FilterOutlined, SettingOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
+import {
+  procurementPoService,
+  PO_STATUS,
+  type PurchaseOrderDetail,
+  type PurchaseOrderListItem,
+} from '../services/procurementPoService';
+import { PurchaseOrderFormModalNew } from '../components/PurchaseOrderFormModalNew';
+import { PurchaseOrderDetailModal } from '../components/PurchaseOrderDetailModal';
+import { supplierService, type SupplierItem } from '../../admin/services/supplierService';
 import './PurchaseOrdersPage.css';
 
-const { Option } = Select;
-
-/** Backend status: -1=Nháp, 0=Đã gửi (kế toán), 1=Chờ duyệt (giám đốc), 2=Duyệt, 3=Từ chối, 4=Chờ ngân sách, 5=Đã ghi tăng */
-const STATUS_MAP: Record<number, { label: string; color: string }> = {
-  [-1]: { label: 'Nháp', color: 'default' },
-  0: { label: 'Đã gửi', color: 'processing' },
-  1: { label: 'Chờ duyệt', color: 'warning' },
-  2: { label: 'Duyệt', color: 'success' },
-  3: { label: 'Từ chối', color: 'error' },
-  4: { label: 'Chờ ngân sách', color: 'warning' },
-  5: { label: 'Đã ghi tăng', color: 'success' },
-};
-
-interface TableRow extends PurchaseOrderListItem {
-  key: string;
-  stt: number;
-  code: string;
-  requestDate: string;
-  equipment: string;
-  quantity: number;
-  estimatedPrice: string;
-}
-
-function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString('vi-VN');
-  } catch {
-    return iso;
-  }
-}
-
-function parseCurrencyToNumber(value: unknown): number {
-  const raw = String(value ?? '').trim();
-  if (!raw) return 0;
-  const cleaned = raw.replace(/[^\d,.-]/g, '');
-  if (!cleaned) return 0;
-  const normalized = cleaned.includes(',') && !cleaned.includes('.')
-    ? cleaned.replace(/,/g, '.')
-    : cleaned.replace(/,/g, '');
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function toTableRow(item: PurchaseOrderListItem, index: number): TableRow {
-  let quantity = 1;
-  let estimatedPrice = '—';
-  try {
-    if (item.proposedData) {
-      const parsed = JSON.parse(item.proposedData) as {
-        equipment?: { quantity?: number | string; estimatedPrice?: string }[];
-        totalPrice?: string;
-      };
-      if (Array.isArray(parsed.equipment) && parsed.equipment.length > 0) {
-        quantity = parsed.equipment.reduce((sum, line) => {
-          const q = Number(line?.quantity);
-          return sum + (Number.isFinite(q) && q > 0 ? q : 1);
-        }, 0);
-        if (parsed.totalPrice && String(parsed.totalPrice).trim()) {
-          estimatedPrice = String(parsed.totalPrice);
-        } else {
-          const total = parsed.equipment.reduce((sum, line) => {
-            const q = Number(line?.quantity);
-            const unitPrice = parseCurrencyToNumber(line?.estimatedPrice);
-            return sum + (Number.isFinite(q) && q > 0 ? q : 1) * unitPrice;
-          }, 0);
-          estimatedPrice = total > 0 ? `${total.toLocaleString('vi-VN')}đ` : '—';
-        }
-      }
-    }
-  } catch {
-    // keep defaults
-  }
-  return {
-    ...item,
-    key: String(item.assetRequestId),
-    stt: index + 1,
-    code: `YC-${item.assetRequestId}`,
-    requestDate: formatDate(item.createDate),
-    equipment: item.title,
-    quantity,
-    estimatedPrice,
-  };
+function statusTag(status: number) {
+  if (status === PO_STATUS.draft) return { label: 'Nháp', color: 'gray' as const };
+  if (status === PO_STATUS.cancelled) return { label: 'Đã hủy', color: 'red' as const };
+  if (status === PO_STATUS.partiallyReceived) return { label: 'Nhận một phần', color: 'orange' as const };
+  if (status === PO_STATUS.completed) return { label: 'Đã nhận đủ', color: 'green' as const };
+  return { label: 'Đã tạo', color: 'blue' as const };
 }
 
 export function PurchaseOrdersPage() {
-  const [data, setData] = useState<TableRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [selectedDetail, setSelectedDetail] = useState<PurchaseOrderDetail | null>(null);
-  const [editingDetail, setEditingDetail] = useState<PurchaseOrderDetail | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [statusFilter, setStatusFilter] = useState<number | 'all'>('all');
-  const [searchText, setSearchText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState<PurchaseOrderListItem[]>([]);
+  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(20);
+  const [filterId, setFilterId] = useState<string>('');
+  const [filterSupplierId, setFilterSupplierId] = useState<number | 'all'>('all');
+  const [filterStatus, setFilterStatus] = useState<number | 'all'>('all');
+  const [suppliers, setSuppliers] = useState<SupplierItem[]>([]);
 
-  const loadList = async () => {
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selected, setSelected] = useState<PurchaseOrderDetail | null>(null);
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
+
+  const loadList = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await purchaseOrderService.getList();
-      setData(list.map((item, i) => toTableRow(item, i)));
-    } catch (e) {
-      message.error('Không tải được danh sách đơn mua.');
-      setData([]);
+      const parsedId = filterId.trim() ? parseInt(filterId.trim(), 10) : undefined;
+      const res = await procurementPoService.getList({
+        procurementId: parsedId && !isNaN(parsedId) ? parsedId : undefined,
+        supplierId: filterSupplierId === 'all' ? undefined : filterSupplierId,
+        status: filterStatus === 'all' ? undefined : filterStatus,
+        page,
+        pageSize,
+      });
+      setItems(res.items);
+      setTotal(res.total);
+    } catch {
+      message.error('Không tải được danh sách đơn mua (cần quyền kế toán).');
+      setItems([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterId, filterSupplierId, filterStatus, page, pageSize]);
 
   useEffect(() => {
     loadList();
-    // preload profile for possible approve actions
-    (async () => {
-      try {
-        const p = await profileService.getProfile();
-        setProfile(p);
-      } catch {
-        // ignore, will be handled on demand
-      }
-    })();
-  }, []);
-
-  const handleOpenCreateModal = async () => {
-    try {
-      const p = await profileService.getProfile();
-      setProfile(p);
-      setEditingDetail(null);
-      setIsCreateModalOpen(true);
-    } catch {
-      message.error('Không lấy được thông tin người dùng.');
-    }
-  };
-  const handleCloseCreateModal = () => {
-    setIsCreateModalOpen(false);
-    setProfile(null);
-    setEditingDetail(null);
-  };
-
-  const handleViewDetail = async (record: TableRow) => {
-    try {
-      const detail = await purchaseOrderService.getById(record.assetRequestId);
-      setSelectedDetail(detail);
-      setIsViewModalOpen(true);
-    } catch {
-      message.error('Không tải được chi tiết đơn.');
-    }
-  };
-
-  const handleCloseViewModal = () => {
-    setIsViewModalOpen(false);
-    setSelectedDetail(null);
-  };
-
-  const handleSubmitPurchaseOrder = async (payload: {
-    title: string;
-    description?: string;
-    proposedData?: string;
-    status?: number;
-  }) => {
-    if (!profile) {
-      message.error('Vui lòng đăng nhập lại.');
-      return;
-    }
-    try {
-      if (editingDetail) {
-        await purchaseOrderService.update(editingDetail.assetRequestId, {
-          userId: profile.id,
-          title: payload.title,
-          description: payload.description ?? null,
-          proposedData: payload.proposedData ?? null,
-          createdBy: profile.id,
-          status: payload.status ?? -1,
-        });
-      } else {
-        await purchaseOrderService.create({
-          userId: profile.id,
-          title: payload.title,
-          description: payload.description ?? null,
-          proposedData: payload.proposedData ?? null,
-          createdBy: profile.id,
-          status: payload.status ?? 0,
-        });
-      }
-      if ((payload.status ?? 0) === -1) {
-        message.success(editingDetail ? 'Cập nhật nháp thành công.' : 'Lưu nháp yêu cầu mua sắm thành công.');
-      } else {
-        message.success(editingDetail ? 'Đã gửi yêu cầu mua sắm.' : 'Gửi yêu cầu mua sắm thành công.');
-      }
-      handleCloseCreateModal();
-      loadList();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: string } };
-      message.error(err?.response?.data ?? 'Tạo yêu cầu thất bại.');
-    }
-  };
-
-  const parseToFormValues = (detail: PurchaseOrderDetail) => {
-    const values: any = {
-      title: detail.title ?? '',
-      equipment: [{ name: '', quantity: 1, modelCode: '', unit: 'Cái', estimatedPrice: '' }],
-    };
-    try {
-      const desc = (detail.description ?? '').split('\n').map((s) => s.trim()).filter(Boolean);
-      for (const line of desc) {
-        if (line.startsWith('Lý do:')) values.reason = line.replace('Lý do:', '').trim();
-        if (line.startsWith('Thời gian cần:')) {
-          const raw = line.replace('Thời gian cần:', '').trim();
-          const parsed = dayjs(raw, 'DD/MM/YYYY', true);
-          values.needDate = parsed.isValid() ? (parsed as Dayjs) : undefined;
-        }
-        if (line.startsWith('Nhà cung cấp đề xuất:')) values.supplier = line.replace('Nhà cung cấp đề xuất:', '').trim();
-        if (line.startsWith('Loại tài sản:')) values.assetType = line.replace('Loại tài sản:', '').trim();
-        if (line.startsWith('Mục đích:')) values.purpose = line.replace('Mục đích:', '').trim();
-      }
-    } catch {
-      // ignore
-    }
-    try {
-      if (detail.proposedData) {
-        const parsed = JSON.parse(detail.proposedData) as { equipment?: any[]; assetTypeId?: number | null };
-        if (parsed.assetTypeId != null) {
-          values.assetType = String(parsed.assetTypeId);
-        }
-        if (Array.isArray(parsed.equipment) && parsed.equipment.length > 0) {
-          values.equipment = parsed.equipment.map((e) => ({
-            name: e.name ?? '',
-            quantity: e.quantity ?? 1,
-            modelCode: e.modelCode ?? e.machineCode ?? '',
-            unit: e.unit ?? 'Cái',
-            estimatedPrice: e.estimatedPrice ?? '',
-          }));
-        }
-      }
-    } catch {
-      // ignore
-    }
-    return values;
-  };
-
-  const handleEditDraft = async (record: TableRow) => {
-    try {
-      const detail = await purchaseOrderService.getById(record.assetRequestId);
-      if (detail.status !== -1) {
-        message.warning('Chỉ được sửa khi yêu cầu đang ở trạng thái Nháp.');
-        return;
-      }
-      const p = await profileService.getProfile();
-      setProfile(p);
-      setEditingDetail(detail);
-      setIsCreateModalOpen(true);
-    } catch {
-      message.error('Không tải được dữ liệu nháp để sửa.');
-    }
-  };
-
-  const filteredData = data.filter((row) => {
-    const matchStatus = statusFilter === 'all' || row.status === statusFilter;
-    const matchSearch =
-      !searchText ||
-      row.title.toLowerCase().includes(searchText.toLowerCase()) ||
-      row.code.toLowerCase().includes(searchText.toLowerCase());
-    return matchStatus && matchSearch;
-  });
+  }, [loadList]);
 
   useEffect(() => {
-    setPage(1);
-  }, [statusFilter, searchText]);
+    let c = false;
+    (async () => {
+      try {
+        const s = await supplierService.getAll();
+        if (!c) setSuppliers(s);
+      } catch {
+        if (!c) setSuppliers([]);
+      }
+    })();
+    return () => {
+      c = true;
+    };
+  }, []);
 
-  const total = filteredData.length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const startIndex = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
-  const endIndex = Math.min(safePage * pageSize, total);
-  const pagedData = filteredData.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const openDetail = async (id: number) => {
+    try {
+      const d = await procurementPoService.getById(id);
+      setSelected(d);
+      setDetailOpen(true);
+    } catch {
+      message.error('Không tải được chi tiết.');
+    }
+  };
+
+  const handleCreateSubmit = async (
+    payload: Parameters<ComponentProps<typeof PurchaseOrderFormModalNew>['onSubmit']>[0],
+  ) => {
+    await procurementPoService.create({
+      supplierId: payload.supplierId,
+      currency: payload.currency,
+      assetRequestId: payload.assetRequestId,
+      lines: payload.lines,
+      isDraft: payload.isDraft,
+    });
+    setFormOpen(false);
+    await loadList();
+  };
+
+  const handleEditSubmit = async (
+    payload: Parameters<ComponentProps<typeof PurchaseOrderFormModalNew>['onSubmit']>[0],
+  ) => {
+    if (!selected) return;
+    await procurementPoService.update(selected.procurementId, {
+      supplierId: payload.supplierId,
+      currency: payload.currency,
+      assetRequestId: payload.assetRequestId,
+      lines: payload.lines,
+      isDraft: payload.isDraft,
+    });
+    setFormOpen(false);
+    setDetailOpen(false);
+    setSelected(null);
+    await loadList();
+  };
 
   return (
     <div className="purchase-orders-page">
       <div className="purchase-orders-header">
         <h1 className="purchase-orders-title">Đơn mua</h1>
-        <Button type="primary" className="purchase-orders-btn-add" onClick={handleOpenCreateModal}>
-          + Tạo yêu cầu mua sắm
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => {
+          setFormMode('create');
+          setFormOpen(true);
+        }}>
+          Tạo đơn mua
         </Button>
       </div>
 
       <div className="purchase-orders-card">
         <div className="purchase-orders-filters">
           <Input
-            placeholder="Tìm kiếm"
+            placeholder="Tìm kiếm mã đơn"
             prefix={<SearchOutlined />}
+            value={filterId}
+            onChange={(e) => {
+              setFilterId(e.target.value);
+              setPage(1);
+            }}
+            onPressEnter={() => loadList()}
             className="purchase-orders-search"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            allowClear
+          />
+          <Select
+            placeholder="Nhà cung cấp"
+            allowClear
+            className="purchase-orders-select"
+            value={filterSupplierId === 'all' ? undefined : filterSupplierId}
+            onChange={(v) => {
+              setFilterSupplierId(v ?? 'all');
+              setPage(1);
+            }}
+            options={[
+              ...suppliers.map((s) => ({
+                value: s.supplierId,
+                label: `${s.code} — ${s.name}`,
+              })),
+            ]}
           />
           <Select
             placeholder="Trạng thái"
             className="purchase-orders-select"
-            suffixIcon={<FilterOutlined />}
-            value={statusFilter}
-            onChange={(v) => setStatusFilter(v)}
-          >
-            <Option value="all">Tất cả</Option>
-            {Object.entries(STATUS_MAP).map(([k, v]) => (
-              <Option key={k} value={Number(k)}>{v.label}</Option>
-            ))}
-          </Select>
+            value={filterStatus === 'all' ? undefined : filterStatus}
+            onChange={(v) => {
+              setFilterStatus(v ?? 'all');
+              setPage(1);
+            }}
+            options={[
+              { value: PO_STATUS.draft, label: 'Nháp' },
+              { value: PO_STATUS.created, label: 'Đã tạo' },
+              { value: PO_STATUS.partiallyReceived, label: 'Nhận một phần' },
+              { value: PO_STATUS.completed, label: 'Đã nhận đủ' },
+              { value: PO_STATUS.cancelled, label: 'Đã hủy' },
+            ]}
+          />
           <Button icon={<FilterOutlined />} className="purchase-orders-filter-advanced">
             Gỡ bộ lọc
           </Button>
@@ -329,77 +189,81 @@ export function PurchaseOrdersPage() {
             <table className="asset-table purchase-orders-table">
               <thead>
                 <tr>
-                  <th className="asset-table__cell asset-table__cell--checkbox">
-                    <input type="checkbox" />
-                  </th>
-                  <th>STT</th>
-                  <th>MÃ YÊU CẦU</th>
-                  <th>NGÀY ĐỀ XUẤT</th>
-                  <th>MỤC ĐÍCH MUA</th>
-                  <th>SỐ LƯỢNG</th>
-                  <th>TỔNG GIÁ TRỊ DỰ KIẾN</th>
+                  <th>MÃ ĐƠN</th>
+                  <th>SỐ CHỨNG TỪ</th>
+                  <th>TIÊU ĐỀ</th>
+                  <th>NHÀ CUNG CẤP</th>
+                  <th className="asset-align-right">TỔNG TIỀN</th>
                   <th>TRẠNG THÁI</th>
+                  <th>NGÀY TẠO</th>
                   <th className="asset-table__cell asset-table__cell--actions" />
                 </tr>
               </thead>
               <tbody>
-                {pagedData.map((row) => {
-                  const config = STATUS_MAP[row.status] ?? STATUS_MAP[0];
+                {items.map((item) => {
+                  const tag = statusTag(item.status);
                   return (
-                    <tr key={row.key} className="asset-row">
-                      <td className="asset-table__cell asset-table__cell--checkbox">
-                        <input type="checkbox" />
-                      </td>
-                      <td className="asset-align-right">{row.stt}</td>
+                    <tr key={item.procurementId} className="asset-row">
                       <td>
                         <button
                           type="button"
                           className="asset-code asset-code--link"
-                          onClick={() => handleViewDetail(row)}
+                          onClick={() => openDetail(item.procurementId)}
                         >
-                          {row.code}
+                          {item.procurementId}
                         </button>
                       </td>
-                      <td>{row.requestDate}</td>
-                      <td>{row.equipment}</td>
-                      <td className="asset-align-right">{row.quantity}</td>
-                      <td className="asset-align-right">{row.estimatedPrice}</td>
+                      <td>{item.contractNo}</td>
+                      <td>{item.title}</td>
+                      <td>{item.supplierName ?? `ID ${item.supplierId}`}</td>
+                      <td className="asset-align-right">
+                        {Number(item.totalAmount).toLocaleString('vi-VN')} {item.currency}
+                      </td>
                       <td>
                         <span
                           className={
-                            config.color === 'success'
-                              ? 'asset-status-pill asset-status-pill--active'
-                              : config.color === 'default'
+                            tag.color === 'gray'
                               ? 'asset-status-pill asset-status-pill--inactive'
-                              : config.color === 'processing'
-                              ? 'asset-status-pill asset-status-pill--processing'
-                              : config.color === 'warning'
-                              ? 'asset-status-pill asset-status-pill--warning'
-                              : config.color === 'error'
-                              ? 'asset-status-pill asset-status-pill--danger'
-                              : 'asset-status-pill'
+                              : tag.color === 'green'
+                                ? 'asset-status-pill asset-status-pill--active'
+                                : tag.color === 'red'
+                                  ? 'asset-status-pill asset-status-pill--danger'
+                                  : tag.color === 'orange'
+                                    ? 'asset-status-pill asset-status-pill--warning'
+                                    : 'asset-status-pill asset-status-pill--processing'
                           }
                         >
-                          {config.label}
+                          {tag.label}
                         </span>
                       </td>
+                      <td>{new Date(item.createDate).toLocaleDateString('vi-VN')}</td>
                       <td className="asset-table__cell asset-table__cell--actions">
                         <div className="purchase-orders-actions">
                           <Button
                             type="text"
                             icon={<EyeOutlined />}
                             size="small"
-                            onClick={() => handleViewDetail(row)}
+                            onClick={() => openDetail(item.procurementId)}
+                            title="Xem chi tiết"
                           />
-                          {row.status === -1 && (
+                          {(item.status === PO_STATUS.created || item.status === PO_STATUS.draft) && (
                             <Button
                               type="text"
                               icon={<EditOutlined />}
                               size="small"
-                              onClick={() => handleEditDraft(row)}
+                              onClick={async () => {
+                                try {
+                                  const detail = await procurementPoService.getById(item.procurementId);
+                                  setSelected(detail);
+                                  setFormMode('edit');
+                                  setFormOpen(true);
+                                } catch {
+                                  message.error('Không tải được chi tiết đơn mua.');
+                                }
+                              }}
+                              title="Chỉnh sửa"
                             />
                           )}
-                          <Button type="text" icon={<DeleteOutlined />} size="small" danger />
                         </div>
                       </td>
                     </tr>
@@ -417,24 +281,23 @@ export function PurchaseOrdersPage() {
               className="purchase-orders-footer__select"
               value={pageSize}
               onChange={(e) => {
-                const next = Number(e.target.value);
-                setPageSize(next);
+                setPageSize(Number(e.target.value));
                 setPage(1);
               }}
             >
               <option value={10}>10</option>
-              <option value={25}>25</option>
+              <option value={20}>20</option>
               <option value={50}>50</option>
               <option value={100}>100</option>
             </select>
           </div>
           <div className="purchase-orders-footer__center">
-            {total === 0 ? '0-0 trên 0' : `${startIndex}-${endIndex} trên ${total}`}
+            {total === 0 ? '0-0 trên 0' : `${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, total)} trên ${total}`}
           </div>
           <div className="purchase-orders-footer__right">
             <button
               className="purchase-orders-footer__pager"
-              disabled={safePage <= 1}
+              disabled={page <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               type="button"
             >
@@ -444,12 +307,12 @@ export function PurchaseOrdersPage() {
               className="purchase-orders-footer__pager purchase-orders-footer__pager--active"
               type="button"
             >
-              {safePage}
+              {page}
             </button>
             <button
               className="purchase-orders-footer__pager"
-              disabled={safePage >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= Math.ceil(total / pageSize)}
+              onClick={() => setPage((p) => p + 1)}
               type="button"
             >
               ⟩
@@ -458,39 +321,35 @@ export function PurchaseOrdersPage() {
         </div>
       </div>
 
-      <CreatePurchaseOrderModal
-        open={isCreateModalOpen}
-        onClose={handleCloseCreateModal}
-        onSubmit={handleSubmitPurchaseOrder}
-        creatorName={profile?.name ?? profile?.email ?? null}
-        initialValues={editingDetail ? parseToFormValues(editingDetail) : undefined}
-        mode={editingDetail ? 'edit' : 'create'}
+      <PurchaseOrderDetailModal
+        open={detailOpen}
+        data={selected}
+        onClose={() => {
+          setDetailOpen(false);
+          setSelected(null);
+        }}
+        onEdit={() => {
+          if (!selected || selected.status !== PO_STATUS.created) return;
+          setFormMode('edit');
+          setFormOpen(true);
+        }}
+        onCancelOrder={async () => {
+          if (!selected) return;
+          await procurementPoService.cancel(selected.procurementId);
+          await loadList();
+          const d = await procurementPoService.getById(selected.procurementId);
+          setSelected(d);
+        }}
       />
 
-      <ViewPurchaseOrderModal
-        open={isViewModalOpen}
-        onClose={handleCloseViewModal}
-        data={selectedDetail}
-        currentUserId={profile?.id ?? null}
-        currentUserRole={profile?.role ?? null}
-        onActionCompleted={async (assetRequestId, nextStatus) => {
-          if (typeof nextStatus === 'number') {
-            setData((prev) =>
-              prev.map((row) =>
-                row.assetRequestId === assetRequestId ? { ...row, status: nextStatus } : row,
-              ),
-            );
-            setSelectedDetail((prev) =>
-              prev && prev.assetRequestId === assetRequestId ? { ...prev, status: nextStatus } : prev,
-            );
-          }
-          try {
-            const detail = await purchaseOrderService.getById(assetRequestId);
-            setSelectedDetail(detail);
-          } catch {
-            // ignore detail refresh error
-          }
-          await loadList();
+      <PurchaseOrderFormModalNew
+        open={formOpen}
+        mode={formMode}
+        initial={formMode === 'edit' ? selected : null}
+        onClose={() => setFormOpen(false)}
+        onSubmit={async (payload) => {
+          if (formMode === 'edit') await handleEditSubmit(payload);
+          else await handleCreateSubmit(payload);
         }}
       />
     </div>

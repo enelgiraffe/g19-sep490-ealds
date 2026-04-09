@@ -8,8 +8,8 @@ namespace g19_sep490_ealds.Server.Models.DTOs;
 /// </summary>
 public class CreateAssetDTO
 {
-    /// <summary>Catalog code when <see cref="AssetCodePrefix"/> is not used; ignored when prefix is set (server generates <c>Code</c>).</summary>
-    public string Code { get; set; } = null!;
+    /// <summary>Catalog code when <see cref="AssetCodePrefix"/> is not used; ignored when prefix is set (server generates <c>Code</c>). Omitted when only <see cref="AssetCodePrefix"/> is sent.</summary>
+    public string? Code { get; set; }
 
     /// <summary>Optional prefix for generated catalog <c>Code</c>: next sequential number is appended (global max suffix for this prefix among <see cref="Asset"/> rows + 1).</summary>
     public string? AssetCodePrefix { get; set; }

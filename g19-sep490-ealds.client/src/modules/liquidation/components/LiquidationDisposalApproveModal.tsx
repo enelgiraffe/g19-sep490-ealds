@@ -9,6 +9,8 @@ export interface LiquidationDisposalApproveModalProps {
   onDecisionChange: (v: 'approved' | 'rejected') => void;
   comment: string;
   onCommentChange: (v: string) => void;
+  disposalMethod: string;
+  onDisposalMethodChange: (v: string) => void;
   submitting: boolean;
   onConfirm: () => void | Promise<void>;
 }
@@ -21,6 +23,8 @@ export function LiquidationDisposalApproveModal({
   onDecisionChange,
   comment,
   onCommentChange,
+  disposalMethod,
+  onDisposalMethodChange,
   submitting,
   onConfirm,
 }: LiquidationDisposalApproveModalProps) {
@@ -54,6 +58,22 @@ export function LiquidationDisposalApproveModal({
                   <option value="rejected">Từ chối</option>
                 </select>
               </div>
+              {decision === 'approved' && (
+                <div className="mark-damaged-form__item">
+                  <label htmlFor="liq-appr-disposal-method">
+                    Phương án thanh lý<span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <textarea
+                    id="liq-appr-disposal-method"
+                    className="mark-damaged-textarea"
+                    rows={3}
+                    placeholder="Nhập phương án thanh lý (bán, tiêu hủy, tặng, ...)"
+                    value={disposalMethod}
+                    onChange={(e) => onDisposalMethodChange(e.target.value)}
+                    disabled={submitting}
+                  />
+                </div>
+              )}
               <div className="mark-damaged-form__item">
                 <label htmlFor="liq-appr-comment">Ghi chú</label>
                 <textarea

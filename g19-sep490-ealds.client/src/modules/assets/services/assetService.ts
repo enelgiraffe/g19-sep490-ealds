@@ -445,6 +445,15 @@ export const assetService = {
     });
     return response.data;
   },
+
+  async createAssetType(payload: { name: string; description?: string | null; categoryId?: number }): Promise<AssetTypeItem> {
+    const categoryId = payload.categoryId ?? 1;
+    const response = await assetApi.post<AssetTypeItem>('/api/AssetTypes', {
+      categoryId,
+      name: payload.name,
+    });
+    return response.data;
+  },
 };
 
 export const assetInstanceService = {

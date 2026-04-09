@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using g19_sep490_ealds.Server.DTOs.Auth;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services;
+using g19_sep490_ealds.Server.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -30,6 +31,9 @@ public class AuthController : ControllerBase
         _logger = logger;
     }
 
+    private int AccountantRoleId =>
+        _configuration.GetValue("App:AccountantRoleId", 3);
+
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
     {
@@ -45,10 +49,16 @@ public class AuthController : ControllerBase
         if (user.Status == 0)
             return Unauthorized(new { message = "Tài khoản đã bị vô hiệu hóa." });
 
-        var roles = await _context.UserRoles
+        var roleRows = await _context.UserRoles
             .Where(ur => ur.UserId == user.UserId)
-            .Select(ur => ur.Role.Code)
+            .Select(ur => new { ur.RoleId, Code = ur.Role != null ? ur.Role.Code : null })
             .ToListAsync();
+        var acctIdLogin = AccountantRoleId;
+        var roles = roleRows
+            .Select(r => RoleCanonicalization.CanonicalizeRoleCode(r.RoleId, r.Code, acctIdLogin))
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         var employee = await _context.Employees
             .FirstOrDefaultAsync(e => e.UserId == user.UserId);
@@ -205,10 +215,16 @@ public class AuthController : ControllerBase
         if (user == null || user.RefreshTokenExpiryTime == null || user.RefreshTokenExpiryTime < DateTime.UtcNow)
             return Unauthorized(new { message = "Refresh token không hợp lệ hoặc đã hết hạn." });
 
-        var roles = await _context.UserRoles
+        var roleRows = await _context.UserRoles
             .Where(ur => ur.UserId == user.UserId)
-            .Select(ur => ur.Role.Code)
+            .Select(ur => new { ur.RoleId, Code = ur.Role != null ? ur.Role.Code : null })
             .ToListAsync();
+        var acctId = AccountantRoleId;
+        var roles = roleRows
+            .Select(r => RoleCanonicalization.CanonicalizeRoleCode(r.RoleId, r.Code, acctId))
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         var employee = await _context.Employees
             .FirstOrDefaultAsync(e => e.UserId == user.UserId);

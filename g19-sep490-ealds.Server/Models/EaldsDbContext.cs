@@ -53,14 +53,6 @@ public partial class EaldsDbContext : DbContext
 
     public virtual DbSet<DisposalRecord> DisposalRecords { get; set; }
 
-    public virtual DbSet<DisposalAppraisal> DisposalAppraisals { get; set; }
-
-    public virtual DbSet<DisposalAppraisalMember> DisposalAppraisalMembers { get; set; }
-
-    public virtual DbSet<DisposalAppraisalReport> DisposalAppraisalReports { get; set; }
-
-    public virtual DbSet<DisposalAppraisalMemberDecision> DisposalAppraisalMemberDecisions { get; set; }
-
     public virtual DbSet<DisposalExecution> DisposalExecutions { get; set; }
 
     public virtual DbSet<Document> Documents { get; set; }
@@ -88,6 +80,16 @@ public partial class EaldsDbContext : DbContext
     public virtual DbSet<Notification> Notifications { get; set; }
 
     public virtual DbSet<Procurement> Procurements { get; set; }
+
+    public virtual DbSet<ProcurementLine> ProcurementLines { get; set; }
+
+    public virtual DbSet<GoodsReceipt> GoodsReceipts { get; set; }
+
+    public virtual DbSet<GoodsReceiptLine> GoodsReceiptLines { get; set; }
+
+    public virtual DbSet<SupplierInvoice> SupplierInvoices { get; set; }
+
+    public virtual DbSet<SupplierInvoiceLine> SupplierInvoiceLines { get; set; }
 
     public virtual DbSet<RepairRecord> RepairRecords { get; set; }
 
@@ -249,6 +251,11 @@ public partial class EaldsDbContext : DbContext
                 .HasForeignKey(d => d.WarehouseId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__AssetInst__Wareh__619B8048");
+
+            entity.HasOne(d => d.GoodsReceiptLine).WithMany(l => l.AssetInstances)
+                .HasForeignKey(d => d.GoodsReceiptLineId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_AssetInstance_GoodsReceiptLine");
         });
 
         modelBuilder.Entity<AssetLifeCycle>(entity =>
@@ -610,109 +617,6 @@ public partial class EaldsDbContext : DbContext
                 .HasConstraintName("FK__DisposalR__Execu__3B40CD36");
         });
 
-        modelBuilder.Entity<DisposalAppraisal>(entity =>
-        {
-            entity.HasKey(e => e.AppraisalId);
-            entity.ToTable("DisposalAppraisal");
-
-            entity.Property(e => e.CreatedDate).HasColumnType("datetime");
-            entity.Property(e => e.MeetingLocation).HasMaxLength(255);
-            entity.Property(e => e.Notes).HasMaxLength(1000);
-            entity.Property(e => e.ScheduledAt).HasColumnType("datetime");
-            entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
-
-            entity.HasOne(d => d.AssetRequest).WithMany()
-                .HasForeignKey(d => d.AssetRequestId)
-                .OnDelete(DeleteBehavior.ClientSetNull);
-
-            entity.HasOne(d => d.ReporterUser).WithMany()
-                .HasForeignKey(d => d.ReporterUserId);
-
-            entity.HasOne(d => d.MeetingDepartment).WithMany()
-                .HasForeignKey(d => d.MeetingDepartmentId);
-
-            entity.HasOne(d => d.CreatedByNavigation).WithMany()
-                .HasForeignKey(d => d.CreatedBy)
-                .OnDelete(DeleteBehavior.ClientSetNull);
-
-            entity.HasOne(d => d.UpdatedByNavigation).WithMany()
-                .HasForeignKey(d => d.UpdatedBy);
-        });
-
-        modelBuilder.Entity<DisposalAppraisalMember>(entity =>
-        {
-            entity.HasKey(e => e.AppraisalMemberId);
-            entity.ToTable("DisposalAppraisalMember");
-
-            entity.Property(e => e.AddedDate).HasColumnType("datetime");
-            entity.Property(e => e.MemberRole).HasMaxLength(100);
-
-            entity.HasOne(d => d.Appraisal).WithMany(p => p.DisposalAppraisalMembers)
-                .HasForeignKey(d => d.AppraisalId)
-                .OnDelete(DeleteBehavior.ClientSetNull);
-
-            entity.HasOne(d => d.User).WithMany()
-                .HasForeignKey(d => d.UserId)
-                .OnDelete(DeleteBehavior.ClientSetNull);
-
-            entity.HasOne(d => d.AddedByNavigation).WithMany()
-                .HasForeignKey(d => d.AddedBy)
-                .OnDelete(DeleteBehavior.ClientSetNull);
-        });
-
-        modelBuilder.Entity<DisposalAppraisalReport>(entity =>
-        {
-            entity.HasKey(e => e.AppraisalReportId);
-            entity.ToTable("DisposalAppraisalReport");
-
-            entity.Property(e => e.AppraisedValue).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.MarketReferenceValue).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.MinutesNo).HasMaxLength(100);
-            entity.Property(e => e.SubmittedDate).HasColumnType("datetime");
-            entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
-            entity.Property(e => e.DirectorReviewedDate).HasColumnType("datetime");
-            entity.Property(e => e.DirectorComment).HasMaxLength(1000);
-            entity.Property(e => e.AppraisalMethod).HasMaxLength(200);
-            entity.Property(e => e.AppraisedValueInWords).HasMaxLength(1000);
-
-            entity.HasOne(d => d.Appraisal).WithMany(p => p.DisposalAppraisalReports)
-                .HasForeignKey(d => d.AppraisalId)
-                .OnDelete(DeleteBehavior.ClientSetNull);
-
-            entity.HasOne(d => d.SubmittedByNavigation).WithMany()
-                .HasForeignKey(d => d.SubmittedBy)
-                .OnDelete(DeleteBehavior.ClientSetNull);
-
-            entity.HasOne(d => d.UpdatedByNavigation).WithMany()
-                .HasForeignKey(d => d.UpdatedBy);
-
-            entity.HasOne(d => d.DirectorReviewedByNavigation).WithMany()
-                .HasForeignKey(d => d.DirectorReviewedBy);
-        });
-
-        modelBuilder.Entity<DisposalAppraisalMemberDecision>(entity =>
-        {
-            entity.HasKey(e => e.AppraisalMemberDecisionId);
-            entity.ToTable("DisposalAppraisalMemberDecision");
-
-            entity.Property(e => e.DecisionDate).HasColumnType("datetime");
-            entity.Property(e => e.CreatedDate).HasColumnType("datetime");
-            entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
-            entity.Property(e => e.RejectReason).HasMaxLength(1000);
-
-            entity.HasOne(d => d.Appraisal).WithMany(p => p.DisposalAppraisalMemberDecisions)
-                .HasForeignKey(d => d.AppraisalId)
-                .OnDelete(DeleteBehavior.ClientSetNull);
-
-            entity.HasOne(d => d.AppraisalMember).WithMany(p => p.DisposalAppraisalMemberDecisions)
-                .HasForeignKey(d => d.AppraisalMemberId)
-                .OnDelete(DeleteBehavior.ClientSetNull);
-
-            entity.HasOne(d => d.User).WithMany()
-                .HasForeignKey(d => d.UserId)
-                .OnDelete(DeleteBehavior.ClientSetNull);
-        });
-
         modelBuilder.Entity<DisposalExecution>(entity =>
         {
             entity.HasKey(e => e.DisposalExecutionId);
@@ -735,10 +639,6 @@ public partial class EaldsDbContext : DbContext
             entity.HasOne(d => d.AssetRequest).WithMany()
                 .HasForeignKey(d => d.AssetRequestId)
                 .OnDelete(DeleteBehavior.ClientSetNull);
-
-            entity.HasOne(d => d.Appraisal).WithMany()
-                .HasForeignKey(d => d.AppraisalId)
-                .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasOne(d => d.DisposalRecord).WithMany()
                 .HasForeignKey(d => d.DisposalRecordId)
@@ -1076,14 +976,16 @@ public partial class EaldsDbContext : DbContext
             entity.Property(e => e.AdvanceAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.ContractNo).HasMaxLength(100);
             entity.Property(e => e.CreateDate).HasColumnType("datetime");
+            entity.Property(e => e.Currency).HasMaxLength(10).HasDefaultValue("VND");
             entity.Property(e => e.RemainingAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.Title).HasMaxLength(255);
             entity.Property(e => e.TotalAmount).HasColumnType("decimal(18, 2)");
 
             entity.HasOne(d => d.AssetRequest).WithMany(p => p.Procurements)
                 .HasForeignKey(d => d.AssetRequestId)
+                .IsRequired(false)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Procureme__Asset__498EEC8D");
+                .HasConstraintName("FK_Procurement_AssetRequest_AssetRequestId");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.Procurements)
                 .HasForeignKey(d => d.CreatedBy)
@@ -1093,6 +995,129 @@ public partial class EaldsDbContext : DbContext
             entity.HasOne(d => d.Supplier).WithMany(p => p.Procurements)
                 .HasForeignKey(d => d.SupplierId)
                 .HasConstraintName("FK__Procureme__Suppl__4A8310C6");
+        });
+
+        modelBuilder.Entity<ProcurementLine>(entity =>
+        {
+            entity.HasKey(e => e.LineId).HasName("PK_ProcurementLine");
+
+            entity.ToTable("ProcurementLine");
+
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.Quantity).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.ReceivedQuantity).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.Unit).HasMaxLength(50);
+            entity.Property(e => e.UnitPrice).HasColumnType("decimal(18, 2)");
+
+            entity.HasOne(d => d.Procurement).WithMany(p => p.Lines)
+                .HasForeignKey(d => d.ProcurementId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_ProcurementLine_Procurement");
+
+            entity.HasOne(d => d.Asset).WithMany()
+                .HasForeignKey(d => d.AssetId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ProcurementLine_Asset");
+        });
+
+        modelBuilder.Entity<GoodsReceipt>(entity =>
+        {
+            entity.HasKey(e => e.GoodsReceiptId).HasName("PK_GoodsReceipt");
+
+            entity.ToTable("GoodsReceipt");
+
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime");
+            entity.Property(e => e.Note).HasMaxLength(500);
+
+            entity.HasOne(d => d.Procurement).WithMany(p => p.GoodsReceipts)
+                .HasForeignKey(d => d.ProcurementId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_GoodsReceipt_Procurement");
+
+            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.GoodsReceipts)
+                .HasForeignKey(d => d.CreatedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_GoodsReceipt_User_CreatedBy");
+        });
+
+        modelBuilder.Entity<GoodsReceiptLine>(entity =>
+        {
+            entity.HasKey(e => e.GoodsReceiptLineId).HasName("PK_GoodsReceiptLine");
+
+            entity.ToTable("GoodsReceiptLine");
+
+            entity.Property(e => e.QuantityReceived).HasColumnType("decimal(18, 4)");
+
+            entity.HasOne(d => d.GoodsReceipt).WithMany(r => r.Lines)
+                .HasForeignKey(d => d.GoodsReceiptId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_GoodsReceiptLine_GoodsReceipt");
+
+            entity.HasOne(d => d.ProcurementLine).WithMany(l => l.GoodsReceiptLines)
+                .HasForeignKey(d => d.ProcurementLineId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_GoodsReceiptLine_ProcurementLine");
+
+            entity.HasOne(d => d.Asset).WithMany()
+                .HasForeignKey(d => d.AssetId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_GoodsReceiptLine_Asset");
+        });
+
+        modelBuilder.Entity<SupplierInvoice>(entity =>
+        {
+            entity.HasKey(e => e.SupplierInvoiceId).HasName("PK_SupplierInvoice");
+
+            entity.ToTable("SupplierInvoice");
+
+            entity.Property(e => e.InvoiceNumber).HasMaxLength(100);
+            entity.Property(e => e.Currency).HasMaxLength(10);
+            entity.Property(e => e.TotalAmount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.Note).HasMaxLength(500);
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime");
+
+            entity.HasIndex(e => e.InvoiceNumber).HasDatabaseName("IX_SupplierInvoice_InvoiceNumber");
+
+            entity.HasOne(d => d.Procurement).WithMany(p => p.SupplierInvoices)
+                .HasForeignKey(d => d.ProcurementId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_SupplierInvoice_Procurement");
+
+            entity.HasOne(d => d.GoodsReceipt).WithMany(r => r.SupplierInvoices)
+                .HasForeignKey(d => d.GoodsReceiptId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_SupplierInvoice_GoodsReceipt");
+
+            entity.HasOne(d => d.CreatedByNavigation).WithMany(u => u.SupplierInvoicesCreated)
+                .HasForeignKey(d => d.CreatedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_SupplierInvoice_User_CreatedBy");
+        });
+
+        modelBuilder.Entity<SupplierInvoiceLine>(entity =>
+        {
+            entity.HasKey(e => e.SupplierInvoiceLineId).HasName("PK_SupplierInvoiceLine");
+
+            entity.ToTable("SupplierInvoiceLine");
+
+            entity.Property(e => e.Quantity).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.UnitPrice).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.LineTotal).HasColumnType("decimal(18, 2)");
+
+            entity.HasOne(d => d.SupplierInvoice).WithMany(h => h.Lines)
+                .HasForeignKey(d => d.SupplierInvoiceId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_SupplierInvoiceLine_SupplierInvoice");
+
+            entity.HasOne(d => d.ProcurementLine).WithMany(l => l.SupplierInvoiceLines)
+                .HasForeignKey(d => d.ProcurementLineId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_SupplierInvoiceLine_ProcurementLine");
+
+            entity.HasOne(d => d.GoodsReceiptLine).WithMany(l => l.SupplierInvoiceLines)
+                .HasForeignKey(d => d.GoodsReceiptLineId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_SupplierInvoiceLine_GoodsReceiptLine");
         });
 
         modelBuilder.Entity<RepairRecord>(entity =>

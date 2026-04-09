@@ -242,33 +242,11 @@ public class AssetRequestsController : ControllerBase
         var ar = await _db.AssetRequests.FirstOrDefaultAsync(x => x.AssetRequestId == id && x.RequestTypeId == _purchaseRequestTypeId);
         if (ar == null) return NotFound();
 
-        var actorRoleCode = await _db.UserRoles
-            .AsNoTracking()
-            .Where(ur => ur.UserId == dto.CreatedBy)
-            .Select(ur => ur.Role.Code)
-            .FirstOrDefaultAsync();
-
-        var isAccountantActor = string.Equals(actorRoleCode, "ACCOUNTANT", StringComparison.OrdinalIgnoreCase);
-
-        // Editable cases:
-        // - Draft (-1): creator can edit and keep Draft or submit (0)
-        // - Director-approved (2): accountant can edit info/attachments and must keep status=2
-        if (ar.Status == -1)
-        {
-            if (desiredStatus != -1 && desiredStatus != 0)
-                return BadRequest("Invalid status. Allowed: -1 (Draft), 0 (Sent).");
-        }
-        else if (ar.Status == 2)
-        {
-            if (!isAccountantActor)
-                return BadRequest("Only accountant can edit requests after director approval.");
-            if (desiredStatus != 2)
-                return BadRequest("Invalid status. Allowed: 2.");
-        }
-        else
-        {
-            return BadRequest("Only draft requests (status=-1) or director-approved requests (status=2) can be edited.");
-        }
+        // Only draft (-1) can be edited; after submission/approval the request is immutable via this endpoint.
+        if (ar.Status != -1)
+            return BadRequest("Only draft purchase requests (status=-1) can be edited.");
+        if (desiredStatus != -1 && desiredStatus != 0)
+            return BadRequest("Invalid status. Allowed: -1 (Draft), 0 (Sent).");
 
         var fromStatus = ar.Status;
 
@@ -293,8 +271,7 @@ public class AssetRequestsController : ControllerBase
             ActionRoleId = actionRoleId,
             Comment =
                 (fromStatus == -1 && desiredStatus == 0) ? "Submitted request"
-                : (fromStatus == -1) ? "Updated draft request"
-                : "Updated after accountant approval",
+                : "Updated draft request",
             OccurredAt = DateTime.UtcNow
         };
         _db.AssetRequestRecords.Add(record);
@@ -448,5 +425,35 @@ public class AssetRequestsController : ControllerBase
             .ToListAsync();
 
         return Ok(new { items, total, page, pageSize, totalPages = (int)Math.Ceiling(total / (double)pageSize) });
+    }
+
+    /// <summary>
+    /// POST /api/Assets/Requests/purchase/{id}/revert-to-draft
+    /// Reverts a submitted purchase request (status=0) back to draft (status=-1).
+    /// Only the creator can revert their own request.
+    /// </summary>
+    [HttpPost("{id:int}/revert-to-draft")]
+    public async Task<IActionResult> RevertToDraft(int id, [FromBody] RevertToDraftDTO dto)
+    {
+        if (dto == null || dto.UserId <= 0)
+            return BadRequest(new { message = "UserId is required." });
+
+        var request = await _db.AssetRequests
+            .Where(r => r.AssetRequestId == id && r.RequestTypeId == _purchaseRequestTypeId)
+            .FirstOrDefaultAsync();
+
+        if (request == null)
+            return NotFound(new { message = $"Purchase request with id {id} not found." });
+
+        if (request.Status != 0)
+            return BadRequest(new { message = "Only submitted requests (status=0) can be reverted to draft." });
+
+        if (request.CreatedBy != dto.UserId)
+            return Forbid();
+
+        request.Status = -1;
+        await _db.SaveChangesAsync();
+
+        return Ok(new { assetRequestId = request.AssetRequestId, status = request.Status });
     }
 }

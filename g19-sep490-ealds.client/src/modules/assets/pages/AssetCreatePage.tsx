@@ -8,6 +8,7 @@ import {
 } from '../services/assetService';
 import { transferRequestService, type AssetLocationOption } from '../services/transferRequestService';
 import { useAppStore } from '../../../stores/appStore';
+import { profileService } from '../../profile/services/profileService';
 import './AssetCreatePage.css';
 
 interface GeneralInfoForm {
@@ -57,6 +58,10 @@ export function AssetCreatePage() {
   const currentRole = useAppStore((s) => s.currentRole);
 
   const backToListPath = currentRole === 'accountant' ? '/accountant-assets' : '/assets';
+
+  /** Chỉ tạo bản ghi tài sản (Asset), chưa tạo cá thể / nhập kho — phù hợp luồng đơn mua. */
+  const [onlyMasterAsset, setOnlyMasterAsset] = useState(currentRole === 'accountant');
+  const [actorUserId, setActorUserId] = useState(0);
 
   const [general, setGeneral] = useState<GeneralInfoForm>({
     assetCodePrefix: '',
@@ -120,6 +125,21 @@ export function AssetCreatePage() {
     let cancelled = false;
     (async () => {
       try {
+        const p = await profileService.getProfile();
+        if (!cancelled) setActorUserId(p.id);
+      } catch {
+        if (!cancelled) setActorUserId(0);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
         const [deptList, types, wh, sup, instPrefixes, catPrefixes] = await Promise.all([
           transferRequestService.getAssetLocations(),
           assetService.getAssetTypes(),
@@ -144,7 +164,7 @@ export function AssetCreatePage() {
       } catch {
         if (!cancelled) {
           setLoadMetaError(
-            'Không tải được danh mục (phòng ban, loại tài sản, kho, nhà cung cấp).'
+            'Không tải được dữ liệu tham chiếu (phòng ban, loại tài sản, kho, nhà cung cấp).'
           );
         }
       }
@@ -195,6 +215,38 @@ export function AssetCreatePage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (onlyMasterAsset) {
+      if (!general.name?.trim() || !general.assetTypeId || !general.assetCodePrefix.trim()) {
+        alert('Vui lòng nhập mã tài sản, loại và tên tài sản.');
+        return;
+      }
+      setSubmitError(null);
+      setIsSubmitting(true);
+      try {
+        await assetService.create({
+          assetCodePrefix: general.assetCodePrefix.trim(),
+          name: general.name.trim(),
+          assetTypeId: Number(general.assetTypeId),
+          unit: general.unit || 'Cái',
+          quantity: null,
+          createdBy: actorUserId > 0 ? actorUserId : 0,
+          specification: general.specification?.trim() || null,
+          note: general.note?.trim() || null,
+          inUseDate: null,
+        });
+        navigate(backToListPath);
+      } catch (err: unknown) {
+        const msg =
+          err && typeof err === 'object' && 'response' in err
+            ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+            : null;
+        setSubmitError(msg || 'Tạo bản ghi tài sản (chưa kèm cá thể) thất bại.');
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
     if (!general.name || !general.assetTypeId || !general.purchaseDate) {
       alert('Vui lòng nhập đầy đủ các trường bắt buộc được đánh dấu *.');
       return;
@@ -245,7 +297,7 @@ export function AssetCreatePage() {
       unit: general.unit || 'Cái',
       quantity: qty,
       instanceCodePrefix: prefix,
-      createdBy: 0,
+      createdBy: actorUserId > 0 ? actorUserId : 0,
       inUseDate: general.purchaseDate || null,
       specification: general.specification?.trim() || null,
       note: general.note?.trim() || null,
@@ -295,6 +347,14 @@ export function AssetCreatePage() {
         <div className="asset-create__title-row">
           <h1 className="asset-create__title">Thêm tài sản</h1>
           <span className="asset-create__status">Đang sử dụng</span>
+          <label className="asset-create__checkbox-row" style={{ marginLeft: 12 }}>
+            <input
+              type="checkbox"
+              checked={onlyMasterAsset}
+              onChange={(e) => setOnlyMasterAsset(e.target.checked)}
+            />
+            <span>Chỉ tạo bản ghi tài sản — chưa tạo cá thể / nhập kho</span>
+          </label>
           <div className="asset-create__header-actions">
             <button
               type="button"
@@ -350,7 +410,7 @@ export function AssetCreatePage() {
                   ))}
                 </datalist>
                 <p className="asset-create__hint">
-                  Hệ thống gắn số thứ tự tự động cho mã danh mục (ví dụ TS → TS01).
+                  Hệ thống gắn số thứ tự tự động cho mã tài sản (ví dụ TS → TS01).
                 </p>
               </div>
 
@@ -383,41 +443,33 @@ export function AssetCreatePage() {
                 />
               </div>
 
-              <div className="asset-create__field">
-                <label className="asset-create__label">
-                  Mã cá thể<span className="asset-create__required">*</span>
-                </label>
-                <input
-                  className="asset-create__input"
-                  list="asset-instance-prefix-options"
-                  placeholder="Ví dụ: LAP"
-                  value={general.instanceCodePrefix}
-                  onChange={(e) =>
-                    setGeneral({ ...general, instanceCodePrefix: e.target.value })
-                  }
-                />
-                <datalist id="asset-instance-prefix-options">
-                  {instancePrefixes.map((p) => (
-                    <option key={p} value={p} />
-                  ))}
-                </datalist>
-                <p className="asset-create__hint">
-                  Hệ thống gắn số thứ tự tự động (ví dụ LAP → LAP01, LAP02…).
-                </p>
-              </div>
-
-              <div className="asset-create__field asset-create__field--quantity-unit-row">
-                <div className="asset-create__quantity-unit-cell">
-                  <label className="asset-create__label">Số lượng</label>
+              {!onlyMasterAsset && (
+                <div className="asset-create__field">
+                  <label className="asset-create__label">
+                    Mã cá thể<span className="asset-create__required">*</span>
+                  </label>
                   <input
-                    type="number"
-                    min={1}
                     className="asset-create__input"
-                    value={general.quantity}
-                    onChange={(e) => setGeneral({ ...general, quantity: e.target.value })}
+                    list="asset-instance-prefix-options"
+                    placeholder="Ví dụ: LAP"
+                    value={general.instanceCodePrefix}
+                    onChange={(e) =>
+                      setGeneral({ ...general, instanceCodePrefix: e.target.value })
+                    }
                   />
+                  <datalist id="asset-instance-prefix-options">
+                    {instancePrefixes.map((p) => (
+                      <option key={p} value={p} />
+                    ))}
+                  </datalist>
+                  <p className="asset-create__hint">
+                    Hệ thống gắn số thứ tự tự động (ví dụ LAP → LAP01, LAP02…).
+                  </p>
                 </div>
-                <div className="asset-create__quantity-unit-cell">
+              )}
+
+              {onlyMasterAsset ? (
+                <div className="asset-create__field">
                   <label className="asset-create__label">Đơn vị tính</label>
                   <select
                     className="asset-create__select"
@@ -432,18 +484,48 @@ export function AssetCreatePage() {
                     ))}
                   </select>
                 </div>
-              </div>
+              ) : (
+                <div className="asset-create__field asset-create__field--quantity-unit-row">
+                  <div className="asset-create__quantity-unit-cell">
+                    <label className="asset-create__label">Số lượng (số cá thể tạo)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      className="asset-create__input"
+                      value={general.quantity}
+                      onChange={(e) => setGeneral({ ...general, quantity: e.target.value })}
+                    />
+                  </div>
+                  <div className="asset-create__quantity-unit-cell">
+                    <label className="asset-create__label">Đơn vị tính</label>
+                    <select
+                      className="asset-create__select"
+                      value={general.unit}
+                      onChange={(e) => setGeneral({ ...general, unit: e.target.value })}
+                    >
+                      <option value="">Chọn đơn vị tính</option>
+                      {ASSET_MEASUREMENT_UNITS.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
 
-              <div className="asset-create__field">
-                <label className="asset-create__label">Giá trị</label>
-                <input
-                  type="number"
-                  min={0}
-                  className="asset-create__input"
-                  value={general.value}
-                  onChange={(e) => setGeneral({ ...general, value: e.target.value })}
-                />
-              </div>
+              {!onlyMasterAsset && (
+                <div className="asset-create__field">
+                  <label className="asset-create__label">Giá trị</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="asset-create__input"
+                    value={general.value}
+                    onChange={(e) => setGeneral({ ...general, value: e.target.value })}
+                  />
+                </div>
+              )}
 
               <div className="asset-create__field">
                 <label className="asset-create__label">Nguồn gốc</label>
@@ -462,8 +544,28 @@ export function AssetCreatePage() {
                 />
                 <span>Là tài sản cố định</span>
               </label>
+
+              <div className="asset-create__field">
+                <label className="asset-create__label">Quy cách tài sản</label>
+                <input
+                  className="asset-create__input"
+                  value={general.specification}
+                  onChange={(e) => setGeneral({ ...general, specification: e.target.value })}
+                />
+              </div>
+
+              <div className="asset-create__field">
+                <label className="asset-create__label">Ghi chú</label>
+                <textarea
+                  className="asset-create__textarea"
+                  rows={2}
+                  value={general.note}
+                  onChange={(e) => setGeneral({ ...general, note: e.target.value })}
+                />
+              </div>
             </div>
 
+            {!onlyMasterAsset && (
             <div className="asset-create__column">
               <div className="asset-create__field">
                 <label className="asset-create__label">
@@ -592,30 +694,13 @@ export function AssetCreatePage() {
                   <p className="asset-create__hint">Chỉ áp dụng khi số lượng là 1.</p>
                 )}
               </div>
-
-              <div className="asset-create__field">
-                <label className="asset-create__label">Quy cách tài sản</label>
-                <input
-                  className="asset-create__input"
-                  value={general.specification}
-                  onChange={(e) => setGeneral({ ...general, specification: e.target.value })}
-                />
-              </div>
-
-              <div className="asset-create__field">
-                <label className="asset-create__label">Ghi chú</label>
-                <textarea
-                  className="asset-create__textarea"
-                  rows={2}
-                  value={general.note}
-                  onChange={(e) => setGeneral({ ...general, note: e.target.value })}
-                />
-              </div>
             </div>
+            )}
           </div>
         </section>
 
         {/* Bảo hành */}
+        {!onlyMasterAsset && (
         <section className="asset-create__section">
           <h2 className="asset-create__section-title">Bảo hành</h2>
           <div className="asset-create__grid asset-create__grid--three">
@@ -653,8 +738,10 @@ export function AssetCreatePage() {
             </div>
           </div>
         </section>
+        )}
 
         {/* Thông tin khấu hao */}
+        {!onlyMasterAsset && (
         <section className="asset-create__section">
           <h2 className="asset-create__section-title">Thông tin khấu hao</h2>
           <div className="asset-create__grid asset-create__grid--three">
@@ -743,8 +830,10 @@ export function AssetCreatePage() {
             </div>
           </div>
         </section>
+        )}
 
         {/* Đã cấp phát */}
+        {!onlyMasterAsset && (
         <section className="asset-create__section">
           <h2 className="asset-create__section-title">Đã cấp phát</h2>
           <div className="asset-create__grid asset-create__grid--two">
@@ -771,6 +860,7 @@ export function AssetCreatePage() {
             </div>
           </div>
         </section>
+        )}
 
         {/* Tài liệu */}
         <section className="asset-create__section">

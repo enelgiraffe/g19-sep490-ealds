@@ -71,6 +71,10 @@ public partial class User
 
     public virtual ICollection<Procurement> Procurements { get; set; } = new List<Procurement>();
 
+    public virtual ICollection<GoodsReceipt> GoodsReceipts { get; set; } = new List<GoodsReceipt>();
+
+    public virtual ICollection<SupplierInvoice> SupplierInvoicesCreated { get; set; } = new List<SupplierInvoice>();
+
     public virtual ICollection<Role> RoleCreatedByNavigations { get; set; } = new List<Role>();
 
     public virtual ICollection<Role> RoleUpdatedByNavigations { get; set; } = new List<Role>();

@@ -5,14 +5,8 @@ import { disposalRequestService } from '../../assets/services/disposalRequestSer
 import type { TransferRequestListItem } from '../../assets/services/transferRequestService';
 import { profileService, type UserProfile } from '../../profile/services/profileService';
 import { accountantRequestService } from '../../requests/services/accountantRequestService';
-import {
-  disposalAppraisalService,
-  type DisposalAppraisalListItem,
-} from '../../requests/services/disposalAppraisalService';
-import { DisposalAppraisalDetailModal } from '../../requests/components/DisposalAppraisalDetailModal';
 import { LiquidationDisposalApproveModal } from '../components/LiquidationDisposalApproveModal';
 import { LiquidationDisposalDetailModal } from '../components/LiquidationDisposalDetailModal';
-import { LiquidationExecutionModal } from '../components/LiquidationExecutionModal';
 import {
   filterDisposalListForDepartmentHead,
   isDepartmentHeadRoleCode,
@@ -21,16 +15,14 @@ import './LiquidationPage.css';
 
 const { Option } = Select;
 
-type MainPill = 'requests' | 'appraisals';
-
 const LIQUIDATION_STATUS_MAP: Record<number, { label: string; color: string }> = {
   [-1]: { label: 'Nháp', color: 'default' },
   0: { label: 'Đã gửi', color: 'processing' },
-  1: { label: 'Chờ phê duyệt', color: 'warning' },
-  2: { label: 'Phê duyệt', color: 'success' },
+  1: { label: 'Chờ duyệt giám đốc', color: 'warning' },
+  2: { label: 'Đã duyệt', color: 'success' },
   3: { label: 'Từ chối', color: 'error' },
-  4: { label: 'Đang thực hiện', color: 'processing' },
-  5: { label: 'Hoàn thành', color: 'success' },
+  4: { label: 'Đã thẩm định', color: 'processing' },
+  5: { label: 'Đã thanh lý', color: 'success' },
 };
 
 function formatDate(iso: string): string {
@@ -44,11 +36,8 @@ function formatDate(iso: string): string {
 export function LiquidationPage() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
-  const [mainPill, setMainPill] = useState<MainPill>('requests');
   const [disposalRows, setDisposalRows] = useState<TransferRequestListItem[]>([]);
   const [disposalLoading, setDisposalLoading] = useState(false);
-  const [appraisalRows, setAppraisalRows] = useState<DisposalAppraisalListItem[]>([]);
-  const [appraisalLoading, setAppraisalLoading] = useState(false);
 
   const [reqSearch, setReqSearch] = useState('');
   const [reqStatusFilter, setReqStatusFilter] = useState<number | 'all'>('all');
@@ -60,13 +49,8 @@ export function LiquidationPage() {
   const [selectedLiquidationItem, setSelectedLiquidationItem] = useState<TransferRequestListItem | null>(null);
   const [liquidationDecision, setLiquidationDecision] = useState<'approved' | 'rejected'>('approved');
   const [liquidationComment, setLiquidationComment] = useState('');
+  const [liquidationDisposalMethod, setLiquidationDisposalMethod] = useState('');
   const [liquidationSubmitting, setLiquidationSubmitting] = useState(false);
-  const [isLiquidationExecutionOpen, setIsLiquidationExecutionOpen] = useState(false);
-  const [liquidationExecutionRequestId, setLiquidationExecutionRequestId] = useState<number | null>(null);
-  const [liquidationExecutionCode, setLiquidationExecutionCode] = useState('');
-
-  const [isAppraisalDetailOpen, setIsAppraisalDetailOpen] = useState(false);
-  const [viewAppraisalId, setViewAppraisalId] = useState<number | null>(null);
 
   const normalizedRole = String(userProfile?.role ?? '').toUpperCase();
   const isAccountantRole = normalizedRole === 'ACCOUNTANT';
@@ -97,20 +81,6 @@ export function LiquidationPage() {
     }
   }, [userProfile]);
 
-  const reloadAppraisalList = useCallback(async () => {
-    if (!userProfile?.id) return;
-    setAppraisalLoading(true);
-    try {
-      const rows = await disposalAppraisalService.getMyAppraisals(userProfile.id);
-      setAppraisalRows(rows);
-    } catch {
-      message.error('Không tải được danh sách thẩm định thanh lý.');
-      setAppraisalRows([]);
-    } finally {
-      setAppraisalLoading(false);
-    }
-  }, [userProfile?.id]);
-
   useEffect(() => {
     (async () => {
       try {
@@ -125,11 +95,6 @@ export function LiquidationPage() {
   useEffect(() => {
     void reloadDisposalRows();
   }, [reloadDisposalRows]);
-
-  useEffect(() => {
-    if (mainPill !== 'appraisals' || !userProfile?.id) return;
-    void reloadAppraisalList();
-  }, [mainPill, userProfile?.id, reloadAppraisalList]);
 
   const filteredDisposalRows = useMemo(() => {
     const keyword = reqSearch.trim().toLowerCase();
@@ -157,27 +122,7 @@ export function LiquidationPage() {
     });
   }, [disposalRows, reqSearch, reqStatusFilter, reqSentDate]);
 
-  const filteredAppraisalRows = useMemo(() => {
-    const keyword = reqSearch.trim().toLowerCase();
-    return appraisalRows.filter((row) => {
-      let matchDate = true;
-      if (reqSentDate && row.scheduledAt) {
-        try {
-          const rowDate = new Date(row.scheduledAt).toISOString().slice(0, 10);
-          matchDate = rowDate === reqSentDate;
-        } catch {
-          matchDate = true;
-        }
-      }
-      const matchKeyword =
-        !keyword ||
-        row.requestTitle.toLowerCase().includes(keyword) ||
-        `yc-${row.assetRequestId}`.includes(keyword);
-      return matchDate && matchKeyword;
-    });
-  }, [appraisalRows, reqSearch, reqSentDate]);
-
-  const showRequestTabs = isAccountantRole || isDeptManager;
+  const showRequestTable = isAccountantRole || isDeptManager;
 
   const statusPillClass = (color: string) => {
     if (color === 'success') return 'asset-status-pill asset-status-pill--active';
@@ -192,21 +137,7 @@ export function LiquidationPage() {
     <div className="liquidation-page">
       <h1 className="liquidation-page__title">Thanh lý</h1>
 
-      {showRequestTabs && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
-          <Button type={mainPill === 'requests' ? 'primary' : 'default'} onClick={() => setMainPill('requests')}>
-            Yêu cầu thanh lý
-          </Button>
-          <Button
-            type={mainPill === 'appraisals' ? 'primary' : 'default'}
-            onClick={() => setMainPill('appraisals')}
-          >
-            Thẩm định tài sản
-          </Button>
-        </div>
-      )}
-
-      {showRequestTabs && (mainPill === 'requests' || mainPill === 'appraisals') && (
+      {showRequestTable && (
         <div className="liquidation-card" style={{ marginBottom: 8 }}>
           <div className="liquidation-card__header">
             <div className="liquidation-filters liquidation-filters--single-row">
@@ -217,23 +148,21 @@ export function LiquidationPage() {
                 value={reqSearch}
                 onChange={(e) => setReqSearch(e.target.value)}
               />
-              {mainPill === 'requests' && (
-                <Select
-                  placeholder="Trạng thái"
-                  className="liquidation-select"
-                  value={reqStatusFilter}
-                  onChange={(v) => setReqStatusFilter(v)}
-                >
-                  <Option value="all">Tất cả</Option>
-                  {Object.entries(LIQUIDATION_STATUS_MAP).map(([k, v]) => (
-                    <Option key={k} value={Number(k)}>
-                      {v.label}
-                    </Option>
-                  ))}
-                </Select>
-              )}
+              <Select
+                placeholder="Trạng thái"
+                className="liquidation-select"
+                value={reqStatusFilter}
+                onChange={(v) => setReqStatusFilter(v)}
+              >
+                <Option value="all">Tất cả</Option>
+                {Object.entries(LIQUIDATION_STATUS_MAP).map(([k, v]) => (
+                  <Option key={k} value={Number(k)}>
+                    {v.label}
+                  </Option>
+                ))}
+              </Select>
               <DatePicker
-                placeholder={mainPill === 'appraisals' ? 'Ngày hẹn thẩm định' : 'Ngày gửi'}
+                placeholder="Ngày gửi"
                 className="liquidation-select liquidation-date-picker"
                 onChange={(_, dateString) => setReqSentDate(dateString || null)}
               />
@@ -244,142 +173,44 @@ export function LiquidationPage() {
             <table className="asset-table liquidation-table">
               <thead>
                 <tr>
-                  {mainPill === 'appraisals' ? (
-                    <>
-                      <th>MÃ YÊU CẦU</th>
-                      <th>NGÀY HẸN THẨM ĐỊNH</th>
-                      <th>THÔNG TIN THẨM ĐỊNH</th>
-                      <th>TRẠNG THÁI</th>
-                      <th className="asset-table__cell asset-table__cell--actions" />
-                    </>
-                  ) : (
-                    <>
-                      <th>MÃ YÊU CẦU</th>
-                      <th>NGÀY GỬI</th>
-                      <th>MÃ TÀI SẢN</th>
-                      <th>MÃ CÁ THỂ</th>
-                      <th>TÊN TÀI SẢN</th>
-                      <th>PHÒNG BAN</th>
-                      <th>NỘI DUNG</th>
-                      <th>TRẠNG THÁI</th>
-                      <th className="asset-table__cell asset-table__cell--actions" />
-                    </>
-                  )}
+                  <th>MÃ YÊU CẦU</th>
+                  <th>NGÀY GỬI</th>
+                  <th>MÃ TÀI SẢN</th>
+                  <th>MÃ CÁ THỂ</th>
+                  <th>TÊN TÀI SẢN</th>
+                  <th>PHÒNG BAN</th>
+                  <th>NỘI DUNG</th>
+                  <th>TRẠNG THÁI</th>
+                  <th className="asset-table__cell asset-table__cell--actions" />
                 </tr>
               </thead>
               <tbody>
-                {mainPill === 'requests' ? (
-                  disposalLoading ? (
-                    <tr>
-                      <td colSpan={9} className="liquidation-table-empty">
-                        Đang tải...
-                      </td>
-                    </tr>
-                  ) : filteredDisposalRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="liquidation-table-empty">
-                        Không có dữ liệu.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredDisposalRows.map((row) => {
-                      const config = LIQUIDATION_STATUS_MAP[row.status] ?? LIQUIDATION_STATUS_MAP[0];
-                      return (
-                        <tr key={row.assetRequestId} className="asset-row">
-                          <td>YC-{row.assetRequestId}</td>
-                          <td>{formatDate(row.transferDate)}</td>
-                          <td>{row.assetCode ?? '—'}</td>
-                          <td>{row.instanceCode?.trim() || '—'}</td>
-                          <td>{row.assetName ?? '—'}</td>
-                          <td>{row.fromDepartment ?? '—'}</td>
-                          <td>{row.reason?.trim() || '—'}</td>
-                          <td>
-                            <span className={statusPillClass(config.color)}>{config.label}</span>
-                          </td>
-                          <td className="asset-table__cell asset-table__cell--actions">
-                            <Button
-                              type="text"
-                              icon={<EyeOutlined />}
-                              size="small"
-                              onClick={() => {
-                                setLiquidationDetailRow(row);
-                                setIsLiquidationDetailOpen(true);
-                              }}
-                            >
-                              Xem
-                            </Button>
-                            {isAccountantRole && row.status === 0 && (
-                              <Button
-                                type="text"
-                                icon={<CheckOutlined />}
-                                size="small"
-                                onClick={() => {
-                                  setSelectedLiquidationItem(row);
-                                  setLiquidationDecision('approved');
-                                  setLiquidationComment('');
-                                  setIsLiquidationApproveOpen(true);
-                                }}
-                              >
-                                Phê duyệt
-                              </Button>
-                            )}
-                            {isAccountantRole && row.status === 2 && (
-                              <Button
-                                type="text"
-                                size="small"
-                                onClick={() => {
-                                  setLiquidationExecutionRequestId(row.assetRequestId);
-                                  setLiquidationExecutionCode(row.code ?? `YC-${row.assetRequestId}`);
-                                  setIsLiquidationExecutionOpen(true);
-                                }}
-                              >
-                                Thực hiện thanh lý
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )
-                ) : appraisalLoading ? (
+                {disposalLoading ? (
                   <tr>
-                    <td colSpan={5} className="liquidation-table-empty">
+                    <td colSpan={9} className="liquidation-table-empty">
                       Đang tải...
                     </td>
                   </tr>
-                ) : filteredAppraisalRows.length === 0 ? (
+                ) : filteredDisposalRows.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="liquidation-table-empty">
+                    <td colSpan={9} className="liquidation-table-empty">
                       Không có dữ liệu.
                     </td>
                   </tr>
                 ) : (
-                  filteredAppraisalRows.map((row) => {
-                    const statusText =
-                      row.status === 4
-                        ? 'Đã xác nhận hội đồng'
-                        : row.status === 2
-                          ? 'Đã có biên bản'
-                          : row.status === 1
-                            ? 'Đã lên lịch'
-                            : 'Đang xử lý';
+                  filteredDisposalRows.map((row) => {
+                    const config = LIQUIDATION_STATUS_MAP[row.status] ?? LIQUIDATION_STATUS_MAP[0];
                     return (
-                      <tr key={row.appraisalId} className="asset-row">
+                      <tr key={row.assetRequestId} className="asset-row">
                         <td>YC-{row.assetRequestId}</td>
-                        <td>{row.scheduledAt ? formatDate(row.scheduledAt) : '—'}</td>
+                        <td>{formatDate(row.transferDate)}</td>
+                        <td>{row.assetCode ?? '—'}</td>
+                        <td>{row.instanceCode?.trim() || '—'}</td>
+                        <td>{row.assetName ?? '—'}</td>
+                        <td>{row.fromDepartment ?? '—'}</td>
+                        <td>{row.reason?.trim() || '—'}</td>
                         <td>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            <span>{row.requestTitle || '—'}</span>
-                            <span style={{ color: '#6b7280', fontSize: 12 }}>
-                              {row.isReporter ? 'Bạn là người nhập biên bản' : 'Bạn là thành viên liên quan'}
-                              {row.meetingDepartmentName || row.meetingLocation
-                                ? ` - ${row.meetingDepartmentName ?? row.meetingLocation}`
-                                : ''}
-                            </span>
-                          </div>
-                        </td>
-                        <td>
-                          <span className="asset-status-pill asset-status-pill--processing">{statusText}</span>
+                          <span className={statusPillClass(config.color)}>{config.label}</span>
                         </td>
                         <td className="asset-table__cell asset-table__cell--actions">
                           <Button
@@ -387,12 +218,28 @@ export function LiquidationPage() {
                             icon={<EyeOutlined />}
                             size="small"
                             onClick={() => {
-                              setViewAppraisalId(row.appraisalId);
-                              setIsAppraisalDetailOpen(true);
+                              setLiquidationDetailRow(row);
+                              setIsLiquidationDetailOpen(true);
                             }}
                           >
                             Xem
                           </Button>
+                          {isAccountantRole && row.status === 0 && (
+                            <Button
+                              type="text"
+                              icon={<CheckOutlined />}
+                              size="small"
+                              onClick={() => {
+                                setSelectedLiquidationItem(row);
+                                setLiquidationDecision('approved');
+                                setLiquidationComment('');
+                                setLiquidationDisposalMethod('');
+                                setIsLiquidationApproveOpen(true);
+                              }}
+                            >
+                              Phê duyệt
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -426,9 +273,17 @@ export function LiquidationPage() {
           onDecisionChange={setLiquidationDecision}
           comment={liquidationComment}
           onCommentChange={setLiquidationComment}
+          disposalMethod={liquidationDisposalMethod}
+          onDisposalMethodChange={setLiquidationDisposalMethod}
           submitting={liquidationSubmitting}
           onConfirm={async () => {
             if (!selectedLiquidationItem || !userProfile?.id) return;
+            
+            if (liquidationDecision === 'approved' && !liquidationDisposalMethod.trim()) {
+              message.error('Vui lòng nhập phương án thanh lý.');
+              return;
+            }
+            
             setLiquidationSubmitting(true);
             try {
               const payload = {
@@ -455,33 +310,6 @@ export function LiquidationPage() {
         />
       )}
 
-      {isLiquidationExecutionOpen && isAccountantRole && (
-        <LiquidationExecutionModal
-          open
-          assetRequestId={liquidationExecutionRequestId}
-          requestCode={liquidationExecutionCode}
-          userId={userProfile?.id}
-          onClose={() => {
-            setIsLiquidationExecutionOpen(false);
-            setLiquidationExecutionRequestId(null);
-            setLiquidationExecutionCode('');
-          }}
-          onSuccess={async () => {
-            await reloadDisposalRows();
-          }}
-        />
-      )}
-
-      <DisposalAppraisalDetailModal
-        open={isAppraisalDetailOpen}
-        appraisalId={viewAppraisalId}
-        userId={userProfile?.id}
-        onClose={() => {
-          setIsAppraisalDetailOpen(false);
-          setViewAppraisalId(null);
-        }}
-        onRefreshList={reloadAppraisalList}
-      />
     </div>
   );
 }

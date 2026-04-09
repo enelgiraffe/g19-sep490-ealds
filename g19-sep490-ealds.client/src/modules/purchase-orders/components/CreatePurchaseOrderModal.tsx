@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Form, Input, Button, Table, InputNumber, Select, DatePicker } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import { assetService, type AssetTypeItem } from '../../assets/services/assetService';
+import { type SupplierItem } from '../../admin/services/supplierService';
+import { SupplierSelectionModal } from './SupplierSelectionModal';
+import { AssetTypeSelectionModal } from './AssetTypeSelectionModal';
 import './CreatePurchaseOrderModal.css';
 
 const { TextArea } = Input;
@@ -64,6 +66,10 @@ export function CreatePurchaseOrderModal({
 }: CreatePurchaseOrderModalProps) {
   const [form] = Form.useForm<CreatePurchaseFormValues>();
   const [assetTypes, setAssetTypes] = useState<AssetTypeItem[]>([]);
+  const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+  const [isAssetTypeModalOpen, setIsAssetTypeModalOpen] = useState(false);
+  const [selectedSupplier, setSelectedSupplier] = useState<SupplierItem | null>(null);
+  const [selectedAssetType, setSelectedAssetType] = useState<AssetTypeItem | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -76,6 +82,8 @@ export function CreatePurchaseOrderModal({
   useEffect(() => {
     if (open) {
       form.resetFields();
+      setSelectedSupplier(null);
+      setSelectedAssetType(null);
       if (initialValues) {
         const rawAssetType = String(initialValues.assetType ?? '').trim();
         const mappedAssetTypeId = rawAssetType
@@ -85,6 +93,10 @@ export function CreatePurchaseOrderModal({
               return a === b;
             })?.assetTypeId
           : undefined;
+        if (mappedAssetTypeId) {
+          const foundType = assetTypes.find((t) => t.assetTypeId === mappedAssetTypeId);
+          if (foundType) setSelectedAssetType(foundType);
+        }
         form.setFieldsValue({
           equipment: [
             { name: '', quantity: 1, modelCode: '', unit: 'Cái', estimatedPrice: '' },
@@ -121,15 +133,12 @@ export function CreatePurchaseOrderModal({
         estimatedPrice: e.estimatedPrice ?? '0',
       };
     });
-    const selectedAssetTypeId = values.assetType ? Number(values.assetType) : null;
-    const selectedAssetType =
-      selectedAssetTypeId != null && !Number.isNaN(selectedAssetTypeId)
-        ? assetTypes.find((t) => t.assetTypeId === selectedAssetTypeId)
-        : null;
 
     return JSON.stringify({
       assetTypeId: selectedAssetType?.assetTypeId ?? null,
       assetTypeName: selectedAssetType?.name ?? null,
+      supplierId: selectedSupplier?.supplierId ?? null,
+      supplierName: selectedSupplier?.name ?? null,
       equipment: rows,
       totalPrice: total.toLocaleString('vi-VN') + 'đ',
     });
@@ -146,17 +155,12 @@ export function CreatePurchaseOrderModal({
         values.needDate && typeof (values.needDate as any).format === 'function'
           ? (values.needDate as Dayjs).format('DD/MM/YYYY')
           : undefined;
-      const selectedAssetTypeId = values.assetType ? Number(values.assetType) : null;
-      const selectedAssetTypeName =
-        selectedAssetTypeId != null && !Number.isNaN(selectedAssetTypeId)
-          ? assetTypes.find((t) => t.assetTypeId === selectedAssetTypeId)?.name
-          : undefined;
 
       const description = [
         values.reason && `Lý do: ${values.reason}`,
         needDateText && `Thời gian cần: ${needDateText}`,
-        values.supplier && `Nhà cung cấp đề xuất: ${values.supplier}`,
-        selectedAssetTypeName && `Loại tài sản: ${selectedAssetTypeName}`,
+        selectedSupplier && `Nhà cung cấp đề xuất: ${selectedSupplier.name}`,
+        selectedAssetType && `Loại tài sản: ${selectedAssetType.name}`,
         values.purpose && `Mục đích: ${values.purpose}`,
       ]
         .filter(Boolean)
@@ -240,26 +244,36 @@ export function CreatePurchaseOrderModal({
             </div>
 
             <div className="create-purchase-form__row">
-              <Form.Item
-                label="Nhà cung cấp đề xuất"
-                name="supplier"
-                className="create-purchase-form__item"
-              >
-                <Input placeholder="Nhập nhà cung cấp" />
-              </Form.Item>
-              <Form.Item
-                label="Loại tài sản"
-                name="assetType"
-                className="create-purchase-form__item"
-              >
-                <Select placeholder="Chọn loại tài sản" allowClear>
-                  {assetTypes.map((t) => (
-                    <Option key={t.assetTypeId} value={String(t.assetTypeId)}>
-                      {t.name}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
+              <div className="create-purchase-form__item">
+                <label>Nhà cung cấp đề xuất</label>
+                <div className="create-purchase-selection-wrapper">
+                  <div className="create-purchase-selection-display">
+                    {selectedSupplier ? selectedSupplier.name : 'Chưa chọn'}
+                  </div>
+                  <button
+                    type="button"
+                    className="create-purchase-btn-select"
+                    onClick={() => setIsSupplierModalOpen(true)}
+                  >
+                    {selectedSupplier ? 'Đổi' : 'Chọn'}
+                  </button>
+                </div>
+              </div>
+              <div className="create-purchase-form__item">
+                <label>Loại tài sản</label>
+                <div className="create-purchase-selection-wrapper">
+                  <div className="create-purchase-selection-display">
+                    {selectedAssetType ? selectedAssetType.name : 'Chưa chọn'}
+                  </div>
+                  <button
+                    type="button"
+                    className="create-purchase-btn-select"
+                    onClick={() => setIsAssetTypeModalOpen(true)}
+                  >
+                    {selectedAssetType ? 'Đổi' : 'Chọn'}
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="create-purchase-form__section">
@@ -430,6 +444,24 @@ export function CreatePurchaseOrderModal({
           )}
         </div>
       </div>
+
+      <SupplierSelectionModal
+        open={isSupplierModalOpen}
+        onClose={() => setIsSupplierModalOpen(false)}
+        onSelect={(supplier) => {
+          setSelectedSupplier(supplier);
+          setIsSupplierModalOpen(false);
+        }}
+      />
+
+      <AssetTypeSelectionModal
+        open={isAssetTypeModalOpen}
+        onClose={() => setIsAssetTypeModalOpen(false)}
+        onSelect={(assetType) => {
+          setSelectedAssetType(assetType);
+          setIsAssetTypeModalOpen(false);
+        }}
+      />
     </div>
   );
 }

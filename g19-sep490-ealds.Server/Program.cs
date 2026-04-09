@@ -134,6 +134,21 @@ builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
 var app = builder.Build();
 
+// Keep local/dev databases aligned with current EF model (e.g., new nullable columns like GoodsReceiptLineId).
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<EaldsDbContext>();
+    try
+    {
+        db.Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("StartupMigration");
+        logger.LogError(ex, "Failed to apply database migrations at startup.");
+    }
+}
+
 app.UseDefaultFiles();
 app.UseStaticFiles();
 

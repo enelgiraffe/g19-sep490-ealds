@@ -1,0 +1,28 @@
+/* Debug: Màu nền header để phân biệt với modal thẩm định */
+.liquidation-execution-modal .mark-damaged-modal__header {
+  background: linear-gradient(135deg, #f1f8e9 0%, #c5e1a5 100%);
+  border-bottom: 3px solid #52c41a;
+}
+
+.liquidation-execution-modal .mark-damaged-modal__title {
+  color: #1b5e20;
+}
+
+/* Money input styles */
+.disposal-appraisal-money-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.disposal-appraisal-money-input input {
+  padding-right: 32px;
+}
+
+.disposal-appraisal-money-suffix {
+  position: absolute;
+  right: 12px;
+  color: #6b7280;
+  font-size: 14px;
+  pointer-events: none;
+}

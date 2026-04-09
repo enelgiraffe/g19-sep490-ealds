@@ -36,9 +36,7 @@ public class DisposalExecutionController : ControllerBase
 
         var exec = await _db.DisposalExecutions.AsNoTracking()
             .FirstOrDefaultAsync(e => e.AssetRequestId == assetRequestId);
-        var appraisal = await _db.DisposalAppraisals.AsNoTracking()
-            .FirstOrDefaultAsync(a => a.AssetRequestId == assetRequestId);
-        var (canFinalize, blockReason) = await EvaluateCanFinalizeAsync(ar, exec, appraisal);
+        var (canFinalize, blockReason) = EvaluateCanFinalize(ar, exec);
 
         if (exec == null)
         {
@@ -46,13 +44,13 @@ public class DisposalExecutionController : ControllerBase
             {
                 DisposalExecutionId = null,
                 AssetRequestId = assetRequestId,
-                AppraisalId = appraisal?.AppraisalId,
                 DisposalRecordId = await _db.DisposalRecords.AsNoTracking()
                     .Where(d => d.AssetRequestId == assetRequestId)
                     .Select(d => (int?)d.DiposalId)
                     .FirstOrDefaultAsync(),
                 Status = 0,
-                CanEdit = ar.Status == 2,
+                AssetRequestStatus = ar.Status,
+                CanEdit = ar.Status == 2 || ar.Status == 4,
                 CanFinalize = canFinalize,
                 BlockFinalizeReason = blockReason
             });
@@ -71,8 +69,8 @@ public class DisposalExecutionController : ControllerBase
         if (ar == null) return NotFound();
         if (ar.RequestTypeId != _disposalRequestTypeId)
             return BadRequest("Chỉ áp dụng cho yêu cầu thanh lý.");
-        if (ar.Status != 2)
-            return BadRequest("Chỉ lưu được khi yêu cầu đã được giám đốc phê duyệt (trạng thái 2).");
+        if (ar.Status != 2 && ar.Status != 4)
+            return BadRequest("Chỉ lưu được ở bước đã duyệt (2) hoặc đã ghi nhận thẩm định (4).");
 
         var now = DateTime.UtcNow;
         var exec = await _db.DisposalExecutions.FirstOrDefaultAsync(e => e.AssetRequestId == assetRequestId);
@@ -81,15 +79,12 @@ public class DisposalExecutionController : ControllerBase
 
         var dip = await _db.DisposalRecords.AsNoTracking()
             .FirstOrDefaultAsync(d => d.AssetRequestId == assetRequestId);
-        var appraisal = await _db.DisposalAppraisals.AsNoTracking()
-            .FirstOrDefaultAsync(a => a.AssetRequestId == assetRequestId);
 
         if (exec == null)
         {
             exec = new DisposalExecution
             {
                 AssetRequestId = assetRequestId,
-                AppraisalId = appraisal?.AppraisalId,
                 DisposalRecordId = dip?.DiposalId,
                 Status = 0,
                 CreatedBy = actorUserId,
@@ -114,9 +109,7 @@ public class DisposalExecutionController : ControllerBase
         exec.UpdatedDate = now;
 
         await _db.SaveChangesAsync();
-        var appraisal2 = await _db.DisposalAppraisals.AsNoTracking()
-            .FirstOrDefaultAsync(a => a.AssetRequestId == assetRequestId);
-        var (canFinalize, blockReason) = await EvaluateCanFinalizeAsync(ar, exec, appraisal2);
+        var (canFinalize, blockReason) = EvaluateCanFinalize(ar, exec);
         return Ok(ToDto(exec, ar, canFinalize, blockReason));
     }
 
@@ -130,13 +123,11 @@ public class DisposalExecutionController : ControllerBase
         if (ar == null) return NotFound();
         if (ar.RequestTypeId != _disposalRequestTypeId)
             return BadRequest("Chỉ áp dụng cho yêu cầu thanh lý.");
-        if (ar.Status != 2)
-            return BadRequest("Chỉ hoàn tất được khi yêu cầu đã được giám đốc phê duyệt (trạng thái 2).");
+        if (ar.Status != 4)
+            return BadRequest("Chỉ hoàn tất được sau khi kế toán đã ghi nhận biên bản thẩm định (trạng thái 4).");
 
-        var appraisal = await _db.DisposalAppraisals.AsNoTracking()
-            .FirstOrDefaultAsync(a => a.AssetRequestId == assetRequestId);
         var exec = await _db.DisposalExecutions.FirstOrDefaultAsync(e => e.AssetRequestId == assetRequestId);
-        var (canFinalize, blockReason) = await EvaluateCanFinalizeAsync(ar, exec, appraisal);
+        var (canFinalize, blockReason) = EvaluateCanFinalize(ar, exec);
         if (!canFinalize)
             return BadRequest(blockReason ?? "Không thể hoàn tất thanh lý.");
 
@@ -202,20 +193,80 @@ public class DisposalExecutionController : ControllerBase
         return Ok(new { assetRequestId = assetRequestId, assetRequestStatus = ar.Status, assetInstanceId = instance.AssetInstanceId });
     }
 
-    private Task<(bool canFinalize, string? reason)> EvaluateCanFinalizeAsync(
-        AssetRequest ar,
-        DisposalExecution? exec,
-        DisposalAppraisal? appraisal)
+    [HttpPost("by-request/{assetRequestId:int}/record-appraisal")]
+    public async Task<IActionResult> RecordAppraisal(int assetRequestId, [FromBody] RecordDisposalAppraisalDto dto)
     {
+        var actorUserId = ResolveActorUserId(dto.UserId);
+        if (actorUserId <= 0) return Unauthorized();
+
+        var ar = await _db.AssetRequests.FirstOrDefaultAsync(x => x.AssetRequestId == assetRequestId);
+        if (ar == null) return NotFound();
+        if (ar.RequestTypeId != _disposalRequestTypeId)
+            return BadRequest("Chỉ áp dụng cho yêu cầu thanh lý.");
         if (ar.Status != 2)
-            return Task.FromResult((false, (string?)"Yêu cầu cần ở trạng thái đã phê duyệt giám đốc (2)."));
-        if (appraisal != null && appraisal.Status < 4)
-            return Task.FromResult((false, (string?)"Cần hội đồng thẩm định xác nhận biên bản trước khi hoàn tất thanh lý."));
+            return BadRequest("Chỉ ghi nhận thẩm định khi yêu cầu đã được giám đốc phê duyệt (trạng thái 2).");
+
+        if (!dto.AppraisalDate.HasValue)
+            return BadRequest("Vui lòng nhập ngày thẩm định.");
+
+        var minutesNo = string.IsNullOrWhiteSpace(dto.AppraisalMinutesNo) ? null : dto.AppraisalMinutesNo.Trim();
+        var conclusion = string.IsNullOrWhiteSpace(dto.AppraisalConclusion) ? null : dto.AppraisalConclusion.Trim();
+        if (string.IsNullOrWhiteSpace(minutesNo) && string.IsNullOrWhiteSpace(conclusion))
+            return BadRequest("Vui lòng nhập số biên bản hoặc kết luận thẩm định.");
+
+        var now = DateTime.UtcNow;
+        var exec = await _db.DisposalExecutions.FirstOrDefaultAsync(e => e.AssetRequestId == assetRequestId);
         if (exec == null)
-            return Task.FromResult((false, (string?)"Vui lòng lưu nháp thông tin thực hiện thanh lý trước."));
+        {
+            var dip = await _db.DisposalRecords.AsNoTracking()
+                .FirstOrDefaultAsync(d => d.AssetRequestId == assetRequestId);
+            exec = new DisposalExecution
+            {
+                AssetRequestId = assetRequestId,
+                DisposalRecordId = dip?.DiposalId,
+                Status = 0,
+                CreatedBy = actorUserId,
+                CreatedDate = now
+            };
+            _db.DisposalExecutions.Add(exec);
+        }
+
+        exec.PlannedExecutionDate = dto.AppraisalDate;
+        exec.MinutesNo = minutesNo ?? exec.MinutesNo;
+        exec.ExecutionNote = conclusion ?? exec.ExecutionNote;
+        exec.UpdatedBy = actorUserId;
+        exec.UpdatedDate = now;
+
+        var fromStatus = ar.Status;
+        ar.Status = 4;
+
+        var userRole = await _db.UserRoles.AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == actorUserId);
+        _db.AssetRequestRecords.Add(new AssetRequestRecord
+        {
+            AssetRequestId = ar.AssetRequestId,
+            FromStatus = fromStatus,
+            ToStatus = ar.Status,
+            Action = 1,
+            ActionByUserId = actorUserId,
+            ActionRoleId = userRole?.RoleId ?? 0,
+            Comment = "Accountant recorded appraisal minutes.",
+            OccurredAt = now
+        });
+
+        await _db.SaveChangesAsync();
+        var (canFinalize, blockReason) = EvaluateCanFinalize(ar, exec);
+        return Ok(ToDto(exec, ar, canFinalize, blockReason));
+    }
+
+    private static (bool canFinalize, string? reason) EvaluateCanFinalize(AssetRequest ar, DisposalExecution? exec)
+    {
+        if (ar.Status != 4)
+            return (false, "Yêu cầu cần ở trạng thái đã ghi nhận biên bản thẩm định (4).");
+        if (exec == null)
+            return (false, "Vui lòng lưu nháp thông tin thực hiện thanh lý trước.");
         if (exec.Status >= 2)
-            return Task.FromResult((false, (string?)null));
-        return Task.FromResult((true, (string?)null));
+            return (false, null);
+        return (true, null);
     }
 
     private static DisposalExecutionDto ToDto(
@@ -227,7 +278,6 @@ public class DisposalExecutionController : ControllerBase
         {
             DisposalExecutionId = e.DisposalExecutionId,
             AssetRequestId = e.AssetRequestId,
-            AppraisalId = e.AppraisalId,
             DisposalRecordId = e.DisposalRecordId,
             PlannedExecutionDate = e.PlannedExecutionDate,
             ExecutedDate = e.ExecutedDate,
@@ -242,7 +292,8 @@ public class DisposalExecutionController : ControllerBase
             AttachmentUrls = e.AttachmentUrls,
             ExecutionNote = e.ExecutionNote,
             Status = e.Status,
-            CanEdit = ar.Status == 2 && e.Status < 2,
+            AssetRequestStatus = ar.Status,
+            CanEdit = (ar.Status == 2 || ar.Status == 4) && e.Status < 2,
             CanFinalize = canFinalize && e.Status < 2,
             BlockFinalizeReason = blockFinalizeReason
         };

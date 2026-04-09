@@ -140,4 +140,15 @@ export const purchaseOrderService = {
     );
     return response.data;
   },
+
+  async revertToDraft(
+    id: number,
+    userId: number,
+  ): Promise<{ assetRequestId: number; status: number }> {
+    const response = await purchaseApi.post<{ assetRequestId: number; status: number }>(
+      `/api/Assets/Requests/purchase/${id}/revert-to-draft`,
+      { userId },
+    );
+    return response.data;
+  },
 };

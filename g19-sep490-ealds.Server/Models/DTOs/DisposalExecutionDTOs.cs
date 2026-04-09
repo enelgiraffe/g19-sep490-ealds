@@ -6,7 +6,6 @@ public class DisposalExecutionDto
 {
     public int? DisposalExecutionId { get; set; }
     public int AssetRequestId { get; set; }
-    public int? AppraisalId { get; set; }
     public int? DisposalRecordId { get; set; }
     public DateTime? PlannedExecutionDate { get; set; }
     public DateTime? ExecutedDate { get; set; }
@@ -21,6 +20,7 @@ public class DisposalExecutionDto
     public string? AttachmentUrls { get; set; }
     public string? ExecutionNote { get; set; }
     public int Status { get; set; }
+    public int AssetRequestStatus { get; set; }
     public bool CanEdit { get; set; }
     public bool CanFinalize { get; set; }
     public string? BlockFinalizeReason { get; set; }
@@ -46,4 +46,12 @@ public class SaveDisposalExecutionDto
 public class FinalizeDisposalExecutionDto
 {
     public int UserId { get; set; }
+}
+
+public class RecordDisposalAppraisalDto
+{
+    public int UserId { get; set; }
+    public DateTime? AppraisalDate { get; set; }
+    public string? AppraisalMinutesNo { get; set; }
+    public string? AppraisalConclusion { get; set; }
 }

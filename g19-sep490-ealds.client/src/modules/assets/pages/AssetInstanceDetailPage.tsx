@@ -251,11 +251,11 @@ export function AssetInstanceDetailPage() {
                 <span className="value">{instance.instanceCode}</span>
               </div>
               <div className="asset-detail__info-row">
-                <span className="label">Mã tài sản (danh mục)</span>
+                <span className="label">Mã tài sản gốc</span>
                 <span className="value">{instance.assetCode?.trim() || '—'}</span>
               </div>
               <div className="asset-detail__info-row">
-                <span className="label">Tên tài sản (danh mục)</span>
+                <span className="label">Tên tài sản gốc</span>
                 <span className="value">{instance.assetName?.trim() || '—'}</span>
               </div>
               <div className="asset-detail__info-row">
