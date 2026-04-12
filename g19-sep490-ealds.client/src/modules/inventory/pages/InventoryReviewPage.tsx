@@ -197,7 +197,6 @@ export function InventoryReviewPage() {
     );
   }
 
-  const awaitingDirector = summary.status === SESSION_STATUS.Completed;
   const awaitingHeadResolution = summary.status === SESSION_STATUS.PendingAccountant;
   const unresolvedDiscrepancyCount = summary.discrepancies.filter((d) => !d.resolvedAt).length;
   const canFinishSession =

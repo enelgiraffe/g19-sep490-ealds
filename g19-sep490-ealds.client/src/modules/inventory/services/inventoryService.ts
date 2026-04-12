@@ -202,7 +202,7 @@ export const SESSION_STATUS = {
 export const SESSION_STATUS_LABEL: Record<number, string> = {
   0: 'Đã lên lịch',
   1: 'Đang thực hiện',
-  2: 'Chờ xác nhận',
+  2: 'Chờ xử lý',
   3: 'Đã hủy',
   4: 'Đã xử lý',
   5: 'Đến lịch',
@@ -259,8 +259,15 @@ export const inventoryService = {
     departmentId?: number;
     status?: number;
     keyword?: string;
+    /** When true, server limits director/admin list to post–field-work statuses (Chờ xử lý, Đã xử lý). */
+    directorInventoryReport?: boolean;
   }): Promise<InventorySessionListItem[]> {
-    const res = await inventoryApi.get<InventorySessionListItem[]>('/api/inventory/sessions', { params });
+    const res = await inventoryApi.get<InventorySessionListItem[]>('/api/inventory/sessions', {
+      params: {
+        ...params,
+        directorInventoryReport: params?.directorInventoryReport ? true : undefined,
+      },
+    });
     return res.data;
   },
 

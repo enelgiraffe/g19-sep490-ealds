@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Modal, Form, Input, Select, DatePicker, Button, message } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useAppStore } from '../../../stores/appStore';
+import { profileService } from '../../profile/services/profileService';
 import {
   inventoryService,
   getCurrentUserId,
@@ -48,8 +49,10 @@ export function ScheduleIndividualModal({
     try {
       const deps = await inventoryService.getDepartments();
       setDepartments(deps);
-      if (isDeptHead && deps.length === 1) {
-        form.setFieldsValue({ departmentId: deps[0].id });
+      const profile = await profileService.getProfile();
+      const defaultDeptId = profile.departmentId ?? undefined;
+      if (defaultDeptId != null && deps.some((d) => d.id === defaultDeptId)) {
+        form.setFieldsValue({ departmentId: defaultDeptId });
       }
     } catch {
       message.error('Không thể tải dữ liệu. Vui lòng thử lại.');
@@ -60,9 +63,9 @@ export function ScheduleIndividualModal({
 
   const handleSubmit = () => {
     form.validateFields().then(async (values) => {
-      const departmentId = isDeptHead ? departments[0]?.id : values.departmentId;
+      const departmentId = values.departmentId;
       if (departmentId == null) {
-        message.error('Không xác định được phòng ban.');
+        message.error('Vui lòng chọn phòng ban.');
         return;
       }
       setSubmitting(true);
@@ -122,24 +125,22 @@ export function ScheduleIndividualModal({
           />
         </Form.Item>
 
-        {!isDeptHead && (
-          <Form.Item
-            label="Phòng ban"
-            name="departmentId"
-            rules={[{ required: true, message: 'Vui lòng chọn phòng ban' }]}
-          >
-            <Select
-              placeholder="Chọn phòng ban"
-              loading={loadingMeta}
-              showSearch
-              optionFilterProp="label"
-              options={departments.map((d) => ({ value: d.id, label: d.name }))}
-            />
-          </Form.Item>
-        )}
-        {isDeptHead && departments[0] && (
+        <Form.Item
+          label="Phòng ban"
+          name="departmentId"
+          rules={[{ required: true, message: 'Vui lòng chọn phòng ban' }]}
+        >
+          <Select
+            placeholder="Chọn phòng ban"
+            loading={loadingMeta}
+            showSearch
+            optionFilterProp="label"
+            options={departments.map((d) => ({ value: d.id, label: d.name }))}
+          />
+        </Form.Item>
+        {isDeptHead && (
           <p className="schedule-modal__dept-hint">
-            Phòng ban: <strong>{departments[0].name}</strong>
+            Trưởng phòng chỉ được lập lịch cho phòng ban mình; chọn đúng phòng ban của bạn.
           </p>
         )}
 

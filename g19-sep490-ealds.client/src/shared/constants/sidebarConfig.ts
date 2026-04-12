@@ -25,6 +25,7 @@ export const ROLE_MENU: Record<AppRole, SidebarItem[]> = {
   accountant: [
     // Kế toán dùng màn tài sản riêng
     { key: 'assets', path: '/accountant-assets', label: 'Tài sản', icon: '/icons/sidebar-assets.svg' },
+    { key: 'inventory', path: '/inventory', label: 'Kiểm kê', icon: '/icons/sidebar-inventories.svg' },
     { key: 'liquidation', path: '/liquidation', label: 'Thanh lý', icon: '/icons/sidebar-liquidation.svg' },
     { key: 'cost-recording', path: '/cost-recording', label: 'Ghi nhận chi phí', icon: '/icons/sidebar-cost-recording.svg' },
     { key: 'requests', path: '/requests', label: 'Yêu cầu', icon: '/icons/sidebar-requests.svg' },
@@ -46,7 +47,7 @@ export const ROLE_MENU: Record<AppRole, SidebarItem[]> = {
     { key: 'dashboard', path: '/dashboard', label: 'Dashboard', icon: '/icons/sidebar-dashboard.svg' },
     { key: 'assets', path: '/assets', label: 'Tài sản', icon: '/icons/sidebar-assets.svg' },
     { key: 'requests', path: '/requests', label: 'Yêu cầu', icon: '/icons/sidebar-requests.svg' },
-    { key: 'reports', path: '/reports', label: 'Báo cáo', icon: '/icons/sidebar-reports.svg' },
+    { key: 'reports', path: '/reports', label: 'Báo cáo kiểm kê', icon: '/icons/sidebar-reports.svg' },
   ],
   admin: [
     { key: 'users', path: '/users', label: 'Người dùng', icon: '/icons/sidebar-users.svg' },

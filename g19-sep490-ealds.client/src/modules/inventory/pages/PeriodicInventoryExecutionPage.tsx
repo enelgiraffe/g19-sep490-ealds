@@ -4,7 +4,6 @@ import { Input, Select, Button, Spin, message, Modal, Tooltip } from 'antd';
 import {
   SearchOutlined,
   ArrowLeftOutlined,
-  CheckCircleOutlined,
   PrinterOutlined,
 } from '@ant-design/icons';
 import {
@@ -13,7 +12,6 @@ import {
   type SessionDetail,
   type SessionAssetCheckItem,
   type AssetInventoryDetail,
-  type CompleteSessionResult,
 } from '../services/inventoryService';
 import {
   formatAssetStatusVi,
@@ -32,7 +30,7 @@ const CHECK_STATUS_TABS: { label: string; value: number | undefined }[] = [
 
 function getSessionBadgeClass(status: number): string {
   if (status === 1) return 'exec-badge--in-progress';
-  if (status === 2 || status === 4) return 'exec-badge--completed';
+  if (status === 2 || status === 4 || status === 6) return 'exec-badge--completed';
   if (status === 3) return 'exec-badge--cancelled';
   return 'exec-badge--default';
 }
@@ -77,9 +75,6 @@ export function PeriodicInventoryExecutionPage() {
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelNote, setCancelNote] = useState('');
   const [cancellingSession, setCancellingSession] = useState(false);
-
-  const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
-  const [completeResult, setCompleteResult] = useState<CompleteSessionResult | null>(null);
 
   const fetchSession = useCallback(async () => {
     if (!sessionIdNum) return;
@@ -172,11 +167,9 @@ export function PeriodicInventoryExecutionPage() {
   const handleComplete = async () => {
     setCompleting(true);
     try {
-      const result = await inventoryService.completeSession(sessionIdNum);
-      setCompleteResult(result);
-      setIsCompleteModalOpen(true);
-      fetchSession();
-      fetchAssets();
+      await inventoryService.completeSession(sessionIdNum);
+      message.success('Đã hoàn thành kiểm kê. Chuyển tới trang xử lý chênh lệch.');
+      navigate(`/inventory-review/${sessionIdNum}`);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
       message.error(
@@ -525,48 +518,6 @@ export function PeriodicInventoryExecutionPage() {
         </p>
       </Modal>
 
-      {/* Completion summary modal */}
-      <Modal
-        open={isCompleteModalOpen}
-        footer={null}
-        closable
-        onCancel={() => setIsCompleteModalOpen(false)}
-        centered
-        width={400}
-      >
-        <div className="exec-complete-modal">
-          <div className="exec-complete-modal__icon">
-            <CheckCircleOutlined />
-          </div>
-          <h2 className="exec-complete-modal__title">Hoàn thành kiểm kê</h2>
-          <div className="exec-complete-modal__stats">
-            <p>
-              Chênh lệch số lượng:{' '}
-              <strong>{completeResult?.quantityDiffCount ?? 0} tài sản</strong>
-            </p>
-            <p>
-              Thay đổi vị trí tài sản:{' '}
-              <strong>{completeResult?.locationChangeCount ?? 0} tài sản</strong>
-            </p>
-            <p>
-              Thay đổi phòng ban quản lý:{' '}
-              <strong>{completeResult?.departmentChangeCount ?? 0} tài sản</strong>
-            </p>
-            <p>
-              Thay đổi tình trạng:{' '}
-              <strong>{completeResult?.conditionChangeCount ?? 0} tài sản</strong>
-            </p>
-          </div>
-          <p className="exec-complete-modal__notify">
-            Phiên chuyển sang <strong>Chờ xử lý</strong>. Vào danh sách kiểm kê, mở báo cáo phiên này để cập nhật sổ
-            theo từng chênh lệch (nếu có); khi xong, bấm <strong>Hoàn tất</strong> trên báo cáo để đánh dấu{' '}
-            <strong>Đã xử lý</strong>. Giám đốc có thể xem kết quả trong báo cáo, không cần xác nhận.
-          </p>
-          <div className="exec-complete-modal__footer">
-            <Button onClick={() => setIsCompleteModalOpen(false)}>Đóng</Button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }

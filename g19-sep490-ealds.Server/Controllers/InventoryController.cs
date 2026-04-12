@@ -36,14 +36,13 @@ public class InventoryController : ControllerBase
     public async Task<ActionResult<IEnumerable<InventorySessionListItemDTO>>> GetSessions(
         [FromQuery] int? departmentId,
         [FromQuery] int? status,
-        [FromQuery] string? keyword)
+        [FromQuery] string? keyword,
+        [FromQuery] bool directorInventoryReport = false)
     {
-        var access = await GetInventoryAccessAsync();
-        if (access.RestrictToDepartment)
-        {
-            if (!access.DepartmentId.HasValue)
-                return BadRequest(new { message = "Không xác định được phòng ban của bạn." });
-        }
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var isDirOrAdmin = await UserIsDirectorOrAdminForInventoryListingAsync(userId);
 
         var query = _context.InventorySessions
             .Include(s => s.Department)
@@ -56,10 +55,20 @@ public class InventoryController : ControllerBase
             .AsNoTracking()
             .AsQueryable();
 
-        if (access.RestrictToDepartment)
-            query = query.Where(s => s.DepartmentId == access.DepartmentId!.Value);
-        else if (departmentId.HasValue)
+        // Creators see their own sessions; directors/admins see all (reports / oversight).
+        if (!isDirOrAdmin)
+            query = query.Where(s => s.CreatedBy == userId);
+        if (departmentId.HasValue)
             query = query.Where(s => s.DepartmentId == departmentId.Value);
+
+        // Director / admin "báo cáo kiểm kê" list: only sessions that need oversight (includes Chờ xử lý / PendingAccountant).
+        if (directorInventoryReport && isDirOrAdmin)
+        {
+            query = query.Where(s =>
+                s.Status == (int)InventorySessionStatus.Completed ||
+                s.Status == (int)InventorySessionStatus.Confirmed ||
+                s.Status == (int)InventorySessionStatus.PendingAccountant);
+        }
 
         if (status.HasValue)
         {
@@ -72,6 +81,14 @@ public class InventoryController : ControllerBase
                     s.Status == 0 &&
                     s.StartDate < tomorrowUtc &&
                     s.EndDate >= todayUtc);
+            }
+            else if (status.Value == (int)InventorySessionStatus.PendingAccountant
+                     || status.Value == (int)InventorySessionStatus.Completed)
+            {
+                // "Chờ xử lý": gộp legacy Completed (2) và PendingAccountant (6).
+                query = query.Where(s =>
+                    s.Status == (int)InventorySessionStatus.PendingAccountant ||
+                    s.Status == (int)InventorySessionStatus.Completed);
             }
             else
                 query = query.Where(s => s.Status == status.Value);
@@ -130,7 +147,7 @@ public class InventoryController : ControllerBase
     [HttpGet("sessions/{id:int}")]
     public async Task<ActionResult<InventorySessionDetailDTO>> GetSessionById(int id)
     {
-        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        var gate = await EnsureInventorySessionCreatorAccessAsync(id);
         if (gate != null) return gate;
 
         var session = await _context.InventorySessions
@@ -328,7 +345,7 @@ public class InventoryController : ControllerBase
         string? keyword,
         int? checkStatus)
     {
-        var gate = await EnsureInventorySessionDepartmentAccessAsync(sessionId);
+        var gate = await EnsureInventorySessionCreatorAccessAsync(sessionId);
         if (gate != null) return gate;
 
         var sessionExists = await _context.InventorySessions.AnyAsync(s => s.SessionId == sessionId);
@@ -405,7 +422,7 @@ public class InventoryController : ControllerBase
     public async Task<ActionResult<AssetInventoryDetailDTO>> GetAssetInventoryDetail(
         int sessionId, int assetInstanceId)
     {
-        var gate = await EnsureInventorySessionDepartmentAccessAsync(sessionId);
+        var gate = await EnsureInventorySessionCreatorAccessAsync(sessionId);
         if (gate != null) return gate;
 
         var task = await _context.InventoryTasks
@@ -471,7 +488,7 @@ public class InventoryController : ControllerBase
     public async Task<ActionResult> SaveAssetInventory(
         int sessionId, int assetInstanceId, [FromBody] SaveAssetInventoryDTO dto)
     {
-        var gate = await EnsureInventorySessionDepartmentAccessAsync(sessionId);
+        var gate = await EnsureInventorySessionCreatorAccessAsync(sessionId);
         if (gate != null) return gate;
 
         if (dto.AssetInstanceId > 0 && dto.AssetInstanceId != assetInstanceId)
@@ -640,7 +657,8 @@ public class InventoryController : ControllerBase
         {
             if (!access.DepartmentId.HasValue)
                 return BadRequest(new { message = "Không xác định được phòng ban của bạn." });
-            dto.DepartmentId = access.DepartmentId.Value;
+            if (dto.DepartmentId != access.DepartmentId.Value)
+                return BadRequest(new { message = "Bạn chỉ được lập lịch kiểm kê cho phòng ban của bạn." });
         }
 
         dto.CreatedBy = currentUserId;
@@ -670,7 +688,7 @@ public class InventoryController : ControllerBase
     public async Task<ActionResult> SubmitTaskRecord(
         int id, int taskId, [FromBody] SubmitInventoryTaskDTO dto)
     {
-        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        var gate = await EnsureInventorySessionCreatorAccessAsync(id);
         if (gate != null) return gate;
 
         var session = await _context.InventorySessions.FindAsync(id);
@@ -817,7 +835,7 @@ public class InventoryController : ControllerBase
     [HttpPost("sessions/{id:int}/complete")]
     public async Task<ActionResult> CompleteSession(int id)
     {
-        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        var gate = await EnsureInventorySessionCreatorAccessAsync(id);
         if (gate != null) return gate;
 
         var session = await _context.InventorySessions
@@ -827,9 +845,6 @@ public class InventoryController : ControllerBase
 
         if (session == null)
             return NotFound();
-
-        if (session.Status == (int)InventorySessionStatus.Completed)
-            return BadRequest(new { message = "Phiên kiểm kê này đã hoàn thành." });
 
         if (session.Status != (int)InventorySessionStatus.InProgress)
             return BadRequest(new { message = "Chỉ có thể hoàn thành kiểm kê khi phiên đang ở trạng thái Đang thực hiện." });
@@ -878,7 +893,7 @@ public class InventoryController : ControllerBase
     [HttpGet("sessions/{id:int}/review-summary")]
     public async Task<ActionResult<InventoryReviewSummaryDTO>> GetReviewSummary(int id)
     {
-        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        var gate = await EnsureInventorySessionCreatorOrDirectorReviewAccessAsync(id);
         if (gate != null) return gate;
 
         var session = await _context.InventorySessions
@@ -977,12 +992,12 @@ public class InventoryController : ControllerBase
     }
 
     /// <summary>
-    /// POST /api/inventory/sessions/{id}/director-approve — Chờ xác nhận → Chờ xử lý (trưởng phòng xử lý sổ) hoặc Đã xử lý
+    /// POST /api/inventory/sessions/{id}/director-approve — Sau kiểm kê (Chờ xử lý) → xác nhận chênh lệch: Chờ xử lý sổ hoặc Đã xử lý
     /// </summary>
     [HttpPost("sessions/{id:int}/director-approve")]
     public async Task<ActionResult> DirectorApproveSession(int id, [FromBody] ReviewInventorySessionDTO dto)
     {
-        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        var gate = await EnsureInventorySessionCreatorOrDirectorModerateAsync(id);
         if (gate != null) return gate;
 
         var session = await _context.InventorySessions
@@ -998,8 +1013,9 @@ public class InventoryController : ControllerBase
         if (session == null)
             return NotFound();
 
-        if (session.Status != (int)InventorySessionStatus.Completed)
-            return BadRequest(new { message = "Chỉ có thể xác nhận khi phiên đang ở trạng thái Chờ xác nhận." });
+        if (session.Status != (int)InventorySessionStatus.Completed &&
+            session.Status != (int)InventorySessionStatus.PendingAccountant)
+            return BadRequest(new { message = "Chỉ có thể xác nhận khi phiên đang chờ xử lý sau kiểm kê." });
 
         const int bookQtyPerInstance = 1;
         var hasMismatch = false;
@@ -1062,12 +1078,12 @@ public class InventoryController : ControllerBase
     }
 
     /// <summary>
-    /// POST /api/inventory/sessions/{id}/reject — Yêu cầu kiểm kê lại: Chờ xác nhận → Đang thực hiện (reset nhiệm vụ để kiểm lại)
+    /// POST /api/inventory/sessions/{id}/reject — Yêu cầu kiểm kê lại: từ trạng thái chờ xử lý sau kiểm kê → Đang thực hiện
     /// </summary>
     [HttpPost("sessions/{id:int}/reject")]
     public async Task<ActionResult> RequestInventoryRecheck(int id, [FromBody] ReviewInventorySessionDTO dto)
     {
-        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        var gate = await EnsureInventorySessionCreatorOrDirectorModerateAsync(id);
         if (gate != null) return gate;
 
         var session = await _context.InventorySessions
@@ -1080,8 +1096,9 @@ public class InventoryController : ControllerBase
         if (session == null)
             return NotFound();
 
-        if (session.Status != (int)InventorySessionStatus.Completed)
-            return BadRequest(new { message = "Chỉ có thể yêu cầu kiểm kê lại khi phiên đang chờ xác nhận." });
+        if (session.Status != (int)InventorySessionStatus.Completed &&
+            session.Status != (int)InventorySessionStatus.PendingAccountant)
+            return BadRequest(new { message = "Chỉ có thể yêu cầu kiểm kê lại khi phiên đang chờ xử lý sau kiểm kê." });
 
         foreach (var task in session.InventoryTasks)
         {
@@ -1109,6 +1126,9 @@ public class InventoryController : ControllerBase
     [HttpPost("sessions/{id:int}/confirm")]
     public async Task<ActionResult> DepartmentHeadFinishInventoryResolution(int id, [FromBody] ReviewInventorySessionDTO dto)
     {
+        var creatorGate = await EnsureInventorySessionCreatorAccessAsync(id);
+        if (creatorGate != null) return creatorGate;
+
         var actorGate = await EnsureDepartmentHeadOrAdminForSessionAsync(id);
         if (actorGate != null) return actorGate;
 
@@ -1150,6 +1170,9 @@ public class InventoryController : ControllerBase
     [HttpPost("sessions/{sessionId:int}/discrepancies/{discrepancyId:int}/apply-actual")]
     public async Task<ActionResult> AccountantApplyDiscrepancyActual(int sessionId, int discrepancyId)
     {
+        var creatorGate = await EnsureInventorySessionCreatorAccessAsync(sessionId);
+        if (creatorGate != null) return creatorGate;
+
         var actorGate = await EnsureDepartmentHeadOrAdminForSessionAsync(sessionId);
         if (actorGate != null) return actorGate;
 
@@ -1240,7 +1263,7 @@ public class InventoryController : ControllerBase
     [HttpPut("sessions/{id:int}")]
     public async Task<ActionResult> UpdateSession(int id, [FromBody] UpdateInventorySessionDTO dto)
     {
-        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        var gate = await EnsureInventorySessionCreatorAccessAsync(id);
         if (gate != null) return gate;
 
         var session = await _context.InventorySessions.FindAsync(id);
@@ -1284,7 +1307,7 @@ public class InventoryController : ControllerBase
     [HttpPost("sessions/{id:int}/activate")]
     public async Task<ActionResult> ActivateSession(int id)
     {
-        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        var gate = await EnsureInventorySessionCreatorAccessAsync(id);
         if (gate != null) return gate;
 
         var session = await _context.InventorySessions.FindAsync(id);
@@ -1312,7 +1335,7 @@ public class InventoryController : ControllerBase
     [HttpPost("sessions/{id:int}/cancel")]
     public async Task<ActionResult> CancelSession(int id, [FromBody] ReviewInventorySessionDTO dto)
     {
-        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        var gate = await EnsureInventorySessionCreatorAccessAsync(id);
         if (gate != null) return gate;
 
         var session = await _context.InventorySessions
@@ -1388,7 +1411,7 @@ public class InventoryController : ControllerBase
     [HttpGet("sessions/{id:int}/discrepancies")]
     public async Task<ActionResult<IEnumerable<InventoryDiscrepancyDTO>>> GetDiscrepancies(int id)
     {
-        var gate = await EnsureInventorySessionDepartmentAccessAsync(id);
+        var gate = await EnsureInventorySessionCreatorOrDirectorReviewAccessAsync(id);
         if (gate != null) return gate;
 
         var sessionExists = await _context.InventorySessions.AnyAsync(s => s.SessionId == id);
@@ -1444,21 +1467,10 @@ public class InventoryController : ControllerBase
     [HttpGet("meta/departments")]
     public async Task<ActionResult<IEnumerable<DropdownItemDTO>>> GetDepartments()
     {
-        var access = await GetInventoryAccessAsync();
-        if (access.RestrictToDepartment)
-        {
-            if (!access.DepartmentId.HasValue)
-                return Ok(Array.Empty<DropdownItemDTO>());
-            var one = await _context.Departments
-                .AsNoTracking()
-                .Where(d => d.DepartmentId == access.DepartmentId.Value)
-                .Select(d => new DropdownItemDTO { Id = d.DepartmentId, Name = d.Name })
-                .ToListAsync();
-            return Ok(one);
-        }
-
+        // Full list for scheduling / filters; create-session still enforces department for scoped roles.
         var items = await _context.Departments
             .AsNoTracking()
+            .OrderBy(d => d.Name)
             .Select(d => new DropdownItemDTO { Id = d.DepartmentId, Name = d.Name })
             .ToListAsync();
         return Ok(items);
@@ -1544,25 +1556,105 @@ public class InventoryController : ControllerBase
         return new InventoryAccessInfo { RestrictToDepartment = true, DepartmentId = deptId };
     }
 
-    private async Task<ActionResult?> EnsureInventorySessionDepartmentAccessAsync(int sessionId)
+    /// <summary>Inventory session APIs are limited to the user who scheduled the session (<see cref="InventorySession.CreatedBy"/>).</summary>
+    private async Task<ActionResult?> EnsureInventorySessionCreatorAccessAsync(int sessionId)
     {
-        var access = await GetInventoryAccessAsync();
-        if (!access.RestrictToDepartment || !access.DepartmentId.HasValue)
-            return null;
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var createdBy = await _context.InventorySessions
+            .AsNoTracking()
+            .Where(s => s.SessionId == sessionId)
+            .Select(s => (int?)s.CreatedBy)
+            .FirstOrDefaultAsync();
+
+        if (!createdBy.HasValue)
+            return NotFound();
+
+        if (createdBy.Value != userId)
+            return Forbid();
+
+        return null;
+    }
+
+    private static bool IsDirectorRoleCode(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return false;
+        var c = code.Trim().ToLowerInvariant().Replace(' ', '_');
+        return c is "director" or "giám_đốc" or "giam_doc";
+    }
+
+    private async Task<bool> UserIsDirectorOrAdminForInventoryListingAsync(int userId)
+    {
+        var codes = await _context.UserRoles
+            .AsNoTracking()
+            .Where(ur => ur.UserId == userId)
+            .Select(ur => ur.Role.Code)
+            .ToListAsync();
+        return codes.Any(c => IsDirectorRoleCode(c) || IsAdminRoleCode(c));
+    }
+
+    private async Task<bool> UserIsDirectorAsync(int userId)
+    {
+        var codes = await _context.UserRoles
+            .AsNoTracking()
+            .Where(ur => ur.UserId == userId)
+            .Select(ur => ur.Role.Code)
+            .ToListAsync();
+        return codes.Any(IsDirectorRoleCode);
+    }
+
+    /// <summary>Creator, or director viewing a session in a post–field-work state (báo cáo / xác nhận).</summary>
+    private async Task<ActionResult?> EnsureInventorySessionCreatorOrDirectorReviewAccessAsync(int sessionId)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
 
         var row = await _context.InventorySessions
             .AsNoTracking()
             .Where(s => s.SessionId == sessionId)
-            .Select(s => new { s.DepartmentId })
+            .Select(s => new { s.CreatedBy, s.Status })
             .FirstOrDefaultAsync();
 
         if (row == null)
             return NotFound();
 
-        if (row.DepartmentId != access.DepartmentId.Value)
+        if (row.CreatedBy == userId)
+            return null;
+
+        if (!await UserIsDirectorAsync(userId))
+            return Forbid();
+
+        if (row.Status != (int)InventorySessionStatus.Completed
+            && row.Status != (int)InventorySessionStatus.Confirmed
+            && row.Status != (int)InventorySessionStatus.PendingAccountant)
             return Forbid();
 
         return null;
+    }
+
+    /// <summary>Creator or director (phê duyệt / yêu cầu kiểm kê lại).</summary>
+    private async Task<ActionResult?> EnsureInventorySessionCreatorOrDirectorModerateAsync(int sessionId)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var createdBy = await _context.InventorySessions
+            .AsNoTracking()
+            .Where(s => s.SessionId == sessionId)
+            .Select(s => (int?)s.CreatedBy)
+            .FirstOrDefaultAsync();
+
+        if (!createdBy.HasValue)
+            return NotFound();
+
+        if (createdBy.Value == userId)
+            return null;
+
+        if (await UserIsDirectorAsync(userId))
+            return null;
+
+        return Forbid();
     }
 
     /// <summary>Trưởng phòng (đúng phòng ban phiên) hoặc Admin: cập nhật sổ / hoàn tất xử lý chênh lệch kiểm kê.</summary>
@@ -1982,7 +2074,7 @@ public class InventoryController : ControllerBase
     {
         0 => "Đã lên lịch",
         1 => "Đang thực hiện",
-        2 => "Chờ xác nhận",
+        2 => "Chờ xử lý",
         3 => "Đã hủy",
         4 => "Đã xử lý",
         5 => "Đến lịch",

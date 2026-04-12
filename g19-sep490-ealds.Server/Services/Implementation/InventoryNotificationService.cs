@@ -99,7 +99,7 @@ public class InventoryNotificationService : IInventoryNotificationService
         {
             _db.Notifications.Add(new Notification
             {
-                Title = TruncateTitle($"Chờ xác nhận kiểm kê: {session.Code}"),
+                Title = TruncateTitle($"Chờ xử lý kiểm kê: {session.Code}"),
                 Content = TruncateContent(
                     $"Trưởng phòng đã xử lý chênh lệch / báo cáo phiên {session.Code}. Vui lòng xác nhận."),
                 RefId = null,
