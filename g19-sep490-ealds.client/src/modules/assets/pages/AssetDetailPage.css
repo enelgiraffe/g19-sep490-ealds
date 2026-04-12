@@ -462,6 +462,11 @@
   min-height: 41px;
 }
 
+.asset-detail__record-info-value--multiline {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .asset-detail__record-modal-footer {
   display: flex;
   gap: 12px;

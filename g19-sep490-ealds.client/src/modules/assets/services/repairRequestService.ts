@@ -31,6 +31,8 @@ export interface RepairStartPayload {
   expectedCompletionTo?: string | null;
   estimatedCost?: number | null;
   repairProgressStatus?: string | null;
+  supplierId?: number | null;
+  newSupplier?: { code: string; name: string } | null;
 }
 
 /** Khớp backend TransferRequestListItemDTO (một phần trường dùng cho sửa chữa). */
@@ -146,6 +148,14 @@ export interface RepairCompletePayload {
   result?: string;
   detailedDescription?: string | null;
   supplierId?: number | null;
+  newSupplier?: { code: string; name: string } | null;
   attachmentDocumentIds?: number[] | null;
   attachmentUrls?: string[] | null;
+  /** Bảo hành gắn biên bản sửa chữa; không cập nhật bảo hành tài sản. */
+  repairWarrantyStartDate?: string | null;
+  repairWarrantyEndDate?: string | null;
+  repairWarrantyPeriodValue?: number | null;
+  repairWarrantyPeriodUnit?: string | null;
+  repairWarrantyConditions?: string | null;
+  repairWarrantyNote?: string | null;
 }

@@ -300,6 +300,8 @@ public class AssetRequestsController : ControllerBase
             .Include(x => x.RepairTasks)
                 .ThenInclude(t => t.AssetInstance)
                     .ThenInclude(ai => ai.Asset)
+            .Include(x => x.RepairTasks)
+                .ThenInclude(t => t.Supplier)
             .Include(x => x.TransferRecords)
                 .ThenInclude(tr => tr.AssetInstance)
                     .ThenInclude(ai => ai.Asset)
@@ -344,7 +346,10 @@ public class AssetRequestsController : ControllerBase
                 t.EstimatedCost,
                 damageCondition = t.Reason,
                 t.Status,
+                t.RepairDate,
                 t.AssetInstanceId,
+                t.SupplierId,
+                supplierName = t.Supplier != null ? t.Supplier.Name : null,
                 InstanceCode = t.AssetInstance != null ? t.AssetInstance.InstanceCode : null,
                 AssetName = t.AssetInstance != null && t.AssetInstance.Asset != null ? t.AssetInstance.Asset.Name : null
             }),

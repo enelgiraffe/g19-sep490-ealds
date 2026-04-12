@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import type { AssetDetailResponse, AssetInstanceResponse } from '../../assets/services/assetService';
 import { getStatusLabel } from '../../assets/services/assetService';
+import { supplierService, type SupplierItem } from '../../admin/services/supplierService';
 import './RepairStartModal.css';
 
 interface RepairStartRow {
@@ -19,6 +20,8 @@ export interface RepairStartFormValues {
   repairDate: string;
   expectedCompletionDate?: string;
   repairProgressStatus: string;
+  supplierId: number | null;
+  newSupplier: { code: string; name: string } | null;
 }
 
 interface RepairStartModalProps {
@@ -83,6 +86,11 @@ function RepairStartModalInner({
   const [repairDate, setRepairDate] = useState('');
   const [expectedCompletionDate, setExpectedCompletionDate] = useState('');
   const [repairProgressStatus, setRepairProgressStatus] = useState('');
+  const [suppliers, setSuppliers] = useState<SupplierItem[]>([]);
+  const [useNewSupplier, setUseNewSupplier] = useState(false);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<number | ''>('');
+  const [newSupplierCode, setNewSupplierCode] = useState('');
+  const [newSupplierName, setNewSupplierName] = useState('');
   const reportNumber = useMemo(() => {
     if (!open || !row) return '';
     return `BBSC-${dayjs().format('YYYYMMDD-HHmmss')}`;
@@ -97,9 +105,29 @@ function RepairStartModalInner({
       setRepairDate(today);
       setExpectedCompletionDate('');
       setRepairProgressStatus('');
+      setUseNewSupplier(false);
+      setSelectedSupplierId('');
+      setNewSupplierCode('');
+      setNewSupplierName('');
     }, 0);
     return () => window.clearTimeout(timer);
   }, [open, row]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await supplierService.getAll();
+        if (!cancelled) setSuppliers(list);
+      } catch {
+        if (!cancelled) setSuppliers([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const assetInfo = useMemo(() => {
     const instances = asset?.instances ?? [];
@@ -145,6 +173,13 @@ function RepairStartModalInner({
 
   const handleSubmit = () => {
     if (!damageDate || !repairDate || !repairProgressStatus.trim()) return;
+    if (useNewSupplier && (!newSupplierCode.trim() || !newSupplierName.trim())) return;
+
+    const pickedId =
+      !useNewSupplier && selectedSupplierId !== '' && selectedSupplierId !== 0
+        ? Number(selectedSupplierId)
+        : null;
+
     onSubmit({
       reportNumber: reportNumber.trim(),
       damageDate: toIsoDate(damageDate),
@@ -152,6 +187,10 @@ function RepairStartModalInner({
       repairDate: toIsoDate(repairDate),
       expectedCompletionDate: toIsoDateOrUndefined(expectedCompletionDate),
       repairProgressStatus: repairProgressStatus.trim(),
+      supplierId: useNewSupplier ? null : pickedId,
+      newSupplier: useNewSupplier
+        ? { code: newSupplierCode.trim(), name: newSupplierName.trim() }
+        : null,
     });
   };
 
@@ -279,6 +318,77 @@ function RepairStartModalInner({
 
               <div className="repair-start-form-section">
                 <h3 className="repair-start-section-title">Thông tin sửa chữa</h3>
+                <div className="repair-start-form__item repair-start-form__item--full">
+                  <label>Đơn vị sửa chữa</label>
+                  {!useNewSupplier ? (
+                    <>
+                      <select
+                        id="repair-start-supplier"
+                        className="repair-start-input"
+                        value={selectedSupplierId === '' ? '' : String(selectedSupplierId)}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setSelectedSupplierId(v === '' ? '' : Number(v));
+                        }}
+                      >
+                        <option value="">— Chọn đơn vị —</option>
+                        {suppliers.map((s) => (
+                          <option key={s.supplierId} value={s.supplierId}>
+                            {s.name} ({s.code})
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="repair-start-link-btn"
+                        onClick={() => {
+                          setUseNewSupplier(true);
+                          setSelectedSupplierId('');
+                        }}
+                      >
+                        Thêm đơn vị mới…
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="repair-start-inline-fields">
+                        <div className="repair-start-form__item repair-start-form__item--inline">
+                          <label htmlFor="repair-start-new-supplier-code">Mã đơn vị</label>
+                          <input
+                            id="repair-start-new-supplier-code"
+                            type="text"
+                            className="repair-start-input"
+                            value={newSupplierCode}
+                            onChange={(e) => setNewSupplierCode(e.target.value)}
+                            maxLength={50}
+                          />
+                        </div>
+                        <div className="repair-start-form__item repair-start-form__item--inline">
+                          <label htmlFor="repair-start-new-supplier-name">Tên đơn vị</label>
+                          <input
+                            id="repair-start-new-supplier-name"
+                            type="text"
+                            className="repair-start-input"
+                            value={newSupplierName}
+                            onChange={(e) => setNewSupplierName(e.target.value)}
+                            maxLength={200}
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="repair-start-link-btn"
+                        onClick={() => {
+                          setUseNewSupplier(false);
+                          setNewSupplierCode('');
+                          setNewSupplierName('');
+                        }}
+                      >
+                        ← Chọn từ danh sách
+                      </button>
+                    </>
+                  )}
+                </div>
                 <div className="repair-start-info-row">
                   <div>
                     <div className="repair-start-form__item">
@@ -328,7 +438,7 @@ function RepairStartModalInner({
             type="button"
             onClick={handleSubmit}
             className="repair-start-btn-submit"
-            disabled={submitting || loading}
+            disabled={submitting || loading || (useNewSupplier && (!newSupplierCode.trim() || !newSupplierName.trim()))}
           >
             {submitting ? 'Đang gửi...' : 'Bắt đầu'}
           </button>

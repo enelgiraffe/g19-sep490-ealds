@@ -23,9 +23,13 @@ public partial class RepairTask
 
     public string? RepairProgressStatus { get; set; }
 
+    public int? SupplierId { get; set; }
+
     public virtual AssetInstance AssetInstance { get; set; } = null!;
 
     public virtual AssetRequest AssetRequest { get; set; } = null!;
+
+    public virtual Supplier? Supplier { get; set; }
 
     public virtual ICollection<RepairRecord> RepairRecords { get; set; } = new List<RepairRecord>();
 }

@@ -183,8 +183,42 @@
   border-color: #4b5563;
 }
 
+.repair-start-form__item--full {
+  width: 100%;
+}
+
+.repair-start-inline-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+  margin-top: 6px;
+}
+
+.repair-start-form__item--inline {
+  margin-bottom: 0;
+}
+
+.repair-start-link-btn {
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #2563eb;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.repair-start-link-btn:hover {
+  color: #1d4ed8;
+}
+
 @media (max-width: 900px) {
   .repair-start-info-row {
+    grid-template-columns: 1fr;
+  }
+
+  .repair-start-inline-fields {
     grid-template-columns: 1fr;
   }
 }

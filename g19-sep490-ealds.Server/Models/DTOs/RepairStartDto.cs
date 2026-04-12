@@ -25,4 +25,10 @@ public class RepairStartDto
     public DateTime? ExpectedCompletionTo { get; set; }
     public decimal? EstimatedCost { get; set; }
     public string? RepairProgressStatus { get; set; }
+
+    /// <summary>Đơn vị sửa chữa (Supplier đã có); có thể bỏ trống.</summary>
+    public int? SupplierId { get; set; }
+
+    /// <summary>Tạo đơn vị mới (mã + tên); nếu có thì ưu tiên hơn SupplierId.</summary>
+    public RepairSupplierCreateDto? NewSupplier { get; set; }
 }

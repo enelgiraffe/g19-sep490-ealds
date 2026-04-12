@@ -30,4 +30,6 @@ public partial class Supplier
     public virtual ICollection<Procurement> Procurements { get; set; } = new List<Procurement>();
 
     public virtual ICollection<RepairRecord> RepairRecords { get; set; } = new List<RepairRecord>();
+
+    public virtual ICollection<RepairTask> RepairTasks { get; set; } = new List<RepairTask>();
 }

@@ -10,8 +10,10 @@ import {
   getMaintenanceRecordStatusLabel,
   isRepairMaintenanceRecord,
   maintenanceRecordService,
+  mergeMaintenanceAndRepairHistory,
   type MaintenanceRecordResponse,
 } from '../services/maintenanceRecordService';
+import { repairRecordService } from '../services/repairRecordService';
 import {
   maintenanceScheduleService,
   type MaintenanceScheduleResponse,
@@ -28,6 +30,39 @@ function formatDate(iso?: string | null): string {
   } catch {
     return iso;
   }
+}
+
+function formatCalendarDateOnly(value?: string | null): string {
+  if (!value?.trim()) return '—';
+  const t = value.trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
+  if (!m) return formatDate(t);
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return d.toLocaleDateString('vi-VN');
+}
+
+function getRepairWarrantyPeriodLabel(value?: number | null, unit?: string | null): string {
+  if (value == null || !unit?.trim()) return '—';
+  const normalized = unit.trim().toLowerCase();
+  if (normalized === 'day' || normalized === 'days') return `${value} ngày`;
+  if (normalized === 'week' || normalized === 'weeks') return `${value} tuần`;
+  if (normalized === 'month' || normalized === 'months') return `${value} tháng`;
+  if (normalized === 'year' || normalized === 'years') return `${value} năm`;
+  return `${value} ${unit}`;
+}
+
+const REPAIR_WARRANTY_EXTERNAL_PREFIX = 'Mã BH ngoài:';
+
+function splitRepairWarrantyStoredConditions(raw?: string | null): { code: string; details: string } {
+  const source = String(raw ?? '').trim();
+  if (!source) return { code: '', details: '' };
+  const [firstLine, ...rest] = source.split('\n');
+  if (!firstLine?.trim().startsWith(REPAIR_WARRANTY_EXTERNAL_PREFIX)) {
+    return { code: '', details: source };
+  }
+  const code = firstLine.replace(REPAIR_WARRANTY_EXTERNAL_PREFIX, '').trim();
+  const details = rest.join('\n').trim();
+  return { code, details };
 }
 
 function formatCurrentLocationLabel(row: AssetInstanceResponse): string {
@@ -141,17 +176,18 @@ export function AssetInstanceDetailPage() {
     setError(null);
     async function load() {
       try {
-        const [instRes, profileRes, scheduleRes, recordRes] = await Promise.all([
+        const [instRes, profileRes, scheduleRes, recordRes, repairRes] = await Promise.all([
           assetInstanceService.getById(instanceId),
           profileService.getProfile().catch(() => null),
           maintenanceScheduleService.findByInstanceId(instanceId).catch(() => []),
           maintenanceRecordService.getByInstanceId(instanceId).catch(() => []),
+          repairRecordService.getByInstanceId(instanceId).catch(() => []),
         ]);
         if (cancelled) return;
         setInstance(instRes);
         if (profileRes) setProfile(profileRes);
         setMaintenanceSchedules(scheduleRes);
-        setMaintenanceRecords(recordRes);
+        setMaintenanceRecords(mergeMaintenanceAndRepairHistory(recordRes, repairRes));
       } catch {
         if (!cancelled) setError('Không tải được thông tin cá thể.');
       } finally {
@@ -467,6 +503,7 @@ export function AssetInstanceDetailPage() {
                   <th>NGÀY THỰC HIỆN</th>
                   <th>NỘI DUNG CÔNG VIỆC</th>
                   <th>CHI PHÍ</th>
+                  <th>ĐƠN VỊ SỬA CHỮA</th>
                   <th>TÌNH TRẠNG TRƯỚC</th>
                   <th>TÌNH TRẠNG SAU</th>
                   <th>GHI CHÚ KỸ THUẬT</th>
@@ -477,11 +514,16 @@ export function AssetInstanceDetailPage() {
               <tbody>
                 {maintenanceRecords.length > 0 ? (
                   maintenanceRecords.map((record) => (
-                    <tr key={record.recordId}>
+                    <tr key={`${record.recordSource ?? 'maintenance'}-${record.recordId}`}>
                       <td>{formatDate(record.executionDate)}</td>
                       <td>{getCleanWorkPerformedText(record.workPerformed)}</td>
                       <td>
                         {record.totalCost != null ? formatVnd(record.totalCost) : '—'}
+                      </td>
+                      <td>
+                        {isRepairMaintenanceRecord(record)
+                          ? record.repairUnitName?.trim() || '—'
+                          : '—'}
                       </td>
                       <td>{record.conditionBefore || '—'}</td>
                       <td>{record.conditionAfter || '—'}</td>
@@ -510,7 +552,7 @@ export function AssetInstanceDetailPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={8} className="asset-detail__empty">
+                    <td colSpan={9} className="asset-detail__empty">
                       Chưa có lịch sử bảo trì/bảo dưỡng cho cá thể này.
                     </td>
                   </tr>
@@ -686,6 +728,75 @@ export function AssetInstanceDetailPage() {
                         </div>
                       </div>
                     </div>
+
+                    {detailRecordIsRepair ? (
+                      <div className="asset-detail__record-info-row asset-detail__record-info-row--single">
+                        <div className="asset-detail__record-info-item">
+                          <label>Đơn vị sửa chữa</label>
+                          <div className="asset-detail__record-info-value">
+                            {selectedMaintenanceRecord.repairUnitName?.trim() || '—'}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {detailRecordIsRepair ? (
+                      <>
+                        <div className="asset-detail__record-info-row">
+                          <div className="asset-detail__record-info-item">
+                            <label>Ngày bắt đầu BH sửa chữa</label>
+                            <div className="asset-detail__record-info-value">
+                              {formatCalendarDateOnly(selectedMaintenanceRecord.repairWarrantyStartDate)}
+                            </div>
+                          </div>
+                          <div className="asset-detail__record-info-item">
+                            <label>Ngày hết hạn BH sửa chữa</label>
+                            <div className="asset-detail__record-info-value">
+                              {formatCalendarDateOnly(selectedMaintenanceRecord.repairWarrantyEndDate)}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="asset-detail__record-info-row asset-detail__record-info-row--single">
+                          <div className="asset-detail__record-info-item">
+                            <label>Thời hạn bảo hành sửa chữa</label>
+                            <div className="asset-detail__record-info-value">
+                              {getRepairWarrantyPeriodLabel(
+                                selectedMaintenanceRecord.repairWarrantyPeriodValue,
+                                selectedMaintenanceRecord.repairWarrantyPeriodUnit
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="asset-detail__record-info-row asset-detail__record-info-row--single">
+                          <div className="asset-detail__record-info-item">
+                            <label>Mã bảo hành ngoài (sửa chữa)</label>
+                            <div className="asset-detail__record-info-value">
+                              {splitRepairWarrantyStoredConditions(
+                                selectedMaintenanceRecord.repairWarrantyConditions
+                              ).code || '—'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="asset-detail__record-info-row asset-detail__record-info-row--single">
+                          <div className="asset-detail__record-info-item">
+                            <label>Nội dung điều khoản bảo hành sửa chữa</label>
+                            <div className="asset-detail__record-info-value asset-detail__record-info-value--multiline">
+                              {splitRepairWarrantyStoredConditions(
+                                selectedMaintenanceRecord.repairWarrantyConditions
+                              ).details || '—'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="asset-detail__record-info-row asset-detail__record-info-row--single">
+                          <div className="asset-detail__record-info-item">
+                            <label>Ghi chú bảo hành sửa chữa</label>
+                            <div className="asset-detail__record-info-value asset-detail__record-info-value--multiline">
+                              {selectedMaintenanceRecord.repairWarrantyNote?.trim() || '—'}
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
                 </div>
               </div>
