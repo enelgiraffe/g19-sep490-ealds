@@ -83,7 +83,6 @@ function RepairStartModalInner({
 }: RepairStartModalProps) {
   const [damageDate, setDamageDate] = useState('');
   const [damageCondition, setDamageCondition] = useState('');
-  const [repairDate, setRepairDate] = useState('');
   const [expectedCompletionDate, setExpectedCompletionDate] = useState('');
   const [repairProgressStatus, setRepairProgressStatus] = useState('');
   const [suppliers, setSuppliers] = useState<SupplierItem[]>([]);
@@ -96,13 +95,18 @@ function RepairStartModalInner({
     return `BBSC-${dayjs().format('YYYYMMDD-HHmmss')}`;
   }, [open, row]);
 
+  /** Ngày sửa chữa: cố định theo ngày mở form (hôm nay tại thời điểm bắt đầu). */
+  const repairDateToday = useMemo(() => {
+    if (!open || !row) return '';
+    return dayjs().format('YYYY-MM-DD');
+  }, [open, row]);
+
   useEffect(() => {
     if (!open || !row) return;
     const today = dayjs().format('YYYY-MM-DD');
     const timer = window.setTimeout(() => {
       setDamageDate(today);
       setDamageCondition(row.condition || '');
-      setRepairDate(today);
       setExpectedCompletionDate('');
       setRepairProgressStatus('');
       setUseNewSupplier(false);
@@ -172,7 +176,7 @@ function RepairStartModalInner({
   if (!open) return null;
 
   const handleSubmit = () => {
-    if (!damageDate || !repairDate || !repairProgressStatus.trim()) return;
+    if (!damageDate || !repairDateToday || !repairProgressStatus.trim()) return;
     if (useNewSupplier && (!newSupplierCode.trim() || !newSupplierName.trim())) return;
 
     const pickedId =
@@ -184,7 +188,7 @@ function RepairStartModalInner({
       reportNumber: reportNumber.trim(),
       damageDate: toIsoDate(damageDate),
       damageCondition: damageCondition.trim(),
-      repairDate: toIsoDate(repairDate),
+      repairDate: toIsoDate(repairDateToday),
       expectedCompletionDate: toIsoDateOrUndefined(expectedCompletionDate),
       repairProgressStatus: repairProgressStatus.trim(),
       supplierId: useNewSupplier ? null : pickedId,
@@ -299,7 +303,7 @@ function RepairStartModalInner({
                       type="date"
                       className="repair-start-input"
                       value={damageDate}
-                      onChange={(e) => setDamageDate(e.target.value)}
+                      readOnly
                     />
                   </div>
                   <div className="repair-start-form__item">
@@ -309,7 +313,7 @@ function RepairStartModalInner({
                       className="repair-start-textarea"
                       rows={4}
                       value={damageCondition}
-                      onChange={(e) => setDamageCondition(e.target.value)}
+                      readOnly
                       placeholder="VD: Hỏng nhẹ"
                     />
                   </div>
@@ -399,8 +403,9 @@ function RepairStartModalInner({
                         id="repair-start-repair-date"
                         type="date"
                         className="repair-start-input"
-                        value={repairDate}
-                        onChange={(e) => setRepairDate(e.target.value)}
+                        value={repairDateToday}
+                        disabled
+                        title="Luôn là ngày hiện tại khi mở form"
                       />
                     </div>
                     <div className="repair-start-form__item">
@@ -409,8 +414,13 @@ function RepairStartModalInner({
                         id="repair-start-expected-date"
                         type="date"
                         className="repair-start-input"
+                        min={repairDateToday || undefined}
                         value={expectedCompletionDate}
-                        onChange={(e) => setExpectedCompletionDate(e.target.value)}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v && repairDateToday && v < repairDateToday) return;
+                          setExpectedCompletionDate(v);
+                        }}
                       />
                     </div>
                   </div>
