@@ -21,6 +21,10 @@ public partial class User
 
     public DateTime? ResetPasswordTokenExpiryTime { get; set; }
 
+    public int AccessFailedCount { get; set; }
+
+    public DateTime? LockoutEnd { get; set; }
+
     public virtual ICollection<BudgetAllocation> BudgetAllocationsSubmitted { get; set; } = new List<BudgetAllocation>();
 
     public virtual ICollection<Approval> Approvals { get; set; } = new List<Approval>();

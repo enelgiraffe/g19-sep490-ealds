@@ -34,6 +34,9 @@ public class AuthController : ControllerBase
     private int AccountantRoleId =>
         _configuration.GetValue("App:AccountantRoleId", 3);
 
+    private const int MaxFailedLoginAttemptsBeforeLockout = 5;
+    private static readonly TimeSpan LoginLockoutDuration = TimeSpan.FromMinutes(30);
+
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
     {
@@ -43,11 +46,53 @@ public class AuthController : ControllerBase
         var user = await _context.Users
             .FirstOrDefaultAsync(u => u.Email == request.Email);
 
-        if (user == null || user.Password != request.Password)
+        if (user == null)
             return Unauthorized(new { message = "Email hoặc mật khẩu không đúng." });
+
+        var now = DateTime.UtcNow;
+        if (user.LockoutEnd.HasValue && user.LockoutEnd <= now)
+        {
+            user.LockoutEnd = null;
+            user.AccessFailedCount = 0;
+            await _context.SaveChangesAsync();
+        }
 
         if (user.Status == 0)
             return Unauthorized(new { message = "Tài khoản đã bị vô hiệu hóa." });
+
+        if (user.LockoutEnd.HasValue && user.LockoutEnd > now)
+        {
+            var remaining = user.LockoutEnd.Value - now;
+            var minutes = Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes));
+            return Unauthorized(new
+            {
+                message = $"Tài khoản đã bị khóa do đăng nhập sai quá nhiều lần. Vui lòng thử lại sau {minutes} phút."
+            });
+        }
+
+        if (user.Password != request.Password)
+        {
+            user.AccessFailedCount++;
+            if (user.AccessFailedCount >= MaxFailedLoginAttemptsBeforeLockout)
+            {
+                user.LockoutEnd = now.Add(LoginLockoutDuration);
+                user.AccessFailedCount = 0;
+            }
+
+            await _context.SaveChangesAsync();
+            if (user.LockoutEnd.HasValue && user.LockoutEnd > now)
+            {
+                return Unauthorized(new
+                {
+                    message = "Đăng nhập sai quá 5 lần. Tài khoản bị khóa trong 30 phút."
+                });
+            }
+
+            return Unauthorized(new { message = "Email hoặc mật khẩu không đúng." });
+        }
+
+        user.AccessFailedCount = 0;
+        user.LockoutEnd = null;
 
         var roleRows = await _context.UserRoles
             .Where(ur => ur.UserId == user.UserId)
@@ -189,6 +234,9 @@ public class AuthController : ControllerBase
 
         if (user == null || user.ResetPasswordTokenExpiryTime == null || user.ResetPasswordTokenExpiryTime < DateTime.UtcNow)
             return BadRequest(new { message = "Token không hợp lệ hoặc đã hết hạn." });
+
+        if (string.Equals(user.Password, request.NewPassword, StringComparison.Ordinal))
+            return BadRequest(new { message = "Mật khẩu mới không được trùng với mật khẩu cũ." });
 
         user.Password = request.NewPassword;
         user.ResetPasswordToken = null;

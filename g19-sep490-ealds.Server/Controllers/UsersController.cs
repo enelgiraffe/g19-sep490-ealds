@@ -239,15 +239,8 @@ public class UsersController : ControllerBase
         }
 
         if (!string.Equals(user.Email, dto.Email, StringComparison.OrdinalIgnoreCase))
-        {
-            var duplicatedEmail = await _context.Users.AnyAsync(u => u.Email == dto.Email && u.UserId != id);
-            if (duplicatedEmail)
-            {
-                return BadRequest("A user with this email already exists.");
-            }
-        }
+            return BadRequest(new { message = "Không thể thay đổi email." });
 
-        user.Email = dto.Email;
         user.Status = dto.Status;
         employee.Name = dto.FullName;
         employee.Phone = dto.Phone;
@@ -429,6 +422,9 @@ public class UsersController : ControllerBase
         {
             return NotFound();
         }
+
+        if (string.Equals(user.Password, dto.NewPassword, StringComparison.Ordinal))
+            return BadRequest(new { message = "Mật khẩu mới không được trùng với mật khẩu cũ." });
 
         user.Password = dto.NewPassword;
         await _context.SaveChangesAsync();

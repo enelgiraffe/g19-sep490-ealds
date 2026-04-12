@@ -59,6 +59,7 @@ export function PasswordTab() {
         <Form.Item
           label="Nhập mật khẩu mới"
           name="newPassword"
+          dependencies={['currentPassword']}
           rules={[
             { required: true, message: 'Vui lòng nhập mật khẩu mới' },
             { min: 8, message: 'Mật khẩu phải có ít nhất 8 ký tự.' },
@@ -66,6 +67,17 @@ export function PasswordTab() {
               pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d]).{8,}$/,
               message: 'Mật khẩu phải bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt.',
             },
+            ({ getFieldValue }) => ({
+              validator(_, value) {
+                const current = getFieldValue('currentPassword') as string | undefined;
+                if (!value || !current || value !== current) {
+                  return Promise.resolve();
+                }
+                return Promise.reject(
+                  new Error('Mật khẩu mới không được trùng với mật khẩu hiện tại.'),
+                );
+              },
+            }),
           ]}
         >
           <Input.Password

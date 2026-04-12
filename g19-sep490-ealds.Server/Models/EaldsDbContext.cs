@@ -1298,6 +1298,8 @@ public partial class EaldsDbContext : DbContext
             entity.Property(e => e.RefreshTokenExpiryTime).HasColumnType("datetime");
             entity.Property(e => e.ResetPasswordToken).HasMaxLength(255);
             entity.Property(e => e.ResetPasswordTokenExpiryTime).HasColumnType("datetime");
+            entity.Property(e => e.AccessFailedCount).HasDefaultValue(0);
+            entity.Property(e => e.LockoutEnd).HasColumnType("datetime2");
         });
 
         modelBuilder.Entity<UserRole>(entity =>
