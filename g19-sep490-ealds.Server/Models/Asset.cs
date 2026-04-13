@@ -1,5 +1,5 @@
-using System;
-using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
 namespace g19_sep490_ealds.Server.Models;
 
@@ -23,6 +23,10 @@ public partial class Asset
 
     public DateOnly? InUseDate { get; set; }
 
+    public int? SupplierId { get; set; }
+
+    public string? ContractNo { get; set; }
+
     public string? Specification { get; set; }
 
     public string? Note { get; set; }
@@ -37,7 +41,16 @@ public partial class Asset
 
     public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
 
+    public virtual Supplier? Supplier { get; set; }
+
     public virtual ICollection<MaintenanceSchedule> MaintenanceSchedules { get; set; } = new List<MaintenanceSchedule>();
 
     public virtual ICollection<AssetAllocationOrderLine> AssetAllocationOrderLines { get; set; } = new List<AssetAllocationOrderLine>();
+
+    [NotMapped]
+    public AssetStatus StatusEnum
+    {
+        get => (AssetStatus)Status;
+        set => Status = (int)value;
+    }
 }

@@ -4,6 +4,7 @@ namespace g19_sep490_ealds.Server.DTO.RequestDTO.AssetMaintenance.MaintenanceSch
 
 public class ScheduleUpdateDTO
 {
+    public int AssetInstanceId { get; set; }
     public int AssetId { get; set; }
 
     public int? TemplateId { get; set; }

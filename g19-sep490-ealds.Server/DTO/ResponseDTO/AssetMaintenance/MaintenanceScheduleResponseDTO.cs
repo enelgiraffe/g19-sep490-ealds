@@ -6,9 +6,8 @@ public class MaintenanceScheduleResponseDTO
 {
     public int ScheduleId { get; set; }
 
-    public int AssetId { get; set; }
-
     public int? AssetInstanceId { get; set; }
+    public int? AssetId { get; set; }
 
     public string? InstanceCode { get; set; }
 

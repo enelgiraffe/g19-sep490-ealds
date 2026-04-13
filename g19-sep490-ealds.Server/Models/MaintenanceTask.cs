@@ -1,5 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using g19_sep490_ealds.Server.Utils.EnumsStatus;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace g19_sep490_ealds.Server.Models;
 
@@ -48,4 +48,10 @@ public partial class MaintenanceTask
     public virtual User? PerformerUser { get; set; }
 
     public virtual MaintenanceSchedule? Schedule { get; set; }
+    [NotMapped]
+    public MaintenanceTaskStatus StatusEnum
+    {
+        get => (MaintenanceTaskStatus)Status;
+        set => Status = (int)value;
+    }
 }

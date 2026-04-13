@@ -1,5 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using g19_sep490_ealds.Server.Utils.EnumsStatus;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace g19_sep490_ealds.Server.Models;
 
@@ -40,4 +40,20 @@ public partial class MaintenanceSchedule
     public virtual ICollection<MaintenanceTask> MaintenanceTasks { get; set; } = new List<MaintenanceTask>();
 
     public virtual MaintenanceTemplate Template { get; set; } = null!;
+    [NotMapped]
+    public ScheduleType ScheduleTypeEnum
+    {
+        get => (ScheduleType)ScheduleType;
+        set => ScheduleType = (int)value;
+    }
+
+    [NotMapped]
+    public MaintenanceRepeatIntervalUnit? IntervalUnitEnum
+    {
+        get => IntervalUnit.HasValue
+            ? (MaintenanceRepeatIntervalUnit)IntervalUnit.Value
+            : null;
+
+        set => IntervalUnit = value.HasValue ? (int)value.Value : null;
+    }
 }

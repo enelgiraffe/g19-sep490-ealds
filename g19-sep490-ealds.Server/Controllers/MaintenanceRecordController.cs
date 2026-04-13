@@ -16,6 +16,7 @@ public class MaintenanceRecordController : ControllerBase
     }
 
     [HttpGet("asset/{assetId}")]
+    [HttpGet("assetInstance/{assetId}")]
     public async Task<IActionResult> GetByAsset(int assetId)
     {
         var result = await _service.GetRecordsByAssetAsync(assetId);

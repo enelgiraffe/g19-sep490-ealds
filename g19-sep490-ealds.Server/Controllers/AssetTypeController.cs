@@ -1,8 +1,6 @@
 ﻿using g19_sep490_ealds.Server.DTO.RequestDTO.AssetType;
-using g19_sep490_ealds.Server.Mappers;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Net;
 

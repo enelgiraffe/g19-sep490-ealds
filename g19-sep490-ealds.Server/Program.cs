@@ -106,6 +106,8 @@ builder.Services.AddScoped<IAssetRequestNotificationService, AssetRequestNotific
 // Asset capitalization
 builder.Services.AddScoped<IAssetCapitalizationMapper, AssetCapitalizationMapper>();
 builder.Services.AddScoped<IAssetCapitalizationService, AssetCapitalizationService>();
+builder.Services.AddScoped<IAssetDepreciationService, AssetDepreciationService>();
+builder.Services.AddScoped<IAssetRevaluationService, AssetRevaluationService>();
 
 // Asset type (controller/service exists)
 builder.Services.AddScoped<IAssetTypeMapper, AssetTypeMapper>();
@@ -129,6 +131,18 @@ builder.Services.AddQuartz(q =>
         .ForJob(inventoryNotifyJobKey)
         .WithIdentity("InventoryScheduledCheckNotificationJob-trigger")
         .WithCronSchedule("0 */15 * * * ?")); // 15 phút/lần — nhắc trong khung Đến lịch (tối đa 1 TB/ngày/user/phiên)
+});
+
+builder.Services.AddQuartz(q =>
+{
+    var jobKey = new JobKey("DepreciationJob");
+
+    q.AddJob<DepreciationJobs>(opts => opts.WithIdentity(jobKey));
+
+    q.AddTrigger(opts => opts
+        .ForJob(jobKey)
+        .WithIdentity("DepreciationJob-trigger")
+        .WithCronSchedule("0 5 0 1 * ?")); // 00:05 ngày 1 mỗi tháng
 });
 //dky host service cho Quarzt
 builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);

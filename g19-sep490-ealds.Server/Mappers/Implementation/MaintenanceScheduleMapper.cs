@@ -30,7 +30,11 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
     public MaintenanceSchedule CreateToEntity(ScheduleCreateDTO create)
     {
         MaintenanceSchedule schedule = new MaintenanceSchedule();
-        schedule.AssetId = create.AssetId;
+        schedule.AssetInstanceId = create.AssetInstanceId;
+        schedule.ScheduleTypeEnum = create.ScheduleType;
+        schedule.IntervalValue = create.IntervalValue;
+        schedule.IntervalUnitEnum = create.IntervalUnit;
+        schedule.AssetInstanceId = create.AssetInstanceId;
         schedule.TemplateId = create.TemplateId ?? 0;
         schedule.Content = string.IsNullOrWhiteSpace(create.Content) ? null : create.Content.Trim();
         schedule.ScheduleType = (int)create.ScheduleType;
@@ -47,7 +51,7 @@ public class MaintenanceScheduleMapper : IMaintenanceScheduleMapper
     {
         MaintenanceSchedule schedule = new MaintenanceSchedule();
         schedule.ScheduleId = delete.ScheduleId;
-        schedule.AssetId = delete.AssetId;
+        schedule.AssetInstanceId = delete.AssetInstanceId;
         schedule.TemplateId = delete.TemplateId ?? 0;
         schedule.Content = string.IsNullOrWhiteSpace(delete.Content) ? null : delete.Content.Trim();
         schedule.ScheduleType = (int)delete.ScheduleType;

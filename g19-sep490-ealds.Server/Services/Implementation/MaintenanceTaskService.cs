@@ -39,17 +39,17 @@ public class MaintenanceTaskService : IMaintenanceTaskService
 
         task.Status = (int)MaintenanceTaskStatus.InProgress;
 
-        var asset = task.AssetInstance;
-        var oldStatus = asset.Status;
+        var assetInstance = task.AssetInstance;
+        var oldStatus = assetInstance.Status;
 
-        asset.Status = (int)AssetStatus.UnderMaintenance;
+        assetInstance.Status = (int)AssetStatus.UnderMaintenance;
 
         await _context.SaveChangesAsync();
 
         await _mediator.Publish(new AssetStatusChangedEvent(
-            asset.AssetInstanceId,
+            assetInstance.AssetInstanceId,
             oldStatus,
-            asset.Status,
+            assetInstance.Status,
             userId,
             roleId
         ));

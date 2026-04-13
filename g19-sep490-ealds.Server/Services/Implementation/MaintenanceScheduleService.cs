@@ -21,7 +21,7 @@ public class MaintenanceScheduleService : IMaintenanceScheduleService
 
     public async Task<MaintenanceScheduleResponseDTO> CreateScheduleAsync(ScheduleCreateDTO create)
     {
-        var asset = await _context.Assets.FindAsync(create.AssetId)
+        var asset = await _context.AssetInstances.FindAsync(create.AssetInstanceId)
         ?? throw new Exception("Asset not found");
         var hasTemplate = create.TemplateId.HasValue && create.TemplateId.Value > 0;
         var hasContent = !string.IsNullOrWhiteSpace(create.Content);

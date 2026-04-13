@@ -1,4 +1,5 @@
 using g19_sep490_ealds.Server.DTO.ResponseDTO.AssetMaintenance;
+using g19_sep490_ealds.Server.Mappers;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
@@ -9,9 +10,12 @@ namespace g19_sep490_ealds.Server.Services.Implementation;
 public class MaintenanceRecordService : IMaintenanceRecordService
 {
     private readonly EaldsDbContext _context;
+    private readonly IMaintenanceRecordMapper _mapper;
 
-    public MaintenanceRecordService(EaldsDbContext context)
+    public MaintenanceRecordService(
+        IMaintenanceRecordMapper mapper, EaldsDbContext context)
     {
+        _mapper = mapper;
         _context = context;
     }
 

@@ -22,6 +22,7 @@ public class MaintenanceTaskJobs : IJob
         _scope = scope;
     }
 
+    // Điểm vào Quartz: tạo task bảo trì từ các lịch đang hoạt động.
     public async Task Execute(IJobExecutionContext context)
     {
         _logger.LogInformation("Maintenance Task Job started at {time}", DateTime.Now);
@@ -38,17 +39,29 @@ public class MaintenanceTaskJobs : IJob
         _logger.LogInformation("Maintenance Task Job finished at {time}", DateTime.Now);
     }
 
+    // Quét lịch đến hạn/quá hạn, tạo task chờ xử lý và dời ngày đến hạn kế tiếp.
     private async Task GenerateTasks()
     {
         using var scope = _scope.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<EaldsDbContext>();
+        var nowLocal = DateTime.UtcNow.AddHours(7);
+
+        // Tự ngắt các lịch đã qua ngày kết thúc.
+        var expiredSchedules = await db.MaintenanceSchedules
+            .Where(x => x.IsActive && x.EndDate.HasValue && x.EndDate.Value < nowLocal)
+            .ToListAsync();
+        foreach (var expired in expiredSchedules)
+        {
+            expired.IsActive = false;
+        }
 
         var schedules = await db.MaintenanceSchedules.Where(x => x.IsActive == true
                                                                  && x.NextDueDate != null
-                                                                 && x.NextDueDate <= DateTime.UtcNow.AddHours(7)).ToListAsync();
+                                                                 && x.NextDueDate <= nowLocal).ToListAsync();
 
         foreach (var schedule in schedules)
         {
+            // Tránh tạo trùng task cho cùng lịch và cùng ngày kế hoạch.
             var exist = await db.MaintenanceTasks.AnyAsync(x => x.ScheduleId == schedule.ScheduleId
                                                                && x.PlannedDate == schedule.NextDueDate!.Value.Date
                                                                && x.Status != (int)MaintenanceTaskStatus.Completed);
@@ -59,6 +72,7 @@ public class MaintenanceTaskJobs : IJob
             int? assetInstanceId = schedule.AssetInstanceId;
             if (!assetInstanceId.HasValue && schedule.AssetId.HasValue)
             {
+                // Fallback: chọn instance đầu tiên khi lịch được đặt ở cấp asset.
                 assetInstanceId = await db.AssetInstances
                     .Where(ai => ai.AssetId == schedule.AssetId.Value)
                     .OrderBy(ai => ai.AssetInstanceId)
@@ -85,6 +99,7 @@ public class MaintenanceTaskJobs : IJob
 
             db.MaintenanceTasks.Add(task);
 
+            // Đẩy lịch sang chu kỳ kế tiếp sau khi đã tạo task.
             schedule.NextDueDate = _service.CalculateNextDueDate(schedule);
         }
 
