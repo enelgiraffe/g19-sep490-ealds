@@ -873,14 +873,7 @@ export function GoodsReceiptFormModal({ open, onClose, onSubmit }: GoodsReceiptF
                                             >
                                               Áp dụng cho Mã cá thể
                                             </button>
-                                            <button
-                                              type="button"
-                                              className="gr-form-btn-preview"
-                                              style={{ height: '32px', padding: '0 16px', fontSize: '13px' }}
-                                              onClick={() => applyPatternSerials(line.lineId)}
-                                            >
-                                              Áp dụng cho Serial
-                                            </button>
+                                            
                                             <button
                                               type="button"
                                               className="gr-form-btn-secondary"

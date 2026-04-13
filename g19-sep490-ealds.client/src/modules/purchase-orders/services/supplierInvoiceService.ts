@@ -44,8 +44,9 @@ export interface SupplierInvoiceListResponse {
 
 export interface SupplierInvoiceDetailLine {
   supplierInvoiceLineId: number;
-  procurementLineId: number;
+  procurementLineId: number | null;
   goodsReceiptLineId: number | null;
+  chargeDescription: string | null;
   assetId: number | null;
   assetCode: string | null;
   assetName: string | null;
@@ -71,8 +72,9 @@ export interface SupplierInvoiceDetail {
 }
 
 export interface SupplierInvoiceCreateLine {
-  procurementLineId: number;
+  procurementLineId: number | null;
   goodsReceiptLineId?: number | null;
+  chargeDescription?: string | null;
   quantity: number;
   unitPrice: number;
 }

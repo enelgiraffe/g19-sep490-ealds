@@ -1,4 +1,3 @@
-import { Button } from 'antd';
 import dayjs from 'dayjs';
 import { SUPPLIER_INVOICE_STATUS, type SupplierInvoiceDetail } from '../services/supplierInvoiceService';
 import './SupplierInvoiceDetailModal.css';
@@ -160,7 +159,9 @@ export function SupplierInvoiceDetailModal({
                         <tr key={line.supplierInvoiceLineId}>
                           <td>{idx + 1}</td>
                           <td>
-                            {[line.assetCode, line.assetName].filter(Boolean).join(' ') || '—'}
+                            {line.chargeDescription?.trim() ||
+                              [line.assetCode, line.assetName].filter(Boolean).join(' ') ||
+                              '—'}
                           </td>
                           <td style={{ textAlign: 'right' }}>
                             {Number(line.quantity).toLocaleString('en-US')}

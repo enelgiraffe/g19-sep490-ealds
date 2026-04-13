@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import dayjs, { type Dayjs } from 'dayjs';
-import { message } from 'antd';
 import {
   procurementPoService,
   type PurchaseOrderDetail,
@@ -14,6 +13,19 @@ interface PoLineEdit {
   procurementLineId: number;
   quantity: number;
   unitPrice: number;
+}
+
+interface MiscChargeRow {
+  id: string;
+  description: string;
+  amount: number;
+}
+
+function newMiscRowId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `misc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 interface ThreeWayMatchWarning {
@@ -43,8 +55,9 @@ interface SupplierInvoiceFormModalProps {
     invoiceDate: string;
     note: string | null;
     lines: Array<{
-      procurementLineId: number;
+      procurementLineId: number | null;
       goodsReceiptLineId?: number;
+      chargeDescription?: string | null;
       quantity: number;
       unitPrice: number;
     }>;
@@ -62,6 +75,7 @@ export function SupplierInvoiceFormModal({
   const [selectedPoId, setSelectedPoId] = useState<number | null>(null);
   const [poDetail, setPoDetail] = useState<PurchaseOrderDetail | null>(null);
   const [poLineEdits, setPoLineEdits] = useState<PoLineEdit[]>([]);
+  const [miscCharges, setMiscCharges] = useState<MiscChargeRow[]>([]);
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceDate, setInvoiceDate] = useState<Dayjs | null>(dayjs());
   const [note, setNote] = useState('');
@@ -78,6 +92,7 @@ export function SupplierInvoiceFormModal({
       setSelectedPoId(null);
       setPoDetail(null);
       setPoLineEdits([]);
+      setMiscCharges([]);
       setInvoiceNumber('');
       setInvoiceDate(dayjs());
       setNote('');
@@ -115,12 +130,18 @@ export function SupplierInvoiceFormModal({
 
   const onSelectPoForCreate = async (procurementId: number) => {
     setSelectedPoId(procurementId);
+    setMiscCharges([]);
     setRefLoading(true);
     setThreeWayWarnings([]);
     try {
       const d = await procurementPoService.getById(procurementId);
       setPoDetail(d);
       setSupplierId(d.supplierId);
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.supplierId;
+        return next;
+      });
       setPoLineEdits(
         d.lines.map((l) => ({
           procurementLineId: l.lineId,
@@ -253,6 +274,19 @@ export function SupplierInvoiceFormModal({
       }
     }
 
+    for (const m of miscCharges) {
+      const hasDesc = m.description.trim().length > 0;
+      const hasAmt = m.amount > 0;
+      if (hasDesc && !hasAmt) {
+        newErrors.miscCharges = 'Nhập số tiền cho mọi dòng chi phí đã đặt tên.';
+        break;
+      }
+      if (hasAmt && !hasDesc) {
+        newErrors.miscCharges = 'Nhập tên chi phí cho mọi dòng có số tiền.';
+        break;
+      }
+    }
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -278,13 +312,22 @@ export function SupplierInvoiceFormModal({
 
     setSubmitting(true);
     try {
-      const lines = poLineEdits
+      const poLines = poLineEdits
         .filter((r) => r.quantity > 0)
         .map((r) => ({
           procurementLineId: r.procurementLineId,
           quantity: r.quantity,
           unitPrice: r.unitPrice,
         }));
+      const extraLines = miscCharges
+        .filter((m) => m.description.trim() && m.amount > 0)
+        .map((m) => ({
+          procurementLineId: null as number | null,
+          chargeDescription: m.description.trim(),
+          quantity: 1,
+          unitPrice: m.amount,
+        }));
+      const lines = [...poLines, ...extraLines];
       await onSubmit({
         procurementId: selectedPoId!,
         goodsReceiptId: null,
@@ -301,8 +344,16 @@ export function SupplierInvoiceFormModal({
 
   if (!open) return null;
 
+  const supplierLocked = Boolean(poDetail);
+  const supplierDisplayName =
+    suppliers.find((s) => s.supplierId === supplierId)?.name ??
+    poDetail?.supplierName ??
+    '';
+
   const poLineById = new Map(poDetail?.lines.map((l) => [l.lineId, l]) ?? []);
-  const totalAmount = poLineEdits.reduce((sum, r) => sum + r.quantity * r.unitPrice, 0);
+  const poSubtotal = poLineEdits.reduce((sum, r) => sum + r.quantity * r.unitPrice, 0);
+  const miscSubtotal = miscCharges.reduce((sum, m) => sum + (m.amount > 0 ? m.amount : 0), 0);
+  const totalAmount = poSubtotal + miscSubtotal;
 
   return (
     <div className="supplier-invoice-modal-overlay" role="dialog" aria-modal="true">
@@ -357,39 +408,54 @@ export function SupplierInvoiceFormModal({
 
               <div className="supplier-invoice-form__row">
                 <div className="supplier-invoice-form__item">
-                  <label htmlFor="supplier-select">
+                  <label htmlFor={supplierLocked ? 'supplier-readonly' : 'supplier-select'}>
                     Nhà cung cấp<span style={{ color: '#ef4444' }}>*</span>
                   </label>
-                  <select
-                    id="supplier-select"
-                    className="supplier-invoice-select"
-                    value={supplierId ?? ''}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const newSupplierId = val ? Number(val) : null;
-                      setSupplierId(newSupplierId);
-                      if (val) {
-                        setErrors((prev) => {
-                          const next = { ...prev };
-                          delete next.supplierId;
-                          return next;
-                        });
-                        // Trigger duplicate check if invoice number is already entered
-                        if (invoiceNumber.trim() && newSupplierId) {
-                          checkDuplicateInvoice(invoiceNumber, newSupplierId);
+                  {supplierLocked ? (
+                    <>
+                      <input
+                        id="supplier-readonly"
+                        type="text"
+                        readOnly
+                        className="supplier-invoice-input supplier-invoice-input--disabled"
+                        value={supplierDisplayName}
+                        title="Nhà cung cấp theo đơn mua đã chọn"
+                      />
+                      <div style={{ marginTop: 4, fontSize: 12, color: '#6b7280' }}>
+                        Theo đơn mua đã chọn, không thể thay đổi nhà cung cấp.
+                      </div>
+                    </>
+                  ) : (
+                    <select
+                      id="supplier-select"
+                      className="supplier-invoice-select"
+                      value={supplierId ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const newSupplierId = val ? Number(val) : null;
+                        setSupplierId(newSupplierId);
+                        if (val) {
+                          setErrors((prev) => {
+                            const next = { ...prev };
+                            delete next.supplierId;
+                            return next;
+                          });
+                          if (invoiceNumber.trim() && newSupplierId) {
+                            checkDuplicateInvoice(invoiceNumber, newSupplierId);
+                          }
+                        } else {
+                          setDuplicateWarning('');
                         }
-                      } else {
-                        setDuplicateWarning('');
-                      }
-                    }}
-                  >
-                    <option value="">-- Chọn nhà cung cấp --</option>
-                    {suppliers.map((s) => (
-                      <option key={s.supplierId} value={s.supplierId}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
+                      }}
+                    >
+                      <option value="">-- Chọn nhà cung cấp --</option>
+                      {suppliers.map((s) => (
+                        <option key={s.supplierId} value={s.supplierId}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   {errors.supplierId && (
                     <div className="supplier-invoice-error-text">{errors.supplierId}</div>
                   )}
@@ -474,20 +540,6 @@ export function SupplierInvoiceFormModal({
                     <div className="supplier-invoice-error-text">{errors.invoiceDate}</div>
                   )}
                 </div>
-
-                <div className="supplier-invoice-form__item">
-                  <label htmlFor="total-amount">Tổng tiền</label>
-                  <div className="supplier-invoice-money-display">
-                    <input
-                      id="total-amount"
-                      type="text"
-                      className="supplier-invoice-input--disabled"
-                      value={totalAmount.toLocaleString('en-US')}
-                      readOnly
-                    />
-                    <span className="supplier-invoice-money-suffix">đ</span>
-                  </div>
-                </div>
               </div>
 
               <div className="supplier-invoice-form__item">
@@ -538,7 +590,6 @@ export function SupplierInvoiceFormModal({
                         <th style={{ width: '100px' }}>SL đơn mua</th>
                         <th style={{ width: '120px' }}>SL trên HĐ</th>
                         <th style={{ width: '150px' }}>Đơn giá (đ)</th>
-                        <th style={{ width: '150px' }}>Thành tiền (đ)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -587,15 +638,129 @@ export function SupplierInvoiceFormModal({
                                 placeholder="0"
                               />
                             </td>
-                            <td style={{ textAlign: 'right' }}>
-                              {(r.quantity * r.unitPrice).toLocaleString('en-US')}
-                            </td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
                 </div>
+
+                <div className="supplier-invoice-misc">
+                  <div className="supplier-invoice-misc__head">
+                    <h4 className="supplier-invoice-misc__title">Chi phí thêm (ngoài dòng đơn mua)</h4>
+                    <button
+                      type="button"
+                      className="supplier-invoice-btn-add-misc"
+                      onClick={() => {
+                        setMiscCharges((prev) => [
+                          ...prev,
+                          { id: newMiscRowId(), description: '', amount: 0 },
+                        ]);
+                        setErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.miscCharges;
+                          return next;
+                        });
+                      }}
+                    >
+                      + Thêm dòng chi phí
+                    </button>
+                  </div>
+                  <p className="supplier-invoice-misc__hint">
+                    Ví dụ phí vận chuyển, lắp đặt… Các khoản này được cộng vào tổng tiền bên dưới.
+                  </p>
+                  {miscCharges.length > 0 && (
+                    <div className="supplier-invoice-table-wrapper">
+                      <table className="supplier-invoice-table supplier-invoice-table--misc">
+                        <thead>
+                          <tr>
+                            <th style={{ width: '40px' }}>#</th>
+                            <th>Tên chi phí</th>
+                            <th style={{ width: '180px' }}>Số tiền (đ)</th>
+                            <th style={{ width: '48px' }} />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {miscCharges.map((m, idx) => (
+                            <tr key={m.id}>
+                              <td>{idx + 1}</td>
+                              <td>
+                                <input
+                                  type="text"
+                                  className="supplier-invoice-input"
+                                  value={m.description}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    setMiscCharges((prev) =>
+                                      prev.map((row) => (row.id === m.id ? { ...row, description: v } : row)),
+                                    );
+                                    setErrors((p) => {
+                                      const n = { ...p };
+                                      delete n.miscCharges;
+                                      return n;
+                                    });
+                                  }}
+                                  placeholder="VD: Phí vận chuyển"
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  type="text"
+                                  className="supplier-invoice-input-number"
+                                  inputMode="numeric"
+                                  value={m.amount > 0 ? m.amount.toLocaleString('en-US') : ''}
+                                  onChange={(e) => {
+                                    const val = parseNumberInput(e.target.value) ?? 0;
+                                    setMiscCharges((prev) =>
+                                      prev.map((row) => (row.id === m.id ? { ...row, amount: val } : row)),
+                                    );
+                                    setErrors((p) => {
+                                      const n = { ...p };
+                                      delete n.miscCharges;
+                                      return n;
+                                    });
+                                  }}
+                                  placeholder="0"
+                                />
+                              </td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className="supplier-invoice-btn-remove-misc"
+                                  onClick={() =>
+                                    setMiscCharges((prev) => prev.filter((row) => row.id !== m.id))
+                                  }
+                                  aria-label="Xóa dòng"
+                                >
+                                  ×
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                <div className="supplier-invoice-grand-total">
+                  <span className="supplier-invoice-grand-total__label">Tổng tiền</span>
+                  <div className="supplier-invoice-money-display supplier-invoice-grand-total__value">
+                    <input
+                      id="invoice-grand-total"
+                      type="text"
+                      className="supplier-invoice-input--disabled"
+                      value={totalAmount.toLocaleString('en-US')}
+                      readOnly
+                      aria-readonly="true"
+                    />
+                    <span className="supplier-invoice-money-suffix">đ</span>
+                  </div>
+                </div>
+
+                {errors.miscCharges && (
+                  <div className="supplier-invoice-error-text">{errors.miscCharges}</div>
+                )}
                 {errors.lines && <div className="supplier-invoice-error-text">{errors.lines}</div>}
               </div>
             )}

@@ -127,7 +127,7 @@ public class SupplierInvoicesController : ControllerBase
             return NotFound();
 
         var lines = await _db.SupplierInvoiceLines.AsNoTracking()
-            .Include(l => l.ProcurementLine).ThenInclude(pl => pl.Asset!)
+            .Include(l => l.ProcurementLine).ThenInclude(pl => pl!.Asset!)
             .Include(l => l.GoodsReceiptLine).ThenInclude(gl => gl!.Asset!)
             .Where(l => l.SupplierInvoiceId == id)
             .OrderBy(l => l.SupplierInvoiceLineId)
@@ -136,14 +136,15 @@ public class SupplierInvoicesController : ControllerBase
         var lineDtos = lines.Select(l =>
         {
             var pl = l.ProcurementLine;
-            var assetId = l.GoodsReceiptLine?.AssetId ?? pl.AssetId;
-            var code = l.GoodsReceiptLine?.Asset?.Code ?? pl.Asset?.Code;
-            var name = l.GoodsReceiptLine?.Asset?.Name ?? pl.Asset?.Name;
+            var assetId = l.GoodsReceiptLine?.AssetId ?? pl?.AssetId;
+            var code = l.GoodsReceiptLine?.Asset?.Code ?? pl?.Asset?.Code;
+            var name = l.GoodsReceiptLine?.Asset?.Name ?? pl?.Asset?.Name;
             return new SupplierInvoiceDetailLineDto
             {
                 SupplierInvoiceLineId = l.SupplierInvoiceLineId,
                 ProcurementLineId = l.ProcurementLineId,
                 GoodsReceiptLineId = l.GoodsReceiptLineId,
+                ChargeDescription = l.ChargeDescription,
                 AssetId = assetId,
                 AssetCode = code,
                 AssetName = name,
@@ -225,18 +226,51 @@ public class SupplierInvoicesController : ControllerBase
 
         var plById = procurement.Lines.ToDictionary(l => l.LineId);
 
-        var normalized = new List<(SupplierInvoiceCreateLineDto Row, decimal LineTotal)>();
+        var normalized = new List<(int? ProcurementLineId, string? ChargeDescription, int? GoodsReceiptLineId, decimal Quantity, decimal UnitPrice, decimal LineTotal)>();
+        var hasPositivePoLine = false;
+
         foreach (var row in dto.Lines)
         {
-            if (!plById.TryGetValue(row.ProcurementLineId, out var pl))
-                return BadRequest($"Procurement line {row.ProcurementLineId} is not on this order.");
+            var plId = row.ProcurementLineId;
+            var isMisc = plId is null or <= 0;
+
+            if (isMisc)
+            {
+                if (dto.GoodsReceiptId is > 0)
+                    return BadRequest("Ad-hoc charge lines are not supported when invoicing from a goods receipt.");
+
+                var desc = string.IsNullOrWhiteSpace(row.ChargeDescription) ? null : row.ChargeDescription.Trim();
+                if (string.IsNullOrEmpty(desc))
+                    return BadRequest("Each ad-hoc charge line must have a description (charge name).");
+                if (desc.Length > 500)
+                    return BadRequest("Charge description is too long.");
+                if (row.GoodsReceiptLineId.HasValue)
+                    return BadRequest("Ad-hoc charge lines cannot reference a goods receipt line.");
+                if (row.Quantity <= 0)
+                    return BadRequest("Ad-hoc charge line: quantity must be positive.");
+                if (row.UnitPrice < 0)
+                    return BadRequest("Ad-hoc charge line: unit price cannot be negative.");
+
+                var miscTotal = RoundMoney(row.Quantity * row.UnitPrice);
+                if (miscTotal <= 0)
+                    continue;
+
+                normalized.Add((null, desc, null, row.Quantity, row.UnitPrice, miscTotal));
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(row.ChargeDescription))
+                return BadRequest($"Procurement line {plId}: charge description must be empty for order lines.");
+
+            if (!plById.TryGetValue(plId!.Value, out var pl))
+                return BadRequest($"Procurement line {plId} is not on this order.");
             if (pl.ProcurementId != dto.ProcurementId)
-                return BadRequest($"Procurement line {row.ProcurementLineId} does not match order.");
+                return BadRequest($"Procurement line {plId} does not match order.");
 
             if (row.Quantity <= 0)
-                return BadRequest($"Line {row.ProcurementLineId}: quantity must be positive.");
+                return BadRequest($"Line {plId}: quantity must be positive.");
             if (row.UnitPrice < 0)
-                return BadRequest($"Line {row.ProcurementLineId}: unit price cannot be negative.");
+                return BadRequest($"Line {plId}: unit price cannot be negative.");
 
             if (dto.GoodsReceiptId is > 0)
             {
@@ -245,22 +279,29 @@ public class SupplierInvoicesController : ControllerBase
                 var grlId = row.GoodsReceiptLineId.Value;
                 if (grLineById == null || !grLineById.TryGetValue(grlId, out var grl))
                     return BadRequest($"Goods receipt line {grlId} not found.");
-                if (grl.ProcurementLineId != row.ProcurementLineId)
-                    return BadRequest($"Goods receipt line {grlId} does not match procurement line {row.ProcurementLineId}.");
+                if (grl.ProcurementLineId != plId)
+                    return BadRequest($"Goods receipt line {grlId} does not match procurement line {plId}.");
                 if (row.Quantity > grl.QuantityReceived)
-                    return BadRequest($"Line {row.ProcurementLineId}: quantity cannot exceed quantity on the goods receipt ({grl.QuantityReceived}).");
+                    return BadRequest($"Line {plId}: quantity cannot exceed quantity on the goods receipt ({grl.QuantityReceived}).");
             }
             else
             {
                 if (row.GoodsReceiptLineId.HasValue)
                     return BadRequest("Goods receipt line must be empty when no goods receipt is selected.");
                 if (row.Quantity > pl.Quantity)
-                    return BadRequest($"Line {row.ProcurementLineId}: quantity cannot exceed ordered quantity ({pl.Quantity}).");
+                    return BadRequest($"Line {plId}: quantity cannot exceed ordered quantity ({pl.Quantity}).");
             }
 
+            hasPositivePoLine = true;
             var lineTotal = RoundMoney(row.Quantity * row.UnitPrice);
-            normalized.Add((row, lineTotal));
+            normalized.Add((plId, null, dto.GoodsReceiptId is > 0 ? row.GoodsReceiptLineId : null, row.Quantity, row.UnitPrice, lineTotal));
         }
+
+        if (!hasPositivePoLine)
+            return BadRequest("Enter quantity > 0 for at least one purchase order line.");
+
+        if (normalized.Count == 0)
+            return BadRequest("At least one invoice line with amount > 0 is required.");
 
         var totalAmount = normalized.Sum(x => x.LineTotal);
 
@@ -281,16 +322,17 @@ public class SupplierInvoicesController : ControllerBase
         _db.SupplierInvoices.Add(entity);
         await _db.SaveChangesAsync();
 
-        foreach (var (row, lineTotal) in normalized)
+        foreach (var row in normalized)
         {
             _db.SupplierInvoiceLines.Add(new SupplierInvoiceLine
             {
                 SupplierInvoiceId = entity.SupplierInvoiceId,
                 ProcurementLineId = row.ProcurementLineId,
-                GoodsReceiptLineId = dto.GoodsReceiptId is > 0 ? row.GoodsReceiptLineId!.Value : null,
+                ChargeDescription = row.ChargeDescription,
+                GoodsReceiptLineId = dto.GoodsReceiptId is > 0 ? row.GoodsReceiptLineId : null,
                 Quantity = row.Quantity,
                 UnitPrice = row.UnitPrice,
-                LineTotal = lineTotal,
+                LineTotal = row.LineTotal,
             });
         }
 

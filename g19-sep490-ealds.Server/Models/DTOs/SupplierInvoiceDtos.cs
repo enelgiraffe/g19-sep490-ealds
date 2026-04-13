@@ -5,13 +5,17 @@ namespace g19_sep490_ealds.Server.Models.DTOs;
 
 public class SupplierInvoiceCreateLineDto
 {
-    public int ProcurementLineId { get; set; }
+    /// <summary>Null for ad-hoc charge lines (shipping, other fees).</summary>
+    public int? ProcurementLineId { get; set; }
 
     public int? GoodsReceiptLineId { get; set; }
 
     public decimal Quantity { get; set; }
 
     public decimal UnitPrice { get; set; }
+
+    /// <summary>Required when <see cref="ProcurementLineId"/> is null.</summary>
+    public string? ChargeDescription { get; set; }
 }
 
 public class SupplierInvoiceCreateDto
@@ -54,8 +58,9 @@ public class SupplierInvoiceListResponseDto
 public class SupplierInvoiceDetailLineDto
 {
     public int SupplierInvoiceLineId { get; set; }
-    public int ProcurementLineId { get; set; }
+    public int? ProcurementLineId { get; set; }
     public int? GoodsReceiptLineId { get; set; }
+    public string? ChargeDescription { get; set; }
     public int? AssetId { get; set; }
     public string? AssetCode { get; set; }
     public string? AssetName { get; set; }

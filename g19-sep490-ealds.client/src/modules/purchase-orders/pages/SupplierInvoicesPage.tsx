@@ -102,8 +102,9 @@ export function SupplierInvoicesPage() {
     invoiceDate: string;
     note: string | null;
     lines: Array<{
-      procurementLineId: number;
+      procurementLineId: number | null;
       goodsReceiptLineId?: number;
+      chargeDescription?: string | null;
       quantity: number;
       unitPrice: number;
     }>;

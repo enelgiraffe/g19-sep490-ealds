@@ -1103,6 +1103,7 @@ public partial class EaldsDbContext : DbContext
             entity.Property(e => e.Quantity).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.UnitPrice).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.LineTotal).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ChargeDescription).HasMaxLength(500);
 
             entity.HasOne(d => d.SupplierInvoice).WithMany(h => h.Lines)
                 .HasForeignKey(d => d.SupplierInvoiceId)
@@ -1112,6 +1113,7 @@ public partial class EaldsDbContext : DbContext
             entity.HasOne(d => d.ProcurementLine).WithMany(l => l.SupplierInvoiceLines)
                 .HasForeignKey(d => d.ProcurementLineId)
                 .OnDelete(DeleteBehavior.Restrict)
+                .IsRequired(false)
                 .HasConstraintName("FK_SupplierInvoiceLine_ProcurementLine");
 
             entity.HasOne(d => d.GoodsReceiptLine).WithMany(l => l.SupplierInvoiceLines)

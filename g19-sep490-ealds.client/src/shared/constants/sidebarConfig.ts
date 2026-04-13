@@ -28,7 +28,6 @@ export const ROLE_MENU: Record<AppRole, SidebarItem[]> = {
     { key: 'transfers', path: '/transfers', label: 'Điều chuyển', icon: '/icons/sidebar-transfers.svg' },
     { key: 'allocations', path: '/allocations', label: 'Cấp phát & Hoàn trả', icon: '/icons/sidebar-allocations.svg' },
     { key: 'liquidation', path: '/liquidation', label: 'Thanh lý', icon: '/icons/sidebar-liquidation.svg' },
-    { key: 'cost-recording', path: '/cost-recording', label: 'Ghi nhận chi phí', icon: '/icons/sidebar-cost-recording.svg' },
     { key: 'requests', path: '/requests', label: 'Yêu cầu', icon: '/icons/sidebar-requests.svg' },
     { key: 'purchase-orders', path: '/purchase-orders', label: 'Đơn mua', icon: '/icons/sidebar-purchase-orders.svg' },
     {
