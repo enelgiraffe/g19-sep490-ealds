@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Services;
 using g19_sep490_ealds.Server.Services.Interface;
 
 namespace g19_sep490_ealds.Server.Controllers;
@@ -17,6 +18,8 @@ public class DirectorApproveController : ControllerBase
     private readonly IAssetRequestNotificationService _requestNotifications;
     private readonly int _transferRequestTypeId;
     private readonly int _purchaseRequestTypeId;
+    private readonly int _allocationRequestTypeId;
+    private readonly int _departmentHeadRoleId;
 
     public DirectorApproveController(
         EaldsDbContext db,
@@ -27,6 +30,8 @@ public class DirectorApproveController : ControllerBase
         _requestNotifications = requestNotifications;
         _transferRequestTypeId = configuration.GetValue<int>("App:TransferRequestTypeId", 3);
         _purchaseRequestTypeId = configuration.GetValue<int>("App:PurchaseRequestTypeId", 1);
+        _allocationRequestTypeId = configuration.GetValue<int>("App:AllocationRequestTypeId", 6);
+        _departmentHeadRoleId = configuration.GetValue<int>("App:DepartmentHeadRoleId", 4);
     }
 
     [HttpPost("{id}/approve")]
@@ -146,6 +151,16 @@ public class DirectorApproveController : ControllerBase
                 };
                 _db.Procurements.Add(procurement);
             }
+        }
+
+        if (isPurchase && ar.Status == 2)
+        {
+            await PurchaseLinkedAllocationRequestService.TryCreateAwaitingGoodsReceiptAllocationAsync(
+                _db,
+                ar,
+                _allocationRequestTypeId,
+                _departmentHeadRoleId,
+                dto.ApprovedBy);
         }
 
         await _db.SaveChangesAsync();

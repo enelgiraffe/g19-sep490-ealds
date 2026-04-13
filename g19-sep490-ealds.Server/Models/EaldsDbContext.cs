@@ -316,6 +316,7 @@ public partial class EaldsDbContext : DbContext
             entity.Property(e => e.Title).HasMaxLength(255);
 
             entity.HasIndex(e => e.AllocationTargetDepartmentId);
+            entity.HasIndex(e => e.SourcePurchaseRequestId);
 
             entity.HasOne(d => d.Asset).WithMany(p => p.AssetRequests)
                 .HasForeignKey(d => d.AssetId)
@@ -349,6 +350,11 @@ public partial class EaldsDbContext : DbContext
                 .WithOne(p => p.AssetRequest)
                 .HasForeignKey<AssetAllocationOrder>(p => p.AssetRequestId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne<AssetRequest>()
+                .WithMany()
+                .HasForeignKey(e => e.SourcePurchaseRequestId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
 
         modelBuilder.Entity<AssetRequestRecord>(entity =>

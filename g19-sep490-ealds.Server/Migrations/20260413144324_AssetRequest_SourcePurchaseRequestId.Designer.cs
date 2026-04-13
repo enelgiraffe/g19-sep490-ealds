@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using g19_sep490_ealds.Server.Models;
 
@@ -11,9 +12,11 @@ using g19_sep490_ealds.Server.Models;
 namespace g19_sep490_ealds.Server.Migrations
 {
     [DbContext(typeof(EaldsDbContext))]
-    partial class EaldsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260413144324_AssetRequest_SourcePurchaseRequestId")]
+    partial class AssetRequest_SourcePurchaseRequestId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

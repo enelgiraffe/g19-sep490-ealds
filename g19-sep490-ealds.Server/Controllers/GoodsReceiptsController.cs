@@ -5,11 +5,14 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Services;
+using g19_sep490_ealds.Server.Services.Interface;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Configuration;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -22,10 +25,17 @@ public class GoodsReceiptsController : ControllerBase
     public const int GoodsReceiptStatusPosted = 1;
 
     private readonly EaldsDbContext _db;
+    private readonly IAssetRequestNotificationService _requestNotifications;
+    private readonly int _allocationRequestTypeId;
 
-    public GoodsReceiptsController(EaldsDbContext db)
+    public GoodsReceiptsController(
+        EaldsDbContext db,
+        IAssetRequestNotificationService requestNotifications,
+        IConfiguration configuration)
     {
         _db = db;
+        _requestNotifications = requestNotifications;
+        _allocationRequestTypeId = configuration.GetValue<int>("App:AllocationRequestTypeId", 6);
     }
 
     private int? GetActorUserId()
@@ -413,6 +423,13 @@ public class GoodsReceiptsController : ControllerBase
 
             ApplyProcurementReceiptStatus(procurement);
             await _db.SaveChangesAsync();
+
+            var promotedIds = await PurchaseLinkedAllocationRequestService.TryPromoteAwaitingGoodsReceiptForProcurementAsync(
+                _db,
+                procurement.ProcurementId,
+                _allocationRequestTypeId);
+            foreach (var allocationRequestId in promotedIds)
+                await _requestNotifications.NotifyFirstApproversAsync(allocationRequestId);
 
             if (tx != null)
                 await tx.CommitAsync();

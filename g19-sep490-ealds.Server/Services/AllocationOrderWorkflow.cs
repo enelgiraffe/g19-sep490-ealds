@@ -18,6 +18,9 @@ public static class AllocationOrderWorkflow
     public const int RequestStatusRejected = 3;
     public const int RequestStatusDeptConfirmed = 4;
 
+    /// <summary>Allocation request created from an approved PR: waiting until linked PO is fully received (goods receipt).</summary>
+    public const int RequestStatusAwaitingGoodsReceipt = 5;
+
     private static readonly JsonSerializerOptions JsonRead = new()
     {
         PropertyNameCaseInsensitive = true
@@ -116,7 +119,8 @@ public static class AllocationOrderWorkflow
     internal static async Task<string?> ValidateLinesAgainstDatabaseAsync(
         EaldsDbContext db,
         ProposedRootJson root,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool validateWarehouseAvailability = true)
     {
         if (root.DepartmentId <= 0)
             return "Phòng ban không hợp lệ.";
@@ -143,9 +147,12 @@ public static class AllocationOrderWorkflow
             if (asset.AssetTypeId != line.AssetTypeId)
                 return $"Tài sản không thuộc loại đã chọn (dòng mã {asset.Code}).";
 
-            var available = await GetWarehouseAvailableCountAsync(db, line.AssetId, cancellationToken);
-            if (line.Quantity > available)
-                return $"Số lượng vượt quá tồn kho cho {asset.Name} (còn {available}).";
+            if (validateWarehouseAvailability)
+            {
+                var available = await GetWarehouseAvailableCountAsync(db, line.AssetId, cancellationToken);
+                if (line.Quantity > available)
+                    return $"Số lượng vượt quá tồn kho cho {asset.Name} (còn {available}).";
+            }
         }
 
         return null;
@@ -198,7 +205,7 @@ public static class AllocationOrderWorkflow
         if (!TryParseProposedData(ar.ProposedData, out var root, out var parseErr) || root == null)
             return parseErr;
 
-        var validation = await ValidateLinesAgainstDatabaseAsync(db, root, cancellationToken);
+        var validation = await ValidateLinesAgainstDatabaseAsync(db, root, cancellationToken, validateWarehouseAvailability: true);
         if (validation != null)
             return validation;
 

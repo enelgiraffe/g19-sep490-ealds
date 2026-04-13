@@ -39,6 +39,7 @@ const ALLOC_STATUS: Record<number, { label: string; color: string }> = {
   2: { label: 'Đã duyệt', color: 'processing' },
   3: { label: 'Từ chối', color: 'error' },
   4: { label: 'Hoàn tất', color: 'success' },
+  5: { label: 'Chờ nhận hàng (PR)', color: 'default' },
 };
 
 function statusPillClass(color: string): string {

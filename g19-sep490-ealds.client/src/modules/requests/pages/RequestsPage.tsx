@@ -89,6 +89,7 @@ const ALLOC_HANDOVER_ACCOUNTANT_STATUS_MAP: Record<number, { label: string; colo
   2: { label: 'Đã duyệt', color: 'processing' },
   3: { label: 'Từ chối', color: 'error' },
   4: { label: 'Hoàn tất', color: 'success' },
+  5: { label: 'Chờ nhận hàng (PR)', color: 'default' },
 };
 
 const MAINT_REPAIR_STATUS_MAP: Record<number, { label: string; color: string }> = {

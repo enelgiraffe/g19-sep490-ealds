@@ -31,6 +31,9 @@ public partial class AssetRequest
     /// <summary>When set (e.g. allocation requests), filters list queries by requesting department.</summary>
     public int? AllocationTargetDepartmentId { get; set; }
 
+    /// <summary>When an allocation request is auto-created from an approved purchase requisition, links to that PR.</summary>
+    public int? SourcePurchaseRequestId { get; set; }
+
     public virtual ICollection<Approval> Approvals { get; set; } = new List<Approval>();
 
     public virtual AssetAllocationOrder? AssetAllocationOrder { get; set; }

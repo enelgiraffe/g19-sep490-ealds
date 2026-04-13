@@ -37,6 +37,8 @@ export type DepartmentRequestsMode = 'allocation' | 'handover';
 
 function statusLabel(mode: DepartmentRequestsMode, status: number): { text: string; color: string } {
   switch (status) {
+    case 5:
+      return { text: 'Chờ nhận hàng (PR)', color: 'default' };
     case 0:
       return { text: 'Chờ kế toán', color: 'gold' };
     case 2:
