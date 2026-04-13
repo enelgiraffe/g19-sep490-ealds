@@ -12,6 +12,7 @@ import {
   HANDOVER_REQUEST_TYPE_ID,
   handoverRequestService,
 } from '../../allocations/services/handoverRequestService';
+import { assetService } from '../../assets/services/assetService';
 
 const { Text, Title } = Typography;
 const { TextArea } = Input;
@@ -71,6 +72,11 @@ export function AllocationHandoverAccountantRequestModal({
   const [actionMode, setActionMode] = useState<'approve' | 'reject'>('approve');
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  /** When đơn chưa có, map assetId → labels for proposed lines. */
+  const [proposedAssetLabels, setProposedAssetLabels] = useState<
+    Record<number, { name: string; code: string; assetTypeName: string }>
+  >({});
+  const [proposedLabelsLoading, setProposedLabelsLoading] = useState(false);
 
   const isAlloc = variant === 'allocation';
   const typeId = isAlloc ? ALLOCATION_REQUEST_TYPE_ID : HANDOVER_REQUEST_TYPE_ID;
@@ -79,6 +85,7 @@ export function AllocationHandoverAccountantRequestModal({
   const loadOrder = useCallback(async () => {
     if (!item?.assetAllocationOrderId) {
       setOrderDetail(null);
+      setOrderLoading(false);
       return;
     }
     setOrderLoading(true);
@@ -97,10 +104,61 @@ export function AllocationHandoverAccountantRequestModal({
   useEffect(() => {
     if (!open || !item) {
       setOrderDetail(null);
+      setOrderLoading(false);
       return;
     }
     void loadOrder();
   }, [open, item, loadOrder]);
+
+  useEffect(() => {
+    if (!open || !item || orderLoading || orderDetail != null) {
+      setProposedAssetLabels({});
+      setProposedLabelsLoading(false);
+      return;
+    }
+    const lines = parseProposedLines(item.proposedData);
+    const assetIds = [
+      ...new Set(lines.map((l) => l.assetId).filter((id): id is number => typeof id === 'number' && id > 0)),
+    ];
+    if (assetIds.length === 0) {
+      setProposedAssetLabels({});
+      setProposedLabelsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setProposedLabelsLoading(true);
+    void (async () => {
+      const entries = await Promise.all(
+        assetIds.map(async (id) => {
+          try {
+            const a = await assetService.getById(id);
+            return [
+              id,
+              {
+                name: a.name,
+                code: a.code,
+                assetTypeName: (a.assetTypeName ?? '').trim() || '—',
+              },
+            ] as const;
+          } catch {
+            return [id, null] as const;
+          }
+        }),
+      );
+      if (cancelled) return;
+      const next: Record<number, { name: string; code: string; assetTypeName: string }> = {};
+      for (const [id, row] of entries) {
+        if (row) next[id] = row;
+      }
+      setProposedAssetLabels(next);
+      setProposedLabelsLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, item, item?.proposedData, item?.assetRequestId, orderLoading, orderDetail]);
 
   const openAction = (mode: 'approve' | 'reject') => {
     setActionMode(mode);
@@ -173,9 +231,7 @@ export function AllocationHandoverAccountantRequestModal({
         destroyOnClose
       >
         <div style={{ marginBottom: 12 }}>
-          <Text type="secondary">
-            Gửi {item.createDate?.slice(0, 10)} · Loại #{item.requestTypeId}
-          </Text>
+          <Text type="secondary">Gửi {item.createDate?.slice(0, 10)}</Text>
         </div>
         <Title level={5} style={{ marginTop: 0 }}>
           {item.title}
@@ -217,16 +273,34 @@ export function AllocationHandoverAccountantRequestModal({
         ) : proposedLines.length > 0 ? (
           <>
             <Title level={5}>Dự kiến (theo yêu cầu)</Title>
-            <ul style={{ paddingLeft: 18, margin: '8px 0 0' }}>
-              {proposedLines.map((l, idx) => (
-                <li key={idx} style={{ marginBottom: 4 }}>
-                  <Text type="secondary">
-                    Loại #{l.assetTypeId ?? '—'} · Tài sản #{l.assetId ?? '—'} · SL: {l.quantity ?? '—'}
-                    {l.reason ? ` · ${l.reason}` : ''}
-                  </Text>
-                </li>
-              ))}
-            </ul>
+            {proposedLabelsLoading ? (
+              <Spin style={{ marginTop: 8 }} />
+            ) : (
+              <ul style={{ paddingLeft: 18, margin: '8px 0 0' }}>
+                {proposedLines.map((l, idx) => {
+                  const id = l.assetId;
+                  const resolved = id != null && id > 0 ? proposedAssetLabels[id] : undefined;
+                  const typeLabel = resolved?.assetTypeName ?? (l.assetTypeId != null ? `Loại #${l.assetTypeId}` : '—');
+                  const assetMain = resolved
+                    ? resolved.name
+                    : id != null && id > 0
+                      ? `Tài sản #${id}`
+                      : '—';
+                  const assetCode = resolved?.code ?? null;
+                  return (
+                    <li key={idx} style={{ marginBottom: 6 }}>
+                      <strong>{assetMain}</strong>
+                      {assetCode ? ` (${assetCode})` : ''} — {typeLabel}
+                      <br />
+                      <Text type="secondary">
+                        SL: {l.quantity ?? '—'}
+                        {l.reason ? ` · ${l.reason}` : ''}
+                      </Text>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </>
         ) : (
           <Text type="secondary">Không có dòng chi tiết trong yêu cầu.</Text>

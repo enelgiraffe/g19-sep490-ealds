@@ -27,6 +27,19 @@ public partial class RepairRecord
 
     public string? DamageCondition { get; set; }
 
+    /// <summary>Bảo hành theo lần sửa chữa (cấu trúc tương tự Guarantee; không cập nhật bảo hành tài sản).</summary>
+    public DateOnly? RepairWarrantyStartDate { get; set; }
+
+    public DateOnly? RepairWarrantyEndDate { get; set; }
+
+    public int? RepairWarrantyPeriodValue { get; set; }
+
+    public string? RepairWarrantyPeriodUnit { get; set; }
+
+    public string? RepairWarrantyConditions { get; set; }
+
+    public string? RepairWarrantyNote { get; set; }
+
     public virtual Supplier? Supplier { get; set; }
 
     public virtual RepairTask Task { get; set; } = null!;

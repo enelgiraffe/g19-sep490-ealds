@@ -1132,6 +1132,8 @@ public partial class EaldsDbContext : DbContext
             entity.Property(e => e.DamageDate).HasColumnType("datetime");
             entity.Property(e => e.RepairDate).HasColumnType("datetime");
             entity.Property(e => e.ReturnToUseDate).HasColumnType("datetime2");
+            entity.Property(e => e.RepairWarrantyPeriodUnit).HasMaxLength(20);
+            entity.Property(e => e.RepairWarrantyNote).HasMaxLength(2000);
 
             entity.HasOne(d => d.Supplier).WithMany(p => p.RepairRecords)
                 .HasForeignKey(d => d.SupplierId)
@@ -1152,6 +1154,7 @@ public partial class EaldsDbContext : DbContext
             entity.Property(e => e.EstimatedCost).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.ExpectedCompletionDate).HasColumnType("datetime");
             entity.Property(e => e.RepairDate).HasColumnType("datetime");
+            entity.Property(e => e.SupplierId).IsRequired(false);
 
             entity.HasOne(d => d.AssetInstance).WithMany(p => p.RepairTasks)
                 .HasForeignKey(d => d.AssetInstanceId)
@@ -1162,6 +1165,11 @@ public partial class EaldsDbContext : DbContext
                 .HasForeignKey(d => d.AssetRequestId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__RepairTas__Asset__151B244E");
+
+            entity.HasOne(d => d.Supplier).WithMany(p => p.RepairTasks)
+                .HasForeignKey(d => d.SupplierId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RepairTask_Supplier");
         });
 
         modelBuilder.Entity<RequestType>(entity =>
@@ -1292,6 +1300,8 @@ public partial class EaldsDbContext : DbContext
             entity.Property(e => e.RefreshTokenExpiryTime).HasColumnType("datetime");
             entity.Property(e => e.ResetPasswordToken).HasMaxLength(255);
             entity.Property(e => e.ResetPasswordTokenExpiryTime).HasColumnType("datetime");
+            entity.Property(e => e.AccessFailedCount).HasDefaultValue(0);
+            entity.Property(e => e.LockoutEnd).HasColumnType("datetime2");
         });
 
         modelBuilder.Entity<UserRole>(entity =>

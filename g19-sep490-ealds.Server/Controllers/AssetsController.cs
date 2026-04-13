@@ -82,6 +82,61 @@ public class AssetsController : ControllerBase
     }
 
     /// <summary>
+    /// GET /api/assets/catalog-eligible-asset-type-ids — Asset type ids that have at least one catalog asset returned by
+    /// <see cref="GetAll"/> for allocation (<paramref name="forAllocation"/> = true, warehouse stock) or handover
+    /// (department-scoped or any assigned instance when unrestricted).
+    /// </summary>
+    [HttpGet("catalog-eligible-asset-type-ids")]
+    public async Task<ActionResult<IReadOnlyList<int>>> GetCatalogEligibleAssetTypeIds([FromQuery] bool forAllocation)
+    {
+        var scope = await DepartmentAssetScope.ResolveForUserAsync(User, _context, _departmentHeadRoleId);
+        if (scope.IsRestricted && !scope.DepartmentId.HasValue)
+            return Ok(Array.Empty<int>());
+
+        if (forAllocation)
+        {
+            var allocationTypeIds = await _context.Assets
+                .AsNoTracking()
+                .Where(a => _context.AssetInstances.Any(i =>
+                    i.AssetId == a.AssetId &&
+                    !i.AssetLocations.Any(al => al.IsCurrent)))
+                .Select(a => a.AssetTypeId)
+                .Distinct()
+                .OrderBy(id => id)
+                .ToListAsync();
+            return Ok(allocationTypeIds);
+        }
+
+        IQueryable<Asset> handoverQuery = _context.Assets.AsNoTracking();
+        if (scope.IsRestricted && scope.DepartmentId is int scopedDept && scopedDept > 0)
+        {
+            handoverQuery = handoverQuery.Where(a => _context.AssetInstances.Any(i =>
+                i.AssetId == a.AssetId &&
+                i.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == scopedDept) &&
+                i.Status != (int)AssetStatus.Disposed &&
+                i.Status != (int)AssetStatus.Lost &&
+                i.Status != (int)AssetStatus.Liquidated));
+        }
+        else
+        {
+            handoverQuery = handoverQuery.Where(a => _context.AssetInstances.Any(i =>
+                i.AssetId == a.AssetId &&
+                i.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId > 0) &&
+                i.Status != (int)AssetStatus.Disposed &&
+                i.Status != (int)AssetStatus.Lost &&
+                i.Status != (int)AssetStatus.Liquidated));
+        }
+
+        var handoverTypeIds = await handoverQuery
+            .Select(a => a.AssetTypeId)
+            .Distinct()
+            .OrderBy(id => id)
+            .ToListAsync();
+
+        return Ok(handoverTypeIds);
+    }
+
+    /// <summary>
     /// GET /api/assets/code-prefixes — Distinct catalog code prefixes (trailing digits stripped) for datalist / suggestions.
     /// </summary>
     [HttpGet("code-prefixes")]

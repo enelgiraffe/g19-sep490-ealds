@@ -30,12 +30,37 @@ export interface MaintenanceRecordResponse {
   conditionAfter: string;
   technicalNote?: string | null;
   status: number;
-  /** maintenance | repair — từ API; mặc định coi là bảo dưỡng nếu thiếu */
+  /** maintenance (API MaintenanceRecord) hoặc repair (ghép từ API RepairRecord trên client) */
   recordSource?: string | null;
+  /** Chỉ lịch sử sửa chữa: tên đơn vị sửa chữa (Supplier). */
+  repairUnitName?: string | null;
+  /** Bảo hành theo lần sửa chữa (không phải bảo hành tài sản). API: yyyy-MM-dd hoặc null. */
+  repairWarrantyStartDate?: string | null;
+  repairWarrantyEndDate?: string | null;
+  repairWarrantyPeriodValue?: number | null;
+  repairWarrantyPeriodUnit?: string | null;
+  repairWarrantyConditions?: string | null;
+  repairWarrantyNote?: string | null;
 }
 
 export function isRepairMaintenanceRecord(record: MaintenanceRecordResponse): boolean {
   return String(record.recordSource ?? '').toLowerCase() === 'repair';
+}
+
+/** Ghép lịch sử bảo dưỡng (MaintenanceRecord) và sửa chữa (RepairRecord) cho cùng một bảng trên UI. */
+export function mergeMaintenanceAndRepairHistory(
+  maintenance: MaintenanceRecordResponse[],
+  repairs: Omit<MaintenanceRecordResponse, 'recordSource'>[]
+): MaintenanceRecordResponse[] {
+  const rows: MaintenanceRecordResponse[] = [
+    ...maintenance.map((r) => ({ ...r, recordSource: r.recordSource ?? 'maintenance' })),
+    ...repairs.map((r) => ({
+      ...r,
+      recordSource: 'repair',
+    })),
+  ];
+  rows.sort((a, b) => String(b.executionDate).localeCompare(String(a.executionDate)));
+  return rows;
 }
 
 export function getMaintenanceRecordStatusLabel(status: number): string {

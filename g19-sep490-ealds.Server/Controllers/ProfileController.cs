@@ -166,6 +166,9 @@ public class ProfileController : ControllerBase
         if (user.Password != request.CurrentPassword)
             return BadRequest(new { message = "Mật khẩu hiện tại không đúng." });
 
+        if (string.Equals(user.Password, request.NewPassword, StringComparison.Ordinal))
+            return BadRequest(new { message = "Mật khẩu mới không được trùng với mật khẩu cũ." });
+
         user.Password = request.NewPassword;
         await _context.SaveChangesAsync();
 

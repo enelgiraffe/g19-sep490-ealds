@@ -30,7 +30,6 @@ export function UserDetailPage() {
   const [isSavingPassword, setIsSavingPassword] = useState(false);
   const [editDraft, setEditDraft] = useState({
     fullName: '',
-    email: '',
     phone: '',
     departmentId: 0,
     roleId: 0,
@@ -59,7 +58,6 @@ export function UserDetailPage() {
         setUser(res);
         setEditDraft({
           fullName: res.fullName ?? '',
-          email: res.email ?? '',
           phone: res.phone ?? '',
           departmentId: res.departmentId ?? 0,
           roleId: res.roleIds?.[0] ?? 0,
@@ -95,7 +93,7 @@ export function UserDetailPage() {
 
   const handleSaveEdit = async () => {
     if (!user) return;
-    if (!editDraft.fullName.trim() || !editDraft.email.trim() || !editDraft.phone.trim() || !editDraft.departmentId || !editDraft.roleId) {
+    if (!editDraft.fullName.trim() || !editDraft.phone.trim() || !editDraft.departmentId || !editDraft.roleId) {
       message.error('Vui lòng nhập đầy đủ thông tin bắt buộc.');
       return;
     }
@@ -104,7 +102,7 @@ export function UserDetailPage() {
       setIsSavingEdit(true);
       await userService.update(user.userId, {
         fullName: editDraft.fullName.trim(),
-        email: editDraft.email.trim(),
+        email: (user.email ?? '').trim(),
         phone: editDraft.phone.trim(),
         departmentId: editDraft.departmentId,
         status: editDraft.status,
@@ -114,8 +112,11 @@ export function UserDetailPage() {
       setUser(refreshed);
       setIsEditing(false);
       message.success('Cập nhật người dùng thành công.');
-    } catch {
-      message.error('Không thể cập nhật người dùng.');
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Không thể cập nhật người dùng.';
+      message.error(typeof msg === 'string' ? msg : 'Không thể cập nhật người dùng.');
     } finally {
       setIsSavingEdit(false);
     }
@@ -142,8 +143,11 @@ export function UserDetailPage() {
       setNewPassword('');
       setConfirmPassword('');
       message.success('Đổi mật khẩu thành công.');
-    } catch {
-      message.error('Không thể đổi mật khẩu.');
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Không thể đổi mật khẩu.';
+      message.error(typeof msg === 'string' ? msg : 'Không thể đổi mật khẩu.');
     } finally {
       setIsSavingPassword(false);
     }
@@ -153,7 +157,6 @@ export function UserDetailPage() {
     if (user) {
       setEditDraft({
         fullName: user.fullName ?? '',
-        email: user.email ?? '',
         phone: user.phone ?? '',
         departmentId: user.departmentId ?? 0,
         roleId: user.roleIds?.[0] ?? 0,
@@ -229,15 +232,7 @@ export function UserDetailPage() {
                 </div>
                 <div className="user-detail-field">
                   <div className="user-detail-label">Email</div>
-                  {isEditing ? (
-                    <Input
-                      value={editDraft.email}
-                      onChange={(e) => setEditDraft((d) => ({ ...d, email: e.target.value }))}
-                      placeholder="email@example.com"
-                    />
-                  ) : (
-                    <div className="user-detail-value">{user?.email || '—'}</div>
-                  )}
+                  <div className="user-detail-value user-detail-value--readonly">{user?.email || '—'}</div>
                 </div>
                 <div className="user-detail-field">
                   <div className="user-detail-label">Vị trí công việc</div>

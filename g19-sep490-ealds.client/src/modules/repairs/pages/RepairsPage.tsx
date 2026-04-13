@@ -38,6 +38,16 @@ import {
 } from '../components/RepairProposalModal';
 import { isDepartmentHeadRoleCode } from '../../../shared/utils/departmentHeadRole';
 
+function localYyyyMmDdFromIso(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function compareYyyyMmDd(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true });
+}
+
 type RepairStatus =
   | 'needsProposal'
   | 'draft'
@@ -201,6 +211,12 @@ export function RepairsPage() {
   const [repairCompleteLoading, setRepairCompleteLoading] = useState(false);
   const [repairCompleteSubmitting, setRepairCompleteSubmitting] = useState(false);
   const [repairCompleteReportNumber, setRepairCompleteReportNumber] = useState('');
+  const [repairCompleteDefaultSupplierId, setRepairCompleteDefaultSupplierId] = useState<number | null>(
+    null
+  );
+  const [repairCompleteDefaultSupplierName, setRepairCompleteDefaultSupplierName] = useState<
+    string | null
+  >(null);
 
   const [proposalOpen, setProposalOpen] = useState(false);
   const [proposalRows, setProposalRows] = useState<RepairRow[]>([]);
@@ -369,6 +385,8 @@ export function RepairsPage() {
         expectedCompletionTo: undefined,
         repairProgressStatus: values.repairProgressStatus.trim(),
         comment: null,
+        supplierId: values.supplierId,
+        newSupplier: values.newSupplier,
       };
 
       await repairRequestService.start(repairStartRow.assetRequestId!, payload);
@@ -403,9 +421,19 @@ export function RepairsPage() {
         setRepairCompleteOpen(false);
         setRepairCompleteRow(null);
         setRepairCompleteTaskId(null);
+        setRepairCompleteDefaultSupplierId(null);
+        setRepairCompleteDefaultSupplierName(null);
         return;
       }
       setRepairCompleteTaskId(task.taskId);
+      setRepairCompleteDefaultSupplierId(
+        task.supplierId != null && task.supplierId > 0 ? task.supplierId : null
+      );
+      setRepairCompleteDefaultSupplierName(
+        typeof task.supplierName === 'string' && task.supplierName.trim()
+          ? task.supplierName.trim()
+          : null
+      );
 
       const aid = det.asset?.assetId ?? row.assetId;
       if (aid) {
@@ -448,6 +476,8 @@ export function RepairsPage() {
       setRepairCompleteRow(null);
       setRepairCompleteTaskId(null);
       setRepairCompleteAsset(null);
+      setRepairCompleteDefaultSupplierId(null);
+      setRepairCompleteDefaultSupplierName(null);
     } finally {
       setRepairCompleteLoading(false);
     }
@@ -468,6 +498,15 @@ export function RepairsPage() {
       return;
     }
 
+    if (values.completionDate && values.returnToUseDate) {
+      const compLocal = localYyyyMmDdFromIso(values.completionDate);
+      const retLocal = localYyyyMmDdFromIso(values.returnToUseDate);
+      if (compareYyyyMmDd(retLocal, compLocal) < 0) {
+        message.warning('Ngày đưa vào sử dụng lại không được trước ngày hoàn thành sửa chữa.');
+        return;
+      }
+    }
+
     setRepairCompleteSubmitting(true);
     try {
       const payload: RepairCompletePayload = {
@@ -478,7 +517,15 @@ export function RepairsPage() {
         actualCost: values.actualCost,
         result: values.result || undefined,
         detailedDescription: values.detail || null,
+        supplierId: values.supplierId,
+        newSupplier: values.newSupplier,
         attachmentUrls: null,
+        repairWarrantyStartDate: values.repairWarrantyStartDate || null,
+        repairWarrantyEndDate: values.repairWarrantyEndDate || null,
+        repairWarrantyPeriodValue: values.repairWarrantyPeriodValue ?? null,
+        repairWarrantyPeriodUnit: values.repairWarrantyPeriodUnit?.trim() || null,
+        repairWarrantyConditions: values.repairWarrantyConditions.trim() || null,
+        repairWarrantyNote: values.repairWarrantyNote.trim() || null,
       };
 
       await repairRequestService.complete(repairCompleteTaskId, payload);
@@ -487,6 +534,8 @@ export function RepairsPage() {
       setRepairCompleteRow(null);
       setRepairCompleteTaskId(null);
       setRepairCompleteAsset(null);
+      setRepairCompleteDefaultSupplierId(null);
+      setRepairCompleteDefaultSupplierName(null);
       await reload();
     } catch (e: any) {
       const msg = e?.response?.data ?? 'Không thể hoàn thành sửa chữa.';
@@ -692,7 +741,6 @@ export function RepairsPage() {
                 <th>TÌNH TRẠNG</th>
                 <th>NGÀY HỎNG</th>
                 <th>SỐ LƯỢNG</th>
-                <th>VỊ TRÍ TÀI SẢN</th>
                 <th>PHÒNG BAN QUẢN LÝ</th>
                 <th>TRẠNG THÁI</th>
                 <th className="asset-table__cell asset-table__cell--actions" />
@@ -741,7 +789,6 @@ export function RepairsPage() {
                     <td>{row.condition}</td>
                     <td>{row.brokenDate}</td>
                     <td className="asset-align-right">{row.quantity}</td>
-                    <td>{row.location}</td>
                     <td>{row.department}</td>
                     <td>
                       <span className={getStatusClass(row.status)}>{getStatusLabel(row.status)}</span>
@@ -895,18 +942,12 @@ export function RepairsPage() {
                       ) : null}
                       <div className="repair-detail-info-row">
                         <div className="repair-detail-info-item">
-                          <label>Vị trí tài sản</label>
-                          <div className="repair-detail-info-value">{selected.location || '—'}</div>
+                        <label>Phòng ban quản lý</label>
+                        <div className="repair-detail-info-value">{selected.department || '—'}</div>
                         </div>
                         <div className="repair-detail-info-item">
-                          <label>Phòng ban quản lý</label>
-                          <div className="repair-detail-info-value">{selected.department || '—'}</div>
-                        </div>
-                      </div>
-                      <div className="repair-detail-info-row">
-                        <div className="repair-detail-info-item repair-detail-info-item--full">
-                          <label>Số lượng</label>
-                          <div className="repair-detail-info-value">{selected.quantity}</div>
+                        <label>Số lượng</label>
+                        <div className="repair-detail-info-value">{selected.quantity}</div>
                         </div>
                       </div>
                     </div>
@@ -965,11 +1006,15 @@ export function RepairsPage() {
         row={repairCompleteRow}
         asset={repairCompleteAsset}
         defaultReportNumber={repairCompleteReportNumber}
+        defaultRepairSupplierId={repairCompleteDefaultSupplierId}
+        defaultRepairSupplierName={repairCompleteDefaultSupplierName}
         onClose={() => {
           setRepairCompleteOpen(false);
           setRepairCompleteRow(null);
           setRepairCompleteTaskId(null);
           setRepairCompleteAsset(null);
+          setRepairCompleteDefaultSupplierId(null);
+          setRepairCompleteDefaultSupplierName(null);
         }}
         onSubmit={submitRepairComplete}
       />

@@ -43,7 +43,9 @@ public class DirectorDashboardController : ControllerBase
             .Where(s => s.IsActive && s.NextDueDate != null && s.NextDueDate <= now.AddDays(60))
             .CountAsync();
         var inventoryAwaitingDirector = await _db.InventorySessions.AsNoTracking()
-            .CountAsync(s => s.Status == (int)InventorySessionStatus.Completed);
+            .CountAsync(s =>
+                s.Status == (int)InventorySessionStatus.Completed ||
+                s.Status == (int)InventorySessionStatus.PendingAccountant);
         var assetsDueMaintenance = maintenanceDueSoon + inventoryAwaitingDirector;
 
         var assetStatusBreakdown = await BuildAssetStatusBreakdownAsync();

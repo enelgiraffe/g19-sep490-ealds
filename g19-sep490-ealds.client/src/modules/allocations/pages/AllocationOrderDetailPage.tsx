@@ -9,6 +9,7 @@ import {
   type AllocationOrderLineDetail,
 } from '../services/allocationRequestService';
 import { handoverRequestService } from '../services/handoverRequestService';
+import { useAppStore } from '../../../stores/appStore';
 import './AccountantAllocationsPage.css';
 import '../../requests/pages/RequestsPage.css';
 
@@ -18,6 +19,7 @@ export function AllocationOrderDetailPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const currentRole = useAppStore((s) => s.currentRole);
   const isHandover = pathname.includes('handover-order');
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<AllocationOrderDetail | null>(null);
@@ -100,6 +102,9 @@ export function AllocationOrderDetailPage() {
 
   const orderKind = detail.orderKind ?? (isHandover ? 'return' : 'allocation');
   const isReturnFlow = orderKind === 'return';
+  /** Hoàn trả: chỉ trưởng phòng thấy nút xác nhận; cấp phát: giữ theo trạng thái đơn (mọi vai trò có quyền trang). */
+  const showConfirmButton =
+    canConfirm && (!isReturnFlow || currentRole === 'department_head');
 
   return (
     <div className="requests-page">
@@ -117,7 +122,7 @@ export function AllocationOrderDetailPage() {
             </Text>
           </div>
         </div>
-        {canConfirm && (
+        {showConfirmButton && (
           <Button type="primary" loading={confirming} onClick={() => void confirm()}>
             {isReturnFlow ? 'Xác nhận hoàn trả' : 'Xác nhận cấp phát'}
           </Button>

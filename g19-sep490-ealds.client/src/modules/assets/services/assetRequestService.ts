@@ -42,6 +42,12 @@ export interface AssetRequestDetailsResponse {
     estimatedCost: number;
     damageCondition: string;
     status: number;
+    /** Ngày bắt đầu sửa chữa (RepairTask.RepairDate). */
+    repairDate?: string | null;
+    supplierId?: number | null;
+    supplierName?: string | null;
+    assetInstanceId?: number;
+    instanceCode?: string | null;
   }>;
 }
 

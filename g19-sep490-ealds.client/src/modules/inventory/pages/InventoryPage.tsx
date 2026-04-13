@@ -6,12 +6,14 @@ import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { SchedulePeriodicModal } from '../components/SchedulePeriodicModal';
 import { ScheduleIndividualModal } from '../components/ScheduleIndividualModal';
-import { useAppStore } from '../../../stores/appStore';
 import {
   inventoryService,
   inventorySessionDateToUtcIso,
+  inventorySessionEndDayForInclusiveDuration,
   inventorySessionEndOfDayUtcIso,
+  inventorySessionInclusiveDayCount,
   SESSION_STATUS,
+  type DropdownItem,
   type InventorySessionListItem,
 } from '../services/inventoryService';
 import '../../maintenance/pages/MaintenancePage.css';
@@ -23,7 +25,7 @@ const { TextArea } = Input;
 const STATUS_COLOR: Record<number, string> = {
   0: 'blue',        // Đã lên lịch
   1: 'processing',  // Đang thực hiện
-  2: 'warning',     // Chờ xác nhận
+  2: 'warning',     // Chờ xử lý (legacy DB Completed)
   3: 'error',       // Đã hủy
   4: 'success',     // Đã xử lý
   5: 'orange',      // Đến lịch
@@ -47,13 +49,7 @@ function formatDate(dateStr: string | null | undefined): string {
 
 function execDurationLabel(startStr: string | null | undefined, endStr: string | null | undefined): string {
   if (!startStr || !endStr) return '-';
-  const start = new Date(startStr);
-  const end = new Date(endStr);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '-';
-  const su = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
-  const eu = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
-  const days = Math.max(1, Math.round((eu - su) / 86_400_000));
-  return `${days} ngày`;
+  return `${inventorySessionInclusiveDayCount(startStr, endStr)} ngày`;
 }
 
 interface EditFormValues {
@@ -65,7 +61,6 @@ interface EditFormValues {
 
 export function InventoryPage() {
   const navigate = useNavigate();
-  const isDeptHead = useAppStore((s) => s.currentRole) === 'department_head';
   const [isPeriodicModalOpen, setIsPeriodicModalOpen] = useState(false);
   const [isIndividualModalOpen, setIsIndividualModalOpen] = useState(false);
 
@@ -73,7 +68,8 @@ export function InventoryPage() {
   const [loading, setLoading] = useState(false);
 
   const [searchText, setSearchText] = useState('');
-  const [departmentFilter, setDepartmentFilter] = useState<string | undefined>(undefined);
+  const [departmentFilter, setDepartmentFilter] = useState<number | undefined>(undefined);
+  const [departmentOptions, setDepartmentOptions] = useState<DropdownItem[]>([]);
   const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
 
   // Execute confirmation
@@ -99,6 +95,7 @@ export function InventoryPage() {
       const data = await inventoryService.getSessions({
         keyword: searchText || undefined,
         status: statusFilter,
+        departmentId: departmentFilter,
       });
       setSessions(data);
     } catch {
@@ -106,7 +103,16 @@ export function InventoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [searchText, statusFilter]);
+  }, [searchText, statusFilter, departmentFilter]);
+
+  useEffect(() => {
+    void inventoryService
+      .getDepartments()
+      .then(setDepartmentOptions)
+      .catch(() => {
+        setDepartmentOptions([]);
+      });
+  }, []);
 
   useEffect(() => {
     fetchSessions();
@@ -116,14 +122,7 @@ export function InventoryPage() {
     setCurrentPage(1);
   }, [searchText, statusFilter, departmentFilter]);
 
-  const uniqueDepartments = Array.from(new Set(sessions.map((s) => s.departmentName)));
-
-  const filteredSessions = useMemo(
-    () => sessions.filter((s) => !departmentFilter || s.departmentName === departmentFilter),
-    [sessions, departmentFilter],
-  );
-
-  const totalFiltered = filteredSessions.length;
+  const totalFiltered = sessions.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
 
   useEffect(() => {
@@ -134,8 +133,8 @@ export function InventoryPage() {
   const rangeStart = totalFiltered === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const rangeEnd = Math.min(safePage * pageSize, totalFiltered);
   const paginatedSessions = useMemo(
-    () => filteredSessions.slice((safePage - 1) * pageSize, safePage * pageSize),
-    [filteredSessions, safePage, pageSize],
+    () => sessions.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [sessions, safePage, pageSize],
   );
 
   const handleSubmitPeriodic = () => {
@@ -167,8 +166,7 @@ export function InventoryPage() {
   const openEditModal = (row: InventorySessionListItem) => {
     setEditTarget(row);
     const start = dayjs(row.startDate);
-    const end = dayjs(row.endDate);
-    const execDays = Math.max(1, end.diff(start, 'day'));
+    const execDays = inventorySessionInclusiveDayCount(row.startDate, row.endDate);
     editForm.setFieldsValue({
       purpose: row.purpose,
       startDate: start,
@@ -182,7 +180,7 @@ export function InventoryPage() {
     const values = await editForm.validateFields();
     setEditSubmitting(true);
     try {
-      const endDate = values.startDate.add(values.executionDays, 'day');
+      const endDate = inventorySessionEndDayForInclusiveDuration(values.startDate, values.executionDays);
       await inventoryService.updateSession(editTarget.sessionId, {
         purpose: values.purpose,
         startDate: inventorySessionDateToUtcIso(values.startDate),
@@ -254,19 +252,19 @@ export function InventoryPage() {
             onChange={(e) => setSearchText(e.target.value)}
             allowClear
           />
-          {!isDeptHead && (
-            <Select
-              placeholder="Phòng ban"
-              className="maintenance-select"
-              value={departmentFilter}
-              onChange={(v) => setDepartmentFilter(v)}
-              allowClear
-            >
-              {uniqueDepartments.map((d) => (
-                <Option key={d} value={d}>{d}</Option>
-              ))}
-            </Select>
-          )}
+          <Select
+            placeholder="Phòng ban"
+            className="maintenance-select"
+            value={departmentFilter}
+            onChange={(v) => setDepartmentFilter(v)}
+            allowClear
+            showSearch
+            optionFilterProp="children"
+          >
+            {departmentOptions.map((d) => (
+              <Option key={d.id} value={d.id}>{d.name}</Option>
+            ))}
+          </Select>
           <Select
             placeholder="Trạng thái"
             className="maintenance-select"
@@ -277,7 +275,6 @@ export function InventoryPage() {
             <Option value={0}>Đã lên lịch</Option>
             <Option value={5}>Đến lịch</Option>
             <Option value={1}>Đang thực hiện</Option>
-            <Option value={2}>Chờ xác nhận</Option>
             <Option value={3}>Đã hủy</Option>
             <Option value={4}>Đã xử lý</Option>
             <Option value={6}>Chờ xử lý</Option>
@@ -518,7 +515,9 @@ export function InventoryPage() {
               return (
                 <div style={{ marginBottom: 16, color: '#595959', fontSize: 13 }}>
                   Hạn hoàn thành:{' '}
-                  <strong>{startDate.add(execDays, 'day').format('DD/MM/YYYY')}</strong>
+                  <strong>
+                    {inventorySessionEndDayForInclusiveDuration(startDate, execDays).format('DD/MM/YYYY')}
+                  </strong>
                 </div>
               );
             }}
@@ -559,8 +558,8 @@ export function InventoryPage() {
             </p>
             {cancelTarget.isPeriodic && (
               <p style={{ marginBottom: 12, color: '#cf1322', fontSize: 13 }}>
-                Đây là lịch kiểm kê định kỳ. Tất cả các phiên định kỳ tiếp theo chưa bắt đầu
-                của phòng ban này cũng sẽ bị hủy.
+                Đây là lịch kiểm kê định kỳ. Các phiên định kỳ tiếp theo cùng chu kỳ (cùng mục đích,
+                chu kỳ, người lập và có ngày bắt đầu sau phiên này) cũng sẽ bị hủy.
               </p>
             )}
             <TextArea

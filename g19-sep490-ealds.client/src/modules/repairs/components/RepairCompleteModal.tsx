@@ -1,6 +1,8 @@
 import { memo, useEffect, useMemo, useState } from 'react';
+import { message } from 'antd';
 import dayjs from 'dayjs';
 import type { AssetDetailResponse } from '../../assets/services/assetService';
+import { supplierService, type SupplierItem } from '../../admin/services/supplierService';
 import './RepairCompleteModal.css';
 
 interface RepairCompleteRow {
@@ -18,6 +20,15 @@ export interface RepairCompleteFormValues {
   actualCost: number;
   result: string;
   detail: string;
+  supplierId: number | null;
+  newSupplier: { code: string; name: string } | null;
+  /** Bảo hành theo lần sửa chữa (cấu trúc giống bảo hành cá thể); không cập nhật bảo hành tài sản */
+  repairWarrantyStartDate: string | null;
+  repairWarrantyEndDate: string | null;
+  repairWarrantyPeriodValue: number | null;
+  repairWarrantyPeriodUnit: string | null;
+  repairWarrantyConditions: string;
+  repairWarrantyNote: string;
 }
 
 interface RepairCompleteModalProps {
@@ -27,6 +38,9 @@ interface RepairCompleteModalProps {
   row: RepairCompleteRow | null;
   asset: AssetDetailResponse | null;
   defaultReportNumber?: string;
+  /** Đơn vị sửa chữa đã chọn khi bắt đầu sửa chữa */
+  defaultRepairSupplierId?: number | null;
+  defaultRepairSupplierName?: string | null;
   onClose: () => void;
   onSubmit: (values: RepairCompleteFormValues) => void;
 }
@@ -58,6 +72,41 @@ function toIsoDate(value: string): string {
   return new Date(`${value}T00:00:00`).toISOString();
 }
 
+/** Giống AssetInstanceEditPage: tính ngày hết hạn từ ngày bắt đầu + thời hạn. */
+function computeWarrantyEndDate(startDate: string, periodValue: string, periodUnit: string): string {
+  if (!startDate.trim() || !periodValue.trim() || !periodUnit.trim()) return '';
+  const period = Number(periodValue);
+  if (!Number.isFinite(period) || period <= 0) return '';
+  const base = new Date(startDate);
+  if (Number.isNaN(base.getTime())) return '';
+  const result = new Date(base);
+  const u = periodUnit.trim().toLowerCase();
+  if (u === 'day' || u === 'days') result.setDate(result.getDate() + period);
+  else if (u === 'week' || u === 'weeks') result.setDate(result.getDate() + period * 7);
+  else if (u === 'month' || u === 'months') result.setMonth(result.getMonth() + period);
+  else if (u === 'year' || u === 'years') result.setFullYear(result.getFullYear() + period);
+  else return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${result.getFullYear()}-${pad(result.getMonth() + 1)}-${pad(result.getDate())}`;
+}
+
+/** Giống AssetInstanceEditPage — gộp mã BH ngoài + nội dung vào một chuỗi lưu DB. */
+const EXTERNAL_WARRANTY_CODE_PREFIX = 'Mã BH ngoài:';
+
+function buildWarrantyConditions(externalCode: string, details: string): string | null {
+  const code = externalCode.trim();
+  const content = details.trim();
+  if (!code && !content) return null;
+  if (code && content) return `${EXTERNAL_WARRANTY_CODE_PREFIX} ${code}\n${content}`;
+  if (code) return `${EXTERNAL_WARRANTY_CODE_PREFIX} ${code}`;
+  return content;
+}
+
+/** So sánh yyyy-MM-dd (chuỗi). */
+function compareYyyyMmDd(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true });
+}
+
 function RepairCompleteModalInner({
   open,
   loading,
@@ -65,6 +114,8 @@ function RepairCompleteModalInner({
   row,
   asset,
   defaultReportNumber,
+  defaultRepairSupplierId,
+  defaultRepairSupplierName,
   onClose,
   onSubmit,
 }: RepairCompleteModalProps) {
@@ -75,6 +126,17 @@ function RepairCompleteModalInner({
   const [actualCostInput, setActualCostInput] = useState('');
   const [result, setResult] = useState('');
   const [detail, setDetail] = useState('');
+  const [suppliers, setSuppliers] = useState<SupplierItem[]>([]);
+  const [useNewSupplier, setUseNewSupplier] = useState(false);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<number | ''>('');
+  const [newSupplierCode, setNewSupplierCode] = useState('');
+  const [newSupplierName, setNewSupplierName] = useState('');
+  const [repairWarrantyEndDate, setRepairWarrantyEndDate] = useState('');
+  const [repairWarrantyPeriodValue, setRepairWarrantyPeriodValue] = useState('');
+  const [repairWarrantyPeriodUnit, setRepairWarrantyPeriodUnit] = useState('month');
+  const [repairWarrantyExternalCode, setRepairWarrantyExternalCode] = useState('');
+  const [repairWarrantyConditions, setRepairWarrantyConditions] = useState('');
+  const [repairWarrantyNote, setRepairWarrantyNote] = useState('');
 
   useEffect(() => {
     if (!open || !row) return;
@@ -85,7 +147,58 @@ function RepairCompleteModalInner({
     setActualCostInput('');
     setResult('');
     setDetail(row.condition || '');
-  }, [open, row, defaultReportNumber]);
+    setUseNewSupplier(false);
+    setNewSupplierCode('');
+    setNewSupplierName('');
+    if (defaultRepairSupplierId != null && defaultRepairSupplierId > 0) {
+      setSelectedSupplierId(defaultRepairSupplierId);
+    } else {
+      setSelectedSupplierId('');
+    }
+    setRepairWarrantyEndDate('');
+    setRepairWarrantyPeriodValue('');
+    setRepairWarrantyPeriodUnit('month');
+    setRepairWarrantyExternalCode('');
+    setRepairWarrantyConditions('');
+    setRepairWarrantyNote('');
+  }, [open, row, defaultReportNumber, defaultRepairSupplierId]);
+
+  useEffect(() => {
+    if (!open) return;
+    const period = Number(repairWarrantyPeriodValue);
+    if (
+      !completionDate.trim() ||
+      !repairWarrantyPeriodValue.trim() ||
+      !Number.isFinite(period) ||
+      period <= 0
+    ) {
+      setRepairWarrantyEndDate('');
+      return;
+    }
+    const computed = computeWarrantyEndDate(
+      completionDate.trim(),
+      repairWarrantyPeriodValue.trim(),
+      repairWarrantyPeriodUnit
+    );
+    if (computed) setRepairWarrantyEndDate(computed);
+    else setRepairWarrantyEndDate('');
+  }, [open, completionDate, repairWarrantyPeriodValue, repairWarrantyPeriodUnit]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await supplierService.getAll();
+        if (!cancelled) setSuppliers(list);
+      } catch {
+        if (!cancelled) setSuppliers([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const assetInfo = useMemo(() => {
     const instances = asset?.instances ?? [];
@@ -131,6 +244,21 @@ function RepairCompleteModalInner({
   const handleSubmit = () => {
     const actualCost = parseNumberInput(actualCostInput);
     if (!completionDate || !returnDate || actualCost == null) return;
+    if (useNewSupplier && (!newSupplierCode.trim() || !newSupplierName.trim())) return;
+
+    if (compareYyyyMmDd(returnDate, completionDate) < 0) {
+      message.warning('Ngày đưa vào sử dụng lại không được trước ngày hoàn thành sửa chữa.');
+      return;
+    }
+
+    const pickedId =
+      !useNewSupplier && selectedSupplierId !== '' && selectedSupplierId !== 0
+        ? Number(selectedSupplierId)
+        : null;
+
+    const periodParsed = parseNumberInput(repairWarrantyPeriodValue);
+    const periodOk = repairWarrantyPeriodValue.trim() !== '' && periodParsed != null && periodParsed > 0;
+
     onSubmit({
       reportNumber: reportNumber.trim(),
       completionDate: toIsoDate(completionDate),
@@ -138,6 +266,17 @@ function RepairCompleteModalInner({
       actualCost,
       result: result.trim(),
       detail: detail.trim(),
+      supplierId: useNewSupplier ? null : pickedId,
+      newSupplier: useNewSupplier
+        ? { code: newSupplierCode.trim(), name: newSupplierName.trim() }
+        : null,
+      repairWarrantyStartDate: completionDate.trim() ? completionDate.trim() : null,
+      repairWarrantyEndDate: repairWarrantyEndDate.trim() ? repairWarrantyEndDate.trim() : null,
+      repairWarrantyPeriodValue: periodOk && periodParsed != null ? periodParsed : null,
+      repairWarrantyPeriodUnit: periodOk ? repairWarrantyPeriodUnit.trim().slice(0, 20) || null : null,
+      repairWarrantyConditions:
+        buildWarrantyConditions(repairWarrantyExternalCode, repairWarrantyConditions)?.trim() ?? '',
+      repairWarrantyNote: repairWarrantyNote.trim(),
     });
   };
 
@@ -226,6 +365,87 @@ function RepairCompleteModalInner({
 
               <div className="repair-complete-form-section">
                 <h3 className="repair-complete-section-title">Thông tin hoàn thành sửa chữa</h3>
+                <div className="repair-complete-form__item repair-complete-form__item--full">
+                  <label>Đơn vị sửa chữa</label>
+                  {defaultRepairSupplierName?.trim() ? (
+                    <p className="repair-complete-hint">
+                      Theo bắt đầu sửa chữa: {defaultRepairSupplierName.trim()}
+                    </p>
+                  ) : null}
+                  {!useNewSupplier ? (
+                    <>
+                      <select
+                        id="repair-complete-supplier"
+                        className="repair-complete-input"
+                        value={selectedSupplierId === '' ? '' : String(selectedSupplierId)}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setSelectedSupplierId(v === '' ? '' : Number(v));
+                        }}
+                      >
+                        <option value="">— Chọn đơn vị —</option>
+                        {suppliers.map((s) => (
+                          <option key={s.supplierId} value={s.supplierId}>
+                            {s.name} ({s.code})
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="repair-complete-link-btn"
+                        onClick={() => {
+                          setUseNewSupplier(true);
+                          setSelectedSupplierId('');
+                        }}
+                      >
+                        Thêm đơn vị mới…
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="repair-complete-inline-fields">
+                        <div className="repair-complete-form__item repair-complete-form__item--inline">
+                          <label htmlFor="repair-complete-new-supplier-code">Mã đơn vị</label>
+                          <input
+                            id="repair-complete-new-supplier-code"
+                            type="text"
+                            className="repair-complete-input"
+                            value={newSupplierCode}
+                            onChange={(e) => setNewSupplierCode(e.target.value)}
+                            maxLength={50}
+                          />
+                        </div>
+                        <div className="repair-complete-form__item repair-complete-form__item--inline">
+                          <label htmlFor="repair-complete-new-supplier-name">Tên đơn vị</label>
+                          <input
+                            id="repair-complete-new-supplier-name"
+                            type="text"
+                            className="repair-complete-input"
+                            value={newSupplierName}
+                            onChange={(e) => setNewSupplierName(e.target.value)}
+                            maxLength={200}
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="repair-complete-link-btn"
+                        onClick={() => {
+                          setUseNewSupplier(false);
+                          setNewSupplierCode('');
+                          setNewSupplierName('');
+                          if (defaultRepairSupplierId != null && defaultRepairSupplierId > 0) {
+                            setSelectedSupplierId(defaultRepairSupplierId);
+                          } else {
+                            setSelectedSupplierId('');
+                          }
+                        }}
+                      >
+                        ← Chọn từ danh sách
+                      </button>
+                    </>
+                  )}
+                </div>
                 <div className="repair-complete-info-row">
                   <div>
                     <div className="repair-complete-form__item">
@@ -235,9 +455,10 @@ function RepairCompleteModalInner({
                       <input
                         id="repair-complete-date"
                         type="date"
-                        className="repair-complete-input"
+                        className="repair-complete-input repair-complete-input--readonly"
                         value={completionDate}
-                        onChange={(e) => setCompletionDate(e.target.value)}
+                        readOnly
+                        tabIndex={-1}
                       />
                     </div>
                     <div className="repair-complete-form__item">
@@ -249,8 +470,17 @@ function RepairCompleteModalInner({
                         type="date"
                         className="repair-complete-input"
                         value={returnDate}
-                        onChange={(e) => setReturnDate(e.target.value)}
+                        min={completionDate.trim() || undefined}
+                        onChange={(e) => {
+                          let v = e.target.value;
+                          const min = completionDate.trim();
+                          if (min && v && compareYyyyMmDd(v, min) < 0) v = min;
+                          setReturnDate(v);
+                        }}
                       />
+                      <p className="repair-complete-hint repair-complete-hint--tight">
+                        Tối thiểu từ ngày hoàn thành sửa chữa.
+                      </p>
                     </div>
                     <div className="repair-complete-form__item">
                       <label htmlFor="repair-complete-actual-cost">
@@ -294,7 +524,107 @@ function RepairCompleteModalInner({
                     </div>
                   </div>
                 </div>
+              </div>
 
+              <div className="repair-complete-form-section repair-complete-warranty-section">
+                <h3 className="repair-complete-section-title">Bảo hành sửa chữa</h3>
+                <div className="repair-complete-info-row repair-complete-info-row--warranty-dates">
+                  <div className="repair-complete-form__item">
+                    <label htmlFor="repair-complete-warranty-start">Ngày bắt đầu bảo hành sửa chữa</label>
+                    <input
+                      id="repair-complete-warranty-start"
+                      type="date"
+                      className="repair-complete-input repair-complete-input--readonly"
+                      value={completionDate}
+                      readOnly
+                      tabIndex={-1}
+                      title="Luôn trùng ngày hoàn thành sửa chữa"
+                      aria-label="Ngày bắt đầu bảo hành sửa chữa, trùng với ngày hoàn thành sửa chữa"
+                    />
+                    <p className="repair-complete-hint repair-complete-hint--tight">
+                      Cố định theo ngày hoàn thành sửa chữa.
+                    </p>
+                  </div>
+                  <div className="repair-complete-form__item">
+                    <label htmlFor="repair-complete-warranty-end">Ngày hết hạn bảo hành sửa chữa</label>
+                    <input
+                      id="repair-complete-warranty-end"
+                      type="date"
+                      className="repair-complete-input repair-complete-input--readonly"
+                      value={repairWarrantyEndDate}
+                      readOnly
+                      aria-readonly="true"
+                      title="Tự tính từ ngày hoàn thành sửa chữa và thời hạn"
+                    />
+                  </div>
+                </div>
+
+                <div className="repair-complete-inline-fields repair-complete-inline-fields--warranty-period">
+                  <div className="repair-complete-form__item repair-complete-form__item--inline">
+                    <label htmlFor="repair-complete-warranty-period">Thời hạn</label>
+                    <input
+                      id="repair-complete-warranty-period"
+                      type="text"
+                      className="repair-complete-input"
+                      inputMode="numeric"
+                      value={repairWarrantyPeriodValue}
+                      onChange={(e) => setRepairWarrantyPeriodValue(parseDigitsOnly(e.target.value))}
+                    />
+                  </div>
+                  <div className="repair-complete-form__item repair-complete-form__item--inline">
+                    <label htmlFor="repair-complete-warranty-unit">Đơn vị thời hạn</label>
+                    <select
+                      id="repair-complete-warranty-unit"
+                      className="repair-complete-input"
+                      value={repairWarrantyPeriodUnit}
+                      onChange={(e) => setRepairWarrantyPeriodUnit(e.target.value)}
+                    >
+                      <option value="day">Ngày</option>
+                      <option value="week">Tuần</option>
+                      <option value="month">Tháng</option>
+                      <option value="year">Năm</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="repair-complete-form__item repair-complete-form__item--full">
+                  <label htmlFor="repair-complete-warranty-external-code">Mã bảo hành ngoài (đơn vị sửa chữa)</label>
+                  <input
+                    id="repair-complete-warranty-external-code"
+                    type="text"
+                    className="repair-complete-input"
+                    value={repairWarrantyExternalCode}
+                    onChange={(e) => setRepairWarrantyExternalCode(e.target.value)}
+                    placeholder="Số phiếu / mã BH từ nhà cung cấp"
+                    maxLength={200}
+                  />
+                </div>
+
+                <div className="repair-complete-form__item repair-complete-form__item--full">
+                  <label htmlFor="repair-complete-warranty-conditions">Nội dung điều khoản bảo hành sửa chữa</label>
+                  <textarea
+                    id="repair-complete-warranty-conditions"
+                    className="repair-complete-textarea repair-complete-textarea--warranty-conditions"
+                    rows={5}
+                    value={repairWarrantyConditions}
+                    onChange={(e) => setRepairWarrantyConditions(e.target.value)}
+                    placeholder="Phạm vi, linh kiện thay thế, điều kiện áp dụng, loại trừ trách nhiệm…"
+                    maxLength={8000}
+                  />
+                </div>
+
+                <div className="repair-complete-form__item repair-complete-form__item--full">
+                  <label htmlFor="repair-complete-warranty-note">Ghi chú thêm</label>
+                  <textarea
+                    id="repair-complete-warranty-note"
+                    className="repair-complete-textarea"
+                    rows={3}
+                    value={repairWarrantyNote}
+                    onChange={(e) => setRepairWarrantyNote(e.target.value)}
+                    placeholder="Ghi chú nội bộ, liên hệ xử lý sự cố…"
+                    maxLength={2000}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -305,7 +635,7 @@ function RepairCompleteModalInner({
             type="button"
             onClick={handleSubmit}
             className="repair-complete-btn-submit"
-            disabled={submitting || loading}
+            disabled={submitting || loading || (useNewSupplier && (!newSupplierCode.trim() || !newSupplierName.trim()))}
           >
             {submitting ? 'Đang lưu...' : 'Lưu'}
           </button>

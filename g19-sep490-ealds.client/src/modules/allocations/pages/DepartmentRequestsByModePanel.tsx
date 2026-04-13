@@ -89,12 +89,16 @@ export function DepartmentRequestsByModePanel({ mode }: { mode: DepartmentReques
 
   const loadTypes = useCallback(async () => {
     try {
-      const t = await assetTypeService.getAll();
-      setTypes(t);
+      const [allTypes, eligibleTypeIds] = await Promise.all([
+        assetTypeService.getAll(),
+        allocationRequestService.catalogEligibleAssetTypeIds(mode === 'allocation'),
+      ]);
+      const eligible = new Set(eligibleTypeIds);
+      setTypes(allTypes.filter((t) => eligible.has(t.assetTypeId)));
     } catch {
       message.error('Không tải được danh sách loại tài sản.');
     }
-  }, []);
+  }, [mode]);
 
   const loadRequests = useCallback(async () => {
     setListLoading(true);

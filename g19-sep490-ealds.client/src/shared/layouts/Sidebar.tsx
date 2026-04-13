@@ -4,10 +4,25 @@ import type { MenuProps } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { authService } from '../../modules/auth/services/authService';
-import { COMMON_MENU, ROLE_MENU, ROLE_OPTIONS } from '../constants/sidebarConfig';
+import { COMMON_MENU, ROLE_MENU } from '../constants/sidebarConfig';
 import { notificationService } from '../services/notificationService';
-import type { AppRole } from '../types/layout.types';
 import './Sidebar.css';
+
+function readStoredUserLabel(): { displayName: string; avatarInitial: string } {
+  try {
+    const raw = localStorage.getItem('user');
+    if (!raw) return { displayName: '', avatarInitial: '?' };
+    const u = JSON.parse(raw) as { name?: string; email?: string };
+    const name = u.name?.trim() ?? '';
+    const email = u.email?.trim() ?? '';
+    const displayName = name || email || '';
+    const initialSource = name || email || '?';
+    const avatarInitial = initialSource.charAt(0).toUpperCase();
+    return { displayName, avatarInitial };
+  } catch {
+    return { displayName: '', avatarInitial: '?' };
+  }
+}
 
 /** Đường dẫn public (icons, logo) — tôn trọng Vite `base` khi deploy subpath. */
 function publicAssetUrl(path: string): string {
@@ -21,9 +36,10 @@ function publicAssetUrl(path: string): string {
 
 export function Sidebar() {
   const navigate = useNavigate();
-  const { currentRole, setCurrentRole } = useAppStore();
+  const currentRole = useAppStore((s) => s.currentRole);
   const roleMenu = ROLE_MENU[currentRole];
   const [notificationsUnread, setNotificationsUnread] = useState(0);
+  const [{ displayName, avatarInitial }, setUserLabel] = useState(() => readStoredUserLabel());
 
   const refreshNotificationsUnread = useCallback(() => {
     notificationService
@@ -42,11 +58,14 @@ export function Sidebar() {
     return () => window.removeEventListener('ealds-notifications-changed', onChanged);
   }, [refreshNotificationsUnread]);
 
-  const roleDropdownItems: MenuProps['items'] = ROLE_OPTIONS.map((opt) => ({
-    key: opt.value,
-    label: opt.label,
-    onClick: () => setCurrentRole(opt.value as AppRole),
-  }));
+  useEffect(() => {
+    setUserLabel(readStoredUserLabel());
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'user') setUserLabel(readStoredUserLabel());
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -74,7 +93,7 @@ export function Sidebar() {
     },
   ];
 
-  const currentRoleLabel = ROLE_OPTIONS.find((o) => o.value === currentRole)?.label ?? currentRole;
+  const sidebarUserTitle = displayName || 'Người dùng';
 
   return (
     <aside className="sidebar">
@@ -143,26 +162,16 @@ export function Sidebar() {
       </nav>
       <div className="sidebar__user-section">
         <Dropdown 
-          menu={{ items: roleDropdownItems }} 
-          trigger={['click']} 
-          placement="topRight"
-          getPopupContainer={(trigger) => trigger.parentElement || document.body}
-        >
-          <div className="sidebar__role-selector" role="button" tabIndex={0}>
-            <span className="sidebar__role-label">Vai trò:</span>
-            <span className="sidebar__role-name">{currentRoleLabel}</span>
-            <span className="sidebar__role-chevron">▼</span>
-          </div>
-        </Dropdown>
-        <Dropdown 
           menu={{ items: userDropdownItems }} 
           trigger={['click']} 
           placement="topRight"
           getPopupContainer={(trigger) => trigger.parentElement || document.body}
         >
           <div className="sidebar__user" role="button" tabIndex={0}>
-            <div className="sidebar__user-avatar">A</div>
-            <span className="sidebar__user-name">{currentRoleLabel}</span>
+            <div className="sidebar__user-avatar" aria-hidden="true">
+              {avatarInitial}
+            </div>
+            <span className="sidebar__user-name">{sidebarUserTitle}</span>
             <span className="sidebar__user-chevron">▼</span>
           </div>
         </Dropdown>

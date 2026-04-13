@@ -326,6 +326,10 @@ public class RepairRequestsController : ControllerBase
 
         if (!allowed) return Forbid();
 
+        var (resolvedSupplierId, supplierError) = await TryResolveRepairSupplierAsync(dto.NewSupplier, dto.SupplierId);
+        if (supplierError != null)
+            return BadRequest(supplierError);
+
         var from = ar.Status;
         ar.Status = 4;
 
@@ -351,7 +355,8 @@ public class RepairRequestsController : ControllerBase
                 RepairDate = dto.RepairDate,
                 ExpectedCompletionDate = dto.ExpectedCompletionDate ?? dto.ExpectedCompletionTo,
                 RepairProgressStatus = dto.RepairProgressStatus,
-                Status = 1 // in-progress
+                Status = 1, // in-progress
+                SupplierId = resolvedSupplierId
             };
             _db.RepairTasks.Add(task);
         }
@@ -366,7 +371,17 @@ public class RepairRequestsController : ControllerBase
             task.ExpectedCompletionDate = dto.ExpectedCompletionDate ?? dto.ExpectedCompletionTo;
             task.RepairProgressStatus = dto.RepairProgressStatus;
             task.Status = 1; // in-progress
+            task.SupplierId = resolvedSupplierId;
             _db.RepairTasks.Update(task);
+        }
+
+        string? supplierNameForLog = null;
+        if (resolvedSupplierId.HasValue)
+        {
+            supplierNameForLog = await _db.Suppliers.AsNoTracking()
+                .Where(s => s.SupplierId == resolvedSupplierId.Value)
+                .Select(s => s.Name)
+                .FirstOrDefaultAsync();
         }
 
         var linkedInstanceId = task.AssetInstanceId;
@@ -405,7 +420,9 @@ public class RepairRequestsController : ControllerBase
             ["expectedCompletionFrom"] = dto.ExpectedCompletionFrom,
             ["expectedCompletionTo"] = dto.ExpectedCompletionTo,
             ["estimatedCost"] = dto.EstimatedCost,
-            ["repairProgressStatus"] = dto.RepairProgressStatus
+            ["repairProgressStatus"] = dto.RepairProgressStatus,
+            ["supplierId"] = resolvedSupplierId,
+            ["supplierName"] = supplierNameForLog
         };
         if (!string.IsNullOrWhiteSpace(ar.ProposedData))
             startData["legacyProposedData"] = ar.ProposedData;
@@ -482,6 +499,12 @@ public class RepairRequestsController : ControllerBase
 
         var repairDate = dto.CompletionDate ?? dto.RepairDate ?? DateTime.UtcNow;
 
+        var (resolvedCompleteSupplierId, completeSupplierError) =
+            await TryResolveRepairSupplierAsync(dto.NewSupplier, dto.SupplierId);
+        if (completeSupplierError != null)
+            return BadRequest(completeSupplierError);
+        var supplierForRecord = resolvedCompleteSupplierId ?? task.SupplierId;
+
         var rr = new RepairRecord
         {
             TaskId = task.TaskId,
@@ -492,9 +515,21 @@ public class RepairRequestsController : ControllerBase
                 ? null
                 : dto.DetailedDescription.Trim(),
             ReturnToUseDate = dto.ReturnToUseDate,
-            SupplierId = dto.SupplierId,
+            SupplierId = supplierForRecord,
             DamageDate = dto.DamageDate,
-            DamageCondition = dto.DamageCondition
+            DamageCondition = dto.DamageCondition,
+            RepairWarrantyStartDate = dto.RepairWarrantyStartDate,
+            RepairWarrantyEndDate = dto.RepairWarrantyEndDate,
+            RepairWarrantyPeriodValue = dto.RepairWarrantyPeriodValue is > 0 ? dto.RepairWarrantyPeriodValue : null,
+            RepairWarrantyPeriodUnit = string.IsNullOrWhiteSpace(dto.RepairWarrantyPeriodUnit)
+                ? null
+                : dto.RepairWarrantyPeriodUnit.Trim(),
+            RepairWarrantyConditions = string.IsNullOrWhiteSpace(dto.RepairWarrantyConditions)
+                ? null
+                : dto.RepairWarrantyConditions.Trim(),
+            RepairWarrantyNote = string.IsNullOrWhiteSpace(dto.RepairWarrantyNote)
+                ? null
+                : dto.RepairWarrantyNote.Trim()
         };
 
         _db.RepairRecords.Add(rr);
@@ -532,7 +567,28 @@ public class RepairRequestsController : ControllerBase
                 ["attachmentUrls"] = dto.AttachmentUrls != null
                     ? JsonSerializer.SerializeToNode(dto.AttachmentUrls)
                     : null,
-                ["completedAt"] = JsonSerializer.SerializeToNode(DateTime.UtcNow)
+                ["completedAt"] = JsonSerializer.SerializeToNode(DateTime.UtcNow),
+                ["supplierId"] = supplierForRecord.HasValue
+                    ? JsonSerializer.SerializeToNode(supplierForRecord.Value)
+                    : null,
+                ["repairWarrantyStartDate"] = dto.RepairWarrantyStartDate.HasValue
+                    ? JsonSerializer.SerializeToNode(dto.RepairWarrantyStartDate.Value)
+                    : null,
+                ["repairWarrantyEndDate"] = dto.RepairWarrantyEndDate.HasValue
+                    ? JsonSerializer.SerializeToNode(dto.RepairWarrantyEndDate.Value)
+                    : null,
+                ["repairWarrantyPeriodValue"] = dto.RepairWarrantyPeriodValue is > 0
+                    ? JsonSerializer.SerializeToNode(dto.RepairWarrantyPeriodValue.Value)
+                    : null,
+                ["repairWarrantyPeriodUnit"] = string.IsNullOrWhiteSpace(dto.RepairWarrantyPeriodUnit)
+                    ? null
+                    : dto.RepairWarrantyPeriodUnit.Trim(),
+                ["repairWarrantyConditions"] = string.IsNullOrWhiteSpace(dto.RepairWarrantyConditions)
+                    ? null
+                    : dto.RepairWarrantyConditions.Trim(),
+                ["repairWarrantyNote"] = string.IsNullOrWhiteSpace(dto.RepairWarrantyNote)
+                    ? null
+                    : dto.RepairWarrantyNote.Trim()
             };
 
             JsonObject root;
@@ -599,6 +655,40 @@ public class RepairRequestsController : ControllerBase
         await _db.SaveChangesAsync();
 
         return Ok(new { recordId = rr.RepairId, taskId = task.TaskId });
+    }
+
+    /// <summary>Chọn SupplierId hoặc tạo mới từ mã + tên. Trả lỗi nếu mã trùng hoặc id không tồn tại.</summary>
+    private async Task<(int? SupplierId, string? Error)> TryResolveRepairSupplierAsync(
+        RepairSupplierCreateDto? newSupplier,
+        int? supplierId)
+    {
+        if (newSupplier != null
+            && !string.IsNullOrWhiteSpace(newSupplier.Code)
+            && !string.IsNullOrWhiteSpace(newSupplier.Name))
+        {
+            var code = newSupplier.Code.Trim();
+            if (await _db.Suppliers.AnyAsync(s => s.Code == code))
+                return (null, "Mã đơn vị sửa chữa đã tồn tại.");
+            var sup = new Supplier
+            {
+                Code = code,
+                Name = newSupplier.Name.Trim(),
+                Status = 1,
+                CreateDate = DateTime.UtcNow
+            };
+            _db.Suppliers.Add(sup);
+            await _db.SaveChangesAsync();
+            return (sup.SupplierId, null);
+        }
+
+        if (supplierId is > 0)
+        {
+            if (!await _db.Suppliers.AnyAsync(s => s.SupplierId == supplierId.Value))
+                return (null, "Đơn vị sửa chữa không hợp lệ.");
+            return (supplierId, null);
+        }
+
+        return (null, null);
     }
 
     private int GetUserIdOrZero()

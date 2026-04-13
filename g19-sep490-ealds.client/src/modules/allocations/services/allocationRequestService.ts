@@ -122,6 +122,14 @@ export const allocationRequestService = {
     return Array.isArray(res.data) ? res.data : [];
   },
 
+  /** Distinct asset type ids that have ≥1 choosable catalog row for allocation (kho) or handover (phòng ban). */
+  async catalogEligibleAssetTypeIds(forAllocation: boolean): Promise<number[]> {
+    const res = await api.get<number[]>('/api/Assets/catalog-eligible-asset-type-ids', {
+      params: { forAllocation },
+    });
+    return Array.isArray(res.data) ? res.data : [];
+  },
+
   async list(): Promise<AllocationRequestListItem[]> {
     const res = await api.get<AllocationRequestListItem[]>('/api/Assets/Requests/allocation');
     return res.data;

@@ -23,6 +23,22 @@ public class RepairCompleteDto
     public string? DetailedDescription { get; set; }
     public int? SupplierId { get; set; }
 
+    /// <summary>Tạo đơn vị sửa chữa mới khi hoàn thành (mã + tên); nếu có thì ưu tiên hơn SupplierId.</summary>
+    public RepairSupplierCreateDto? NewSupplier { get; set; }
+
     public List<int>? AttachmentDocumentIds { get; set; }
     public List<string>? AttachmentUrls { get; set; }
+
+    /// <summary>Bảo hành gắn với biên bản sửa chữa (giống trường bảo hành cá thể); không thay đổi bảo hành tài sản.</summary>
+    public DateOnly? RepairWarrantyStartDate { get; set; }
+
+    public DateOnly? RepairWarrantyEndDate { get; set; }
+
+    public int? RepairWarrantyPeriodValue { get; set; }
+
+    public string? RepairWarrantyPeriodUnit { get; set; }
+
+    public string? RepairWarrantyConditions { get; set; }
+
+    public string? RepairWarrantyNote { get; set; }
 }

@@ -19,6 +19,6 @@ public class MaintenanceRecordResponseDTO
 
     public MaintenanceRecordStatus Status { get; set; }
 
-    /// <summary>maintenance | repair — phân biệt bản ghi bảo dưỡng và biên bản sửa chữa (ghép trong cùng API).</summary>
+    /// <summary>Luôn là bảo dưỡng (bảng MaintenanceRecord). Lịch sử sửa chữa lấy từ API RepairRecord.</summary>
     public string RecordSource { get; set; } = "maintenance";
 }
