@@ -1276,18 +1276,18 @@ public class InventoryController : ControllerBase
         if (dto.EndDate <= dto.StartDate)
             return BadRequest(new { message = "Ngày kết thúc phải sau ngày bắt đầu." });
 
-        if (await DepartmentHasOverlappingOpenInventoryAsync(
-                session.DepartmentId,
-                dto.StartDate,
-                dto.EndDate,
-                excludeSessionId: id))
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Phòng ban này đã có phiên kiểm kê (chưa hủy, chưa hoàn tất xử lý) trùng hoặc gối khoảng thời gian mới. Vui lòng chọn khác hoặc chỉnh phiên hiện có.",
-            });
-        }
+        var effectivePeriodDays = session.IsPeriodic
+            ? (dto.PeriodDays is int pd && pd > 0 ? pd : session.PeriodDays)
+            : null;
+        var scheduleError = await ValidateInventoryScheduleAgainstDepartmentAsync(
+            session.DepartmentId,
+            dto.StartDate,
+            dto.EndDate,
+            session.IsPeriodic,
+            effectivePeriodDays,
+            excludeSessionId: id);
+        if (scheduleError != null)
+            return BadRequest(new { message = scheduleError });
 
         session.Purpose = dto.Purpose ?? string.Empty;
         session.StartDate = dto.StartDate;
@@ -1372,7 +1372,8 @@ public class InventoryController : ControllerBase
             });
         }
 
-        // Đã lên lịch + định kỳ: dừng luôn các phiên định kỳ đã lên lịch sau này.
+        // Đã lên lịch + định kỳ: dừng các phiên định kỳ *cùng chuỗi* (cùng người lập, mục đích, chu kỳ, phạm vi tài sản)
+        // có ngày bắt đầu sau phiên này — không hủy mọi phiên định kỳ khác trong phòng ban.
         int cancelledChainCount = 0;
         if (session.IsPeriodic && wasScheduled)
         {
@@ -1381,7 +1382,13 @@ public class InventoryController : ControllerBase
                     s.SessionId != id &&
                     s.DepartmentId == session.DepartmentId &&
                     s.IsPeriodic &&
-                    s.Status == (int)InventorySessionStatus.Scheduled)
+                    s.Status == (int)InventorySessionStatus.Scheduled &&
+                    s.CreatedBy == session.CreatedBy &&
+                    s.PeriodDays == session.PeriodDays &&
+                    s.Purpose == session.Purpose &&
+                    s.AssetCategoryId == session.AssetCategoryId &&
+                    s.AssetTypeId == session.AssetTypeId &&
+                    s.StartDate > session.StartDate)
                 .ToListAsync();
 
             foreach (var future in futurePeriodicSessions)
@@ -1768,15 +1775,21 @@ public class InventoryController : ControllerBase
 
     private sealed record CreateInventorySessionResult(bool Success, string? ErrorMessage, int? SessionId);
 
+    private static TimeSpan InventorySessionExecutionSpan(DateTime startDate, DateTime endDate)
+    {
+        var span = endDate - startDate;
+        return span <= TimeSpan.Zero ? TimeSpan.FromDays(1) : span;
+    }
+
     /// <summary>
-    /// True when [newStart, newEnd] overlaps any open inventory window for the department (UTC calendar days, inclusive).
-    /// Open = not cancelled and not fully closed (Confirmed).
+    /// Open sessions in the department plus extrapolated future windows for periodic sessions
+    /// (same anchor rule as <see cref="TryCreateNextPeriodicSessionIfApplicableAsync"/>: start + n × period).
     /// </summary>
-    private async Task<bool> DepartmentHasOverlappingOpenInventoryAsync(
+    private async Task<List<(DateTime Start, DateTime End)>> BuildDepartmentOpenInventoryBlockingWindowsAsync(
         int departmentId,
-        DateTime newStart,
-        DateTime newEnd,
-        int? excludeSessionId)
+        int? excludeSessionId,
+        DateTime horizonEndUtc,
+        CancellationToken cancellationToken = default)
     {
         var rows = await _context.InventorySessions
             .AsNoTracking()
@@ -1784,18 +1797,101 @@ public class InventoryController : ControllerBase
                 s.DepartmentId == departmentId &&
                 s.Status != (int)InventorySessionStatus.Cancelled &&
                 s.Status != (int)InventorySessionStatus.Confirmed)
-            .Select(s => new { s.SessionId, s.StartDate, s.EndDate })
-            .ToListAsync();
+            .Select(s => new { s.SessionId, s.StartDate, s.EndDate, s.IsPeriodic, s.PeriodDays })
+            .ToListAsync(cancellationToken);
+
+        var windows = new List<(DateTime Start, DateTime End)>(rows.Count * 4);
 
         foreach (var s in rows)
         {
             if (excludeSessionId.HasValue && s.SessionId == excludeSessionId.Value)
                 continue;
-            if (InventoryScheduleWindow.CalendarRangesOverlap(s.StartDate, s.EndDate, newStart, newEnd))
-                return true;
+
+            windows.Add((s.StartDate, s.EndDate));
+
+            if (!s.IsPeriodic || s.PeriodDays is not int p || p <= 0)
+                continue;
+
+            var span = InventorySessionExecutionSpan(s.StartDate, s.EndDate);
+            const int maxRepeats = 2000;
+            for (var n = 1; n <= maxRepeats; n++)
+            {
+                var vs = s.StartDate.AddDays(n * p);
+                if (vs > horizonEndUtc)
+                    break;
+                windows.Add((vs, vs + span));
+            }
         }
 
-        return false;
+        return windows;
+    }
+
+    /// <summary>
+    /// Ensures the schedule (and, for periodic sessions, projected repeats) does not overlap any open department
+    /// session or extrapolated repeats from other periodic schedules. Also rejects periodic chains whose repeats
+    /// would overlap each other (chu kỳ shorter than execution window in calendar terms).
+    /// </summary>
+    private async Task<string?> ValidateInventoryScheduleAgainstDepartmentAsync(
+        int departmentId,
+        DateTime startDate,
+        DateTime endDate,
+        bool isPeriodic,
+        int? periodDays,
+        int? excludeSessionId,
+        CancellationToken cancellationToken = default)
+    {
+        var recurrenceDays = 0;
+        if (isPeriodic)
+        {
+            if (periodDays is not int p || p <= 0)
+                return "Vui lòng nhập chu kỳ kiểm kê (số ngày giữa các lần, tính từ ngày bắt đầu) lớn hơn 0 cho lịch định kỳ.";
+            recurrenceDays = p;
+        }
+
+        var span = InventorySessionExecutionSpan(startDate, endDate);
+
+        if (isPeriodic)
+        {
+            var firstRepeatStart = startDate.AddDays(recurrenceDays);
+            var firstRepeatEnd = firstRepeatStart + span;
+            if (InventoryScheduleWindow.CalendarRangesOverlap(startDate, endDate, firstRepeatStart, firstRepeatEnd))
+                return "Chu kỳ kiểm kê quá ngắn so với thời gian thực hiện: các lần lặp theo chu kỳ sẽ trùng hoặc gối nhau. Vui lòng tăng chu kỳ hoặc rút ngắn thời gian thực hiện.";
+        }
+
+        var utcNow = DateTime.UtcNow;
+        var horizonEndUtc = utcNow.AddYears(6);
+        var fromStartHorizon = startDate.AddYears(6);
+        if (fromStartHorizon > horizonEndUtc)
+            horizonEndUtc = fromStartHorizon;
+
+        var blockingWindows = await BuildDepartmentOpenInventoryBlockingWindowsAsync(
+            departmentId,
+            excludeSessionId,
+            horizonEndUtc,
+            cancellationToken);
+
+        var maxK = !isPeriodic ? 0 : Math.Min(2000, Math.Max(1, (int)Math.Ceiling(5.0 * 365 / recurrenceDays)) + 10);
+
+        for (var k = 0; k <= maxK; k++)
+        {
+            var ws = startDate.AddDays(isPeriodic ? k * recurrenceDays : 0);
+            if (ws > horizonEndUtc)
+                break;
+
+            var we = ws + span;
+            foreach (var block in blockingWindows)
+            {
+                if (!InventoryScheduleWindow.CalendarRangesOverlap(ws, we, block.Start, block.End))
+                    continue;
+
+                if (!isPeriodic || k == 0)
+                    return "Phòng ban này đã có phiên kiểm kê (chưa hủy, chưa hoàn tất xử lý) trùng hoặc gối khoảng thời gian được chọn — kể cả khi so với các lần định kỳ dự kiến của phiên khác. Vui lòng điều chỉnh ngày, thời gian thực hiện hoặc chu kỳ.";
+
+                return $"Lịch định kỳ không khả thi: lần thứ {k + 1} trong chu kỳ (dự kiến) trùng hoặc gối một phiên kiểm kê hiện có hoặc một lần lặp định kỳ khác trong phòng ban. Vui lòng điều chỉnh ngày bắt đầu, thời gian thực hiện hoặc chu kỳ.";
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -1816,13 +1912,15 @@ public class InventoryController : ControllerBase
         if (department == null)
             return new CreateInventorySessionResult(false, "Phòng ban không tồn tại.", null);
 
-        if (await DepartmentHasOverlappingOpenInventoryAsync(departmentId, startDate, endDate, excludeSessionId: null))
-        {
-            return new CreateInventorySessionResult(
-                false,
-                "Phòng ban này đã có phiên kiểm kê (chưa hủy, chưa hoàn tất xử lý) trùng hoặc gối khoảng thời gian được chọn. Vui lòng điều chỉnh lịch hoặc chờ phiên hiện tại kết thúc.",
-                null);
-        }
+        var scheduleError = await ValidateInventoryScheduleAgainstDepartmentAsync(
+            departmentId,
+            startDate,
+            endDate,
+            isPeriodic,
+            isPeriodic ? periodDays : null,
+            excludeSessionId: null);
+        if (scheduleError != null)
+            return new CreateInventorySessionResult(false, scheduleError, null);
 
         var instances = await _context.AssetInstances
             .Where(ai =>

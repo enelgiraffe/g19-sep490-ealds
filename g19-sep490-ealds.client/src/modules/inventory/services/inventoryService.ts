@@ -16,6 +16,28 @@ export function inventorySessionEndOfDayUtcIso(d: Dayjs): string {
   return `${d.format('YYYY-MM-DD')}T23:59:59.999Z`;
 }
 
+/**
+ * Last calendar day of the execution window: end = start + (executionDaysInclusive − 1).
+ * executionDaysInclusive is the number of UTC calendar days in [start … end] inclusive (≥ 1).
+ */
+export function inventorySessionEndDayForInclusiveDuration(
+  start: Dayjs,
+  executionDaysInclusive: number,
+): Dayjs {
+  const n = Math.max(1, Math.floor(executionDaysInclusive));
+  return start.add(n - 1, 'day');
+}
+
+/** Inclusive UTC calendar-day count between session start and end (matches {@link inventorySessionEndDayForInclusiveDuration}). */
+export function inventorySessionInclusiveDayCount(startStr: string, endStr: string): number {
+  const start = new Date(startStr);
+  const end = new Date(endStr);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1;
+  const su = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+  const eu = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+  return Math.max(1, Math.round((eu - su) / 86_400_000) + 1);
+}
+
 const inventoryApi = axios.create({
   baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },

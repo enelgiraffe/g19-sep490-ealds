@@ -4,6 +4,7 @@ import { Input, Select, Tag, Spin, message } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import {
   inventoryService,
+  inventorySessionInclusiveDayCount,
   SESSION_STATUS,
   SESSION_STATUS_LABEL,
   type DropdownItem,
@@ -52,13 +53,7 @@ function formatDate(dateStr: string | null | undefined): string {
 
 function execDurationLabel(startStr: string | null | undefined, endStr: string | null | undefined): string {
   if (!startStr || !endStr) return '-';
-  const start = new Date(startStr);
-  const end = new Date(endStr);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '-';
-  const su = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
-  const eu = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
-  const days = Math.max(1, Math.round((eu - su) / 86_400_000));
-  return `${days} ngày`;
+  return `${inventorySessionInclusiveDayCount(startStr, endStr)} ngày`;
 }
 
 export function DirectorInventoryPage() {

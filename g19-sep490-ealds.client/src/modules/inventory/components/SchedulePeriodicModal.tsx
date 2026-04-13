@@ -7,6 +7,7 @@ import {
   inventoryService,
   getCurrentUserId,
   inventorySessionDateToUtcIso,
+  inventorySessionEndDayForInclusiveDuration,
   inventorySessionEndOfDayUtcIso,
   type DropdownItem,
 } from '../services/inventoryService';
@@ -94,7 +95,10 @@ export function SchedulePeriodicModal({
         return;
       }
 
-      const computedEndDate = values.startDate.add(values.executionDays, 'day');
+      const computedEndDate = inventorySessionEndDayForInclusiveDuration(
+        values.startDate,
+        values.executionDays,
+      );
 
       const departmentId = values.departmentId;
       if (departmentId == null) {
@@ -155,11 +159,6 @@ export function SchedulePeriodicModal({
             options={departments.map((d) => ({ value: d.id, label: d.name }))}
           />
         </Form.Item>
-        {isDeptHead && (
-          <p className="schedule-modal__dept-hint">
-            Trưởng phòng chỉ được lập lịch cho phòng ban mình; chọn đúng phòng ban của bạn.
-          </p>
-        )}
 
         <Form.Item
           label="Mục đích"
@@ -230,7 +229,7 @@ export function SchedulePeriodicModal({
             const startDate = form.getFieldValue('startDate') as Dayjs | undefined;
             const execDays = form.getFieldValue('executionDays') as number | undefined;
             if (!startDate || !execDays || execDays <= 0) return null;
-            const endDate = startDate.add(execDays, 'day');
+            const endDate = inventorySessionEndDayForInclusiveDuration(startDate, execDays);
             return (
               <div className="schedule-periodic-form__enddate-preview">
                 <span className="schedule-periodic-form__enddate-label">Hạn hoàn thành:</span>

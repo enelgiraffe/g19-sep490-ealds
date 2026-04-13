@@ -9,7 +9,9 @@ import { ScheduleIndividualModal } from '../components/ScheduleIndividualModal';
 import {
   inventoryService,
   inventorySessionDateToUtcIso,
+  inventorySessionEndDayForInclusiveDuration,
   inventorySessionEndOfDayUtcIso,
+  inventorySessionInclusiveDayCount,
   SESSION_STATUS,
   type DropdownItem,
   type InventorySessionListItem,
@@ -47,13 +49,7 @@ function formatDate(dateStr: string | null | undefined): string {
 
 function execDurationLabel(startStr: string | null | undefined, endStr: string | null | undefined): string {
   if (!startStr || !endStr) return '-';
-  const start = new Date(startStr);
-  const end = new Date(endStr);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '-';
-  const su = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
-  const eu = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
-  const days = Math.max(1, Math.round((eu - su) / 86_400_000));
-  return `${days} ngày`;
+  return `${inventorySessionInclusiveDayCount(startStr, endStr)} ngày`;
 }
 
 interface EditFormValues {
@@ -170,8 +166,7 @@ export function InventoryPage() {
   const openEditModal = (row: InventorySessionListItem) => {
     setEditTarget(row);
     const start = dayjs(row.startDate);
-    const end = dayjs(row.endDate);
-    const execDays = Math.max(1, end.diff(start, 'day'));
+    const execDays = inventorySessionInclusiveDayCount(row.startDate, row.endDate);
     editForm.setFieldsValue({
       purpose: row.purpose,
       startDate: start,
@@ -185,7 +180,7 @@ export function InventoryPage() {
     const values = await editForm.validateFields();
     setEditSubmitting(true);
     try {
-      const endDate = values.startDate.add(values.executionDays, 'day');
+      const endDate = inventorySessionEndDayForInclusiveDuration(values.startDate, values.executionDays);
       await inventoryService.updateSession(editTarget.sessionId, {
         purpose: values.purpose,
         startDate: inventorySessionDateToUtcIso(values.startDate),
@@ -520,7 +515,9 @@ export function InventoryPage() {
               return (
                 <div style={{ marginBottom: 16, color: '#595959', fontSize: 13 }}>
                   Hạn hoàn thành:{' '}
-                  <strong>{startDate.add(execDays, 'day').format('DD/MM/YYYY')}</strong>
+                  <strong>
+                    {inventorySessionEndDayForInclusiveDuration(startDate, execDays).format('DD/MM/YYYY')}
+                  </strong>
                 </div>
               );
             }}
@@ -561,8 +558,8 @@ export function InventoryPage() {
             </p>
             {cancelTarget.isPeriodic && (
               <p style={{ marginBottom: 12, color: '#cf1322', fontSize: 13 }}>
-                Đây là lịch kiểm kê định kỳ. Tất cả các phiên định kỳ tiếp theo chưa bắt đầu
-                của phòng ban này cũng sẽ bị hủy.
+                Đây là lịch kiểm kê định kỳ. Các phiên định kỳ tiếp theo cùng chu kỳ (cùng mục đích,
+                chu kỳ, người lập và có ngày bắt đầu sau phiên này) cũng sẽ bị hủy.
               </p>
             )}
             <TextArea

@@ -138,11 +138,6 @@ export function ScheduleIndividualModal({
             options={departments.map((d) => ({ value: d.id, label: d.name }))}
           />
         </Form.Item>
-        {isDeptHead && (
-          <p className="schedule-modal__dept-hint">
-            Trưởng phòng chỉ được lập lịch cho phòng ban mình; chọn đúng phòng ban của bạn.
-          </p>
-        )}
 
         <Form.Item label="Mục đích" name="purpose">
           <TextArea rows={3} placeholder="Ví dụ: Kiểm kê tài sản định kỳ tháng 3" className="schedule-form__textarea" />
