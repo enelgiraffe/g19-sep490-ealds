@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useState, type ComponentProps } from 'react';
-import { Button, Input, Select, message } from 'antd';
-import { PlusOutlined, SearchOutlined, FilterOutlined, SettingOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
+import { Button, Input, Popconfirm, Select, message } from 'antd';
+import {
+  PlusOutlined,
+  SearchOutlined,
+  FilterOutlined,
+  SettingOutlined,
+  EyeOutlined,
+  EditOutlined,
+  DeleteOutlined,
+} from '@ant-design/icons';
 import {
   procurementPoService,
   PO_STATUS,
@@ -263,6 +271,32 @@ export function PurchaseOrdersPage() {
                               }}
                               title="Chỉnh sửa"
                             />
+                          )}
+                          {item.status === PO_STATUS.created && (
+                            <Popconfirm
+                              title="Xóa đơn mua?"
+                              description="Đơn mua trạng thái Đã tạo sẽ bị xóa vĩnh viễn."
+                              okText="Xóa"
+                              cancelText="Hủy"
+                              okButtonProps={{ danger: true }}
+                              onConfirm={async () => {
+                                try {
+                                  await procurementPoService.delete(item.procurementId);
+                                  message.success('Đã xóa đơn mua.');
+                                  await loadList();
+                                } catch {
+                                  message.error('Không xóa được đơn mua.');
+                                }
+                              }}
+                            >
+                              <Button
+                                type="text"
+                                danger
+                                icon={<DeleteOutlined />}
+                                size="small"
+                                title="Xóa"
+                              />
+                            </Popconfirm>
                           )}
                         </div>
                       </td>

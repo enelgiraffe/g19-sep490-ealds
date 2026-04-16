@@ -119,4 +119,8 @@ export const procurementPoService = {
     );
     return response.data;
   },
+
+  async delete(id: number): Promise<void> {
+    await poApi.delete(`/api/purchase-orders/${id}`);
+  },
 };

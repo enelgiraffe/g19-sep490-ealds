@@ -362,4 +362,29 @@ public class PurchaseOrdersController : ControllerBase
         await _db.SaveChangesAsync();
         return Ok(new { procurementId = id, status = entity.Status });
     }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var entity = await _db.Procurements.FirstOrDefaultAsync(p => p.ProcurementId == id);
+        if (entity == null)
+            return NotFound();
+
+        if (entity.Status != StatusCreated)
+            return BadRequest("Only purchase orders in Created status can be deleted.");
+
+        var hasReceipts = await _db.ProcurementLines.AsNoTracking()
+            .AnyAsync(l => l.ProcurementId == id && l.ReceivedQuantity > 0);
+        if (hasReceipts)
+            return BadRequest("Cannot delete a purchase order that has goods receipts.");
+
+        var lines = await _db.ProcurementLines.Where(l => l.ProcurementId == id).ToListAsync();
+        if (lines.Count > 0)
+            _db.ProcurementLines.RemoveRange(lines);
+
+        _db.Procurements.Remove(entity);
+        await _db.SaveChangesAsync();
+
+        return NoContent();
+    }
 }

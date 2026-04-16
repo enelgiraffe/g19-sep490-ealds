@@ -14,16 +14,21 @@ import type { PurchaseOrderDetail, PurchaseOrderLineWrite } from '../services/pr
 import './PurchaseOrderFormModalNew.css';
 
 const CURRENCIES = ['VND', 'USD', 'EUR'] as const;
+const FIXED_UNITS = ['Cái', 'Chiếc', 'Bộ'] as const;
+const OTHER_UNIT_VALUE = '__other__';
 
 interface LineRow {
   key: string;
   description: string;
   assetId: number | null;
   assetName: string;
+  requestedAssetTypeId: number | null;
+  requestedAssetTypeName: string;
   quantity: number;
   unit: string;
   unitPrice: number;
   expectedDelivery: Dayjs | null;
+  sourceLineId?: number;
 }
 
 function toRows(lines: PurchaseOrderDetail['lines']): LineRow[] {
@@ -32,10 +37,13 @@ function toRows(lines: PurchaseOrderDetail['lines']): LineRow[] {
     description: l.description ?? '',
     assetId: l.assetId,
     assetName: l.assetName ?? '',
+    requestedAssetTypeId: null,
+    requestedAssetTypeName: '',
     quantity: Number(l.quantity),
     unit: l.unit ?? 'Cái',
     unitPrice: Number(l.unitPrice),
     expectedDelivery: l.expectedDeliveryDate ? dayjs(l.expectedDeliveryDate) : null,
+    sourceLineId: undefined,
   }));
 }
 
@@ -45,10 +53,13 @@ function emptyRow(): LineRow {
     description: '',
     assetId: null,
     assetName: '',
+    requestedAssetTypeId: null,
+    requestedAssetTypeName: '',
     quantity: 1,
     unit: 'Cái',
     unitPrice: 0,
     expectedDelivery: null,
+    sourceLineId: undefined,
   };
 }
 
@@ -64,11 +75,33 @@ function requestLinesToRows(lines: PurchaseRequestLineItem[]): LineRow[] {
     description: (l.itemName ?? l.modelCode ?? '').trim(),
     assetId: l.assetId,
     assetName: [l.assetCode, l.assetName].filter(Boolean).join(' — '),
+    requestedAssetTypeId: null,
+    requestedAssetTypeName: '',
     quantity: Number(l.quantity) > 0 ? Number(l.quantity) : 1,
     unit: (l.unit ?? 'Cái').trim() || 'Cái',
     unitPrice: parseEstimatedPrice(l.estimatedPrice),
     expectedDelivery: null,
+    sourceLineId: l.lineId,
   }));
+}
+
+function parseRequestedAssetTypes(proposedData: string | null | undefined): Array<{ assetTypeId: number | null; assetTypeName: string }> {
+  try {
+    if (!proposedData) return [];
+    const parsed = JSON.parse(proposedData) as {
+      equipment?: Array<{ assetTypeId?: number | string; assetTypeName?: string }>;
+    };
+    if (!Array.isArray(parsed.equipment)) return [];
+    return parsed.equipment.map((row) => {
+      const id = Number(row.assetTypeId);
+      return {
+        assetTypeId: Number.isFinite(id) && id > 0 ? id : null,
+        assetTypeName: String(row.assetTypeName ?? '').trim(),
+      };
+    });
+  } catch {
+    return [];
+  }
 }
 
 export interface PurchaseOrderFormModalNewProps {
@@ -100,6 +133,7 @@ export function PurchaseOrderFormModalNew({
   const [assetRequestOptions, setAssetRequestOptions] = useState<PurchaseOrderListItem[]>([]);
   const [showAssetRequestDropdown, setShowAssetRequestDropdown] = useState(false);
   const [lines, setLines] = useState<LineRow[]>([emptyRow()]);
+  const [expectedDeliveryDate, setExpectedDeliveryDate] = useState<Dayjs | null>(null);
   /** Khi có giá trị: các dòng được lấy từ đơn yêu cầu; chỉ chỉnh sửa đơn giá. */
   const [linkedRequestId, setLinkedRequestId] = useState<number | null>(null);
   const [requestLinesLoading, setRequestLinesLoading] = useState(false);
@@ -107,6 +141,9 @@ export function PurchaseOrderFormModalNew({
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
   const [currentEditingLineKey, setCurrentEditingLineKey] = useState<string | null>(null);
+  const [expectedRequestRows, setExpectedRequestRows] = useState<
+    Array<{ sourceLineId: number; quantity: number; requestedAssetTypeId: number | null }>
+  >([]);
 
   useEffect(() => {
     if (!open) return;
@@ -141,13 +178,18 @@ export function PurchaseOrderFormModalNew({
       setCurrency(initial.currency || 'VND');
       setContractNo(initial.contractNo || '');
       setAssetRequestId(initial.assetRequestId ? String(initial.assetRequestId) : '');
-      setLines(initial.lines.length > 0 ? toRows(initial.lines) : [emptyRow()]);
+      const mappedLines = initial.lines.length > 0 ? toRows(initial.lines) : [emptyRow()];
+      setLines(mappedLines);
+      setExpectedDeliveryDate(mappedLines[0]?.expectedDelivery ?? null);
+      setExpectedRequestRows([]);
     } else {
       setSelectedSupplier(null);
       setCurrency('VND');
       setContractNo('');
       setAssetRequestId('');
       setLines([emptyRow()]);
+      setExpectedDeliveryDate(null);
+      setExpectedRequestRows([]);
     }
   }, [open, mode, initial]);
 
@@ -161,10 +203,26 @@ export function PurchaseOrderFormModalNew({
         return;
       }
       setLinkedRequestId(id);
-      setLines(requestLinesToRows(raw));
+      const req = assetRequestOptions.find((x) => x.assetRequestId === id);
+      const requestedTypes = parseRequestedAssetTypes(req?.proposedData);
+      const mapped = requestLinesToRows(raw).map((line, idx) => ({
+        ...line,
+        requestedAssetTypeId: requestedTypes[idx]?.assetTypeId ?? null,
+        requestedAssetTypeName: requestedTypes[idx]?.assetTypeName ?? '',
+        expectedDelivery: expectedDeliveryDate,
+      }));
+      setLines(mapped);
+      setExpectedRequestRows(
+        mapped.map((line) => ({
+          sourceLineId: line.sourceLineId ?? 0,
+          quantity: line.quantity,
+          requestedAssetTypeId: line.requestedAssetTypeId,
+        }))
+      );
     } catch {
       message.error('Không tải được danh sách vật tư từ đơn yêu cầu.');
       setLinkedRequestId(null);
+      setExpectedRequestRows([]);
     } finally {
       setRequestLinesLoading(false);
     }
@@ -175,20 +233,23 @@ export function PurchaseOrderFormModalNew({
     const trimmed = value.trim();
     if (!trimmed) {
       setLinkedRequestId(null);
+      setExpectedRequestRows([]);
       if (mode === 'create') {
-        setLines([emptyRow()]);
+        setLines([{ ...emptyRow(), expectedDelivery: expectedDeliveryDate }]);
       }
       return;
     }
     const parsed = parseInt(trimmed, 10);
     if (!Number.isFinite(parsed) || parsed <= 0) {
       setLinkedRequestId(null);
+      setExpectedRequestRows([]);
       return;
     }
     if (linkedRequestId !== null && linkedRequestId !== parsed) {
       setLinkedRequestId(null);
+      setExpectedRequestRows([]);
       if (mode === 'create') {
-        setLines([emptyRow()]);
+        setLines([{ ...emptyRow(), expectedDelivery: expectedDeliveryDate }]);
       }
     }
   };
@@ -198,8 +259,9 @@ export function PurchaseOrderFormModalNew({
     const trimmed = assetRequestId.trim();
     if (!trimmed) {
       setLinkedRequestId(null);
+      setExpectedRequestRows([]);
       if (mode === 'create') {
-        setLines([emptyRow()]);
+        setLines([{ ...emptyRow(), expectedDelivery: expectedDeliveryDate }]);
       }
       return;
     }
@@ -234,6 +296,20 @@ export function PurchaseOrderFormModalNew({
       expectedDeliveryDate: r.expectedDelivery ? r.expectedDelivery.format('YYYY-MM-DD') : null,
     }));
     const kept = payloadLines.filter((l) => l.quantity > 0);
+    if (linkedRequestId != null && expectedRequestRows.length > 0) {
+      if (lines.length !== expectedRequestRows.length) {
+        message.warning('Đơn mua phải giữ đúng số dòng loại tài sản như yêu cầu mua.');
+        return;
+      }
+      for (let i = 0; i < lines.length; i += 1) {
+        const actual = lines[i];
+        const expected = expectedRequestRows[i];
+        if (Number(actual.quantity) !== Number(expected.quantity)) {
+          message.warning('Số lượng từng loại tài sản phải đúng theo yêu cầu mua đã chọn.');
+          return;
+        }
+      }
+    }
     if (kept.length === 0 && mode !== 'edit' && !isDraft) {
       message.warning('Cần ít nhất một dòng hàng với số lượng lớn hơn 0.');
       return;
@@ -260,8 +336,6 @@ export function PurchaseOrderFormModalNew({
 
   if (!open) return null;
 
-  const totalAmount = lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
-
   return (
     <div className="po-form-modal-overlay" role="dialog" aria-modal="true">
       <div className="po-form-modal">
@@ -284,6 +358,28 @@ export function PurchaseOrderFormModalNew({
           <div className="po-form-modal__content">
             <div className="po-form-section">
               <h3 className="po-form-section-title">Thông tin chung</h3>
+
+              <div className="po-form-row">
+                <div className="po-form-item">
+                  <label>Ngày giao dự kiến</label>
+                  <DatePicker
+                    className="po-form-datepicker--fixed"
+                    style={{ width: '100%', height: '40px' }}
+                    value={expectedDeliveryDate}
+                    onChange={(d) => {
+                      setExpectedDeliveryDate(d);
+                      // Global planned date works as default for lines that don't have a specific date yet.
+                      setLines((prev) =>
+                        prev.map((line) =>
+                          line.expectedDelivery == null ? { ...line, expectedDelivery: d } : line
+                        )
+                      );
+                    }}
+                    format="DD/MM/YYYY"
+                  />
+                </div>
+                <div className="po-form-item" />
+              </div>
 
               <div className="po-form-row">
                 <div className="po-form-item">
@@ -384,13 +480,6 @@ export function PurchaseOrderFormModalNew({
               </div>
             </div>
 
-            <div className="po-form-total-section">
-              <div className="po-form-total-label">Tổng tiền:</div>
-              <div className="po-form-total-value">
-                {totalAmount.toLocaleString('vi-VN')} {currency}
-              </div>
-            </div>
-
             <div className="po-form-section">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <h3 className="po-form-section-title" style={{ marginBottom: 0 }}>
@@ -400,7 +489,12 @@ export function PurchaseOrderFormModalNew({
                   <button
                     type="button"
                     className="po-form-btn-add-line"
-                    onClick={() => setLines((prev) => [...prev, emptyRow()])}
+                    onClick={() =>
+                      setLines((prev) => [
+                        ...prev,
+                        { ...emptyRow(), expectedDelivery: expectedDeliveryDate },
+                      ])
+                    }
                   >
                     <PlusOutlined /> Thêm dòng
                   </button>
@@ -414,10 +508,10 @@ export function PurchaseOrderFormModalNew({
                       <th style={{ width: '40px' }}>STT</th>
                       <th style={{ width: '200px' }}>Tài sản</th>
                       <th style={{ width: '200px' }}>Mô tả</th>
-                      <th style={{ width: '80px' }}>SL</th>
-                      <th style={{ width: '80px' }}>ĐVT</th>
+                      <th style={{ width: '100px' }}>Số lượng</th>
+                      <th style={{ width: '110px' }}>Đơn vị tính</th>
                       <th style={{ width: '120px' }}>Đơn giá</th>
-                      <th style={{ width: '140px' }}>Ngày giao DK</th>
+                      <th style={{ width: '160px' }}>Ngày giao dự kiến</th>
                       <th style={{ width: '120px' }}>Thành tiền</th>
                       <th style={{ width: '60px' }}></th>
                     </tr>
@@ -429,6 +523,11 @@ export function PurchaseOrderFormModalNew({
                       <tr key={row.key}>
                         <td className="po-form-table-center">{idx + 1}</td>
                         <td>
+                          {lineLocked && row.requestedAssetTypeName && (
+                            <div className="po-form-inline-hint" style={{ marginBottom: 4 }}>
+                              Loại YC: {row.requestedAssetTypeName}
+                            </div>
+                          )}
                           <div className="po-form-asset-select">
                             <input
                               type="text"
@@ -478,13 +577,49 @@ export function PurchaseOrderFormModalNew({
                           />
                         </td>
                         <td>
-                          <input
-                            type="text"
-                            className="po-form-input po-form-input--fixed"
-                            value={row.unit}
-                            readOnly={lineLocked}
-                            onChange={(e) => updateLine(row.key, { unit: e.target.value })}
-                          />
+                          {(() => {
+                            const normalized = String(row.unit ?? '').trim();
+                            const isFixedUnit = FIXED_UNITS.some((u) => u === normalized);
+                            const selectValue = isFixedUnit ? normalized : OTHER_UNIT_VALUE;
+                            return (
+                              <>
+                                <select
+                                  className="po-form-select"
+                                  style={{ width: '100%', height: '40px' }}
+                                  value={selectValue}
+                                  disabled={lineLocked}
+                                  onChange={(e) => {
+                                    const next = e.target.value;
+                                    if (next === OTHER_UNIT_VALUE) {
+                                      if (isFixedUnit || !normalized) {
+                                        updateLine(row.key, { unit: '' });
+                                      }
+                                      return;
+                                    }
+                                    updateLine(row.key, { unit: next });
+                                  }}
+                                >
+                                  {FIXED_UNITS.map((unit) => (
+                                    <option key={unit} value={unit}>
+                                      {unit}
+                                    </option>
+                                  ))}
+                                  <option value={OTHER_UNIT_VALUE}>Khác...</option>
+                                </select>
+                                {selectValue === OTHER_UNIT_VALUE && (
+                                  <input
+                                    type="text"
+                                    className="po-form-input po-form-input--fixed"
+                                    style={{ marginTop: 6 }}
+                                    placeholder="Nhập đơn vị tính"
+                                    value={normalized}
+                                    readOnly={lineLocked}
+                                    onChange={(e) => updateLine(row.key, { unit: e.target.value })}
+                                  />
+                                )}
+                              </>
+                            );
+                          })()}
                         </td>
                         <td>
                           <InputNumber
@@ -578,6 +713,11 @@ export function PurchaseOrderFormModalNew({
           setIsAssetModalOpen(false);
           setCurrentEditingLineKey(null);
         }}
+        filterAssetTypeId={
+          currentEditingLineKey
+            ? (lines.find((l) => l.key === currentEditingLineKey)?.requestedAssetTypeId ?? null)
+            : null
+        }
       />
     </div>
   );

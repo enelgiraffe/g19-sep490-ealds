@@ -149,64 +149,26 @@ export function ViewPurchaseOrderModal({
   const statusConfig = STATUS_MAP[data.status] ?? STATUS_MAP[0];
   let equipment: {
     stt: number;
-    name: string;
+    assetTypeName: string;
     quantity: number;
-    modelCode?: string;
-    unit?: string;
-    estimatedPrice?: string;
   }[] = [];
-  let totalPrice = '—';
   try {
     if (data.proposedData) {
       const parsed = JSON.parse(data.proposedData) as {
-        equipment?: { name?: string; quantity?: number; modelCode?: string; machineCode?: string; unit?: string; estimatedPrice?: string }[];
-        totalPrice?: string;
+        equipment?: { assetTypeName?: string; quantity?: number }[];
       };
       if (Array.isArray(parsed.equipment)) {
         equipment = parsed.equipment.map((e, i) => ({
           stt: i + 1,
-          name: e.name ?? '—',
+          assetTypeName: e.assetTypeName ?? '—',
           quantity: e.quantity ?? 1,
-          modelCode: e.modelCode ?? e.machineCode,
-          unit: e.unit,
-          estimatedPrice: e.estimatedPrice,
         }));
       }
-      if (parsed.totalPrice) totalPrice = parsed.totalPrice;
     }
   } catch {
     // keep empty
   }
 
-  const inferredAssetTypeName = (() => {
-    const fromProposed =
-      parsedProposedData && typeof parsedProposedData === 'object'
-        ? String((parsedProposedData as { assetTypeName?: string | null }).assetTypeName ?? '').trim()
-        : '';
-    if (fromProposed) return fromProposed;
-    const descriptionText = String(data.description ?? '');
-    const marker = 'Loại tài sản:';
-    const idx = descriptionText.indexOf(marker);
-    if (idx < 0) return null;
-    const line = descriptionText.slice(idx + marker.length).split('\n')[0].trim();
-    return line || null;
-  })();
-  const extractedSupplierName = (() => {
-    const descriptionText = String(data.description ?? '');
-    const marker = 'Nhà cung cấp đề xuất:';
-    const idx = descriptionText.indexOf(marker);
-    if (idx < 0) return null;
-    const line = descriptionText.slice(idx + marker.length).split('\n')[0].trim();
-    return line || null;
-  })();
-  const extractedPurpose = (() => {
-    const descriptionText = String(data.description ?? '');
-    const marker = 'Mục đích:';
-    const idx = descriptionText.indexOf(marker);
-    if (idx < 0) return null;
-    const line = descriptionText.slice(idx + marker.length).split('\n')[0].trim();
-    return line || null;
-  })();
   const extractedNeedDate = (() => {
     const descriptionText = String(data.description ?? '');
     const marker = 'Thời gian cần:';
@@ -233,9 +195,9 @@ export function ViewPurchaseOrderModal({
       return [data.assetCode, data.assetName].filter(Boolean).join(' - ');
     }
     if (equipment.length > 0) {
-      const names = equipment.map((e) => e.name).filter(Boolean);
+      const names = equipment.map((e) => e.assetTypeName).filter(Boolean);
       if (names.length === 0) return null;
-      return names.length === 1 ? names[0] : `${names.length} vật tư (${names[0]}...)`;
+      return names.length === 1 ? names[0] : `${names.length} loại tài sản (${names[0]}...)`;
     }
     return null;
   })();
@@ -301,13 +263,10 @@ export function ViewPurchaseOrderModal({
 
               <div className="view-purchase-form__row">
                 <div className="view-purchase-form__field">
-                  <label>Nhà cung cấp đề xuất</label>
-                  <div className="view-purchase-form__value">{extractedSupplierName ?? '—'}</div>
+                  <label>Số dòng đề xuất</label>
+                  <div className="view-purchase-form__value">{equipment.length || '—'}</div>
                 </div>
-                <div className="view-purchase-form__field">
-                  <label>Loại tài sản</label>
-                  <div className="view-purchase-form__value">{inferredAssetTypeName ?? '—'}</div>
-                </div>
+                <div className="view-purchase-form__field view-purchase-form__field--empty" aria-hidden="true" />
               </div>
 
               <div className="view-purchase-form__row">
@@ -320,32 +279,28 @@ export function ViewPurchaseOrderModal({
 
               {equipment.length > 0 && (
                 <div className="view-purchase-form__section">
-                  <h3 className="view-purchase-form__section-title">Danh mục vật tư</h3>
+                  <h3 className="view-purchase-form__section-title">Danh mục loại tài sản đề xuất</h3>
                   <table className="view-purchase-equipment-table">
                     <thead>
                       <tr>
                         <th>STT</th>
-                        <th>Tên vật tư</th>
+                        <th>Loại tài sản</th>
                         <th>Số lượng</th>
-                        <th>Mã model</th>
-                        <th>Đơn vị tính</th>
-                        <th>Đơn giá dự tính</th>
                       </tr>
                     </thead>
                     <tbody>
                       {equipment.map((item) => (
                         <tr key={item.stt}>
                           <td>{item.stt}</td>
-                          <td>{item.name}</td>
+                          <td>{item.assetTypeName}</td>
                           <td>{item.quantity}</td>
-                          <td>{item.modelCode ?? '—'}</td>
-                          <td>{item.unit ?? '—'}</td>
-                          <td className="view-purchase-equipment-price">{item.estimatedPrice ?? '—'}</td>
                         </tr>
                       ))}
                       <tr className="view-purchase-equipment-total">
-                        <td colSpan={5}>Thành tiền</td>
-                        <td className="view-purchase-equipment-price">{totalPrice}</td>
+                        <td colSpan={2}>Tổng số lượng</td>
+                        <td className="view-purchase-equipment-price">
+                          {equipment.reduce((sum, item) => sum + (item.quantity || 0), 0)}
+                        </td>
                       </tr>
                     </tbody>
                   </table>
@@ -361,13 +316,6 @@ export function ViewPurchaseOrderModal({
                   >
                     {data.proposedData}
                   </pre>
-                </div>
-              )}
-
-              {data.description && (
-                <div className="view-purchase-form__section">
-                  <label>Mục đích sử dụng</label>
-                  <div className="view-purchase-form__value">{extractedPurpose ?? '—'}</div>
                 </div>
               )}
 

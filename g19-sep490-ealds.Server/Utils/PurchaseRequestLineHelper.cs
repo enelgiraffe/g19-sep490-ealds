@@ -62,7 +62,9 @@ public static class PurchaseRequestLineHelper
             foreach (var item in equipment.EnumerateArray())
             {
                 var name = item.TryGetProperty("name", out var n) ? n.GetString()?.Trim() : null;
-                if (string.IsNullOrWhiteSpace(name))
+                var assetTypeName = item.TryGetProperty("assetTypeName", out var atn) ? atn.GetString()?.Trim() : null;
+                var displayName = !string.IsNullOrWhiteSpace(name) ? name : assetTypeName;
+                if (string.IsNullOrWhiteSpace(displayName))
                     continue;
 
                 var qty = 1;
@@ -80,7 +82,7 @@ public static class PurchaseRequestLineHelper
                     ? e.ValueKind == JsonValueKind.String ? e.GetString() : e.GetRawText()
                     : null;
 
-                list.Add(new EquipmentRow(name, qty, unit, modelCode, est));
+                list.Add(new EquipmentRow(displayName, qty, unit, modelCode, est));
             }
         }
         catch
