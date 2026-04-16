@@ -130,18 +130,6 @@ function formatDate(iso: string): string {
   }
 }
 
-function parseCurrencyToNumber(value: unknown): number {
-  const raw = String(value ?? '').trim();
-  if (!raw) return 0;
-  const cleaned = raw.replace(/[^\d,.-]/g, '');
-  if (!cleaned) return 0;
-  const normalized = cleaned.includes(',') && !cleaned.includes('.')
-    ? cleaned.replace(/,/g, '.')
-    : cleaned.replace(/,/g, '');
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 function extractDescriptionField(description: string | null | undefined, label: string): string | null {
   const text = String(description ?? '');
   const marker = `${label}:`;
@@ -156,16 +144,16 @@ function getPurchaseAssetDisplay(row: DirectorRequestListItem): string {
   try {
     const parsed = row.proposedData
       ? (JSON.parse(row.proposedData) as {
-          equipment?: { name?: string }[];
+          equipment?: { assetTypeName?: string }[];
         })
       : null;
     const names = Array.isArray(parsed?.equipment)
       ? parsed.equipment
-          .map((item) => String(item?.name ?? '').trim())
+          .map((item) => String(item?.assetTypeName ?? '').trim())
           .filter(Boolean)
       : [];
     if (names.length === 1) return names[0];
-    if (names.length > 1) return `${names.length} vật tư (${names[0]}...)`;
+    if (names.length > 1) return `${names.length} loại tài sản (${names[0]}...)`;
   } catch {
     // ignore invalid proposedData
   }
@@ -178,7 +166,7 @@ function toPurchaseTableRow(item: AccountantRequestListItem, index: number): Pur
   try {
     if (item.proposedData) {
       const parsed = JSON.parse(item.proposedData) as {
-        equipment?: { quantity?: number | string; estimatedPrice?: string }[];
+        equipment?: { quantity?: number | string }[];
         totalPrice?: string;
       };
       if (Array.isArray(parsed.equipment) && parsed.equipment.length > 0) {
@@ -189,13 +177,6 @@ function toPurchaseTableRow(item: AccountantRequestListItem, index: number): Pur
       }
       if (parsed.totalPrice && String(parsed.totalPrice).trim()) {
         estimatedPrice = String(parsed.totalPrice);
-      } else if (Array.isArray(parsed.equipment) && parsed.equipment.length > 0) {
-        const total = parsed.equipment.reduce((sum, line) => {
-          const q = Number(line?.quantity);
-          const unitPrice = parseCurrencyToNumber(line?.estimatedPrice);
-          return sum + (Number.isFinite(q) && q > 0 ? q : 1) * unitPrice;
-        }, 0);
-        estimatedPrice = total > 0 ? `${total.toLocaleString('vi-VN')}đ` : '—';
       }
     }
   } catch {
@@ -845,7 +826,7 @@ export function RequestsPage() {
   const parseToFormValues = (detail: PurchaseOrderDetail) => {
     const values: Record<string, unknown> = {
       title: detail.title ?? '',
-      equipment: [{ name: '', quantity: 1, modelCode: '', unit: 'Cái', estimatedPrice: '' }],
+      equipment: [{ assetTypeId: undefined, quantity: 1 }],
     };
     try {
       const lines = (detail.description ?? '')
@@ -859,9 +840,6 @@ export function RequestsPage() {
           const parsed = dayjs(raw, 'DD/MM/YYYY', true);
           values.needDate = parsed.isValid() ? (parsed as Dayjs) : undefined;
         }
-        if (line.startsWith('Nhà cung cấp đề xuất:')) values.supplier = line.replace('Nhà cung cấp đề xuất:', '').trim();
-        if (line.startsWith('Loại tài sản:')) values.assetType = line.replace('Loại tài sản:', '').trim();
-        if (line.startsWith('Mục đích:')) values.purpose = line.replace('Mục đích:', '').trim();
       }
     } catch {
       // ignore
@@ -870,21 +848,18 @@ export function RequestsPage() {
       if (detail.proposedData) {
         const parsed = JSON.parse(detail.proposedData) as {
           equipment?: {
-            name?: string;
+            assetTypeId?: number | string;
+            assetTypeName?: string;
             quantity?: number;
-            modelCode?: string;
-            machineCode?: string;
-            unit?: string;
-            estimatedPrice?: string;
           }[];
         };
         if (Array.isArray(parsed.equipment) && parsed.equipment.length > 0) {
           values.equipment = parsed.equipment.map((e) => ({
-            name: e.name ?? '',
+            assetTypeId:
+              e.assetTypeId != null && String(e.assetTypeId).trim() !== ''
+                ? String(e.assetTypeId)
+                : undefined,
             quantity: e.quantity ?? 1,
-            modelCode: e.modelCode ?? e.machineCode ?? '',
-            unit: e.unit ?? 'Cái',
-            estimatedPrice: e.estimatedPrice ?? '',
           }));
         }
       }
@@ -1875,40 +1850,25 @@ export function RequestsPage() {
                           null;
                         let purchaseEquipment: {
                           stt: number;
-                          name: string;
+                          assetTypeName: string;
                           quantity: number;
-                          modelCode?: string;
-                          unit?: string;
-                          estimatedPrice?: string;
                         }[] = [];
-                        let purchaseTotalPrice = '—';
                         if (selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.purchase) {
                           try {
                             const parsedProposed = selectedDirectorItem.proposedData
                               ? (JSON.parse(selectedDirectorItem.proposedData) as {
                                   equipment?: {
-                                    name?: string;
+                                    assetTypeName?: string;
                                     quantity?: number;
-                                    modelCode?: string;
-                                    machineCode?: string;
-                                    unit?: string;
-                                    estimatedPrice?: string;
                                   }[];
-                                  totalPrice?: string;
                                 })
                               : null;
                             if (Array.isArray(parsedProposed?.equipment)) {
                               purchaseEquipment = parsedProposed.equipment.map((line, idx) => ({
                                 stt: idx + 1,
-                                name: line.name ?? '—',
+                                assetTypeName: line.assetTypeName ?? '—',
                                 quantity: line.quantity ?? 1,
-                                modelCode: line.modelCode ?? line.machineCode,
-                                unit: line.unit,
-                                estimatedPrice: line.estimatedPrice,
                               }));
-                            }
-                            if (parsedProposed?.totalPrice) {
-                              purchaseTotalPrice = parsedProposed.totalPrice;
                             }
                           } catch {
                             purchaseEquipment = [];
@@ -1985,63 +1945,34 @@ export function RequestsPage() {
 
                                 <div className="acct-transfer-form__row">
                                   <div className="acct-transfer-form__field">
-                                    <label>Nhà cung cấp đề xuất</label>
-                                    <div className="acct-transfer-form__value">
-                                      {extractDescriptionField(
-                                        selectedDirectorItem.description,
-                                        'Nhà cung cấp đề xuất',
-                                      ) ?? '—'}
-                                    </div>
-                                  </div>
-                                  <div className="acct-transfer-form__field">
-                                    <label>Loại tài sản</label>
-                                    <div className="acct-transfer-form__value">
-                                      {extractDescriptionField(
-                                        selectedDirectorItem.description,
-                                        'Loại tài sản',
-                                      ) ?? '—'}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="acct-transfer-form__section">
-                                  <h3 className="acct-transfer-form__section-title">Mục đích sử dụng</h3>
-                                  <div className="acct-transfer-form__value">
-                                    {extractDescriptionField(selectedDirectorItem.description, 'Mục đích') ?? '—'}
+                                    <label>Số dòng đề xuất</label>
+                                    <div className="acct-transfer-form__value">{purchaseEquipment.length || '—'}</div>
                                   </div>
                                 </div>
 
                                 {purchaseEquipment.length > 0 ? (
                                   <div className="acct-transfer-form__section">
-                                    <h3 className="acct-transfer-form__section-title">Danh mục vật tư</h3>
+                                    <h3 className="acct-transfer-form__section-title">Danh mục loại tài sản đề xuất</h3>
                                     <table className="view-purchase-equipment-table">
                                       <thead>
                                         <tr>
                                           <th>STT</th>
-                                          <th>Tên vật tư</th>
+                                          <th>Loại tài sản</th>
                                           <th>Số lượng</th>
-                                          <th>Mã model</th>
-                                          <th>Đơn vị tính</th>
-                                          <th>Đơn giá dự tính</th>
                                         </tr>
                                       </thead>
                                       <tbody>
                                         {purchaseEquipment.map((line) => (
                                           <tr key={line.stt}>
                                             <td>{line.stt}</td>
-                                            <td>{line.name}</td>
+                                            <td>{line.assetTypeName}</td>
                                             <td>{line.quantity}</td>
-                                            <td>{line.modelCode ?? '—'}</td>
-                                            <td>{line.unit ?? '—'}</td>
-                                            <td className="view-purchase-equipment-price">
-                                              {line.estimatedPrice ?? '—'}
-                                            </td>
                                           </tr>
                                         ))}
                                         <tr className="view-purchase-equipment-total">
-                                          <td colSpan={5}>Thành tiền</td>
+                                          <td colSpan={2}>Tổng số lượng</td>
                                           <td className="view-purchase-equipment-price">
-                                            {purchaseTotalPrice}
+                                            {purchaseEquipment.reduce((sum, line) => sum + (line.quantity || 0), 0)}
                                           </td>
                                         </tr>
                                       </tbody>

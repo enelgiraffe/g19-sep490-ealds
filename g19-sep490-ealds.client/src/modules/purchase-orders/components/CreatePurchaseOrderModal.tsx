@@ -3,43 +3,19 @@ import { Form, Input, Button, Table, InputNumber, Select, DatePicker } from 'ant
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import { assetService, type AssetTypeItem } from '../../assets/services/assetService';
-import { type SupplierItem } from '../../admin/services/supplierService';
-import { SupplierSelectionModal } from './SupplierSelectionModal';
-import { AssetTypeSelectionModal } from './AssetTypeSelectionModal';
 import './CreatePurchaseOrderModal.css';
 
 const { TextArea } = Input;
-const { Option } = Select;
 
 export interface CreatePurchaseFormValues {
   title: string;
   description?: string;
   reason?: string;
   needDate?: Dayjs;
-  supplier?: string;
-  assetType?: string;
-  purpose?: string;
   equipment?: {
-    name?: string;
+    assetTypeId?: string;
     quantity?: number;
-    modelCode?: string;
-    unit?: string;
-    estimatedPrice?: string;
   }[];
-}
-
-function parseNumberInput(value: string): string {
-  const normalized = value.replace(/[^\d]/g, '');
-  return normalized;
-}
-
-function formatNumberInput(value?: string): string {
-  const raw = String(value ?? '').trim();
-  if (!raw) return '';
-  const normalized = parseNumberInput(raw);
-  if (!normalized) return '';
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed.toLocaleString('en-US') : '';
 }
 
 interface CreatePurchaseOrderModalProps {
@@ -66,10 +42,6 @@ export function CreatePurchaseOrderModal({
 }: CreatePurchaseOrderModalProps) {
   const [form] = Form.useForm<CreatePurchaseFormValues>();
   const [assetTypes, setAssetTypes] = useState<AssetTypeItem[]>([]);
-  const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
-  const [isAssetTypeModalOpen, setIsAssetTypeModalOpen] = useState(false);
-  const [selectedSupplier, setSelectedSupplier] = useState<SupplierItem | null>(null);
-  const [selectedAssetType, setSelectedAssetType] = useState<AssetTypeItem | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -82,32 +54,28 @@ export function CreatePurchaseOrderModal({
   useEffect(() => {
     if (open) {
       form.resetFields();
-      setSelectedSupplier(null);
-      setSelectedAssetType(null);
       if (initialValues) {
-        const rawAssetType = String(initialValues.assetType ?? '').trim();
-        const mappedAssetTypeId = rawAssetType
-          ? assetTypes.find((t) => {
-              const a = t.name.trim().toLowerCase();
-              const b = rawAssetType.toLowerCase();
-              return a === b;
-            })?.assetTypeId
-          : undefined;
-        if (mappedAssetTypeId) {
-          const foundType = assetTypes.find((t) => t.assetTypeId === mappedAssetTypeId);
-          if (foundType) setSelectedAssetType(foundType);
-        }
+        const mappedEquipment =
+          initialValues.equipment?.map((line) => {
+            const currentId = String(line.assetTypeId ?? '').trim();
+            if (currentId) return line;
+            const rawName = String((line as { assetTypeName?: string }).assetTypeName ?? '').trim().toLowerCase();
+            if (!rawName) return line;
+            const found = assetTypes.find((t) => t.name.trim().toLowerCase() === rawName);
+            if (!found) return line;
+            return { ...line, assetTypeId: String(found.assetTypeId) };
+          }) ?? initialValues.equipment;
         form.setFieldsValue({
           equipment: [
-            { name: '', quantity: 1, modelCode: '', unit: 'Cái', estimatedPrice: '' },
+            { assetTypeId: undefined, quantity: 1 },
           ],
           ...initialValues,
-          assetType: mappedAssetTypeId != null ? String(mappedAssetTypeId) : initialValues.assetType,
+          equipment: mappedEquipment,
         });
       } else {
         form.setFieldsValue({
           equipment: [
-            { name: '', quantity: 1, modelCode: '', unit: 'Cái', estimatedPrice: '' },
+            { assetTypeId: undefined, quantity: 1 },
           ],
         });
       }
@@ -116,31 +84,22 @@ export function CreatePurchaseOrderModal({
 
   const buildProposedData = (values: CreatePurchaseFormValues): string | undefined => {
     const equipment = values.equipment?.filter(
-      (e) => e?.name != null && String(e.name).trim() !== ''
+      (e) => e?.assetTypeId != null && String(e.assetTypeId).trim() !== ''
     );
     if (!equipment?.length) return undefined;
-    let total = 0;
     const rows = equipment.map((e) => {
       const q = Number(e.quantity) || 1;
-      const price = parseFloat(String(e.estimatedPrice || '0').replace(/[^\d.-]/g, '')) || 0;
-      const rowTotal = q * price;
-      total += rowTotal;
+      const typeId = Number(e.assetTypeId);
+      const type = assetTypes.find((t) => t.assetTypeId === typeId);
       return {
-        name: e.name,
+        assetTypeId: Number.isFinite(typeId) ? typeId : null,
+        assetTypeName: type?.name ?? null,
         quantity: q,
-        modelCode: e.modelCode ?? '',
-        unit: e.unit ?? 'Cái',
-        estimatedPrice: e.estimatedPrice ?? '0',
       };
     });
 
     return JSON.stringify({
-      assetTypeId: selectedAssetType?.assetTypeId ?? null,
-      assetTypeName: selectedAssetType?.name ?? null,
-      supplierId: selectedSupplier?.supplierId ?? null,
-      supplierName: selectedSupplier?.name ?? null,
       equipment: rows,
-      totalPrice: total.toLocaleString('vi-VN') + 'đ',
     });
   };
 
@@ -159,9 +118,6 @@ export function CreatePurchaseOrderModal({
       const description = [
         values.reason && `Lý do: ${values.reason}`,
         needDateText && `Thời gian cần: ${needDateText}`,
-        selectedSupplier && `Nhà cung cấp đề xuất: ${selectedSupplier.name}`,
-        selectedAssetType && `Loại tài sản: ${selectedAssetType.name}`,
-        values.purpose && `Mục đích: ${values.purpose}`,
       ]
         .filter(Boolean)
         .join('\n');
@@ -222,14 +178,7 @@ export function CreatePurchaseOrderModal({
               </Form.Item>
             </div>
 
-            <div className="create-purchase-form__row">
-              <Form.Item
-                label="Lý do đề nghị"
-                name="reason"
-                className="create-purchase-form__item"
-              >
-                <Input placeholder="Nhập lý do" />
-              </Form.Item>
+            <div className="create-purchase-form__row create-purchase-form__row--single">
               <Form.Item
                 label="Thời gian cần vật tư"
                 name="needDate"
@@ -243,41 +192,8 @@ export function CreatePurchaseOrderModal({
               </Form.Item>
             </div>
 
-            <div className="create-purchase-form__row">
-              <div className="create-purchase-form__item">
-                <label>Nhà cung cấp đề xuất</label>
-                <div className="create-purchase-selection-wrapper">
-                  <div className="create-purchase-selection-display">
-                    {selectedSupplier ? selectedSupplier.name : 'Chưa chọn'}
-                  </div>
-                  <button
-                    type="button"
-                    className="create-purchase-btn-select"
-                    onClick={() => setIsSupplierModalOpen(true)}
-                  >
-                    {selectedSupplier ? 'Đổi' : 'Chọn'}
-                  </button>
-                </div>
-              </div>
-              <div className="create-purchase-form__item">
-                <label>Loại tài sản</label>
-                <div className="create-purchase-selection-wrapper">
-                  <div className="create-purchase-selection-display">
-                    {selectedAssetType ? selectedAssetType.name : 'Chưa chọn'}
-                  </div>
-                  <button
-                    type="button"
-                    className="create-purchase-btn-select"
-                    onClick={() => setIsAssetTypeModalOpen(true)}
-                  >
-                    {selectedAssetType ? 'Đổi' : 'Chọn'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
             <div className="create-purchase-form__section">
-              <h3 className="create-purchase-form__section-title">Danh mục vật tư</h3>
+              <h3 className="create-purchase-form__section-title">Danh mục loại tài sản đề xuất</h3>
               <Form.List name="equipment">
                 {(fields, { add, remove }) => (
                   <>
@@ -295,12 +211,24 @@ export function CreatePurchaseOrderModal({
                           render: (_, __, i) => i + 1,
                         },
                         {
-                          title: 'Tên vật tư',
-                          key: 'name',
-                          width: 180,
+                          title: 'Loại tài sản',
+                          key: 'assetTypeId',
+                          width: 220,
                           render: (_, __, i) => (
-                            <Form.Item name={[i, 'name']} noStyle>
-                              <Input placeholder="Nhập tên vật tư" />
+                            <Form.Item
+                              name={[i, 'assetTypeId']}
+                              noStyle
+                              rules={[{ required: true, message: 'Chọn loại tài sản' }]}
+                            >
+                              <Select
+                                showSearch
+                                optionFilterProp="label"
+                                placeholder="Chọn loại tài sản"
+                                options={assetTypes.map((t) => ({
+                                  value: String(t.assetTypeId),
+                                  label: t.name,
+                                }))}
+                              />
                             </Form.Item>
                           ),
                         },
@@ -311,46 +239,6 @@ export function CreatePurchaseOrderModal({
                           render: (_, __, i) => (
                             <Form.Item name={[i, 'quantity']} noStyle initialValue={1}>
                               <InputNumber min={1} style={{ width: '100%' }} />
-                            </Form.Item>
-                          ),
-                        },
-                        {
-                          title: 'Mã model',
-                          key: 'modelCode',
-                          width: 110,
-                          render: (_, __, i) => (
-                            <Form.Item name={[i, 'modelCode']} noStyle>
-                              <Input placeholder="Mã model" />
-                            </Form.Item>
-                          ),
-                        },
-                        {
-                          title: 'Đơn vị',
-                          key: 'unit',
-                          width: 100,
-                          render: (_, __, i) => (
-                            <Form.Item name={[i, 'unit']} noStyle initialValue="Cái">
-                              <Select style={{ width: '100%' }}>
-                                <Option value="Cái">Cái</Option>
-                                <Option value="Chiếc">Chiếc</Option>
-                                <Option value="Bộ">Bộ</Option>
-                                <Option value="Kg">Kg</Option>
-                              </Select>
-                            </Form.Item>
-                          ),
-                        },
-                        {
-                          title: 'Đơn giá dự tính',
-                          key: 'estimatedPrice',
-                          width: 140,
-                          render: (_, __, i) => (
-                            <Form.Item
-                              name={[i, 'estimatedPrice']}
-                              noStyle
-                              getValueFromEvent={(e) => parseNumberInput(e?.target?.value ?? '')}
-                              getValueProps={(value) => ({ value: formatNumberInput(value) })}
-                            >
-                              <Input inputMode="numeric" placeholder="VD: 1000000" addonAfter="đ" />
                             </Form.Item>
                           ),
                         },
@@ -375,16 +263,13 @@ export function CreatePurchaseOrderModal({
                       icon={<PlusOutlined />}
                       onClick={() =>
                         add({
-                          name: '',
+                          assetTypeId: undefined,
                           quantity: 1,
-                          modelCode: '',
-                          unit: 'Cái',
-                          estimatedPrice: '',
                         })
                       }
                       className="create-purchase-btn-add-equipment"
                     >
-                      Thêm vật tư
+                      Thêm dòng
                     </Button>
                   </>
                 )}
@@ -393,11 +278,11 @@ export function CreatePurchaseOrderModal({
 
             <div className="create-purchase-form__section">
               <Form.Item
-                label="Mục đích sử dụng"
-                name="purpose"
+                label="Lý do đề nghị"
+                name="reason"
                 className="create-purchase-form__item-full"
               >
-                <TextArea rows={3} placeholder="Mô tả mục đích sử dụng vật tư" />
+                <TextArea rows={3} placeholder="Nhập lý do đề nghị" />
               </Form.Item>
             </div>
           </Form>
@@ -445,23 +330,6 @@ export function CreatePurchaseOrderModal({
         </div>
       </div>
 
-      <SupplierSelectionModal
-        open={isSupplierModalOpen}
-        onClose={() => setIsSupplierModalOpen(false)}
-        onSelect={(supplier) => {
-          setSelectedSupplier(supplier);
-          setIsSupplierModalOpen(false);
-        }}
-      />
-
-      <AssetTypeSelectionModal
-        open={isAssetTypeModalOpen}
-        onClose={() => setIsAssetTypeModalOpen(false)}
-        onSelect={(assetType) => {
-          setSelectedAssetType(assetType);
-          setIsAssetTypeModalOpen(false);
-        }}
-      />
     </div>
   );
 }

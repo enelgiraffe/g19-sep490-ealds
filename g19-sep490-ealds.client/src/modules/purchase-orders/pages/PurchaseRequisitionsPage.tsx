@@ -41,25 +41,13 @@ function formatDate(iso: string): string {
   }
 }
 
-function parseCurrencyToNumber(value: unknown): number {
-  const raw = String(value ?? '').trim();
-  if (!raw) return 0;
-  const cleaned = raw.replace(/[^\d,.-]/g, '');
-  if (!cleaned) return 0;
-  const normalized = cleaned.includes(',') && !cleaned.includes('.')
-    ? cleaned.replace(/,/g, '.')
-    : cleaned.replace(/,/g, '');
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 function toTableRow(item: PurchaseOrderListItem, index: number): TableRow {
   let quantity = 1;
   let estimatedPrice = '—';
   try {
     if (item.proposedData) {
       const parsed = JSON.parse(item.proposedData) as {
-        equipment?: { quantity?: number | string; estimatedPrice?: string }[];
+        equipment?: { quantity?: number | string }[];
         totalPrice?: string;
       };
       if (Array.isArray(parsed.equipment) && parsed.equipment.length > 0) {
@@ -69,13 +57,6 @@ function toTableRow(item: PurchaseOrderListItem, index: number): TableRow {
         }, 0);
         if (parsed.totalPrice && String(parsed.totalPrice).trim()) {
           estimatedPrice = String(parsed.totalPrice);
-        } else {
-          const total = parsed.equipment.reduce((sum, line) => {
-            const q = Number(line?.quantity);
-            const unitPrice = parseCurrencyToNumber(line?.estimatedPrice);
-            return sum + (Number.isFinite(q) && q > 0 ? q : 1) * unitPrice;
-          }, 0);
-          estimatedPrice = total > 0 ? `${total.toLocaleString('vi-VN')}đ` : '—';
         }
       }
     }
@@ -210,7 +191,7 @@ export function PurchaseRequisitionsPage() {
   const parseToFormValues = (detail: PurchaseOrderDetail) => {
     const values: any = {
       title: detail.title ?? '',
-      equipment: [{ name: '', quantity: 1, modelCode: '', unit: 'Cái', estimatedPrice: '' }],
+      equipment: [{ assetTypeId: undefined, quantity: 1 }],
     };
     try {
       const desc = (detail.description ?? '').split('\n').map((s) => s.trim()).filter(Boolean);
@@ -221,26 +202,20 @@ export function PurchaseRequisitionsPage() {
           const parsed = dayjs(raw, 'DD/MM/YYYY', true);
           values.needDate = parsed.isValid() ? (parsed as Dayjs) : undefined;
         }
-        if (line.startsWith('Nhà cung cấp đề xuất:')) values.supplier = line.replace('Nhà cung cấp đề xuất:', '').trim();
-        if (line.startsWith('Loại tài sản:')) values.assetType = line.replace('Loại tài sản:', '').trim();
-        if (line.startsWith('Mục đích:')) values.purpose = line.replace('Mục đích:', '').trim();
       }
     } catch {
       // ignore
     }
     try {
       if (detail.proposedData) {
-        const parsed = JSON.parse(detail.proposedData) as { equipment?: any[]; assetTypeId?: number | null };
-        if (parsed.assetTypeId != null) {
-          values.assetType = String(parsed.assetTypeId);
-        }
+        const parsed = JSON.parse(detail.proposedData) as { equipment?: any[] };
         if (Array.isArray(parsed.equipment) && parsed.equipment.length > 0) {
           values.equipment = parsed.equipment.map((e) => ({
-            name: e.name ?? '',
+            assetTypeId:
+              e.assetTypeId != null && String(e.assetTypeId).trim() !== ''
+                ? String(e.assetTypeId)
+                : undefined,
             quantity: e.quantity ?? 1,
-            modelCode: e.modelCode ?? e.machineCode ?? '',
-            unit: e.unit ?? 'Cái',
-            estimatedPrice: e.estimatedPrice ?? '',
           }));
         }
       }

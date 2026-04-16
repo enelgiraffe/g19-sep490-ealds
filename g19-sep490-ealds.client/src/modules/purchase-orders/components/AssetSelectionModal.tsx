@@ -8,12 +8,14 @@ interface AssetSelectionModalProps {
   open: boolean;
   onClose: () => void;
   onSelect: (asset: AssetCatalogResponse) => void;
+  filterAssetTypeId?: number | null;
 }
 
 export function AssetSelectionModal({
   open,
   onClose,
   onSelect,
+  filterAssetTypeId = null,
 }: AssetSelectionModalProps) {
   const [assets, setAssets] = useState<AssetCatalogResponse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -42,9 +44,12 @@ export function AssetSelectionModal({
   };
 
   const filteredAssets = assets.filter((asset) =>
-    asset.name.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-    asset.code.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-    (asset.assetTypeName && asset.assetTypeName.toLowerCase().includes(searchKeyword.toLowerCase()))
+    (filterAssetTypeId == null || asset.assetTypeId === filterAssetTypeId) &&
+    (
+      asset.name.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+      asset.code.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+      (asset.assetTypeName && asset.assetTypeName.toLowerCase().includes(searchKeyword.toLowerCase()))
+    )
   );
 
   const handleSelectAsset = () => {
@@ -92,6 +97,11 @@ export function AssetSelectionModal({
               <h3 className="asset-selection-section-title">
                 Danh sách tài sản ({filteredAssets.length})
               </h3>
+              {filterAssetTypeId != null && (
+                <div className="asset-selection-section-hint">
+                  Chỉ hiển thị tài sản cùng loại theo yêu cầu mua đã chọn.
+                </div>
+              )}
               {loading ? (
                 <div className="asset-selection-loading">Đang tải...</div>
               ) : filteredAssets.length === 0 ? (

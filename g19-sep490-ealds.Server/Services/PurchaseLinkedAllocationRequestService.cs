@@ -54,19 +54,6 @@ public static class PurchaseLinkedAllocationRequestService
         if (!initialStepId.HasValue)
             return;
 
-        await PurchaseRequestLineHelper.EnsureLinesAsync(db, purchaseRequest, cancellationToken);
-
-        var purchaseLines = await db.AssetRequestPurchaseLines.AsNoTracking()
-            .Where(l => l.AssetRequestId == purchaseRequest.AssetRequestId && l.AssetId != null && l.AssetId > 0)
-            .ToListAsync(cancellationToken);
-        if (purchaseLines.Count == 0)
-            return;
-
-        var grouped = purchaseLines
-            .GroupBy(l => l.AssetId!.Value)
-            .Select(g => new { AssetId = g.Key, Quantity = g.Sum(x => x.Quantity < 1 ? 1 : x.Quantity) })
-            .ToList();
-
         var departmentId = await db.Employees.AsNoTracking()
             .Where(e => e.UserId == purchaseRequest.CreatedBy)
             .OrderBy(e => e.EmployeeId)
@@ -75,37 +62,9 @@ public static class PurchaseLinkedAllocationRequestService
         if (!departmentId.HasValue)
             return;
 
-        var lineInputs = new List<AllocationLineInputDto>();
-        foreach (var g in grouped)
-        {
-            var asset = await db.Assets.AsNoTracking()
-                .FirstOrDefaultAsync(a => a.AssetId == g.AssetId, cancellationToken);
-            if (asset == null)
-                continue;
-
-            lineInputs.Add(new AllocationLineInputDto
-            {
-                AssetTypeId = asset.AssetTypeId,
-                AssetId = g.AssetId,
-                Quantity = g.Quantity,
-                Reason = $"Theo yêu cầu mua #{purchaseRequest.AssetRequestId}"
-            });
-        }
-
-        if (lineInputs.Count == 0)
-            return;
-
-        var proposedJson = AllocationOrderWorkflow.BuildProposedDataJson(departmentId.Value, lineInputs);
-        if (!AllocationOrderWorkflow.TryParseProposedData(proposedJson, out var root, out _) || root == null)
-            return;
-
-        var validation = await AllocationOrderWorkflow.ValidateLinesAgainstDatabaseAsync(
-            db,
-            root,
-            cancellationToken,
-            validateWarehouseAvailability: false);
-        if (validation != null)
-            return;
+        // PR may not have AssetId yet (new purchasing flow). Keep a placeholder payload and
+        // resolve catalog AssetId from PO/GR when procurement is fully received.
+        var proposedJson = "{\"departmentId\":" + departmentId.Value + ",\"lines\":[]}";
 
         var titleBase = string.IsNullOrWhiteSpace(purchaseRequest.Title)
             ? $"YC mua #{purchaseRequest.AssetRequestId}"
@@ -156,6 +115,10 @@ public static class PurchaseLinkedAllocationRequestService
             return Array.Empty<int>();
 
         var prId = proc.AssetRequestId.Value;
+        var lineInputs = await BuildLineInputsFromProcurementAsync(db, procurementId, prId, cancellationToken);
+        if (lineInputs.Count == 0)
+            return Array.Empty<int>();
+
         var rows = await db.AssetRequests
             .Where(r =>
                 r.RequestTypeId == allocationRequestTypeId &&
@@ -165,11 +128,72 @@ public static class PurchaseLinkedAllocationRequestService
         if (rows.Count == 0)
             return Array.Empty<int>();
 
+        var promotedIds = new List<int>();
         foreach (var r in rows)
+        {
+            var deptId = r.AllocationTargetDepartmentId;
+            if (!deptId.HasValue || deptId.Value <= 0)
+                continue;
+
+            var proposedJson = AllocationOrderWorkflow.BuildProposedDataJson(deptId.Value, lineInputs);
+            if (!AllocationOrderWorkflow.TryParseProposedData(proposedJson, out var root, out _) || root == null)
+                continue;
+
+            var validation = await AllocationOrderWorkflow.ValidateLinesAgainstDatabaseAsync(
+                db,
+                root,
+                cancellationToken,
+                validateWarehouseAvailability: false);
+            if (validation != null)
+                continue;
+
+            r.ProposedData = proposedJson;
             r.Status = AllocationOrderWorkflow.RequestStatusPendingAccountant;
+            promotedIds.Add(r.AssetRequestId);
+        }
 
         await db.SaveChangesAsync(cancellationToken);
 
-        return rows.Select(r => r.AssetRequestId).ToList();
+        return promotedIds;
+    }
+
+    private static async Task<List<AllocationLineInputDto>> BuildLineInputsFromProcurementAsync(
+        EaldsDbContext db,
+        int procurementId,
+        int sourcePurchaseRequestId,
+        CancellationToken cancellationToken)
+    {
+        var grouped = await db.ProcurementLines.AsNoTracking()
+            .Where(l => l.ProcurementId == procurementId && l.AssetId != null && l.AssetId > 0)
+            .GroupBy(l => l.AssetId!.Value)
+            .Select(g => new { AssetId = g.Key, Quantity = g.Sum(x => x.Quantity) })
+            .ToListAsync(cancellationToken);
+        if (grouped.Count == 0)
+            return new List<AllocationLineInputDto>();
+
+        var assetMap = await db.Assets.AsNoTracking()
+            .Where(a => grouped.Select(g => g.AssetId).Contains(a.AssetId))
+            .ToDictionaryAsync(a => a.AssetId, cancellationToken);
+
+        var lines = new List<AllocationLineInputDto>();
+        foreach (var g in grouped)
+        {
+            if (!assetMap.TryGetValue(g.AssetId, out var asset))
+                continue;
+
+            var qty = (int)decimal.Truncate(g.Quantity);
+            if (qty <= 0)
+                continue;
+
+            lines.Add(new AllocationLineInputDto
+            {
+                AssetTypeId = asset.AssetTypeId,
+                AssetId = g.AssetId,
+                Quantity = qty,
+                Reason = $"Theo yêu cầu mua #{sourcePurchaseRequestId}"
+            });
+        }
+
+        return lines;
     }
 }
