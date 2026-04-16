@@ -142,7 +142,7 @@ builder.Services.AddQuartz(q =>
     q.AddTrigger(opts => opts
         .ForJob(jobKey)
         .WithIdentity("DepreciationJob-trigger")
-        .WithCronSchedule("0 5 0 1 * ?")); // 00:05 ngày 1 mỗi tháng
+        .WithCronSchedule("0 59 23 L * ?")); // BR-26: 23:59 ngày cuối tháng
 });
 //dky host service cho Quarzt
 builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);

@@ -15,7 +15,8 @@ public static class DepreciationFormula
         if (depreciableBase <= 0)
             return 0;
 
-        return Math.Round(depreciableBase / usefulLifeMonths, 2, MidpointRounding.AwayFromZero);
+        // BR-49: làm tròn tiền VND theo đơn vị đồng.
+        return Math.Round(depreciableBase / usefulLifeMonths, 0, MidpointRounding.AwayFromZero);
     }
 
     public static decimal ClampFinalPeriodAmount(

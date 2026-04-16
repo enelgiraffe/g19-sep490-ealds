@@ -83,4 +83,15 @@ public class AssetDepreciationController : ControllerBase
         await _service.RunManualDepreciation(dto.AssetInstanceId, dto.Year, dto.Month);
         return Ok("Manual depreciation executed");
     }
+
+    [HttpPost("manual-recalculate")]
+    public async Task<IActionResult> RecalculateFromPeriod([FromBody] ManualDepreciationRunDTO dto)
+    {
+        if (!dto.AssetInstanceId.HasValue || !dto.Year.HasValue || !dto.Month.HasValue)
+            return BadRequest("AssetInstanceId, Year, Month are required");
+
+        // Chạy tính lại khấu hao từ kỳ chỉ định để test BR-28.
+        await _service.RecalculateFromPeriod(dto.AssetInstanceId.Value, dto.Year.Value, dto.Month.Value);
+        return Ok("Depreciation recalculated from period");
+    }
 }
