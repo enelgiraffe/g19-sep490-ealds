@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Input, InputNumber, Modal, Select, Space, Table, message } from 'antd';
+import { Button, Input, InputNumber, Select, Space, Table, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { DeleteOutlined, PlusOutlined, ReloadOutlined, FormOutlined } from '@ant-design/icons';
 import {
@@ -15,6 +15,7 @@ import { assetTypeService, type AssetTypeListItem } from '../../admin/services/a
 import { profileService } from '../../profile/services/profileService';
 import './AccountantAllocationsPage.css';
 import '../../requests/pages/RequestsPage.css';
+import '../../purchase-orders/components/CreatePurchaseOrderModal.css';
 
 function formatDateVi(iso: string): string {
   try {
@@ -436,44 +437,82 @@ export function DepartmentRequestsByModePanel({ mode }: { mode: DepartmentReques
         </Space>
       </div>
 
-      <Modal
-        title={modalTitle}
-        open={formModalOpen}
-        onCancel={closeRequestModal}
-        width={720}
-        footer={[
-          <Button key="cancel" onClick={closeRequestModal}>
-            Hủy
-          </Button>,
-          <Button key="submit" type="primary" loading={submitting} onClick={() => void submit()}>
-            Gửi yêu cầu
-          </Button>,
-        ]}
-        destroyOnHidden
-        styles={{ body: { maxHeight: 'min(70vh, 640px)', overflowY: 'auto', paddingTop: 8 } }}
-      >
-        <Space orientation="vertical" style={{ width: '100%' }} size="middle">
-          <div>
-            <div style={{ marginBottom: 6, fontSize: 13 }}>Tiêu đề</div>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={255} placeholder={DEFAULT_TITLES[mode]} />
+      {formModalOpen ? (
+        <div className="create-purchase-modal-overlay" role="dialog" aria-modal="true">
+          <div className="create-purchase-modal">
+            <button
+              type="button"
+              className="create-purchase-modal__close-btn"
+              onClick={closeRequestModal}
+              aria-label="Đóng"
+            >
+              <span className="create-purchase-modal__close">×</span>
+            </button>
+
+            <div className="create-purchase-modal__header">
+              <h2 className="create-purchase-modal__title">{modalTitle}</h2>
+            </div>
+
+            <div className="create-purchase-modal__body">
+              <div className="create-purchase-form">
+                <div className="create-purchase-form__row create-purchase-form__row--single">
+                  <div className="create-purchase-form__item">
+                    <label htmlFor="dept-alloc-request-title">Tiêu đề</label>
+                    <Input
+                      id="dept-alloc-request-title"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      maxLength={255}
+                      placeholder={DEFAULT_TITLES[mode]}
+                    />
+                  </div>
+                </div>
+
+                <div className="create-purchase-form__section">
+                  <h3 className="create-purchase-form__section-title">Danh sách tài sản</h3>
+                  <Table<FormRow>
+                    className="alloc-request-lines-table create-purchase-equipment-table"
+                    size="small"
+                    rowKey="key"
+                    columns={lineColumns}
+                    dataSource={rows}
+                    pagination={false}
+                    tableLayout="fixed"
+                    scroll={{ x: 640 }}
+                  />
+                  <Button
+                    type="dashed"
+                    icon={<PlusOutlined />}
+                    onClick={addRow}
+                    className="create-purchase-btn-add-equipment"
+                  >
+                    Thêm dòng
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="create-purchase-modal__footer">
+              <button
+                type="button"
+                className="create-purchase-btn-submit"
+                disabled={submitting}
+                onClick={() => void submit()}
+              >
+                {submitting ? 'Đang gửi…' : 'Gửi yêu cầu'}
+              </button>
+              <button
+                type="button"
+                className="create-purchase-btn-cancel"
+                disabled={submitting}
+                onClick={closeRequestModal}
+              >
+                Hủy
+              </button>
+            </div>
           </div>
-
-          <Table<FormRow>
-            className="alloc-request-lines-table"
-            size="small"
-            rowKey="key"
-            columns={lineColumns}
-            dataSource={rows}
-            pagination={false}
-            tableLayout="fixed"
-            scroll={{ x: 640 }}
-          />
-
-          <Button icon={<PlusOutlined />} onClick={addRow}>
-            Thêm dòng
-          </Button>
-        </Space>
-      </Modal>
+        </div>
+      ) : null}
 
       <p style={{ fontWeight: 600, margin: '0 0 8px', fontSize: 15, color: '#111827' }}>{listHeading}</p>
 

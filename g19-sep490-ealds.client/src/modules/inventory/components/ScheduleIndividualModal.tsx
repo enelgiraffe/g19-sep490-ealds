@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Modal, Form, Input, Select, DatePicker, Button, message } from 'antd';
+import { Form, Input, Select, DatePicker, message } from 'antd';
 import type { Dayjs } from 'dayjs';
-import { useAppStore } from '../../../stores/appStore';
 import { profileService } from '../../profile/services/profileService';
 import {
   inventoryService,
@@ -10,6 +9,7 @@ import {
   inventorySessionEndOfDayUtcIso,
   type DropdownItem,
 } from '../services/inventoryService';
+import '../../purchase-orders/components/CreatePurchaseOrderModal.css';
 import './ScheduleIndividualModal.css';
 
 const { TextArea } = Input;
@@ -31,7 +31,6 @@ export function ScheduleIndividualModal({
   onClose,
   onSubmit,
 }: ScheduleIndividualModalProps) {
-  const isDeptHead = useAppStore((s) => s.currentRole) === 'department_head';
   const [form] = Form.useForm<ScheduleIndividualFormValues>();
   const [submitting, setSubmitting] = useState(false);
   const [departments, setDepartments] = useState<DropdownItem[]>([]);
@@ -96,67 +95,73 @@ export function ScheduleIndividualModal({
     });
   };
 
+  if (!open) return null;
+
   return (
-    <Modal
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={480}
-      centered
-      className="schedule-individual-modal"
-      closeIcon={<span className="schedule-modal__close">×</span>}
-    >
-      <div className="schedule-modal__header">
-        <h2 className="schedule-modal__title">Lập lịch kiểm kê</h2>
-        <p className="schedule-modal__subtitle">Kiểm kê riêng lẻ</p>
-      </div>
+    <div className="create-purchase-modal-overlay" role="dialog" aria-modal="true">
+      <div className="create-purchase-modal inventory-schedule-modal">
+        <button type="button" className="create-purchase-modal__close-btn" onClick={onClose} aria-label="Đóng">
+          <span className="create-purchase-modal__close">×</span>
+        </button>
 
-      <Form form={form} layout="vertical" className="schedule-individual-form">
-        <Form.Item
-          label="Ngày kiểm kê"
-          name="checkDate"
-          rules={[{ required: true, message: 'Vui lòng chọn ngày kiểm kê' }]}
-        >
-          <DatePicker
-            format="DD/MM/YYYY"
-            placeholder="Chọn ngày"
-            className="schedule-form__datepicker"
-            style={{ width: '100%' }}
-          />
-        </Form.Item>
-
-        <Form.Item
-          label="Phòng ban"
-          name="departmentId"
-          rules={[{ required: true, message: 'Vui lòng chọn phòng ban' }]}
-        >
-          <Select
-            placeholder="Chọn phòng ban"
-            loading={loadingMeta}
-            showSearch
-            optionFilterProp="label"
-            options={departments.map((d) => ({ value: d.id, label: d.name }))}
-          />
-        </Form.Item>
-
-        <Form.Item label="Mục đích" name="purpose">
-          <TextArea rows={3} placeholder="Ví dụ: Kiểm kê tài sản định kỳ tháng 3" className="schedule-form__textarea" />
-        </Form.Item>
-
-        <div className="schedule-modal__footer">
-          <Button onClick={onClose} className="schedule-modal__btn-cancel" disabled={submitting}>
-            Hủy
-          </Button>
-          <Button
-            type="primary"
-            onClick={handleSubmit}
-            className="schedule-modal__btn-submit"
-            loading={submitting}
-          >
-            Lập lịch
-          </Button>
+        <div className="create-purchase-modal__header">
+          <h2 className="create-purchase-modal__title">Lập lịch kiểm kê</h2>
+          <p className="inventory-schedule-modal__subtitle">Kiểm kê riêng lẻ</p>
         </div>
-      </Form>
-    </Modal>
+
+        <div className="create-purchase-modal__body">
+          <Form form={form} layout="vertical" className="create-purchase-form">
+            <Form.Item
+              label="Ngày kiểm kê"
+              name="checkDate"
+              rules={[{ required: true, message: 'Vui lòng chọn ngày kiểm kê' }]}
+            >
+              <DatePicker
+                format="DD/MM/YYYY"
+                placeholder="Chọn ngày"
+                className="schedule-form__datepicker"
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+
+            <Form.Item
+              label="Phòng ban"
+              name="departmentId"
+              rules={[{ required: true, message: 'Vui lòng chọn phòng ban' }]}
+            >
+              <Select
+                placeholder="Chọn phòng ban"
+                loading={loadingMeta}
+                showSearch
+                optionFilterProp="label"
+                options={departments.map((d) => ({ value: d.id, label: d.name }))}
+              />
+            </Form.Item>
+
+            <Form.Item label="Mục đích" name="purpose">
+              <TextArea
+                rows={3}
+                placeholder="Ví dụ: Kiểm kê tài sản định kỳ tháng 3"
+                className="schedule-form__textarea"
+              />
+            </Form.Item>
+          </Form>
+        </div>
+
+        <div className="create-purchase-modal__footer">
+          <button
+            type="button"
+            className="create-purchase-btn-submit"
+            disabled={submitting}
+            onClick={() => void handleSubmit()}
+          >
+            {submitting ? 'Đang lưu…' : 'Lập lịch'}
+          </button>
+          <button type="button" className="create-purchase-btn-cancel" disabled={submitting} onClick={onClose}>
+            Hủy
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
