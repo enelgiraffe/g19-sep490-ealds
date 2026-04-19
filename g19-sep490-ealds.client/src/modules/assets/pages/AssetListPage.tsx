@@ -378,6 +378,10 @@ export function AssetListPage() {
 
     const damageDate = values.damageDate?.trim();
     const condition = values.condition?.trim();
+    if (!condition || /^[-.\s]+$/.test(condition)) {
+      message.warning('Vui lòng nhập tình trạng hỏng hợp lệ (không để "-", "...").');
+      return;
+    }
     const descriptionParts = [
       damageDate ? `Ngày hỏng: ${damageDate}` : null,
       condition ? `Tình trạng: ${condition}` : null,

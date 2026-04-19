@@ -97,6 +97,20 @@ public class RepairRequestsController : ControllerBase
                 Reason = null,
                 DamageCondition = t.Reason,
                 RequestDescription = t.AssetRequest.Description,
+                DirectorComment = t.AssetRequest.Approvals
+                    .Where(a => a.ApprovedRole != null
+                        && a.ApprovedRole.Code != null
+                        && a.ApprovedRole.Code.ToUpper() == "DIRECTOR")
+                    .OrderByDescending(a => a.DecisionDate)
+                    .Select(a => a.Comment)
+                    .FirstOrDefault(),
+                DirectorDecisionDate = t.AssetRequest.Approvals
+                    .Where(a => a.ApprovedRole != null
+                        && a.ApprovedRole.Code != null
+                        && a.ApprovedRole.Code.ToUpper() == "DIRECTOR")
+                    .OrderByDescending(a => a.DecisionDate)
+                    .Select(a => (DateTime?)a.DecisionDate)
+                    .FirstOrDefault(),
                 FromDepartmentId = t.AssetInstance.AssetLocations
                     .Where(al => al.IsCurrent)
                     .Select(al => al.DepartmentId)

@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { message } from 'antd';
 import dayjs from 'dayjs';
 import type { AssetDetailResponse } from '../../assets/services/assetService';
-import { supplierService, type SupplierItem } from '../../admin/services/supplierService';
+import { parseIntegerMoneyInput } from '../../../shared/utils/moneyInput';
 import './RepairCompleteModal.css';
 
 interface RepairCompleteRow {
@@ -55,17 +55,6 @@ function toDisplayDate(value?: string | null): string {
 function formatVndValue(value?: number | null): string {
   if (value == null) return '-';
   return `${value.toLocaleString('vi-VN')} ₫`;
-}
-
-function parseDigitsOnly(value: string): string {
-  return value.replace(/[^\d]/g, '');
-}
-
-function parseNumberInput(value: string): number | undefined {
-  const normalized = parseDigitsOnly(value);
-  if (!normalized) return undefined;
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function toIsoDate(value: string): string {
@@ -126,11 +115,7 @@ function RepairCompleteModalInner({
   const [actualCostInput, setActualCostInput] = useState('');
   const [result, setResult] = useState('');
   const [detail, setDetail] = useState('');
-  const [suppliers, setSuppliers] = useState<SupplierItem[]>([]);
-  const [useNewSupplier, setUseNewSupplier] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<number | ''>('');
-  const [newSupplierCode, setNewSupplierCode] = useState('');
-  const [newSupplierName, setNewSupplierName] = useState('');
   const [repairWarrantyEndDate, setRepairWarrantyEndDate] = useState('');
   const [repairWarrantyPeriodValue, setRepairWarrantyPeriodValue] = useState('');
   const [repairWarrantyPeriodUnit, setRepairWarrantyPeriodUnit] = useState('month');
@@ -147,9 +132,6 @@ function RepairCompleteModalInner({
     setActualCostInput('');
     setResult('');
     setDetail(row.condition || '');
-    setUseNewSupplier(false);
-    setNewSupplierCode('');
-    setNewSupplierName('');
     if (defaultRepairSupplierId != null && defaultRepairSupplierId > 0) {
       setSelectedSupplierId(defaultRepairSupplierId);
     } else {
@@ -183,22 +165,6 @@ function RepairCompleteModalInner({
     if (computed) setRepairWarrantyEndDate(computed);
     else setRepairWarrantyEndDate('');
   }, [open, completionDate, repairWarrantyPeriodValue, repairWarrantyPeriodUnit]);
-
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const list = await supplierService.getAll();
-        if (!cancelled) setSuppliers(list);
-      } catch {
-        if (!cancelled) setSuppliers([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
 
   const assetInfo = useMemo(() => {
     const instances = asset?.instances ?? [];
@@ -242,21 +208,19 @@ function RepairCompleteModalInner({
   if (!open) return null;
 
   const handleSubmit = () => {
-    const actualCost = parseNumberInput(actualCostInput);
+    const actualCost = parseIntegerMoneyInput(actualCostInput);
     if (!completionDate || !returnDate || actualCost == null) return;
-    if (useNewSupplier && (!newSupplierCode.trim() || !newSupplierName.trim())) return;
-
     if (compareYyyyMmDd(returnDate, completionDate) < 0) {
       message.warning('Ngày đưa vào sử dụng lại không được trước ngày hoàn thành sửa chữa.');
       return;
     }
 
     const pickedId =
-      !useNewSupplier && selectedSupplierId !== '' && selectedSupplierId !== 0
+      selectedSupplierId !== '' && selectedSupplierId !== 0
         ? Number(selectedSupplierId)
         : null;
 
-    const periodParsed = parseNumberInput(repairWarrantyPeriodValue);
+    const periodParsed = parseIntegerMoneyInput(repairWarrantyPeriodValue);
     const periodOk = repairWarrantyPeriodValue.trim() !== '' && periodParsed != null && periodParsed > 0;
 
     onSubmit({
@@ -266,10 +230,8 @@ function RepairCompleteModalInner({
       actualCost,
       result: result.trim(),
       detail: detail.trim(),
-      supplierId: useNewSupplier ? null : pickedId,
-      newSupplier: useNewSupplier
-        ? { code: newSupplierCode.trim(), name: newSupplierName.trim() }
-        : null,
+      supplierId: pickedId,
+      newSupplier: null,
       repairWarrantyStartDate: completionDate.trim() ? completionDate.trim() : null,
       repairWarrantyEndDate: repairWarrantyEndDate.trim() ? repairWarrantyEndDate.trim() : null,
       repairWarrantyPeriodValue: periodOk && periodParsed != null ? periodParsed : null,
@@ -367,84 +329,17 @@ function RepairCompleteModalInner({
                 <h3 className="repair-complete-section-title">Thông tin hoàn thành sửa chữa</h3>
                 <div className="repair-complete-form__item repair-complete-form__item--full">
                   <label>Đơn vị sửa chữa</label>
-                  {defaultRepairSupplierName?.trim() ? (
-                    <p className="repair-complete-hint">
-                      Theo bắt đầu sửa chữa: {defaultRepairSupplierName.trim()}
-                    </p>
-                  ) : null}
-                  {!useNewSupplier ? (
-                    <>
-                      <select
-                        id="repair-complete-supplier"
-                        className="repair-complete-input"
-                        value={selectedSupplierId === '' ? '' : String(selectedSupplierId)}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setSelectedSupplierId(v === '' ? '' : Number(v));
-                        }}
-                      >
-                        <option value="">— Chọn đơn vị —</option>
-                        {suppliers.map((s) => (
-                          <option key={s.supplierId} value={s.supplierId}>
-                            {s.name} ({s.code})
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        className="repair-complete-link-btn"
-                        onClick={() => {
-                          setUseNewSupplier(true);
-                          setSelectedSupplierId('');
-                        }}
-                      >
-                        Thêm đơn vị mới…
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <div className="repair-complete-inline-fields">
-                        <div className="repair-complete-form__item repair-complete-form__item--inline">
-                          <label htmlFor="repair-complete-new-supplier-code">Mã đơn vị</label>
-                          <input
-                            id="repair-complete-new-supplier-code"
-                            type="text"
-                            className="repair-complete-input"
-                            value={newSupplierCode}
-                            onChange={(e) => setNewSupplierCode(e.target.value)}
-                            maxLength={50}
-                          />
-                        </div>
-                        <div className="repair-complete-form__item repair-complete-form__item--inline">
-                          <label htmlFor="repair-complete-new-supplier-name">Tên đơn vị</label>
-                          <input
-                            id="repair-complete-new-supplier-name"
-                            type="text"
-                            className="repair-complete-input"
-                            value={newSupplierName}
-                            onChange={(e) => setNewSupplierName(e.target.value)}
-                            maxLength={200}
-                          />
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        className="repair-complete-link-btn"
-                        onClick={() => {
-                          setUseNewSupplier(false);
-                          setNewSupplierCode('');
-                          setNewSupplierName('');
-                          if (defaultRepairSupplierId != null && defaultRepairSupplierId > 0) {
-                            setSelectedSupplierId(defaultRepairSupplierId);
-                          } else {
-                            setSelectedSupplierId('');
-                          }
-                        }}
-                      >
-                        ← Chọn từ danh sách
-                      </button>
-                    </>
-                  )}
+                  <input
+                    id="repair-complete-supplier"
+                    type="text"
+                    className="repair-complete-input repair-complete-input--readonly"
+                    value={defaultRepairSupplierName?.trim() || '—'}
+                    readOnly
+                    tabIndex={-1}
+                  />
+                  <p className="repair-complete-hint repair-complete-hint--tight">
+                    Đơn vị sửa chữa được giữ theo thông tin lúc bắt đầu sửa chữa.
+                  </p>
                 </div>
                 <div className="repair-complete-info-row">
                   <div>
@@ -493,7 +388,10 @@ function RepairCompleteModalInner({
                           className="repair-complete-input"
                           inputMode="numeric"
                           value={actualCostInput}
-                          onChange={(e) => setActualCostInput(parseDigitsOnly(e.target.value))}
+                          onChange={(e) => {
+                            const n = parseIntegerMoneyInput(e.target.value);
+                            setActualCostInput(n == null ? '' : Math.floor(n).toLocaleString('en-US'));
+                          }}
                           placeholder="Nhập chi phí (VNĐ)"
                         />
                         <span className="repair-complete-money-suffix">đ</span>
@@ -568,7 +466,10 @@ function RepairCompleteModalInner({
                       className="repair-complete-input"
                       inputMode="numeric"
                       value={repairWarrantyPeriodValue}
-                      onChange={(e) => setRepairWarrantyPeriodValue(parseDigitsOnly(e.target.value))}
+                      onChange={(e) => {
+                        const n = parseIntegerMoneyInput(e.target.value);
+                        setRepairWarrantyPeriodValue(n == null ? '' : String(Math.floor(n)));
+                      }}
                     />
                   </div>
                   <div className="repair-complete-form__item repair-complete-form__item--inline">
@@ -635,7 +536,7 @@ function RepairCompleteModalInner({
             type="button"
             onClick={handleSubmit}
             className="repair-complete-btn-submit"
-            disabled={submitting || loading || (useNewSupplier && (!newSupplierCode.trim() || !newSupplierName.trim()))}
+            disabled={submitting || loading}
           >
             {submitting ? 'Đang lưu...' : 'Lưu'}
           </button>
