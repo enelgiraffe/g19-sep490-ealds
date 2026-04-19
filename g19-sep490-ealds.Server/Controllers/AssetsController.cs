@@ -383,6 +383,13 @@ public class AssetsController : ControllerBase
         _context.Assets.Add(asset);
         await _context.SaveChangesAsync();
 
+        if (dto.Documents is { Count: > 0 })
+        {
+            var docError = await TryAddAssetDocumentsAsync(asset.AssetId, dto.Documents, dto.CreatedBy);
+            if (docError != null)
+                return docError;
+        }
+
         if (dto.InitialInstance != null)
         {
             var init = dto.InitialInstance;
@@ -480,6 +487,71 @@ public class AssetsController : ControllerBase
     }
 
     /// <summary>
+    /// POST /api/assets/{id}/documents — Attach a file URL (e.g. from <c>POST /api/files/upload</c>) to the catalog asset.
+    /// </summary>
+    [HttpPost("{id:int}/documents")]
+    [Authorize]
+    public async Task<ActionResult<AssetDocumentDTO>> AddDocument(int id, [FromBody] AddAssetDocumentDTO dto)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!int.TryParse(userIdClaim, out var userId) || userId <= 0)
+            return Unauthorized(new { message = "Invalid user identity." });
+
+        if (!await _context.Assets.AnyAsync(a => a.AssetId == id))
+            return NotFound();
+
+        var url = dto.FileUrl?.Trim();
+        if (string.IsNullOrEmpty(url))
+            return BadRequest(new { message = "FileUrl is required." });
+        if (url.Length > 2000)
+            return BadRequest(new { message = "File URL is too long." });
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            return BadRequest(new { message = "FileUrl must be an absolute http or https URL." });
+
+        if (!await _context.Users.AnyAsync(u => u.UserId == userId))
+            return BadRequest(new { message = "User not found." });
+
+        var entity = new Document
+        {
+            AssetId = id,
+            FileUrl = url,
+            DocumentType = dto.DocumentType,
+            UploadedBy = userId,
+            UploadedDate = DateTime.UtcNow,
+            ProcurementId = null
+        };
+        _context.Documents.Add(entity);
+        await _context.SaveChangesAsync();
+
+        return Ok(new AssetDocumentDTO
+        {
+            DocumentId = entity.DocumentId,
+            DocumentType = entity.DocumentType,
+            FileUrl = entity.FileUrl,
+            UploadedDate = entity.UploadedDate
+        });
+    }
+
+    /// <summary>
+    /// DELETE /api/assets/{id}/documents/{documentId} — Remove a catalog document row (does not delete the blob in cloud storage).
+    /// </summary>
+    [HttpDelete("{id:int}/documents/{documentId:int}")]
+    [Authorize]
+    public async Task<IActionResult> RemoveDocument(int id, int documentId)
+    {
+        var doc = await _context.Documents.FirstOrDefaultAsync(d => d.DocumentId == documentId);
+        if (doc == null)
+            return NotFound();
+        if (doc.AssetId != id)
+            return NotFound();
+
+        _context.Documents.Remove(doc);
+        await _context.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>
     /// PUT /api/assets/{id} — Update catalog fields only.
     /// </summary>
     [HttpPut("{id:int}")]
@@ -561,6 +633,45 @@ public class AssetsController : ControllerBase
 
         await _context.Entry(asset).Reference(a => a.AssetType).LoadAsync();
         return Ok(ToAssetResponseDTO(asset));
+    }
+
+    private async Task<ActionResult?> TryAddAssetDocumentsAsync(
+        int assetId,
+        List<CreateAssetDocumentDTO> documents,
+        int uploadedBy)
+    {
+        if (uploadedBy <= 0 || !await _context.Users.AnyAsync(u => u.UserId == uploadedBy))
+            return BadRequest(new { message = "CreatedBy must be a valid user when attaching documents." });
+
+        var toAdd = new List<Document>();
+        foreach (var doc in documents)
+        {
+            var url = doc.FileUrl?.Trim();
+            if (string.IsNullOrEmpty(url))
+                continue;
+            if (url.Length > 2000)
+                return BadRequest(new { message = "A document URL exceeds the maximum length." });
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                return BadRequest(new { message = "Each document must use an http or https URL." });
+
+            toAdd.Add(new Document
+            {
+                AssetId = assetId,
+                FileUrl = url,
+                DocumentType = doc.DocumentType,
+                UploadedBy = uploadedBy,
+                UploadedDate = DateTime.UtcNow,
+                ProcurementId = null
+            });
+        }
+
+        foreach (var row in toAdd)
+            _context.Documents.Add(row);
+
+        if (toAdd.Count > 0)
+            await _context.SaveChangesAsync();
+        return null;
     }
 
     private async Task<Dictionary<int, DepreciationRecord>> LoadLatestDepreciationByInstanceAsync(

@@ -194,6 +194,14 @@ export interface CreateAssetInstancePayload {
   assignmentEffectiveDate?: string | null;
 }
 
+/** Backend default document type for catalog attachments (CreateAssetDocumentDTO.DocumentType). */
+export const ASSET_CATALOG_DOCUMENT_TYPE = 20;
+
+export interface AssetDocumentPayloadItem {
+  fileUrl: string;
+  documentType?: number;
+}
+
 export interface CreateAssetPayload {
   /** Catalog mã tài sản; ignored when assetCodePrefix is set (server generates). */
   code?: string;
@@ -211,6 +219,9 @@ export interface CreateAssetPayload {
   instanceCodePrefix?: string | null;
   /** Optional first physical row (same request as catalog create) */
   initialInstance?: CreateAssetInstancePayload;
+
+  /** URLs from POST /api/files/upload, persisted after the asset row is created. */
+  documents?: AssetDocumentPayloadItem[];
 }
 
 /** Đơn vị tính options for asset create/edit forms. */
@@ -396,6 +407,24 @@ export const assetService = {
   async create(payload: CreateAssetPayload): Promise<AssetDetailResponse> {
     const response = await assetApi.post<AssetDetailResponse>('/api/assets', payload);
     return response.data;
+  },
+
+  async addDocument(
+    assetId: number,
+    payload: AssetDocumentPayloadItem
+  ): Promise<AssetDocumentItem> {
+    const response = await assetApi.post<AssetDocumentItem>(
+      `/api/assets/${assetId}/documents`,
+      {
+        fileUrl: payload.fileUrl,
+        documentType: payload.documentType ?? ASSET_CATALOG_DOCUMENT_TYPE,
+      }
+    );
+    return response.data;
+  },
+
+  async removeDocument(assetId: number, documentId: number): Promise<void> {
+    await assetApi.delete(`/api/assets/${assetId}/documents/${documentId}`);
   },
 
   async update(id: number, payload: UpdateAssetPayload): Promise<AssetDetailResponse> {

@@ -657,7 +657,7 @@ public partial class EaldsDbContext : DbContext
 
             entity.ToTable("Document");
 
-            entity.Property(e => e.FileUrl).HasMaxLength(500);
+            entity.Property(e => e.FileUrl).HasMaxLength(2000);
             entity.Property(e => e.UploadedDate).HasColumnType("datetime");
 
             entity.HasOne(d => d.Asset).WithMany(p => p.Documents)
@@ -671,6 +671,7 @@ public partial class EaldsDbContext : DbContext
             entity.HasOne(d => d.Procurement).WithMany(p => p.Documents)
                 .HasForeignKey(d => d.ProcurementId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
+                .IsRequired(false)
                 .HasConstraintName("FK__Document__Procur__671F4F74");
 
             entity.HasOne(d => d.UploadedByNavigation).WithMany(p => p.Documents)

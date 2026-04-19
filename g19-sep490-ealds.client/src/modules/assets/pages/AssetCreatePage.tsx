@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   assetService,
+  ASSET_CATALOG_DOCUMENT_TYPE,
   ASSET_MEASUREMENT_UNITS,
   type CreateAssetPayload,
 } from '../services/assetService';
+import { uploadAssetFile } from '../services/assetDocumentUploadService';
 import { transferRequestService, type AssetLocationOption } from '../services/transferRequestService';
 import { useAppStore } from '../../../stores/appStore';
 import { profileService } from '../../profile/services/profileService';
@@ -52,6 +54,14 @@ interface AllocationForm {
   allocateNow: boolean;
   usageTarget: string;
 }
+
+type AssetFormDocRow = {
+  id: string;
+  fileName: string;
+  url?: string;
+  uploading?: boolean;
+  error?: string;
+};
 
 export function AssetCreatePage() {
   const navigate = useNavigate();
@@ -120,6 +130,44 @@ export function AssetCreatePage() {
     { employeeId: number; name: string; code: string }[]
   >([]);
   const [loadMetaError, setLoadMetaError] = useState<string | null>(null);
+
+  const [documents, setDocuments] = useState<AssetFormDocRow[]>([]);
+  const docFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const pickDocument = () => docFileInputRef.current?.click();
+
+  const onDocFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const rowId = crypto.randomUUID();
+    setDocuments((prev) => [...prev, { id: rowId, fileName: file.name, uploading: true }]);
+    try {
+      const { url, fileName } = await uploadAssetFile(file);
+      setDocuments((prev) =>
+        prev.map((d) =>
+          d.id === rowId
+            ? { ...d, url, fileName: fileName || file.name, uploading: false, error: undefined }
+            : d
+        )
+      );
+    } catch {
+      setDocuments((prev) =>
+        prev.map((d) =>
+          d.id === rowId ? { ...d, uploading: false, error: 'Tải lên thất bại.' } : d
+        )
+      );
+    }
+  };
+
+  const removeDocumentRow = (id: string) => {
+    setDocuments((prev) => prev.filter((d) => d.id !== id));
+  };
+
+  const downloadAllDocumentUrls = () => {
+    const urls = documents.filter((d) => d.url).map((d) => d.url as string);
+    urls.forEach((u) => window.open(u, '_blank', 'noopener,noreferrer'));
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -215,9 +263,25 @@ export function AssetCreatePage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (documents.some((d) => d.uploading)) {
+      alert('Đang tải tài liệu lên, vui lòng đợi.');
+      return;
+    }
+    if (documents.some((d) => d.error)) {
+      alert('Có tài liệu tải lên lỗi. Xóa dòng đó hoặc thêm tài liệu khác.');
+      return;
+    }
+    const documentPayload = documents
+      .filter((d) => d.url)
+      .map((d) => ({ fileUrl: d.url as string, documentType: ASSET_CATALOG_DOCUMENT_TYPE }));
+
     if (onlyMasterAsset) {
       if (!general.name?.trim() || !general.assetTypeId || !general.assetCodePrefix.trim()) {
         alert('Vui lòng nhập mã tài sản, loại và tên tài sản.');
+        return;
+      }
+      if (documentPayload.length > 0 && actorUserId <= 0) {
+        alert('Cần đăng nhập hợp lệ để đính kèm tài liệu (upload yêu cầu người dùng).');
         return;
       }
       setSubmitError(null);
@@ -233,6 +297,7 @@ export function AssetCreatePage() {
           specification: general.specification?.trim() || null,
           note: general.note?.trim() || null,
           inUseDate: null,
+          documents: documentPayload.length > 0 ? documentPayload : undefined,
         });
         navigate(backToListPath);
       } catch (err: unknown) {
@@ -278,6 +343,12 @@ export function AssetCreatePage() {
     setSubmitError(null);
     setIsSubmitting(true);
 
+    if (documentPayload.length > 0 && actorUserId <= 0) {
+      alert('Cần đăng nhập hợp lệ để đính kèm tài liệu.');
+      setIsSubmitting(false);
+      return;
+    }
+
     const val = Number(general.value || 0);
     const deptId =
       isAccountant && general.departmentId && Number(general.departmentId) > 0
@@ -322,6 +393,7 @@ export function AssetCreatePage() {
             ? general.purchaseDate || null
             : null,
       },
+      documents: documentPayload.length > 0 ? documentPayload : undefined,
     };
 
     try {
@@ -864,28 +936,60 @@ export function AssetCreatePage() {
 
         {/* Tài liệu */}
         <section className="asset-create__section">
+          <input
+            ref={docFileInputRef}
+            type="file"
+            style={{ display: 'none' }}
+            onChange={onDocFileSelected}
+          />
           <h2 className="asset-create__section-title">Tài liệu</h2>
           <div className="asset-create__files">
-            <div className="asset-create__file">
-              <span className="asset-create__file-index">#1</span>
-              <span className="asset-create__file-name">Tài liệu đính kèm</span>
-            </div>
-            <div className="asset-create__file">
-              <span className="asset-create__file-index">#2</span>
-              <span className="asset-create__file-name">Tài liệu đính kèm</span>
-            </div>
+            {documents.length === 0 ? (
+              <p className="asset-create__hint">Chưa có tài liệu. Chọn &quot;Thêm tài liệu&quot; để tải lên.</p>
+            ) : (
+              documents.map((d, idx) => (
+                <div key={d.id} className="asset-create__file">
+                  <span className="asset-create__file-index">#{idx + 1}</span>
+                  <span className="asset-create__file-name asset-create__file-name--grow">
+                    {d.uploading
+                      ? `Đang tải: ${d.fileName}…`
+                      : d.error
+                        ? `${d.fileName} — ${d.error}`
+                        : d.fileName}
+                  </span>
+                  {d.url && !d.uploading && (
+                    <a
+                      href={d.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="asset-create__btn asset-create__btn--secondary"
+                      style={{ padding: '4px 10px', fontSize: 12 }}
+                    >
+                      Mở
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    className="asset-create__btn asset-create__btn--secondary"
+                    style={{ padding: '4px 10px', fontSize: 12 }}
+                    onClick={() => removeDocumentRow(d.id)}
+                  >
+                    Xóa
+                  </button>
+                </div>
+              ))
+            )}
           </div>
           <div className="asset-create__file-actions">
             <button
               type="button"
-              className="asset-create__btn asset-create__btn--danger"
+              className="asset-create__btn asset-create__btn--secondary"
+              onClick={downloadAllDocumentUrls}
+              disabled={!documents.some((d) => d.url)}
             >
               Tải toàn bộ
             </button>
-            <button
-              type="button"
-              className="asset-create__btn asset-create__btn--danger"
-            >
+            <button type="button" className="asset-create__btn asset-create__btn--primary" onClick={pickDocument}>
               Thêm tài liệu
             </button>
           </div>

@@ -1,0 +1,11 @@
+IF COL_LENGTH(N'dbo.Document', N'ProcurementId') IS NOT NULL
+BEGIN
+    ALTER TABLE dbo.Document ALTER COLUMN ProcurementId INT NULL;
+END
+GO
+
+IF COL_LENGTH(N'dbo.Document', N'FileUrl') IS NOT NULL
+BEGIN
+    ALTER TABLE dbo.Document ALTER COLUMN FileUrl NVARCHAR(2000) NOT NULL;
+END
+GO

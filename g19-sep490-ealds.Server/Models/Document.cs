@@ -4,7 +4,7 @@ public partial class Document
 {
     public int DocumentId { get; set; }
 
-    public int ProcurementId { get; set; }
+    public int? ProcurementId { get; set; }
 
     public string FileUrl { get; set; } = null!;
 
@@ -22,7 +22,7 @@ public partial class Document
 
     public virtual AssetInstance? AssetInstance { get; set; }
 
-    public virtual Procurement Procurement { get; set; } = null!;
+    public virtual Procurement? Procurement { get; set; }
 
     public virtual User UploadedByNavigation { get; set; } = null!;
 }

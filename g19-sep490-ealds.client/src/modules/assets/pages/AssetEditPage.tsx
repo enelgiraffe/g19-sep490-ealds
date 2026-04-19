@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { message } from 'antd';
+import { message, Modal } from 'antd';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   assetInstanceService,
   assetService,
+  ASSET_CATALOG_DOCUMENT_TYPE,
   ASSET_MEASUREMENT_UNITS,
   type AssetDetailResponse,
+  type AssetDocumentItem,
   type UpdateAssetPayload,
 } from '../services/assetService';
+import { uploadAssetFile } from '../services/assetDocumentUploadService';
 import { transferRequestService, type AssetLocationOption } from '../services/transferRequestService';
 import {
   maintenanceTemplateService,
@@ -82,6 +85,16 @@ function getFrequencyLabel(value: number | string): string {
   return parseEnumNumber(value) === 1 ? 'Một lần' : 'Định kỳ';
 }
 
+function fileLabelFromUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const seg = u.pathname.split('/').filter(Boolean);
+    return decodeURIComponent(seg[seg.length - 1] || url);
+  } catch {
+    return url;
+  }
+}
+
 export function AssetEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -148,6 +161,57 @@ export function AssetEditPage() {
     isActive: true,
   });
 
+  const [documents, setDocuments] = useState<AssetDocumentItem[]>([]);
+  const docFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const pickEditDocument = () => docFileInputRef.current?.click();
+
+  const onEditDocFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !assetId || Number.isNaN(assetId)) return;
+    try {
+      message.loading({ content: 'Đang tải tài liệu…', key: 'asset-doc-upload', duration: 0 });
+      const { url } = await uploadAssetFile(file);
+      const created = await assetService.addDocument(assetId, {
+        fileUrl: url,
+        documentType: ASSET_CATALOG_DOCUMENT_TYPE,
+      });
+      setDocuments((prev) => [...prev, created]);
+      message.success({ content: 'Đã thêm tài liệu.', key: 'asset-doc-upload' });
+    } catch (err) {
+      message.error({
+        content: getApiErrorMessage(err, 'Tải hoặc lưu tài liệu thất bại.'),
+        key: 'asset-doc-upload',
+      });
+    }
+  };
+
+  const downloadAllEditDocuments = () => {
+    documents.forEach((d) => window.open(d.fileUrl, '_blank', 'noopener,noreferrer'));
+  };
+
+  const removeEditDocument = (doc: AssetDocumentItem) => {
+    if (!assetId || Number.isNaN(assetId)) return;
+    Modal.confirm({
+      title: 'Xóa tài liệu?',
+      content: `Gỡ "${fileLabelFromUrl(doc.fileUrl)}" khỏi tài sản?`,
+      okText: 'Xóa',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          await assetService.removeDocument(assetId, doc.documentId);
+          setDocuments((prev) => prev.filter((d) => d.documentId !== doc.documentId));
+          message.success('Đã xóa tài liệu.');
+        } catch (err) {
+          message.error(getApiErrorMessage(err, 'Xóa tài liệu thất bại.'));
+          throw err;
+        }
+      },
+    });
+  };
+
   useEffect(() => {
     if (!assetId || Number.isNaN(assetId)) {
       setError('ID tài sản không hợp lệ.');
@@ -164,6 +228,7 @@ export function AssetEditPage() {
       .then(async (data) => {
         if (!isMounted) return;
         setAsset(data);
+        setDocuments(data.documents ?? []);
         const primary = data.instances?.[0];
         setCode(data.code);
         setName(data.name);
@@ -961,22 +1026,54 @@ export function AssetEditPage() {
         </section>
 
         <section className="asset-create__section">
+          <input
+            ref={docFileInputRef}
+            type="file"
+            style={{ display: 'none' }}
+            onChange={onEditDocFileSelected}
+          />
           <h2 className="asset-create__section-title">Tài liệu</h2>
           <div className="asset-create__files">
-            <div className="asset-create__file">
-              <span className="asset-create__file-index">#1</span>
-              <span className="asset-create__file-name">Tài liệu đính kèm</span>
-            </div>
-            <div className="asset-create__file">
-              <span className="asset-create__file-index">#2</span>
-              <span className="asset-create__file-name">Tài liệu đính kèm</span>
-            </div>
+            {documents.length === 0 ? (
+              <p className="asset-create__hint">Chưa có tài liệu. Chọn &quot;Thêm tài liệu&quot; để tải lên.</p>
+            ) : (
+              documents.map((doc, idx) => (
+                <div key={doc.documentId} className="asset-create__file">
+                  <span className="asset-create__file-index">#{idx + 1}</span>
+                  <a
+                    href={doc.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="asset-create__file-name asset-create__file-name--grow"
+                  >
+                    {fileLabelFromUrl(doc.fileUrl)}
+                  </a>
+                  <button
+                    type="button"
+                    className="asset-create__btn asset-create__btn--secondary"
+                    style={{ padding: '4px 10px', fontSize: 12 }}
+                    onClick={() => removeEditDocument(doc)}
+                  >
+                    Xóa
+                  </button>
+                </div>
+              ))
+            )}
           </div>
           <div className="asset-create__file-actions">
-            <button type="button" className="asset-create__btn asset-create__btn--danger">
+            <button
+              type="button"
+              className="asset-create__btn asset-create__btn--secondary"
+              onClick={downloadAllEditDocuments}
+              disabled={documents.length === 0}
+            >
               Tải toàn bộ
             </button>
-            <button type="button" className="asset-create__btn asset-create__btn--danger">
+            <button
+              type="button"
+              className="asset-create__btn asset-create__btn--primary"
+              onClick={pickEditDocument}
+            >
               Thêm tài liệu
             </button>
           </div>
