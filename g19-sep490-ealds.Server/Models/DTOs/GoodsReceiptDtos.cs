@@ -3,6 +3,12 @@ using System.Collections.Generic;
 
 namespace g19_sep490_ealds.Server.Models.DTOs;
 
+public class DocumentAttachmentDto
+{
+    public int DocumentId { get; set; }
+    public string FileUrl { get; set; } = null!;
+}
+
 public class GoodsReceiptCreateLineDto
 {
     public int ProcurementLineId { get; set; }
@@ -29,6 +35,9 @@ public class GoodsReceiptCreateDto
     public string? PostingDate { get; set; }
 
     public string? Note { get; set; }
+
+    /// <summary>Public URLs from POST /api/files/upload (stored as Document rows).</summary>
+    public List<string>? AttachmentFileUrls { get; set; }
 
     public List<GoodsReceiptCreateLineDto> Lines { get; set; } = new();
 }
@@ -83,5 +92,8 @@ public class GoodsReceiptDetailDto
     public DateTime CreatedDate { get; set; }
     public int Status { get; set; }
     public string? Note { get; set; }
+
+    public List<DocumentAttachmentDto> Attachments { get; set; } = new();
+
     public List<GoodsReceiptDetailLineDto> Lines { get; set; } = new();
 }

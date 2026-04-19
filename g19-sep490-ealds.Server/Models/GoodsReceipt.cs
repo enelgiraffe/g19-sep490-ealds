@@ -26,4 +26,6 @@ public partial class GoodsReceipt
     public virtual ICollection<GoodsReceiptLine> Lines { get; set; } = new List<GoodsReceiptLine>();
 
     public virtual ICollection<SupplierInvoice> SupplierInvoices { get; set; } = new List<SupplierInvoice>();
+
+    public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
 }

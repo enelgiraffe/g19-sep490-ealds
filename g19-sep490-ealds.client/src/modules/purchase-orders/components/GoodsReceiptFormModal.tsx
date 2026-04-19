@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { message } from 'antd';
-import dayjs from 'dayjs';
+import { uploadAssetFile } from '../../assets/services/assetDocumentUploadService';
+import '../../assets/pages/AssetCreatePage.css';
 import {
   procurementPoService,
   type PurchaseOrderDetail,
@@ -40,6 +41,14 @@ interface LineState {
   patternPadding: number;
 }
 
+type GrFormDocRow = {
+  id: string;
+  fileName: string;
+  url?: string;
+  uploading?: boolean;
+  error?: string;
+};
+
 interface GoodsReceiptFormModalProps {
   open: boolean;
   onClose: () => void;
@@ -48,6 +57,7 @@ interface GoodsReceiptFormModalProps {
     warehouseId: number;
     postingDate: string;
     note: string | null;
+    attachmentFileUrls?: string[];
     lines: {
       procurementLineId: number;
       quantityReceived: number;
@@ -83,11 +93,49 @@ export function GoodsReceiptFormModal({ open, onClose, onSubmit }: GoodsReceiptF
   const [showPrintLabels, setShowPrintLabels] = useState(false);
   const [printGoodsReceiptId, setPrintGoodsReceiptId] = useState<number | null>(null);
 
+  const [documents, setDocuments] = useState<GrFormDocRow[]>([]);
+  const docFileInputRef = useRef<HTMLInputElement | null>(null);
+  const pickDocument = () => docFileInputRef.current?.click();
+
+  const onDocFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const rowId = crypto.randomUUID();
+    setDocuments((prev) => [...prev, { id: rowId, fileName: file.name, uploading: true }]);
+    try {
+      const { url, fileName } = await uploadAssetFile(file);
+      setDocuments((prev) =>
+        prev.map((d) =>
+          d.id === rowId
+            ? { ...d, url, fileName: fileName || file.name, uploading: false, error: undefined }
+            : d
+        )
+      );
+    } catch {
+      setDocuments((prev) =>
+        prev.map((d) =>
+          d.id === rowId ? { ...d, uploading: false, error: 'Tải lên thất bại.' } : d
+        )
+      );
+    }
+  };
+
+  const removeDocumentRow = (id: string) => {
+    setDocuments((prev) => prev.filter((d) => d.id !== id));
+  };
+
+  const downloadAllDocumentUrls = () => {
+    const urls = documents.filter((d) => d.url).map((d) => d.url as string);
+    urls.forEach((u) => window.open(u, '_blank', 'noopener,noreferrer'));
+  };
+
   useEffect(() => {
     if (open) {
       const today = new Date().toISOString().slice(0, 10);
       setPostingDate(today);
       setNote('');
+      setDocuments([]);
       setSelectedPoId(null);
       setPoDetail(null);
       setLines([]);
@@ -423,6 +471,19 @@ export function GoodsReceiptFormModal({ open, onClose, onSubmit }: GoodsReceiptF
       return;
     }
 
+    if (documents.some((d) => d.uploading)) {
+      message.warning('Đang tải tài liệu lên, vui lòng đợi.');
+      return;
+    }
+    if (documents.some((d) => d.error)) {
+      message.error('Có tài liệu tải lên lỗi. Xóa dòng đó hoặc thêm tài liệu khác.');
+      return;
+    }
+
+    const attachmentFileUrls = documents
+      .filter((d) => d.url)
+      .map((d) => d.url as string);
+
     setSubmitting(true);
     try {
       await onSubmit({
@@ -430,6 +491,7 @@ export function GoodsReceiptFormModal({ open, onClose, onSubmit }: GoodsReceiptF
         warehouseId,
         postingDate,
         note: note.trim() || null,
+        attachmentFileUrls: attachmentFileUrls.length > 0 ? attachmentFileUrls : undefined,
         lines: linesPayload,
       });
       message.success('Đã tạo biên nhận và sinh thể hiện tài sản.');
@@ -663,6 +725,72 @@ export function GoodsReceiptFormModal({ open, onClose, onSubmit }: GoodsReceiptF
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                   />
+                </div>
+              </div>
+
+              <div className="asset-create__section" style={{ marginTop: 8 }}>
+                <input
+                  ref={docFileInputRef}
+                  type="file"
+                  style={{ display: 'none' }}
+                  onChange={onDocFileSelected}
+                />
+                <h2 className="asset-create__section-title">Tài liệu đính kèm</h2>
+                <div className="asset-create__files">
+                  {documents.length === 0 ? (
+                    <p className="asset-create__hint">
+                      Chưa có tài liệu. Chọn &quot;Thêm tài liệu&quot; để tải lên.
+                    </p>
+                  ) : (
+                    documents.map((d, idx) => (
+                      <div key={d.id} className="asset-create__file">
+                        <span className="asset-create__file-index">#{idx + 1}</span>
+                        <span className="asset-create__file-name asset-create__file-name--grow">
+                          {d.uploading
+                            ? `Đang tải: ${d.fileName}…`
+                            : d.error
+                              ? `${d.fileName} — ${d.error}`
+                              : d.fileName}
+                        </span>
+                        {d.url && !d.uploading && (
+                          <a
+                            href={d.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="asset-create__btn asset-create__btn--secondary"
+                            style={{ padding: '4px 10px', fontSize: 12 }}
+                          >
+                            Mở
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          className="asset-create__btn asset-create__btn--secondary"
+                          style={{ padding: '4px 10px', fontSize: 12 }}
+                          onClick={() => removeDocumentRow(d.id)}
+                        >
+                          Xóa
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="asset-create__file-actions">
+                  <button
+                    type="button"
+                    className="asset-create__btn asset-create__btn--secondary"
+                    onClick={downloadAllDocumentUrls}
+                    disabled={!documents.some((d) => d.url)}
+                  >
+                    Tải toàn bộ
+                  </button>
+                  <button
+                    type="button"
+                    className="asset-create__btn asset-create__btn--primary"
+                    onClick={pickDocument}
+                  >
+                    Thêm tài liệu
+                  </button>
                 </div>
               </div>
             </div>

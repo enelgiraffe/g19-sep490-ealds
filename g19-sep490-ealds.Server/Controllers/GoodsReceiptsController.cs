@@ -24,6 +24,9 @@ public class GoodsReceiptsController : ControllerBase
 {
     public const int GoodsReceiptStatusPosted = 1;
 
+    /// <summary>Document.DocumentType for files attached to a goods receipt.</summary>
+    private const int DocumentTypeGoodsReceiptAttachment = 50;
+
     private readonly EaldsDbContext _db;
     private readonly IAssetRequestNotificationService _requestNotifications;
     private readonly int _allocationRequestTypeId;
@@ -44,6 +47,18 @@ public class GoodsReceiptsController : ControllerBase
         if (int.TryParse(claim, out var id) && id > 0)
             return id;
         return null;
+    }
+
+    private static IReadOnlyList<string> NormalizeAttachmentFileUrls(IReadOnlyList<string>? urls)
+    {
+        if (urls == null || urls.Count == 0)
+            return Array.Empty<string>();
+        return urls
+            .Select(u => u?.Trim())
+            .Where(u => !string.IsNullOrEmpty(u) && u!.Length <= 2000)
+            .Distinct(StringComparer.Ordinal)
+            .Take(20)
+            .ToList()!;
     }
 
     private static bool IsWholeUnit(decimal q) => q > 0 && q == decimal.Truncate(q);
@@ -229,6 +244,12 @@ public class GoodsReceiptsController : ControllerBase
             };
         }).ToList();
 
+        var attachments = await _db.Documents.AsNoTracking()
+            .Where(d => d.GoodsReceiptId == id)
+            .OrderBy(d => d.DocumentId)
+            .Select(d => new DocumentAttachmentDto { DocumentId = d.DocumentId, FileUrl = d.FileUrl })
+            .ToListAsync();
+
         return Ok(new GoodsReceiptDetailDto
         {
             GoodsReceiptId = header.GoodsReceiptId,
@@ -238,6 +259,7 @@ public class GoodsReceiptsController : ControllerBase
             CreatedDate = header.CreatedDate,
             Status = header.Status,
             Note = header.Note,
+            Attachments = attachments,
             Lines = lineDtos,
         });
     }
@@ -313,6 +335,21 @@ public class GoodsReceiptsController : ControllerBase
             };
             _db.GoodsReceipts.Add(receipt);
             await _db.SaveChangesAsync();
+
+            foreach (var url in NormalizeAttachmentFileUrls(dto.AttachmentFileUrls))
+            {
+                _db.Documents.Add(new Document
+                {
+                    FileUrl = url,
+                    DocumentType = DocumentTypeGoodsReceiptAttachment,
+                    UploadedBy = userId.Value,
+                    UploadedDate = DateTime.UtcNow,
+                    GoodsReceiptId = receipt.GoodsReceiptId,
+                });
+            }
+
+            if (_db.ChangeTracker.HasChanges())
+                await _db.SaveChangesAsync();
 
             var grLines = new List<GoodsReceiptLine>();
             foreach (var row in normalized)

@@ -90,6 +90,7 @@ export function GoodsReceiptsPage() {
     warehouseId: number;
     postingDate: string;
     note: string | null;
+    attachmentFileUrls?: string[];
     lines: {
       procurementLineId: number;
       quantityReceived: number;

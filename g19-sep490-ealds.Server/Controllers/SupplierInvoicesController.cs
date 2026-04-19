@@ -20,6 +20,9 @@ public class SupplierInvoicesController : ControllerBase
     public const int StatusActive = 0;
     public const int StatusCancelled = 1;
 
+    /// <summary>Document.DocumentType for files attached to a supplier invoice.</summary>
+    private const int DocumentTypeSupplierInvoiceAttachment = 51;
+
     private readonly EaldsDbContext _db;
 
     public SupplierInvoicesController(EaldsDbContext db)
@@ -33,6 +36,18 @@ public class SupplierInvoicesController : ControllerBase
         if (int.TryParse(claim, out var id) && id > 0)
             return id;
         return null;
+    }
+
+    private static IReadOnlyList<string> NormalizeAttachmentFileUrls(IReadOnlyList<string>? urls)
+    {
+        if (urls == null || urls.Count == 0)
+            return Array.Empty<string>();
+        return urls
+            .Select(u => u?.Trim())
+            .Where(u => !string.IsNullOrEmpty(u) && u!.Length <= 2000)
+            .Distinct(StringComparer.Ordinal)
+            .Take(20)
+            .ToList()!;
     }
 
     private static decimal RoundMoney(decimal v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
@@ -154,6 +169,12 @@ public class SupplierInvoicesController : ControllerBase
             };
         }).ToList();
 
+        var attachments = await _db.Documents.AsNoTracking()
+            .Where(d => d.SupplierInvoiceId == id)
+            .OrderBy(d => d.DocumentId)
+            .Select(d => new DocumentAttachmentDto { DocumentId = d.DocumentId, FileUrl = d.FileUrl })
+            .ToListAsync();
+
         return Ok(new SupplierInvoiceDetailDto
         {
             SupplierInvoiceId = header.SupplierInvoiceId,
@@ -168,6 +189,7 @@ public class SupplierInvoicesController : ControllerBase
             ProcurementId = header.ProcurementId,
             GoodsReceiptId = header.GoodsReceiptId,
             CreatedDate = header.CreatedDate,
+            Attachments = attachments,
             Lines = lineDtos,
         });
     }
@@ -321,6 +343,18 @@ public class SupplierInvoicesController : ControllerBase
 
         _db.SupplierInvoices.Add(entity);
         await _db.SaveChangesAsync();
+
+        foreach (var url in NormalizeAttachmentFileUrls(dto.AttachmentFileUrls))
+        {
+            _db.Documents.Add(new Document
+            {
+                FileUrl = url,
+                DocumentType = DocumentTypeSupplierInvoiceAttachment,
+                UploadedBy = userId.Value,
+                UploadedDate = DateTime.UtcNow,
+                SupplierInvoiceId = entity.SupplierInvoiceId,
+            });
+        }
 
         foreach (var row in normalized)
         {

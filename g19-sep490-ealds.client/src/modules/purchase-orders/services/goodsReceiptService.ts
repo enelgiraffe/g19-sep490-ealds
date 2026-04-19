@@ -65,6 +65,8 @@ export interface GoodsReceiptDetail {
   createdDate: string;
   status: number;
   note: string | null;
+  /** Present when API returns attachment list (may be empty). */
+  attachments?: { documentId: number; fileUrl: string }[];
   lines: GoodsReceiptDetailLine[];
 }
 
@@ -81,6 +83,7 @@ export interface GoodsReceiptCreateBody {
   warehouseId: number;
   postingDate?: string;
   note?: string | null;
+  attachmentFileUrls?: string[];
   lines: GoodsReceiptCreateLine[];
 }
 

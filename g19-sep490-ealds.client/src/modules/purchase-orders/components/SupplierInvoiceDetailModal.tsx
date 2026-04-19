@@ -23,6 +23,16 @@ function formatDate(iso: string): string {
   }
 }
 
+function fileLabelFromUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const seg = u.pathname.split('/').filter(Boolean);
+    return decodeURIComponent(seg[seg.length - 1] || url);
+  } catch {
+    return url;
+  }
+}
+
 export function SupplierInvoiceDetailModal({
   open,
   loading,
@@ -137,6 +147,30 @@ export function SupplierInvoiceDetailModal({
                     </div>
                   )}
                 </div>
+              </div>
+
+              <div className="supplier-invoice-detail-attachments-section">
+                <h3 className="supplier-invoice-detail-section-title">Tài liệu đính kèm</h3>
+                {(detail.attachments ?? []).length === 0 ? (
+                  <p className="supplier-invoice-detail-attachments-empty">
+                    Không có tài liệu đính kèm.
+                  </p>
+                ) : (
+                  <ul className="supplier-invoice-detail-attachments-list">
+                    {(detail.attachments ?? []).map((a, idx) => (
+                      <li key={a.documentId ?? `${a.fileUrl}-${idx}`}>
+                        <a
+                          href={a.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="supplier-invoice-detail-attachments-link"
+                        >
+                          {fileLabelFromUrl(a.fileUrl)}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               {/* Chi tiết dòng hóa đơn */}

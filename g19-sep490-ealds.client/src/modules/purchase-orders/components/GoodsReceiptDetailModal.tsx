@@ -1,7 +1,16 @@
-import { Modal, Table } from 'antd';
 import dayjs from 'dayjs';
 import type { GoodsReceiptDetail } from '../services/goodsReceiptService';
 import './GoodsReceiptDetailModal.css';
+
+function fileLabelFromUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const seg = u.pathname.split('/').filter(Boolean);
+    return decodeURIComponent(seg[seg.length - 1] || url);
+  } catch {
+    return url;
+  }
+}
 
 interface GoodsReceiptDetailModalProps {
   open: boolean;
@@ -75,6 +84,28 @@ export function GoodsReceiptDetailModal({
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="gr-detail-attachments-section">
+              <h3 className="gr-detail-section-title">Tài liệu đính kèm</h3>
+              {(detail.attachments ?? []).length === 0 ? (
+                <p className="gr-detail-attachments-empty">Không có tài liệu đính kèm.</p>
+              ) : (
+                <ul className="gr-detail-attachments-list">
+                  {(detail.attachments ?? []).map((a, idx) => (
+                    <li key={a.documentId ?? `${a.fileUrl}-${idx}`}>
+                      <a
+                        href={a.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="gr-detail-attachments-link"
+                      >
+                        {fileLabelFromUrl(a.fileUrl)}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div className="gr-detail-lines-section">

@@ -674,6 +674,14 @@ public partial class EaldsDbContext : DbContext
                 .IsRequired(false)
                 .HasConstraintName("FK__Document__Procur__671F4F74");
 
+            entity.HasOne(d => d.GoodsReceipt).WithMany(r => r.Documents)
+                .HasForeignKey(d => d.GoodsReceiptId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(d => d.SupplierInvoice).WithMany(i => i.Documents)
+                .HasForeignKey(d => d.SupplierInvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             entity.HasOne(d => d.UploadedByNavigation).WithMany(p => p.Documents)
                 .HasForeignKey(d => d.UploadedBy)
                 .OnDelete(DeleteBehavior.ClientSetNull)
