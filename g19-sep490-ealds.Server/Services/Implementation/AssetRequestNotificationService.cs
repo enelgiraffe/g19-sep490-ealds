@@ -15,6 +15,7 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
     private readonly int _allocationRequestTypeId;
     private readonly int _handoverRequestTypeId;
     private readonly int _repairRequestTypeId;
+    private readonly int _maintenanceRequestTypeId;
 
     public AssetRequestNotificationService(
         EaldsDbContext db,
@@ -26,6 +27,7 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
         _allocationRequestTypeId = configuration.GetValue<int>("App:AllocationRequestTypeId", 6);
         _handoverRequestTypeId = configuration.GetValue<int>("App:HandoverRequestTypeId", 7);
         _repairRequestTypeId = configuration.GetValue<int>("App:RepairRequestTypeId", 4);
+        _maintenanceRequestTypeId = configuration.GetValue<int>("App:MaintenanceRequestTypeId", 2);
     }
 
     public async Task NotifyFirstApproversAsync(int assetRequestId, CancellationToken cancellationToken = default)
@@ -40,18 +42,18 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
             .FirstOrDefaultAsync(rt => rt.RequestTypeId == ar.RequestTypeId, cancellationToken);
 
         // Cấp phát / hoàn trả: bước xử lý đầu là kế toán.
-        // Sửa chữa: ưu tiên thông báo Giám đốc (không phụ thuộc RoleId bước 1 workflow — thường là kế toán).
+        // Sửa chữa / bảo dưỡng: ưu tiên thông báo Giám đốc.
         List<int> recipientIds;
         if (IsAllocationOrHandoverRequestType(ar.RequestTypeId))
             recipientIds = await UserIdsForRolesAsync(await AccountantRoleIdsAsync(cancellationToken), cancellationToken);
-        else if (ar.RequestTypeId == _repairRequestTypeId)
+        else if (ar.RequestTypeId == _repairRequestTypeId || ar.RequestTypeId == _maintenanceRequestTypeId)
         {
             recipientIds = await DirectorUserIdsAsync(cancellationToken);
             if (recipientIds.Count == 0)
             {
                 _logger.LogWarning(
-                    "No users with DIRECTOR role for repair request AssetRequestId={Id}; using workflow first step / fallback.",
-                    assetRequestId);
+                    "No users with DIRECTOR role for request AssetRequestId={Id} type={TypeId}; using workflow first step / fallback.",
+                    assetRequestId, ar.RequestTypeId);
                 recipientIds = await ResolveFirstStepApproverUserIdsAsync(requestType?.WorkflowId, cancellationToken);
             }
         }

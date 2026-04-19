@@ -117,7 +117,9 @@ public class MaintenanceRequestsController : ControllerBase
             ? await _db.MaintenanceSchedules.FindAsync(dto.ScheduleId)
             : null;
 
-        var title = dto.Title ?? $"Maintenance request for instance {dto.AssetInstanceId}";
+        var title = string.IsNullOrWhiteSpace(dto.Title)
+            ? $"Yêu cầu bảo dưỡng tài sản #{dto.AssetInstanceId}"
+            : dto.Title.Trim();
         var initialStepId = await _db.RequestTypes
             .AsNoTracking()
             .Where(rt => rt.RequestTypeId == _maintenanceRequestTypeId)
@@ -180,7 +182,7 @@ public class MaintenanceRequestsController : ControllerBase
             Action = 0,
             ActionByUserId = dto.CreatedBy,
             ActionRoleId = actionRoleId,
-            Comment = "Maintenance request created",
+            Comment = "Tạo yêu cầu bảo dưỡng",
             OccurredAt = DateTime.UtcNow
         };
 

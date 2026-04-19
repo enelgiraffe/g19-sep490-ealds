@@ -82,6 +82,8 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
             MaintenanceTemplate entity = _mapper.CreateToEntity(create);
             await _context.MaintenanceTemplates.AddAsync(entity);
             await _context.SaveChangesAsync();
+
+            await ApplyTemplateToExistingAssetsAsync(entity);
             return _mapper.EntityToResponse(entity);
         }
         catch (Exception ex)
@@ -89,6 +91,63 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
             _logger.LogError(ex, "Lỗi khi tạo mẫu bảo trì");
             throw;
         }
+    }
+
+    private async Task ApplyTemplateToExistingAssetsAsync(MaintenanceTemplate template)
+    {
+        if (!template.IsActive)
+            return;
+
+        var instances = await _context.AssetInstances
+            .AsNoTracking()
+            .Where(ai => ai.Asset != null && ai.Asset.AssetTypeId == template.AssetTypeId)
+            .Select(ai => new { ai.AssetInstanceId, ai.AssetId })
+            .ToListAsync();
+        if (instances.Count == 0)
+            return;
+
+        var instanceIds = instances.Select(i => i.AssetInstanceId).ToList();
+        var existingInstanceIds = await _context.MaintenanceSchedules
+            .AsNoTracking()
+            .Where(s => s.TemplateId == template.TemplateId
+                        && s.AssetInstanceId.HasValue
+                        && instanceIds.Contains(s.AssetInstanceId.Value))
+            .Select(s => s.AssetInstanceId!.Value)
+            .Distinct()
+            .ToListAsync();
+        var existingSet = existingInstanceIds.ToHashSet();
+
+        MaintenanceRepeatIntervalUnit parsedUnit = MaintenanceRepeatIntervalUnit.Month;
+        var hasInterval = template.FrequencyType == (int)MaintenanceFrequencyType.Periodic
+                          && template.RepeatIntervalValue > 0
+                          && Enum.TryParse(template.RepeatIntervalUnit, true, out parsedUnit);
+
+        var nowLocal = DateTime.UtcNow.AddHours(7);
+        var newSchedules = instances
+            .Where(i => !existingSet.Contains(i.AssetInstanceId))
+            .Select(i => new MaintenanceSchedule
+            {
+                AssetId = i.AssetId,
+                AssetInstanceId = i.AssetInstanceId,
+                TemplateId = template.TemplateId,
+                Content = template.Content,
+                ScheduleType = (int)ScheduleType.Auto,
+                IntervalValue = hasInterval ? template.RepeatIntervalValue : null,
+                IntervalUnit = hasInterval ? (int)parsedUnit : null,
+                StartDate = nowLocal,
+                NextDueDate = nowLocal,
+                EndDate = null,
+                IsActive = true,
+                CreateBy = 1,
+                CreateDate = nowLocal
+            })
+            .ToList();
+
+        if (newSchedules.Count == 0)
+            return;
+
+        await _context.MaintenanceSchedules.AddRangeAsync(newSchedules);
+        await _context.SaveChangesAsync();
     }
 
     public async Task<MaintenanceTemplateResponseDTO> FindTemplateByIdAsync(int id)
@@ -118,9 +177,20 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
         return true;
     }
 
-    public Task<IEnumerable<MaintenanceTemplateResponseDTO>> SearchTemplateByKeyAsync(string name)
+    public async Task<IEnumerable<MaintenanceTemplateResponseDTO>> SearchTemplateByKeyAsync(string name)
     {
-        throw new NotImplementedException();
+        var keyword = (name ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(keyword))
+            return await GetAllTemplatesAsync();
+
+        var normalized = keyword.ToLower();
+        var templates = await _context.MaintenanceTemplates
+            .AsNoTracking()
+            .Where(x => x.Name.ToLower().Contains(normalized))
+            .OrderBy(x => x.Name)
+            .ToListAsync();
+
+        return _mapper.ListEntityToResponse(templates);
     }
 
     public async Task<MaintenanceTemplateResponseDTO> ToggleTemplateStatusAsync(int id)
