@@ -370,8 +370,8 @@ public class PurchaseOrdersController : ControllerBase
         if (entity == null)
             return NotFound();
 
-        if (entity.Status != StatusCreated)
-            return BadRequest("Only purchase orders in Created status can be deleted.");
+        if (entity.Status != StatusDraft && entity.Status != StatusCreated)
+            return BadRequest("Only purchase orders in Draft or Created status can be deleted.");
 
         var hasReceipts = await _db.ProcurementLines.AsNoTracking()
             .AnyAsync(l => l.ProcurementId == id && l.ReceivedQuantity > 0);

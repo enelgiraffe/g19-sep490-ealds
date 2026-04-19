@@ -13,7 +13,6 @@ using Microsoft.Extensions.Configuration;
 namespace g19_sep490_ealds.Server.Controllers;
 
 [ApiController]
-[Authorize(Roles = "ACCOUNTANT")]
 [Route("api/Assets/Requests/disposal/execution")]
 public class DisposalExecutionController : ControllerBase
 {
@@ -27,6 +26,7 @@ public class DisposalExecutionController : ControllerBase
     }
 
     [HttpGet("by-request/{assetRequestId:int}")]
+    [Authorize(Roles = "ACCOUNTANT,DIRECTOR,DEPARTMENT_HEAD,ADMIN")]
     public async Task<IActionResult> GetByAssetRequest(int assetRequestId)
     {
         var ar = await _db.AssetRequests.AsNoTracking().FirstOrDefaultAsync(x => x.AssetRequestId == assetRequestId);
@@ -60,6 +60,7 @@ public class DisposalExecutionController : ControllerBase
     }
 
     [HttpPut("by-request/{assetRequestId:int}")]
+    [Authorize(Roles = "ACCOUNTANT")]
     public async Task<IActionResult> SaveDraft(int assetRequestId, [FromBody] SaveDisposalExecutionDto dto)
     {
         var actorUserId = ResolveActorUserId(dto.UserId);
@@ -93,7 +94,8 @@ public class DisposalExecutionController : ControllerBase
             _db.DisposalExecutions.Add(exec);
         }
 
-        exec.PlannedExecutionDate = dto.PlannedExecutionDate;
+        if (dto.PlannedExecutionDate.HasValue)
+            exec.PlannedExecutionDate = dto.PlannedExecutionDate;
         exec.ExecutedDate = dto.ExecutedDate;
         exec.ExecutionMethod = dto.ExecutionMethod;
         exec.BuyerName = string.IsNullOrWhiteSpace(dto.BuyerName) ? null : dto.BuyerName.Trim();
@@ -114,6 +116,7 @@ public class DisposalExecutionController : ControllerBase
     }
 
     [HttpPost("by-request/{assetRequestId:int}/finalize")]
+    [Authorize(Roles = "ACCOUNTANT")]
     public async Task<IActionResult> Finalize(int assetRequestId, [FromBody] FinalizeDisposalExecutionDto dto)
     {
         var actorUserId = ResolveActorUserId(dto.UserId);
@@ -194,6 +197,7 @@ public class DisposalExecutionController : ControllerBase
     }
 
     [HttpPost("by-request/{assetRequestId:int}/record-appraisal")]
+    [Authorize(Roles = "ACCOUNTANT")]
     public async Task<IActionResult> RecordAppraisal(int assetRequestId, [FromBody] RecordDisposalAppraisalDto dto)
     {
         var actorUserId = ResolveActorUserId(dto.UserId);

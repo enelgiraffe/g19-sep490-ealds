@@ -360,24 +360,6 @@ export function PurchaseOrderFormModalNew({
               <h3 className="po-form-section-title">Thông tin chung</h3>
 
               <div className="po-form-row">
-                <div className="po-form-item">
-                  <label>Ngày giao dự kiến</label>
-                  <DatePicker
-                    className="po-form-datepicker--fixed"
-                    style={{ width: '100%', height: '40px' }}
-                    value={expectedDeliveryDate}
-                    onChange={(d) => {
-                      setExpectedDeliveryDate(d);
-                      // Global planned date works as default for lines that don't have a specific date yet.
-                      setLines((prev) =>
-                        prev.map((line) =>
-                          line.expectedDelivery == null ? { ...line, expectedDelivery: d } : line
-                        )
-                      );
-                    }}
-                    format="DD/MM/YYYY"
-                  />
-                </div>
                 <div className="po-form-item" />
               </div>
 

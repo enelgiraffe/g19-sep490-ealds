@@ -747,7 +747,7 @@ export function MaintenancePage() {
                 <th>MỤC ĐÍCH</th>
                 <th>NGÀY THIẾT LẬP BD</th>
                 <th>NGÀY BD DỰ KIẾN</th>
-                <th>TÌNH TRẠNG TS</th>
+                <th>VỊ TRÍ TS</th>
                 <th>TRẠNG THÁI</th>
                 <th className="asset-table__cell asset-table__cell--actions" />
               </tr>

@@ -272,10 +272,10 @@ export function PurchaseOrdersPage() {
                               title="Chỉnh sửa"
                             />
                           )}
-                          {item.status === PO_STATUS.created && (
+                          {(item.status === PO_STATUS.created || item.status === PO_STATUS.draft) && (
                             <Popconfirm
                               title="Xóa đơn mua?"
-                              description="Đơn mua trạng thái Đã tạo sẽ bị xóa vĩnh viễn."
+                              description="Đơn mua ở trạng thái Nháp hoặc Đã tạo sẽ bị xóa vĩnh viễn."
                               okText="Xóa"
                               cancelText="Hủy"
                               okButtonProps={{ danger: true }}
@@ -363,7 +363,7 @@ export function PurchaseOrdersPage() {
           setSelected(null);
         }}
         onEdit={() => {
-          if (!selected || selected.status !== PO_STATUS.created) return;
+          if (!selected || (selected.status !== PO_STATUS.created && selected.status !== PO_STATUS.draft)) return;
           setFormMode('edit');
           setFormOpen(true);
         }}

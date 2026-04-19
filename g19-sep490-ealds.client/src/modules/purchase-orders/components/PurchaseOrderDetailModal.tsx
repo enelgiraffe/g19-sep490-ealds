@@ -4,6 +4,7 @@ import type { PurchaseOrderDetail, PurchaseOrderLineItem } from '../services/pro
 import { PO_STATUS } from '../services/procurementPoService';
 
 function statusLabel(status: number): { text: string; color: string } {
+  if (status === PO_STATUS.draft) return { text: 'Nháp', color: 'default' };
   if (status === PO_STATUS.cancelled) return { text: 'Đã hủy', color: 'error' };
   if (status === PO_STATUS.partiallyReceived) return { text: 'Nhận một phần', color: 'warning' };
   if (status === PO_STATUS.completed) return { text: 'Đã nhận đủ', color: 'success' };
@@ -34,7 +35,8 @@ export function PurchaseOrderDetailModal({
   onCancelOrder,
 }: PurchaseOrderDetailModalProps) {
   const hasReceipt = data?.lines.some((l) => Number(l.receivedQuantity ?? 0) > 0) ?? false;
-  const canEdit = data?.status === PO_STATUS.created && !hasReceipt;
+  const canEdit =
+    (data?.status === PO_STATUS.created || data?.status === PO_STATUS.draft) && !hasReceipt;
   const canCancel =
     data != null &&
     data.status !== PO_STATUS.cancelled &&
