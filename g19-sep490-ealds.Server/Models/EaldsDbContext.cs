@@ -967,7 +967,7 @@ public partial class EaldsDbContext : DbContext
 
             entity.ToTable("Notification");
 
-            entity.Property(e => e.Content).HasMaxLength(100);
+            entity.Property(e => e.Content).HasMaxLength(500);
             entity.Property(e => e.SentDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");

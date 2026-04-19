@@ -9,6 +9,7 @@ import {
 import {
   inventoryService,
   getCurrentUserId,
+  SESSION_STATUS,
   type SessionDetail,
   type SessionAssetCheckItem,
   type AssetInventoryDetail,
@@ -167,9 +168,20 @@ export function PeriodicInventoryExecutionPage() {
   const handleComplete = async () => {
     setCompleting(true);
     try {
-      await inventoryService.completeSession(sessionIdNum);
-      message.success('Đã hoàn thành kiểm kê. Chuyển tới trang xử lý chênh lệch.');
-      navigate(`/inventory-review/${sessionIdNum}`);
+      const result = await inventoryService.completeSession(sessionIdNum);
+      const closedClean =
+        result.hasDiscrepancies === false ||
+        (result.newStatus !== undefined && result.newStatus === SESSION_STATUS.Confirmed);
+      if (closedClean) {
+        message.success(
+          result.message ??
+            'Đã hoàn thành kiểm kê. Không có chênh lệch — phiên đã xử lý.',
+        );
+        navigate('/inventory');
+      } else {
+        message.success('Đã hoàn thành kiểm kê. Chuyển tới trang xử lý chênh lệch.');
+        navigate(`/inventory-review/${sessionIdNum}`);
+      }
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
       message.error(

@@ -230,14 +230,14 @@ export function InventoryPage() {
             className="maintenance-btn-add"
             onClick={() => setIsIndividualModalOpen(true)}
           >
-            Hẹn lịch kiểm kê
+            Kiểm kê bất thường
           </Button>
           <Button
             type="primary"
             className="maintenance-btn-add"
             onClick={() => setIsPeriodicModalOpen(true)}
           >
-            Lập lịch kiểm kê
+            Kiểm kê định kỳ
           </Button>
         </div>
       </div>
@@ -491,7 +491,14 @@ export function InventoryPage() {
               style={{ flex: 1 }}
               rules={[{ required: true, message: 'Vui lòng chọn ngày bắt đầu' }]}
             >
-              <DatePicker format="DD/MM/YYYY" placeholder="Chọn ngày" style={{ width: '100%' }} />
+              <DatePicker
+                format="DD/MM/YYYY"
+                placeholder="Chọn ngày"
+                style={{ width: '100%' }}
+                disabledDate={(current) =>
+                  !!current && current.isBefore(dayjs().startOf('day'))
+                }
+              />
             </Form.Item>
             <Form.Item
               label="Thời gian thực hiện (ngày)"

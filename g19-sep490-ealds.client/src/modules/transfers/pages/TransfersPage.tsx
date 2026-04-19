@@ -387,6 +387,7 @@ export function TransfersPage() {
         open={isTransferModalOpen}
         onClose={() => setIsTransferModalOpen(false)}
         mode="department"
+        currentUserDepartmentId={profile?.departmentId ?? null}
         onSubmit={async (values: any) => {
           if (!profile) {
             message.error('Không lấy được thông tin người dùng. Vui lòng đăng nhập lại.');
@@ -532,6 +533,19 @@ export function TransfersPage() {
                         </div>
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                <div className="mark-damaged-form-section">
+                  <h3 className="mark-damaged-section-title">Ý kiến kế toán</h3>
+                  <div className="mark-damaged-info-value mark-damaged-info-value--multiline">
+                    {confirmModal.row.accountantComment?.trim() || '—'}
+                  </div>
+                </div>
+                <div className="mark-damaged-form-section">
+                  <h3 className="mark-damaged-section-title">Ý kiến giám đốc</h3>
+                  <div className="mark-damaged-info-value mark-damaged-info-value--multiline">
+                    {confirmModal.row.directorComment?.trim() || '—'}
                   </div>
                 </div>
 

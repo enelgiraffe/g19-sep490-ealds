@@ -148,6 +148,10 @@ export interface SaveAssetInventoryPayload {
 }
 
 export interface CompleteSessionResult {
+  message?: string;
+  newStatus?: number;
+  statusName?: string;
+  hasDiscrepancies?: boolean;
   quantityDiffCount: number;
   locationChangeCount: number;
   departmentChangeCount: number;

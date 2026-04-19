@@ -8,6 +8,7 @@ namespace g19_sep490_ealds.Server.Services.Implementation;
 public class AssetRequestNotificationService : IAssetRequestNotificationService
 {
     private const int MaxTitleLength = 255;
+    private const int MaxContentLength = 500;
     private const int RoleIdAccountant = 3;
 
     private readonly EaldsDbContext _db;
@@ -15,6 +16,7 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
     private readonly int _allocationRequestTypeId;
     private readonly int _handoverRequestTypeId;
     private readonly int _repairRequestTypeId;
+    private readonly int _transferRequestTypeId;
 
     public AssetRequestNotificationService(
         EaldsDbContext db,
@@ -26,6 +28,7 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
         _allocationRequestTypeId = configuration.GetValue<int>("App:AllocationRequestTypeId", 6);
         _handoverRequestTypeId = configuration.GetValue<int>("App:HandoverRequestTypeId", 7);
         _repairRequestTypeId = configuration.GetValue<int>("App:RepairRequestTypeId", 4);
+        _transferRequestTypeId = configuration.GetValue<int>("App:TransferRequestTypeId", 3);
     }
 
     public async Task NotifyFirstApproversAsync(int assetRequestId, CancellationToken cancellationToken = default)
@@ -39,11 +42,25 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
             .Include(rt => rt.Workflow)
             .FirstOrDefaultAsync(rt => rt.RequestTypeId == ar.RequestTypeId, cancellationToken);
 
-        // Cấp phát / hoàn trả: bước xử lý đầu là kế toán.
-        // Sửa chữa: ưu tiên thông báo Giám đốc (không phụ thuộc RoleId bước 1 workflow — thường là kế toán).
         List<int> recipientIds;
-        if (IsAllocationOrHandoverRequestType(ar.RequestTypeId))
+        string title;
+        string? content;
+
+        if (ar.RequestTypeId == _transferRequestTypeId)
+        {
             recipientIds = await UserIdsForRolesAsync(await AccountantRoleIdsAsync(cancellationToken), cancellationToken);
+            var parts = await BuildTransferApproverNotificationPartsAsync(assetRequestId, cancellationToken);
+            title = parts.Title;
+            content = parts.Content;
+        }
+        else if (IsAllocationOrHandoverRequestType(ar.RequestTypeId))
+        {
+            recipientIds = await UserIdsForRolesAsync(await AccountantRoleIdsAsync(cancellationToken), cancellationToken);
+            var typeLabel = GetRequestTypeDisplayLabel(ar.RequestTypeId, requestType?.Workflow?.Name);
+            var requestTitle = await BuildNotificationRequestTitleAsync(ar, cancellationToken);
+            title = TruncateTitle($"{typeLabel}: {requestTitle}");
+            content = TruncateContent($"Người gửi: #{ar.CreatedBy}.");
+        }
         else if (ar.RequestTypeId == _repairRequestTypeId)
         {
             recipientIds = await DirectorUserIdsAsync(cancellationToken);
@@ -54,9 +71,20 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
                     assetRequestId);
                 recipientIds = await ResolveFirstStepApproverUserIdsAsync(requestType?.WorkflowId, cancellationToken);
             }
+
+            var typeLabel = GetRequestTypeDisplayLabel(ar.RequestTypeId, requestType?.Workflow?.Name);
+            var requestTitle = await BuildNotificationRequestTitleAsync(ar, cancellationToken);
+            title = TruncateTitle($"{typeLabel}: {requestTitle}");
+            content = TruncateContent($"Người gửi: #{ar.CreatedBy}.");
         }
         else
+        {
             recipientIds = await ResolveFirstStepApproverUserIdsAsync(requestType?.WorkflowId, cancellationToken);
+            var typeLabel = GetRequestTypeDisplayLabel(ar.RequestTypeId, requestType?.Workflow?.Name);
+            var requestTitle = await BuildNotificationRequestTitleAsync(ar, cancellationToken);
+            title = TruncateTitle($"{typeLabel}: {requestTitle}");
+            content = TruncateContent($"Người gửi: #{ar.CreatedBy}.");
+        }
 
         recipientIds = await FilterExistingUserIdsAsync(recipientIds, cancellationToken);
         recipientIds = recipientIds.Where(id => id != ar.CreatedBy).Distinct().ToList();
@@ -69,18 +97,18 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
             return;
         }
 
-        if (IsAllocationOrHandoverRequestType(ar.RequestTypeId))
+        if (ar.RequestTypeId == _transferRequestTypeId)
         {
             _logger.LogInformation(
-                "Notifying accountants for allocation/handover request AssetRequestId={Id} RequestTypeId={TypeId} (recipients={Count}).",
+                "Notifying accountants for transfer AssetRequestId={Id} (recipients={Count}).",
+                assetRequestId, recipientIds.Count);
+        }
+        else if (IsAllocationOrHandoverRequestType(ar.RequestTypeId))
+        {
+            _logger.LogInformation(
+                "Notifying accountants for request AssetRequestId={Id} RequestTypeId={TypeId} (recipients={Count}).",
                 assetRequestId, ar.RequestTypeId, recipientIds.Count);
         }
-
-        var typeLabel = GetRequestTypeDisplayLabel(ar.RequestTypeId, requestType?.Workflow?.Name);
-        var requestTitle = await BuildNotificationRequestTitleAsync(ar, cancellationToken);
-        var title = TruncateTitle($"{typeLabel}: {requestTitle}");
-        var content = TruncateContent(
-            $"Người gửi: #{ar.CreatedBy}.");
 
         foreach (var userId in recipientIds)
         {
@@ -88,6 +116,43 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
             {
                 Title = title,
                 Content = content,
+                RefId = ar.CreatedBy,
+                UserId = userId,
+                SentDate = DateTime.UtcNow,
+                IsSend = true
+            });
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task NotifyTransferDirectorsPendingApprovalAsync(int assetRequestId, CancellationToken cancellationToken = default)
+    {
+        var ar = await _db.AssetRequests.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.AssetRequestId == assetRequestId, cancellationToken);
+        if (ar == null || ar.RequestTypeId != _transferRequestTypeId)
+            return;
+
+        var recipientIds = await DirectorUserIdsAsync(cancellationToken);
+        recipientIds = await FilterExistingUserIdsAsync(recipientIds, cancellationToken);
+        recipientIds = recipientIds.Where(id => id != ar.CreatedBy).Distinct().ToList();
+
+        if (recipientIds.Count == 0)
+        {
+            _logger.LogWarning(
+                "No directors to notify after accountant approval for transfer AssetRequestId={Id}.",
+                assetRequestId);
+            return;
+        }
+
+        var parts = await BuildTransferApproverNotificationPartsAsync(assetRequestId, cancellationToken);
+
+        foreach (var userId in recipientIds)
+        {
+            _db.Notifications.Add(new Notification
+            {
+                Title = parts.Title,
+                Content = parts.Content,
                 RefId = ar.CreatedBy,
                 UserId = userId,
                 SentDate = DateTime.UtcNow,
@@ -257,6 +322,55 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
     private bool IsAllocationOrHandoverRequestType(int requestTypeId) =>
         requestTypeId == _allocationRequestTypeId || requestTypeId == _handoverRequestTypeId;
 
+    private async Task<(string Title, string? Content)> BuildTransferApproverNotificationPartsAsync(
+        int assetRequestId,
+        CancellationToken cancellationToken)
+    {
+        var transfers = await _db.TransferRecords.AsNoTracking()
+            .Where(t => t.AssetRequestId == assetRequestId)
+            .ToListAsync(cancellationToken);
+
+        var fromDept = "—";
+        var toDept = "—";
+        List<string> instanceLines = new();
+
+        if (transfers.Count > 0)
+        {
+            var tr0 = transfers[0];
+            fromDept = await DepartmentNameForAssetLocationAsync(tr0.FromLocationId, cancellationToken) ?? "—";
+            toDept = await DepartmentNameForAssetLocationAsync(tr0.ToLocationId, cancellationToken) ?? "—";
+
+            var instanceIds = transfers.Select(t => t.AssetInstanceId).Distinct().ToList();
+            instanceLines = await _db.AssetInstances.AsNoTracking()
+                .Where(i => instanceIds.Contains(i.AssetInstanceId))
+                .OrderBy(i => i.InstanceCode)
+                .Select(i =>
+                    (i.Asset != null && !string.IsNullOrWhiteSpace(i.Asset.Name)
+                        ? i.Asset.Name!.Trim()
+                        : "Tài sản")
+                    + " (" + i.AssetInstanceId + ")")
+                .ToListAsync(cancellationToken);
+        }
+
+        var title = TruncateTitle(
+            $"Yêu cầu điều chuyển: Từ {fromDept} tới {toDept} (YC #{assetRequestId})");
+
+        var assetsJoined = instanceLines.Count > 0 ? string.Join(", ", instanceLines) : "—";
+
+        var content = TruncateContent($"Các cá thể tài sản: {assetsJoined}");
+        return (title, content);
+    }
+
+    private async Task<string?> DepartmentNameForAssetLocationAsync(int locationId, CancellationToken cancellationToken)
+    {
+        return await (
+            from al in _db.AssetLocations.AsNoTracking()
+            join d in _db.Departments.AsNoTracking() on al.DepartmentId equals d.DepartmentId
+            where al.LocationId == locationId
+            select d.Name
+        ).FirstOrDefaultAsync(cancellationToken);
+    }
+
     /// <summary>Labels aligned with client request tabs (RequestTypeId 1–7); unknown ids use workflow name from DB.</summary>
     private static string GetRequestTypeDisplayLabel(int requestTypeId, string? workflowNameFallback) =>
         requestTypeId switch
@@ -277,5 +391,5 @@ public class AssetRequestNotificationService : IAssetRequestNotificationService
         title.Length > MaxTitleLength ? title[..MaxTitleLength] : title;
 
     private static string? TruncateContent(string content) =>
-        content.Length > 100 ? content[..97] + "..." : content;
+        content.Length > MaxContentLength ? content[..(MaxContentLength - 3)] + "..." : content;
 }

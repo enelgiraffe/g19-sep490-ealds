@@ -11,8 +11,14 @@ import './SelectAssetsModal.css';
 /** `assetId` is the physical row id (`assetInstanceId`) for transfer/maintenance APIs. */
 export type SelectableAsset = {
   assetId: number;
+  /** Mã tài sản (catalog). */
+  assetCatalogCode: string;
+  /** Mã cá thể. */
   code: string;
+  /** Tên tài sản. */
   name: string;
+  /** Loại tài sản. */
+  assetTypeName: string;
   locationLabel: string;
   statusLabel: string;
   quantity: number;
@@ -25,8 +31,10 @@ function toSelectableAsset(a: AssetInstanceResponse): SelectableAsset {
     a.currentLocationId != null ? `AL-${a.currentLocationId}` : '—';
   return {
     assetId: a.assetInstanceId,
+    assetCatalogCode: (a.assetCode && a.assetCode.trim()) || '—',
     code: a.instanceCode,
-    name: a.assetName ?? a.assetCode ?? a.instanceCode,
+    name: (a.assetName && a.assetName.trim()) || (a.assetCode && a.assetCode.trim()) || a.instanceCode,
+    assetTypeName: (a.assetTypeName && a.assetTypeName.trim()) || '—',
     locationLabel,
     statusLabel: getStatusLabel(a.statusName),
     quantity: 1,
@@ -46,6 +54,7 @@ export function SelectAssetsModal({
   onConfirm,
   enforceSameDepartment = true,
   restrictToDepartmentId,
+  forTransferSelection = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -54,6 +63,8 @@ export function SelectAssetsModal({
   enforceSameDepartment?: boolean;
   /** When set, only load instances currently assigned to this department (GET currentDepartmentId). */
   restrictToDepartmentId?: number | null;
+  /** When true, list is not limited to the signed-in department head’s department (server flag). */
+  forTransferSelection?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
@@ -85,6 +96,9 @@ export function SelectAssetsModal({
       const params: GetAssetInstancesParams = {
         keyword: kw || undefined,
         ...(deptFilter != null ? { currentDepartmentId: deptFilter } : {}),
+        ...(forTransferSelection
+          ? { forTransferSelection: true, status: 1 }
+          : {}),
       };
       assetInstanceService
         .getAll(params)
@@ -102,7 +116,7 @@ export function SelectAssetsModal({
         searchDebounceRef.current = null;
       }
     };
-  }, [open, keyword, restrictToDepartmentId]);
+  }, [open, keyword, restrictToDepartmentId, forTransferSelection]);
 
   const selectedAssets = useMemo(() => {
     const byId = new Map(rows.map((r) => [r.assetId, r]));
@@ -148,35 +162,28 @@ export function SelectAssetsModal({
             </div>
           </div>
 
-          {restrictToDepartmentId != null && restrictToDepartmentId > 0 && (
-            <div className="select-assets__hint">
-              Chỉ hiển thị cá thể đang thuộc <strong>phòng ban nguồn</strong> đã chọn trên form điều chuyển.
-            </div>
-          )}
-
           <div className="select-assets__table-wrapper">
             <table className="select-assets__table">
               <thead>
                 <tr>
                   <th className="select-assets__cell select-assets__cell--checkbox" />
+                  <th>Mã tài sản</th>
                   <th>Mã cá thể</th>
-                  <th>Tài sản</th>
-                  <th>Vị trí tài sản</th>
-                  <th>Tình trạng</th>
-                  <th>Số lượng</th>
-                  <th>Phòng ban sử dụng</th>
+                  <th>Tên tài sản</th>
+                  <th>Loại tài sản</th>
+                  <th>Trạng thái</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="select-assets__empty">
+                    <td colSpan={6} className="select-assets__empty">
                       Đang tải...
                     </td>
                   </tr>
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="select-assets__empty">
+                    <td colSpan={6} className="select-assets__empty">
                       Không có dữ liệu.
                     </td>
                   </tr>
@@ -213,12 +220,11 @@ export function SelectAssetsModal({
                             }}
                           />
                         </td>
+                        <td>{r.assetCatalogCode}</td>
                         <td>{r.code}</td>
                         <td>{r.name}</td>
-                        <td>{r.locationLabel}</td>
+                        <td>{r.assetTypeName}</td>
                         <td>{r.statusLabel}</td>
-                        <td className="select-assets__align-right">{r.quantity}</td>
-                        <td>{r.currentDepartmentName}</td>
                       </tr>
                     );
                   })

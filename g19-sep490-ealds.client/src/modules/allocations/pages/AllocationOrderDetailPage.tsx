@@ -102,9 +102,8 @@ export function AllocationOrderDetailPage() {
 
   const orderKind = detail.orderKind ?? (isHandover ? 'return' : 'allocation');
   const isReturnFlow = orderKind === 'return';
-  /** Hoàn trả: chỉ trưởng phòng thấy nút xác nhận; cấp phát: giữ theo trạng thái đơn (mọi vai trò có quyền trang). */
-  const showConfirmButton =
-    canConfirm && (!isReturnFlow || currentRole === 'department_head');
+  /** Chỉ trưởng phòng ban mới thấy và bấm xác nhận (cấp phát / hoàn trả); API cũng kiểm tra vai trò. */
+  const showConfirmButton = canConfirm && currentRole === 'department_head';
 
   return (
     <div className="requests-page">

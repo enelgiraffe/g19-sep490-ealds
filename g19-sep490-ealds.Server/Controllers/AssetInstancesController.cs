@@ -28,6 +28,7 @@ public class AssetInstancesController : ControllerBase
     /// <summary>
     /// GET /api/assetinstances — Search and filter instances (replaces former filters on GET /api/assets).
     /// </summary>
+    /// <param name="forTransferSelection">When true, department heads may list instances in all departments (e.g. transfer picker).</param>
     [HttpGet]
     public async Task<ActionResult<IEnumerable<AssetInstanceResponseDTO>>> GetAll(
         [FromQuery] string? keyword,
@@ -38,7 +39,8 @@ public class AssetInstancesController : ControllerBase
         [FromQuery] decimal? minPrice,
         [FromQuery] decimal? maxPrice,
         [FromQuery] DateOnly? fromDate,
-        [FromQuery] DateOnly? toDate)
+        [FromQuery] DateOnly? toDate,
+        [FromQuery] bool forTransferSelection = false)
     {
         var query = _context.AssetInstances
             .Include(i => i.Asset).ThenInclude(a => a!.AssetType)
@@ -83,16 +85,19 @@ public class AssetInstancesController : ControllerBase
             query = query.Where(i => i.PurchaseDate <= toDate.Value);
 
         var scope = await DepartmentAssetScope.ResolveForUserAsync(User, _context, _departmentHeadRoleId);
-        if (scope.IsRestricted && !scope.DepartmentId.HasValue)
-            return Ok(Array.Empty<AssetInstanceResponseDTO>());
-
-        if (scope.IsRestricted && scope.DepartmentId is int headDeptId && headDeptId > 0)
+        if (!forTransferSelection)
         {
-            query = query.Where(i =>
-                i.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == headDeptId) &&
-                i.Status != (int)AssetStatus.Disposed &&
-                i.Status != (int)AssetStatus.Lost &&
-                i.Status != (int)AssetStatus.Liquidated);
+            if (scope.IsRestricted && !scope.DepartmentId.HasValue)
+                return Ok(Array.Empty<AssetInstanceResponseDTO>());
+
+            if (scope.IsRestricted && scope.DepartmentId is int headDeptId && headDeptId > 0)
+            {
+                query = query.Where(i =>
+                    i.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == headDeptId) &&
+                    i.Status != (int)AssetStatus.Disposed &&
+                    i.Status != (int)AssetStatus.Lost &&
+                    i.Status != (int)AssetStatus.Liquidated);
+            }
         }
 
         var instances = await query.ToListAsync();
@@ -803,6 +808,7 @@ public class AssetInstancesController : ControllerBase
             AssetInstanceId = i.AssetInstanceId,
             AssetId = i.AssetId,
             AssetTypeId = i.Asset?.AssetTypeId ?? 0,
+            AssetTypeName = i.Asset?.AssetType?.Name,
             AssetCode = i.Asset?.Code,
             AssetName = i.Asset?.Name,
             Specification = i.Asset?.Specification,

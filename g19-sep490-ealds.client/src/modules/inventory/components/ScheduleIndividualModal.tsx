@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Form, Input, Select, DatePicker, message } from 'antd';
+import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import { profileService } from '../../profile/services/profileService';
 import {
@@ -105,8 +106,7 @@ export function ScheduleIndividualModal({
         </button>
 
         <div className="create-purchase-modal__header">
-          <h2 className="create-purchase-modal__title">Lập lịch kiểm kê</h2>
-          <p className="inventory-schedule-modal__subtitle">Kiểm kê riêng lẻ</p>
+          <h2 className="create-purchase-modal__title">Tạo lịch kiểm kê bất thường</h2>
         </div>
 
         <div className="create-purchase-modal__body">
@@ -121,6 +121,9 @@ export function ScheduleIndividualModal({
                 placeholder="Chọn ngày"
                 className="schedule-form__datepicker"
                 style={{ width: '100%' }}
+                disabledDate={(current) =>
+                  !!current && current.isBefore(dayjs().startOf('day'))
+                }
               />
             </Form.Item>
 

@@ -15,6 +15,8 @@ function todayLocalISODate(): string {
 interface AssetInfo {
   assetInstanceId?: number;
   assetId?: number;
+  /** Mã tài sản (catalog). */
+  assetCatalogCode?: string;
   code: string;
   name: string;
   type: string;
@@ -39,6 +41,8 @@ interface TransferAssetModalProps {
   /** When true with fromDepartmentId, "Từ phòng ban" is fixed (e.g. trưởng phòng chỉ điều chuyển từ đơn vị mình). */
   lockFromDepartment?: boolean;
   mode?: 'location' | 'department';
+  /** When set in department mode, submit only if this department matches "Từ phòng ban" or "Đến phòng ban". */
+  currentUserDepartmentId?: number | null;
 }
 
 export function TransferAssetModal({
@@ -49,6 +53,7 @@ export function TransferAssetModal({
   fromDepartmentId,
   lockFromDepartment = false,
   mode = 'location',
+  currentUserDepartmentId,
 }: TransferAssetModalProps) {
   const [locations, setLocations] = useState<AssetLocationOption[]>([]);
   const [locationsLoading, setLocationsLoading] = useState(false);
@@ -60,6 +65,7 @@ export function TransferAssetModal({
   const [dateError, setDateError] = useState<string | null>(null);
   const [fromError, setFromError] = useState<string | null>(null);
   const [toError, setToError] = useState<string | null>(null);
+  const [participantDeptError, setParticipantDeptError] = useState<string | null>(null);
   const [isSelectAssetsOpen, setIsSelectAssetsOpen] = useState(false);
   const [selectedAssets, setSelectedAssets] = useState<SelectableAsset[]>([]);
 
@@ -85,6 +91,7 @@ export function TransferAssetModal({
       setDateError(null);
       setFromError(null);
       setToError(null);
+      setParticipantDeptError(null);
       setSelectedAssets([]);
       if (fromDepartmentId != null) {
         setFromLocationId(String(fromDepartmentId));
@@ -100,8 +107,10 @@ export function TransferAssetModal({
     if (assetInfo) {
       const mapped: SelectableAsset = {
         assetId: assetInfo.assetInstanceId ?? assetInfo.assetId ?? -1,
+        assetCatalogCode: assetInfo.assetCatalogCode?.trim() || '—',
         code: assetInfo.code,
         name: assetInfo.name,
+        assetTypeName: assetInfo.type?.trim() || '—',
         locationLabel: assetInfo.location ?? '—',
         statusLabel: assetInfo.status ?? '—',
         quantity: 1,
@@ -139,6 +148,9 @@ export function TransferAssetModal({
     fromDepartmentId != null &&
     fromDepartmentId > 0;
   const canPickAssets = !!assetInfo || validFromDepartmentId != null;
+  /** In department mode, picker only loads instances currently in the selected "Từ phòng ban". */
+  const restrictPickerToDepartmentId =
+    mode === 'department' && validFromDepartmentId != null ? validFromDepartmentId : null;
 
   const minTransferDate = todayLocalISODate();
   const toLocationOptions =
@@ -148,6 +160,7 @@ export function TransferAssetModal({
 
   const handleSubmit = () => {
     let hasError = false;
+    setParticipantDeptError(null);
     if (!transferDate) {
       setDateError('Vui lòng chọn ngày điều chuyển');
       hasError = true;
@@ -165,6 +178,23 @@ export function TransferAssetModal({
     if (!toLocationId) {
       setToError(mode === 'department' ? 'Chọn phòng ban đích' : 'Chọn vị trí đích');
       hasError = true;
+    }
+    if (
+      mode === 'department' &&
+      currentUserDepartmentId != null &&
+      currentUserDepartmentId > 0 &&
+      fromLocationId &&
+      toLocationId
+    ) {
+      const myDept = currentUserDepartmentId;
+      const fromId = Number(fromLocationId);
+      const toId = Number(toLocationId);
+      if (myDept !== fromId && myDept !== toId) {
+        setParticipantDeptError(
+          'Phòng ban của bạn phải được chọn ở "Từ phòng ban" hoặc "Đến phòng ban" (phòng ban đi hoặc phòng ban đến).',
+        );
+        hasError = true;
+      }
     }
     if (hasError) return;
 
@@ -264,6 +294,7 @@ export function TransferAssetModal({
                   onChange={(e) => {
                     setFromLocationId(e.target.value);
                     setFromError(null);
+                    setParticipantDeptError(null);
                   }}
                 >
                   <option value="">
@@ -291,6 +322,7 @@ export function TransferAssetModal({
                   onChange={(e) => {
                     setToLocationId(e.target.value);
                     setToError(null);
+                    setParticipantDeptError(null);
                   }}
                 >
                   <option value="">
@@ -305,6 +337,9 @@ export function TransferAssetModal({
                 {toError && <div className="transfer-error-text">{toError}</div>}
               </div>
             </div>
+            {participantDeptError && (
+              <div className="transfer-error-text transfer-error-text--full">{participantDeptError}</div>
+            )}
           </div>
 
           <div className="transfer-form__section">
@@ -388,7 +423,8 @@ export function TransferAssetModal({
         onClose={() => setIsSelectAssetsOpen(false)}
         initialSelectedIds={selectedAssets.map((a) => a.assetId)}
         enforceSameDepartment
-        restrictToDepartmentId={validFromDepartmentId}
+        forTransferSelection
+        restrictToDepartmentId={restrictPickerToDepartmentId}
         onConfirm={(assets) => {
           setSelectedAssets(assets);
           if (fromSelectLocked && fromDepartmentId != null) {

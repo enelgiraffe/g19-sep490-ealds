@@ -652,15 +652,6 @@ public class InventoryController : ControllerBase
         if (!TryGetCurrentUserId(out var currentUserId))
             return Unauthorized();
 
-        var access = await GetInventoryAccessAsync();
-        if (access.RestrictToDepartment)
-        {
-            if (!access.DepartmentId.HasValue)
-                return BadRequest(new { message = "Không xác định được phòng ban của bạn." });
-            if (dto.DepartmentId != access.DepartmentId.Value)
-                return BadRequest(new { message = "Bạn chỉ được lập lịch kiểm kê cho phòng ban của bạn." });
-        }
-
         dto.CreatedBy = currentUserId;
 
         var created = await CreateInventorySessionCoreAsync(
@@ -858,8 +849,6 @@ public class InventoryController : ControllerBase
         if (totalTasks == 0 || checkedTasks < totalTasks)
             return BadRequest(new { message = "Cần hoàn tất kiểm kê 100% tài sản trước khi kết thúc phiên." });
 
-        // Trưởng phòng xử lý chênh lệch trước; chỉ sau đó hệ thống mới báo Giám đốc.
-        session.Status = (int)InventorySessionStatus.PendingAccountant;
         session.ProgressPercent = totalTasks > 0
             ? (int)Math.Round((double)checkedTasks / totalTasks * 100)
             : 0;
@@ -870,14 +859,30 @@ public class InventoryController : ControllerBase
             .AsNoTracking()
             .ToListAsync();
 
+        // Không có chênh lệch → Đã xử lý (Confirmed). Có chênh lệch → Chờ xử lý sổ (PendingAccountant).
+        var hasDiscrepancies = discrepancies.Count > 0;
+        session.Status = hasDiscrepancies
+            ? (int)InventorySessionStatus.PendingAccountant
+            : (int)InventorySessionStatus.Confirmed;
+
         await _context.SaveChangesAsync();
+
+        if (!hasDiscrepancies)
+            await TryCreateNextPeriodicSessionIfApplicableAsync(session);
+
+        var displayStatus = GetDisplayStatus(session, DateTime.UtcNow);
 
         return Ok(new
         {
-            message = "Phiên kiểm kê đã được hoàn thành.",
+            message = hasDiscrepancies
+                ? "Phiên kiểm kê đã được hoàn thành."
+                : "Phiên kiểm kê đã được hoàn thành. Không có chênh lệch — phiên đã xử lý.",
             progressPercent = session.ProgressPercent,
             checkedTasks,
             totalTasks,
+            newStatus = displayStatus,
+            statusName = GetSessionStatusName(displayStatus),
+            hasDiscrepancies,
             quantityDiffCount = discrepancies.Count(d =>
                 (d.DiscrepancyType & (int)DiscrepancyType.AssetNotFound) != 0 ||
                 (d.DiscrepancyType & (int)DiscrepancyType.QuantityMismatch) != 0),
@@ -1474,7 +1479,7 @@ public class InventoryController : ControllerBase
     [HttpGet("meta/departments")]
     public async Task<ActionResult<IEnumerable<DropdownItemDTO>>> GetDepartments()
     {
-        // Full list for scheduling / filters; create-session still enforces department for scoped roles.
+        // Full list for scheduling / filters.
         var items = await _context.Departments
             .AsNoTracking()
             .OrderBy(d => d.Name)
@@ -1510,24 +1515,12 @@ public class InventoryController : ControllerBase
     [HttpGet("meta/users")]
     public async Task<ActionResult<IEnumerable<DropdownItemDTO>>> GetUsers()
     {
-        var access = await GetInventoryAccessAsync();
-        var q = _context.Employees.AsNoTracking().AsQueryable();
-        if (access.RestrictToDepartment && access.DepartmentId.HasValue)
-            q = q.Where(e => e.DepartmentId == access.DepartmentId.Value);
-
-        var items = await q
+        var items = await _context.Employees
+            .AsNoTracking()
             .Where(e => e.UserId != null)
             .Select(e => new DropdownItemDTO { Id = e.UserId!.Value, Name = e.Name })
             .ToListAsync();
         return Ok(items);
-    }
-
-    // ── Department head: scope to employee department ─────────────────────────
-
-    private sealed class InventoryAccessInfo
-    {
-        public bool RestrictToDepartment { get; init; }
-        public int? DepartmentId { get; init; }
     }
 
     private bool TryGetCurrentUserId(out int userId)
@@ -1535,32 +1528,6 @@ public class InventoryController : ControllerBase
         userId = 0;
         var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
         return int.TryParse(claim, out userId) && userId > 0;
-    }
-
-    private async Task<InventoryAccessInfo> GetInventoryAccessAsync()
-    {
-        if (!TryGetCurrentUserId(out var userId))
-            return new InventoryAccessInfo { RestrictToDepartment = false };
-
-        var roleCodes = await _context.UserRoles
-            .AsNoTracking()
-            .Where(ur => ur.UserId == userId)
-            .Select(ur => ur.Role.Code)
-            .ToListAsync();
-
-        if (roleCodes.Any(IsGlobalInventoryRole))
-            return new InventoryAccessInfo { RestrictToDepartment = false };
-
-        if (!roleCodes.Any(IsDepartmentHeadRole))
-            return new InventoryAccessInfo { RestrictToDepartment = false };
-
-        var deptId = await _context.Employees
-            .AsNoTracking()
-            .Where(e => e.UserId == userId)
-            .Select(e => (int?)e.DepartmentId)
-            .FirstOrDefaultAsync();
-
-        return new InventoryAccessInfo { RestrictToDepartment = true, DepartmentId = deptId };
     }
 
     /// <summary>Inventory session APIs are limited to the user who scheduled the session (<see cref="InventorySession.CreatedBy"/>).</summary>
@@ -1746,20 +1713,11 @@ public class InventoryController : ControllerBase
             or "trưởng_phòng" or "truong_phong";
     }
 
-    private static bool IsGlobalInventoryRole(string? code)
-    {
-        if (string.IsNullOrWhiteSpace(code)) return false;
-        var c = code.Trim().ToLowerInvariant().Replace(' ', '_');
-        return c is "director" or "accountant" or "admin"
-            or "kế_toán" or "ke_toan"
-            or "giám_đốc" or "giam_doc";
-    }
-
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /// <summary>Notification.Content is VARCHAR(100) — hard-truncate to prevent DB exceptions.</summary>
+    /// <summary>Notification.Content max length — keep in sync with Notification.Content in EaldsDbContext.</summary>
     private static string? TruncateNotificationContent(string content) =>
-        content.Length > 100 ? content[..97] + "..." : content;
+        content.Length > 500 ? content[..497] + "..." : content;
 
     private async Task SafeInventoryNotifyAsync(Func<Task> notify, string step)
     {

@@ -11,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
 using g19_sep490_ealds.Server.Services.Interface;
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -97,7 +98,23 @@ public class TransferRequestsController : ControllerBase
                     "Không xác định",
                 Reason = tr.AssetRequest.Description,
                 IsSenderConfirmed = tr.IsSenderConfirmed,
-                IsReceiverConfirmed = tr.IsReceiverConfirmed
+                IsReceiverConfirmed = tr.IsReceiverConfirmed,
+                AccountantComment = _db.Approvals.AsNoTracking()
+                    .Join(_db.Roles.AsNoTracking(), a => a.ApprovedRoleId, r => r.RoleId, (a, r) => new { a, r })
+                    .Where(x => x.a.AssetRequestId == tr.AssetRequestId
+                        && x.r.Code != null
+                        && x.r.Code.ToUpper() == "ACCOUNTANT")
+                    .OrderByDescending(x => x.a.DecisionDate)
+                    .Select(x => x.a.Comment)
+                    .FirstOrDefault(),
+                DirectorComment = _db.Approvals.AsNoTracking()
+                    .Join(_db.Roles.AsNoTracking(), a => a.ApprovedRoleId, r => r.RoleId, (a, r) => new { a, r })
+                    .Where(x => x.a.AssetRequestId == tr.AssetRequestId
+                        && x.r.Code != null
+                        && x.r.Code.Trim().ToUpper() == "DIRECTOR")
+                    .OrderByDescending(x => x.a.DecisionDate)
+                    .Select(x => x.a.Comment)
+                    .FirstOrDefault()
             })
             .ToListAsync();
 
@@ -197,6 +214,9 @@ public class TransferRequestsController : ControllerBase
             .FirstOrDefaultAsync(ai => ai.AssetInstanceId == dto.AssetInstanceId);
         if (instance == null)
             return NotFound($"AssetInstanceId {dto.AssetInstanceId} not found.");
+
+        if (instance.Status != (int)AssetStatus.InUse)
+            return BadRequest("Chỉ có thể điều chuyển cá thể đang ở trạng thái đang sử dụng.");
 
         // NOTE: Frontend selects departments as "locations" (FromLocationId/ToLocationId are DepartmentId).
         if (dto.FromLocationId == dto.ToLocationId)

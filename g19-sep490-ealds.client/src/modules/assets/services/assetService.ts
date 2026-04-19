@@ -88,6 +88,7 @@ export interface AssetInstanceResponse {
   assetInstanceId: number;
   assetId: number;
   assetTypeId: number;
+  assetTypeName?: string | null;
   assetCode?: string | null;
   assetName?: string | null;
   specification?: string | null;
@@ -170,6 +171,8 @@ export interface GetAssetInstancesParams {
   maxPrice?: number;
   fromDate?: string;
   toDate?: string;
+  /** When true, department heads see instances in all departments (server: GET /api/assetinstances). */
+  forTransferSelection?: boolean;
 }
 
 /** @deprecated Use GetAssetCatalogParams or GetAssetInstancesParams */

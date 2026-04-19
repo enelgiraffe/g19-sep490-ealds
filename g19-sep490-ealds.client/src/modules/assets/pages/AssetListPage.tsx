@@ -45,6 +45,7 @@ interface InstanceItem {
 interface AssetInfo {
   assetInstanceId: number;
   assetId: number;
+  assetCatalogCode: string;
   code: string;
   name: string;
   type: string;
@@ -127,9 +128,10 @@ function instanceToAssetInfo(
   return {
     assetInstanceId: a.assetInstanceId,
     assetId: a.assetId,
+    assetCatalogCode: (a.assetCode && a.assetCode.trim()) || catalog?.code?.trim() || '—',
     code: a.instanceCode,
     name: a.assetName ?? a.instanceCode,
-    type: catalog?.assetTypeName ?? '—',
+    type: (a.assetTypeName && a.assetTypeName.trim()) || catalog?.assetTypeName?.trim() || '—',
     specification: catalog?.specification ?? '—',
     purchaseDate: formatDate(a.purchaseDate),
     warrantyExpiry: formatDate(latestWarrantyEndDate),
@@ -940,6 +942,7 @@ export function AssetListPage() {
         onSubmit={handleSubmitTransfer}
         assetInfo={selectedAssetInfo}
         mode="department"
+        currentUserDepartmentId={profile?.departmentId ?? null}
         fromDepartmentId={deptHeadFromId ?? selectedAssetInfo?.currentDepartmentId ?? null}
         lockFromDepartment={deptHeadFromId != null}
       />
