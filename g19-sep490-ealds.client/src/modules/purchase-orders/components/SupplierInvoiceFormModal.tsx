@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import dayjs, { type Dayjs } from 'dayjs';
+import { uploadAssetFile } from '../../assets/services/assetDocumentUploadService';
+import '../../assets/pages/AssetCreatePage.css';
 import {
   procurementPoService,
   type PurchaseOrderDetail,
@@ -44,6 +46,14 @@ function parseNumberInput(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+type SiFormDocRow = {
+  id: string;
+  fileName: string;
+  url?: string;
+  uploading?: boolean;
+  error?: string;
+};
+
 interface SupplierInvoiceFormModalProps {
   open: boolean;
   onClose: () => void;
@@ -54,6 +64,7 @@ interface SupplierInvoiceFormModalProps {
     invoiceNumber: string;
     invoiceDate: string;
     note: string | null;
+    attachmentFileUrls?: string[];
     lines: Array<{
       procurementLineId: number | null;
       goodsReceiptLineId?: number;
@@ -86,10 +97,48 @@ export function SupplierInvoiceFormModal({
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string>('');
 
+  const [documents, setDocuments] = useState<SiFormDocRow[]>([]);
+  const docFileInputRef = useRef<HTMLInputElement | null>(null);
+  const pickDocument = () => docFileInputRef.current?.click();
+
+  const onDocFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const rowId = crypto.randomUUID();
+    setDocuments((prev) => [...prev, { id: rowId, fileName: file.name, uploading: true }]);
+    try {
+      const { url, fileName } = await uploadAssetFile(file);
+      setDocuments((prev) =>
+        prev.map((d) =>
+          d.id === rowId
+            ? { ...d, url, fileName: fileName || file.name, uploading: false, error: undefined }
+            : d
+        )
+      );
+    } catch {
+      setDocuments((prev) =>
+        prev.map((d) =>
+          d.id === rowId ? { ...d, uploading: false, error: 'Tải lên thất bại.' } : d
+        )
+      );
+    }
+  };
+
+  const removeDocumentRow = (id: string) => {
+    setDocuments((prev) => prev.filter((d) => d.id !== id));
+  };
+
+  const downloadAllDocumentUrls = () => {
+    const urls = documents.filter((d) => d.url).map((d) => d.url as string);
+    urls.forEach((u) => window.open(u, '_blank', 'noopener,noreferrer'));
+  };
+
   useEffect(() => {
     if (open) {
       setSupplierId(null);
       setSelectedPoId(null);
+      setDocuments([]);
       setPoDetail(null);
       setPoLineEdits([]);
       setMiscCharges([]);
@@ -310,6 +359,19 @@ export function SupplierInvoiceFormModal({
       if (!proceed) return;
     }
 
+    if (documents.some((d) => d.uploading)) {
+      window.alert('Đang tải tài liệu lên, vui lòng đợi.');
+      return;
+    }
+    if (documents.some((d) => d.error)) {
+      window.alert('Có tài liệu tải lên lỗi. Xóa dòng đó hoặc thêm tài liệu khác.');
+      return;
+    }
+
+    const attachmentFileUrls = documents
+      .filter((d) => d.url)
+      .map((d) => d.url as string);
+
     setSubmitting(true);
     try {
       const poLines = poLineEdits
@@ -335,6 +397,7 @@ export function SupplierInvoiceFormModal({
         invoiceNumber: invoiceNumber.trim(),
         invoiceDate: invoiceDate!.format('YYYY-MM-DD'),
         note: note.trim() || null,
+        attachmentFileUrls: attachmentFileUrls.length > 0 ? attachmentFileUrls : undefined,
         lines,
       });
     } finally {
@@ -552,6 +615,72 @@ export function SupplierInvoiceFormModal({
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="Ghi chú (không bắt buộc)"
                 />
+              </div>
+
+              <div className="asset-create__section" style={{ marginTop: 8 }}>
+                <input
+                  ref={docFileInputRef}
+                  type="file"
+                  style={{ display: 'none' }}
+                  onChange={onDocFileSelected}
+                />
+                <h2 className="asset-create__section-title">Tài liệu đính kèm</h2>
+                <div className="asset-create__files">
+                  {documents.length === 0 ? (
+                    <p className="asset-create__hint">
+                      Chưa có tài liệu. Chọn &quot;Thêm tài liệu&quot; để tải lên.
+                    </p>
+                  ) : (
+                    documents.map((d, idx) => (
+                      <div key={d.id} className="asset-create__file">
+                        <span className="asset-create__file-index">#{idx + 1}</span>
+                        <span className="asset-create__file-name asset-create__file-name--grow">
+                          {d.uploading
+                            ? `Đang tải: ${d.fileName}…`
+                            : d.error
+                              ? `${d.fileName} — ${d.error}`
+                              : d.fileName}
+                        </span>
+                        {d.url && !d.uploading && (
+                          <a
+                            href={d.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="asset-create__btn asset-create__btn--secondary"
+                            style={{ padding: '4px 10px', fontSize: 12 }}
+                          >
+                            Mở
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          className="asset-create__btn asset-create__btn--secondary"
+                          style={{ padding: '4px 10px', fontSize: 12 }}
+                          onClick={() => removeDocumentRow(d.id)}
+                        >
+                          Xóa
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="asset-create__file-actions">
+                  <button
+                    type="button"
+                    className="asset-create__btn asset-create__btn--secondary"
+                    onClick={downloadAllDocumentUrls}
+                    disabled={!documents.some((d) => d.url)}
+                  >
+                    Tải toàn bộ
+                  </button>
+                  <button
+                    type="button"
+                    className="asset-create__btn asset-create__btn--primary"
+                    onClick={pickDocument}
+                  >
+                    Thêm tài liệu
+                  </button>
+                </div>
               </div>
             </div>
 

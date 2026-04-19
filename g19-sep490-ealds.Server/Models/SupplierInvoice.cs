@@ -37,4 +37,6 @@ public partial class SupplierInvoice
     public virtual User CreatedByNavigation { get; set; } = null!;
 
     public virtual ICollection<SupplierInvoiceLine> Lines { get; set; } = new List<SupplierInvoiceLine>();
+
+    public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
 }

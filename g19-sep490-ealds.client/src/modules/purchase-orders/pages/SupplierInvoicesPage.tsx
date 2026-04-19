@@ -101,6 +101,7 @@ export function SupplierInvoicesPage() {
     invoiceNumber: string;
     invoiceDate: string;
     note: string | null;
+    attachmentFileUrls?: string[];
     lines: Array<{
       procurementLineId: number | null;
       goodsReceiptLineId?: number;

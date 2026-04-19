@@ -31,6 +31,25 @@ public class CreateAssetDTO
 
     /// <summary>Optional first physical row: same transaction as the asset when provided.</summary>
     public CreateAssetInstanceDTO? InitialInstance { get; set; }
+
+    /// <summary>Optional attachments (URLs from <c>POST /api/files/upload</c>), stored as <see cref="Document"/> rows.</summary>
+    public List<CreateAssetDocumentDTO>? Documents { get; set; }
+}
+
+/// <summary>Payload item for catalog document URLs when creating an <see cref="Asset"/>.</summary>
+public class CreateAssetDocumentDTO
+{
+    public string FileUrl { get; set; } = null!;
+
+    /// <summary>Application-specific type; default <c>20</c> = asset catalog attachment.</summary>
+    public int DocumentType { get; set; } = 20;
+}
+
+/// <summary>Add a document to an existing catalog asset (<c>POST /api/assets/{id}/documents</c>).</summary>
+public class AddAssetDocumentDTO
+{
+    public string FileUrl { get; set; } = null!;
+    public int DocumentType { get; set; } = 20;
 }
 
 /// <summary>

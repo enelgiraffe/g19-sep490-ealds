@@ -30,6 +30,9 @@ public class SupplierInvoiceCreateDto
 
     public string? Note { get; set; }
 
+    /// <summary>Public URLs from POST /api/files/upload (stored as Document rows).</summary>
+    public List<string>? AttachmentFileUrls { get; set; }
+
     public List<SupplierInvoiceCreateLineDto> Lines { get; set; } = new();
 }
 
@@ -83,5 +86,8 @@ public class SupplierInvoiceDetailDto
     public int ProcurementId { get; set; }
     public int? GoodsReceiptId { get; set; }
     public DateTime CreatedDate { get; set; }
+
+    public List<DocumentAttachmentDto> Attachments { get; set; } = new();
+
     public List<SupplierInvoiceDetailLineDto> Lines { get; set; } = new();
 }

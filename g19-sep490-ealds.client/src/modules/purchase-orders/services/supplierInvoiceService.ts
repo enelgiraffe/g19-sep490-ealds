@@ -68,6 +68,7 @@ export interface SupplierInvoiceDetail {
   procurementId: number;
   goodsReceiptId: number | null;
   createdDate: string;
+  attachments?: { documentId: number; fileUrl: string }[];
   lines: SupplierInvoiceDetailLine[];
 }
 
@@ -86,6 +87,7 @@ export interface SupplierInvoiceCreateBody {
   invoiceNumber: string;
   invoiceDate: string;
   note?: string | null;
+  attachmentFileUrls?: string[];
   lines: SupplierInvoiceCreateLine[];
 }
 

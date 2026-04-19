@@ -1,4 +1,5 @@
 using System.Text;
+using g19_sep490_ealds.Server.Configuration;
 using g19_sep490_ealds.Server.Mappers;
 using g19_sep490_ealds.Server.Mappers.Implementation;
 using g19_sep490_ealds.Server.Models;
@@ -48,6 +49,14 @@ builder.Services.AddAuthentication(options =>
 // Services
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+
+builder.Services.Configure<GoogleCloudStorageSettings>(
+    builder.Configuration.GetSection(GoogleCloudStorageSettings.SectionName));
+var gcsBucket = builder.Configuration["GoogleCloudStorage:BucketName"];
+if (!string.IsNullOrWhiteSpace(gcsBucket))
+    builder.Services.AddSingleton<IFileStorageService, GoogleCloudFileStorageService>();
+else
+    builder.Services.AddSingleton<IFileStorageService, LocalFileStorageService>();
 
 builder.Services.AddCors(options =>
 {

@@ -234,6 +234,12 @@
   color: #111827;
 }
 
+.asset-create__file-name--grow {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
 .asset-create__file-actions {
   display: flex;
   gap: 12px;

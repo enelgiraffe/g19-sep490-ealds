@@ -58,8 +58,47 @@
 }
 
 .gr-detail-info-section,
+.gr-detail-attachments-section,
 .gr-detail-lines-section {
   margin-bottom: 24px;
+}
+
+.gr-detail-attachments-section {
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #fafafa;
+}
+
+.gr-detail-attachments-empty {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.gr-detail-attachments-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  color: #111827;
+}
+
+.gr-detail-attachments-list li {
+  margin-bottom: 6px;
+}
+
+.gr-detail-attachments-list li:last-child {
+  margin-bottom: 0;
+}
+
+.gr-detail-attachments-link {
+  color: #1890ff;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.gr-detail-attachments-link:hover {
+  text-decoration: underline;
 }
 
 .gr-detail-section-title {

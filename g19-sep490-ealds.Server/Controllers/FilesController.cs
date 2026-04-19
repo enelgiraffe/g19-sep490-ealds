@@ -1,3 +1,4 @@
+using g19_sep490_ealds.Server.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,6 +8,13 @@ namespace g19_sep490_ealds.Server.Controllers;
 [Route("api/[controller]")]
 public class FilesController : ControllerBase
 {
+    private readonly IFileStorageService _fileStorage;
+
+    public FilesController(IFileStorageService fileStorage)
+    {
+        _fileStorage = fileStorage;
+    }
+
     public class UploadFileForm
     {
         public IFormFile? File { get; set; }
@@ -22,21 +30,8 @@ public class FilesController : ControllerBase
         if (file == null || file.Length == 0)
             return BadRequest("File is required.");
 
-        var uploadsRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
-        Directory.CreateDirectory(uploadsRoot);
-
-        var safeName = Path.GetFileName(file.FileName);
-        var ext = Path.GetExtension(safeName);
-        var generatedName = $"{Guid.NewGuid():N}{ext}";
-        var fullPath = Path.Combine(uploadsRoot, generatedName);
-
-        await using (var stream = new FileStream(fullPath, FileMode.Create))
-        {
-            await file.CopyToAsync(stream);
-        }
-
-        var url = $"{Request.Scheme}://{Request.Host}/uploads/{generatedName}";
-        return Ok(new { fileName = safeName, url });
+        var result = await _fileStorage.UploadAsync(file, Request, HttpContext.RequestAborted);
+        return Ok(new { fileName = result.FileName, url = result.Url });
     }
 }
 
