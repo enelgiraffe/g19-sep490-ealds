@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Form, Input, Modal } from 'antd';
+import { useEffect, useState } from 'react';
+import './RepairProposalModal.css';
 
 export interface RepairProposalFormValues {
   damageCondition: string;
@@ -26,65 +26,99 @@ export function RepairProposalModal({
   onClose,
   onSubmit,
 }: RepairProposalModalProps) {
-  const [form] = Form.useForm<RepairProposalFormValues>();
+  const [damageCondition, setDamageCondition] = useState('');
+  const [repairKind, setRepairKind] = useState('');
 
   useEffect(() => {
-    if (!open) form.resetFields();
-  }, [open, form]);
+    if (!open) return;
+    const timer = window.setTimeout(() => {
+      setDamageCondition('');
+      setRepairKind('');
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [open]);
+
+  if (!open) return null;
 
   const count = items.length;
+  const canSubmit = damageCondition.trim().length > 0 && repairKind.trim().length > 0;
+
+  const handleSubmit = () => {
+    if (!canSubmit || loading) return;
+    void onSubmit({
+      damageCondition: damageCondition.trim(),
+      repairKind: repairKind.trim(),
+    });
+  };
 
   return (
-    <Modal
-      title="Tạo đơn sửa chữa"
-      open={open}
-      onCancel={onClose}
-      okText="Gửi phê duyệt"
-      cancelText="Hủy"
-      confirmLoading={loading}
-      onOk={() => form.submit()}
-    >
-      {count > 1 ? (
-        <ul
-          style={{
-            margin: '0 0 16px',
-            padding: '8px 12px',
-            maxHeight: 160,
-            overflowY: 'auto',
-            listStyle: 'none',
-            background: 'var(--color-bg-secondary, #f9fafb)',
-            border: '1px solid var(--color-border, #e5e7eb)',
-            borderRadius: 8,
-            fontSize: 13,
-          }}
-        >
-          {items.map((it, idx) => (
-            <li key={`${it.assetCode}-${idx}`} style={{ padding: '4px 0' }}>
-              <strong>{it.assetCode || '—'}</strong>
-              {it.assetName ? ` — ${it.assetName}` : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <Form form={form} layout="vertical" onFinish={(v) => onSubmit(v)}>
-        <Form.Item
-          name="damageCondition"
-          label="Tình trạng hỏng hóc"
-          rules={[{ required: true, message: 'Vui lòng nhập tình trạng hỏng hóc.' }]}
-        >
-          <Input.TextArea rows={3} placeholder="Mô tả chi tiết tình trạng hỏng hóc" />
-        </Form.Item>
-        <Form.Item
-          name="repairKind"
-          label="Phương án sửa chữa đề xuất"
-          rules={[{ required: true, message: 'Vui lòng mô tả phương án sửa chữa.' }]}
-        >
-          <Input.TextArea
-            rows={3}
-            placeholder="Ví dụ: thay linh kiện, sửa chữa nội bộ, gửi bảo hành nhà cung cấp…"
-          />
-        </Form.Item>
-      </Form>
-    </Modal>
+    <div className="repair-proposal-modal-overlay" role="dialog" aria-modal="true">
+      <div className="repair-proposal-modal">
+        <button type="button" className="repair-proposal-modal__close-btn" onClick={onClose} aria-label="Đóng">
+          <span className="repair-proposal-modal__close">×</span>
+        </button>
+
+        <div className="repair-proposal-modal__header">
+          <h2 className="repair-proposal-modal__title">Tạo đơn sửa chữa</h2>
+        </div>
+
+        <div className="repair-proposal-modal__body">
+          <div className="repair-proposal-modal__content">
+            {count > 1 ? (
+              <ul className="repair-proposal-modal__asset-list">
+                {items.map((it, idx) => (
+                  <li key={`${it.assetCode}-${idx}`}>
+                    <strong>{it.assetCode || '—'}</strong>
+                    {it.assetName ? ` — ${it.assetName}` : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            <div className="repair-proposal-form__item">
+              <label htmlFor="repair-proposal-damage">
+                Tình trạng hỏng hóc<span className="repair-proposal-required">*</span>
+              </label>
+              <textarea
+                id="repair-proposal-damage"
+                className="repair-proposal-textarea"
+                rows={3}
+                value={damageCondition}
+                onChange={(e) => setDamageCondition(e.target.value)}
+                placeholder="Mô tả chi tiết tình trạng hỏng hóc"
+              />
+            </div>
+
+            <div className="repair-proposal-form__item">
+              <label htmlFor="repair-proposal-kind">
+                Phương án sửa chữa đề xuất<span className="repair-proposal-required">*</span>
+              </label>
+              <textarea
+                id="repair-proposal-kind"
+                className="repair-proposal-textarea"
+                rows={3}
+                value={repairKind}
+                onChange={(e) => setRepairKind(e.target.value)}
+                placeholder="Ví dụ: thay linh kiện, sửa chữa nội bộ, gửi bảo hành nhà cung cấp…"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="repair-proposal-modal__footer">
+          <button
+            type="button"
+            className="repair-proposal-btn-submit"
+            onClick={handleSubmit}
+            disabled={loading || !canSubmit}
+          >
+            {loading ? 'Đang gửi...' : 'Gửi phê duyệt'}
+          </button>
+          <button type="button" className="repair-proposal-btn-cancel" onClick={onClose} disabled={loading}>
+            Hủy
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
