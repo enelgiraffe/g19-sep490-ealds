@@ -6,10 +6,14 @@ namespace g19_sep490_ealds.Server.Services.Implementation;
 public class AssetRevaluationService : IAssetRevaluationService
 {
     private readonly EaldsDbContext _context;
+    private readonly IAssetDepreciationService _depreciationService;
 
-    public AssetRevaluationService(EaldsDbContext context)
+    public AssetRevaluationService(
+        EaldsDbContext context,
+        IAssetDepreciationService depreciationService)
     {
         _context = context;
+        _depreciationService = depreciationService;
     }
     public async Task RevaluateAsync(int assetInstanceId, decimal newValue)
     {
@@ -25,14 +29,22 @@ public class AssetRevaluationService : IAssetRevaluationService
 
         instance.CurrentValue = newValue;
 
+        var effectiveAt = DateTime.UtcNow;
         _context.AssetRevaluations.Add(new AssetRevaluation
         {
             AssetInstanceId = assetInstanceId,
             OldValue = oldValue,
             NewValue = newValue,
-            EffectiveDate = DateTime.UtcNow
+            EffectiveDate = effectiveAt
         });
 
         await _context.SaveChangesAsync();
+
+        // BR-28: đánh giá lại làm thay đổi base, cần tính lại từ kỳ hiệu lực.
+        var localEffective = effectiveAt.AddHours(7);
+        await _depreciationService.RecalculateFromPeriod(
+            assetInstanceId,
+            localEffective.Year,
+            localEffective.Month);
     }
 }
