@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Input, InputNumber, Select, Space, Table, message } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import { DeleteOutlined, PlusOutlined, ReloadOutlined, FormOutlined } from '@ant-design/icons';
+import { Button, Input, InputNumber, Select, Space, message } from 'antd';
+import { DeleteOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import {
   allocationRequestApiErrorMessage,
   allocationRequestService,
@@ -16,6 +15,7 @@ import { profileService } from '../../profile/services/profileService';
 import './AccountantAllocationsPage.css';
 import '../../requests/pages/RequestsPage.css';
 import '../../purchase-orders/components/CreatePurchaseOrderModal.css';
+import '../../maintenance/pages/MaintenancePage.css';
 
 function formatDateVi(iso: string): string {
   try {
@@ -280,126 +280,6 @@ export function DepartmentRequestsByModePanel({ mode }: { mode: DepartmentReques
   const orderLinkLabel = mode === 'handover' ? 'Đơn hoàn trả' : 'Đơn cấp phát';
   const receiptCol = mode === 'handover' ? 'Xác nhận trả' : 'Nhận TS';
 
-  const lineColumns: ColumnsType<FormRow> = useMemo(
-    () => [
-      {
-        title: 'Loại TS',
-        key: 'assetTypeId',
-        width: 168,
-        render: (_, row) => (
-          <Select
-            showSearch
-            allowClear
-            placeholder="Chọn loại"
-            className="alloc-request-lines-table__select"
-            style={{ width: '100%', minWidth: 0 }}
-            popupMatchSelectWidth={false}
-            options={types.map((t) => ({
-              value: t.assetTypeId,
-              label: `${t.name} (${t.categoryName})`,
-            }))}
-            optionFilterProp="label"
-            value={row.assetTypeId}
-            onChange={(v) => onTypeChange(row.key, v ?? undefined)}
-          />
-        ),
-      },
-      {
-        title: 'Tài sản',
-        key: 'assetId',
-        width: 200,
-        ellipsis: true,
-        render: (_, row) => (
-          <Select
-            showSearch
-            allowClear
-            disabled={!row.assetTypeId}
-            placeholder={row.assetTypeId ? 'Chọn tài sản' : '—'}
-            className="alloc-request-lines-table__select"
-            style={{ width: '100%', minWidth: 0 }}
-            popupMatchSelectWidth={280}
-            options={(assetOptionsByRow[row.key] ?? []).map((a) => ({
-              value: a.assetId,
-              label: `${a.name} (${a.code})`,
-            }))}
-            optionFilterProp="label"
-            value={row.assetId}
-            onSearch={(q) => {
-              if (row.assetTypeId) void loadAssetsForRow(row.key, row.assetTypeId, q);
-            }}
-            onChange={(v) => void onAssetChange(row.key, v ?? undefined)}
-            filterOption={false}
-            notFoundContent={row.assetTypeId ? undefined : null}
-          />
-        ),
-      },
-      {
-        title: 'SL',
-        key: 'quantity',
-        width: 88,
-        align: 'center',
-        render: (_, row) => (
-          <div>
-            <InputNumber
-              min={1}
-              max={row.maxQty ?? undefined}
-              size="small"
-              style={{ width: '100%' }}
-              disabled={!row.assetId}
-              controls
-              value={row.quantity}
-              onChange={(v) => updateRow(row.key, { quantity: typeof v === 'number' ? v : undefined })}
-            />
-            {row.maxQty != null && (
-              <div className="alloc-muted" style={{ marginTop: 2, fontSize: 11, lineHeight: 1.2, whiteSpace: 'nowrap' }}>
-                max {row.maxQty}
-              </div>
-            )}
-          </div>
-        ),
-      },
-      {
-        title: 'Lý do',
-        key: 'reason',
-        render: (_, row) => (
-          <Input
-            size="small"
-            value={row.reason}
-            onChange={(e) => updateRow(row.key, { reason: e.target.value })}
-            placeholder="Ghi chú"
-          />
-        ),
-      },
-      {
-        title: '',
-        key: 'actions',
-        width: 40,
-        align: 'center',
-        render: (_, row) => (
-          <Button
-            type="text"
-            danger
-            size="small"
-            icon={<DeleteOutlined />}
-            disabled={rows.length <= 1}
-            onClick={() => removeRow(row.key)}
-            aria-label="Xóa dòng"
-          />
-        ),
-      },
-    ],
-    [
-      assetOptionsByRow,
-      loadAssetsForRow,
-      onAssetChange,
-      onTypeChange,
-      removeRow,
-      rows.length,
-      types,
-      updateRow,
-    ],
-  );
-
   const requestTotal = requests.length;
   const requestTotalPages = Math.max(1, Math.ceil(requestTotal / requestPageSize));
   const safeRequestPage = Math.min(requestPage, requestTotalPages);
@@ -419,24 +299,6 @@ export function DepartmentRequestsByModePanel({ mode }: { mode: DepartmentReques
 
   return (
     <>
-      <div
-        className="requests-filters"
-        style={{ justifyContent: 'space-between', width: '100%', marginBottom: 12, flexWrap: 'wrap' }}
-      >
-        <span style={{ color: '#6b7280', fontSize: 13 }}>
-          {pageSubtitle}
-          {profileDept ? ` · ${profileDept}` : ''}
-        </span>
-        <Space wrap>
-          <Button type="primary" icon={<FormOutlined />} onClick={openRequestModal}>
-            Tạo yêu cầu
-          </Button>
-          <Button icon={<ReloadOutlined />} onClick={() => void loadRequests()}>
-            Làm mới danh sách
-          </Button>
-        </Space>
-      </div>
-
       {formModalOpen ? (
         <div className="create-purchase-modal-overlay" role="dialog" aria-modal="true">
           <div className="create-purchase-modal">
@@ -470,16 +332,113 @@ export function DepartmentRequestsByModePanel({ mode }: { mode: DepartmentReques
 
                 <div className="create-purchase-form__section">
                   <h3 className="create-purchase-form__section-title">Danh sách tài sản</h3>
-                  <Table<FormRow>
-                    className="alloc-request-lines-table create-purchase-equipment-table"
-                    size="small"
-                    rowKey="key"
-                    columns={lineColumns}
-                    dataSource={rows}
-                    pagination={false}
-                    tableLayout="fixed"
-                    scroll={{ x: 640 }}
-                  />
+                  <div className="asset-table-wrapper dept-alloc-modal-lines-wrap">
+                    <table className="asset-table requests-table dept-alloc-request-lines-native">
+                      <thead>
+                        <tr>
+                          <th>LOẠI TS</th>
+                          <th>TÀI SẢN</th>
+                          <th className="dept-alloc-request-lines-native__th-narrow">SL</th>
+                          <th>LÝ DO</th>
+                          <th className="asset-table__cell asset-table__cell--actions dept-alloc-request-lines-native__th-actions" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((row) => (
+                          <tr key={row.key} className="asset-row">
+                            <td>
+                              <Select
+                                showSearch
+                                allowClear
+                                placeholder="Chọn loại"
+                                className="alloc-request-lines-table__select"
+                                style={{ width: '100%', minWidth: 0 }}
+                                popupMatchSelectWidth={false}
+                                options={types.map((t) => ({
+                                  value: t.assetTypeId,
+                                  label: `${t.name} (${t.categoryName})`,
+                                }))}
+                                optionFilterProp="label"
+                                value={row.assetTypeId}
+                                onChange={(v) => onTypeChange(row.key, v ?? undefined)}
+                              />
+                            </td>
+                            <td>
+                              <Select
+                                showSearch
+                                allowClear
+                                disabled={!row.assetTypeId}
+                                placeholder={row.assetTypeId ? 'Chọn tài sản' : '—'}
+                                className="alloc-request-lines-table__select"
+                                style={{ width: '100%', minWidth: 0 }}
+                                popupMatchSelectWidth={280}
+                                options={(assetOptionsByRow[row.key] ?? []).map((a) => ({
+                                  value: a.assetId,
+                                  label: `${a.name} (${a.code})`,
+                                }))}
+                                optionFilterProp="label"
+                                value={row.assetId}
+                                onSearch={(q) => {
+                                  if (row.assetTypeId) void loadAssetsForRow(row.key, row.assetTypeId, q);
+                                }}
+                                onChange={(v) => void onAssetChange(row.key, v ?? undefined)}
+                                filterOption={false}
+                                notFoundContent={row.assetTypeId ? undefined : null}
+                              />
+                            </td>
+                            <td className="dept-alloc-request-lines-native__cell-narrow">
+                              <div>
+                                <InputNumber
+                                  min={1}
+                                  max={row.maxQty ?? undefined}
+                                  size="small"
+                                  style={{ width: '100%' }}
+                                  disabled={!row.assetId}
+                                  controls
+                                  value={row.quantity}
+                                  onChange={(v) =>
+                                    updateRow(row.key, { quantity: typeof v === 'number' ? v : undefined })
+                                  }
+                                />
+                                {row.maxQty != null && (
+                                  <div
+                                    className="alloc-muted"
+                                    style={{
+                                      marginTop: 2,
+                                      fontSize: 11,
+                                      lineHeight: 1.2,
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    max {row.maxQty}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              <Input
+                                size="small"
+                                value={row.reason}
+                                onChange={(e) => updateRow(row.key, { reason: e.target.value })}
+                                placeholder="Ghi chú"
+                              />
+                            </td>
+                            <td className="asset-table__cell asset-table__cell--actions">
+                              <Button
+                                type="text"
+                                danger
+                                size="small"
+                                icon={<DeleteOutlined />}
+                                disabled={rows.length <= 1}
+                                onClick={() => removeRow(row.key)}
+                                aria-label="Xóa dòng"
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                   <Button
                     type="dashed"
                     icon={<PlusOutlined />}
@@ -514,108 +473,135 @@ export function DepartmentRequestsByModePanel({ mode }: { mode: DepartmentReques
         </div>
       ) : null}
 
-      <p style={{ fontWeight: 600, margin: '0 0 8px', fontSize: 15, color: '#111827' }}>{listHeading}</p>
+      <div className="dept-alloc-panel">
+        <div
+          className="requests-filters dept-alloc-panel__toolbar"
+          style={{ justifyContent: 'space-between', width: '100%', flexWrap: 'wrap' }}
+        >
+          <span style={{ color: '#6b7280', fontSize: 13 }}>
+            {pageSubtitle}
+            {profileDept ? ` · ${profileDept}` : ''}
+          </span>
+          <Space wrap>
+            <Button type="primary" className="requests-btn-add" onClick={openRequestModal}>
+              + Tạo yêu cầu
+            </Button>
+            <Button icon={<ReloadOutlined />} onClick={() => void loadRequests()}>
+              Làm mới danh sách
+            </Button>
+          </Space>
+        </div>
 
-      <div className="asset-table-wrapper requests-table-wrapper">
-        {listLoading ? (
-          <div className="requests-table-loading">Đang tải danh sách...</div>
-        ) : (
-          <table className="asset-table requests-table">
-            <thead>
-              <tr>
-                <th>MÃ YÊU CẦU</th>
-                <th>NGÀY GỬI</th>
-                <th>TIÊU ĐỀ</th>
-                <th>NGƯỜI YÊU CẦU</th>
-                <th>TRẠNG THÁI</th>
-                <th>{receiptCol.toUpperCase()}</th>
-                <th className="asset-table__cell asset-table__cell--actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {pagedRequests.length === 0 ? (
+        <div className="dept-alloc-requests-table-card dept-alloc-requests-table-card--fill">
+          <div className="dept-alloc-requests-table-card__head">
+            <h2 className="dept-alloc-requests-table-card__title">{listHeading}</h2>
+          </div>
+          <div className="asset-table-wrapper maintenance-table-wrapper requests-table-wrapper dept-alloc-requests-table-card__table">
+          {listLoading ? (
+            <div className="requests-table-loading">Đang tải danh sách...</div>
+          ) : (
+            <table className="asset-table requests-table">
+              <thead>
                 <tr>
-                  <td colSpan={7} className="requests-table-empty">
-                    Không có dữ liệu.
-                  </td>
+                  <th>MÃ YÊU CẦU</th>
+                  <th>NGÀY GỬI</th>
+                  <th>TIÊU ĐỀ</th>
+                  <th>NGƯỜI YÊU CẦU</th>
+                  <th>TRẠNG THÁI</th>
+                  <th>{receiptCol.toUpperCase()}</th>
+                  <th className="asset-table__cell asset-table__cell--actions" />
                 </tr>
-              ) : (
-                pagedRequests.map((row) => {
-                  const st = statusLabel(mode, row.status);
-                  return (
-                    <tr key={row.assetRequestId} className="asset-row">
-                      <td>YC-{row.assetRequestId}</td>
-                      <td>{formatDateVi(row.createDate)}</td>
-                      <td>{row.title}</td>
-                      <td>{row.requestedByName}</td>
-                      <td>
-                        <span className={deptStatusPillClass(st.color)}>{st.text}</span>
-                      </td>
-                      <td>
-                        {row.receiptConfirmedAt ? formatDateVi(row.receiptConfirmedAt) : '—'}
-                      </td>
-                      <td className="asset-table__cell asset-table__cell--actions">
-                        <div className="requests-actions">
-                          {row.assetAllocationOrderId != null && row.status >= 2 ? (
-                            <Link
-                              className="asset-code asset-code--link"
-                              to={`/allocations/${orderPath}/${row.assetAllocationOrderId}`}
-                            >
-                              {orderLinkLabel}
-                            </Link>
-                          ) : (
-                            <span style={{ color: '#9ca3af', fontSize: 13 }}>—</span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {pagedRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="requests-table-empty">
+                      Không có dữ liệu.
+                    </td>
+                  </tr>
+                ) : (
+                  pagedRequests.map((row) => {
+                    const st = statusLabel(mode, row.status);
+                    return (
+                      <tr key={row.assetRequestId} className="asset-row">
+                        <td>YC-{row.assetRequestId}</td>
+                        <td>{formatDateVi(row.createDate)}</td>
+                        <td>{row.title}</td>
+                        <td>{row.requestedByName}</td>
+                        <td>
+                          <span className={deptStatusPillClass(st.color)}>{st.text}</span>
+                        </td>
+                        <td>
+                          {row.receiptConfirmedAt ? formatDateVi(row.receiptConfirmedAt) : '—'}
+                        </td>
+                        <td className="asset-table__cell asset-table__cell--actions">
+                          <div className="requests-actions">
+                            {row.assetAllocationOrderId != null && row.status >= 2 ? (
+                              <Link
+                                className="asset-code asset-code--link"
+                                to={`/allocations/${orderPath}/${row.assetAllocationOrderId}`}
+                              >
+                                {orderLinkLabel}
+                              </Link>
+                            ) : (
+                              <span style={{ color: '#9ca3af', fontSize: 13 }}>—</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          )}
+          </div>
 
-      <div className="requests-card__footer">
-        <div className="requests-footer__left">
-          Số lượng trên trang:
-          <select
-            className="requests-footer__select"
-            value={requestPageSize}
-            onChange={(e) => {
-              setRequestPageSize(Number(e.target.value));
-              setRequestPage(1);
-            }}
-          >
-            <option value={8}>8</option>
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-          </select>
-        </div>
-        <div className="requests-footer__center">
-          {requestTotal === 0 ? '0-0 trên 0' : `${requestStart}-${requestEnd} trên ${requestTotal}`}
-        </div>
-        <div className="requests-footer__right">
-          <button
-            className="requests-footer__pager"
-            disabled={safeRequestPage <= 1}
-            onClick={() => setRequestPage((p) => Math.max(1, p - 1))}
-            type="button"
-          >
-            ⟨
-          </button>
-          <button className="requests-footer__pager requests-footer__pager--active" type="button">
-            {safeRequestPage}
-          </button>
-          <button
-            className="requests-footer__pager"
-            disabled={safeRequestPage >= requestTotalPages}
-            onClick={() => setRequestPage((p) => Math.min(requestTotalPages, p + 1))}
-            type="button"
-          >
-            ⟩
-          </button>
+          <div className="maintenance-card__footer dept-alloc-requests-table-card__footer">
+          <div className="maintenance-footer__left">
+            Số lượng trên trang:
+            <select
+              className="maintenance-footer__select"
+              value={requestPageSize}
+              onChange={(e) => {
+                setRequestPageSize(Number(e.target.value));
+                setRequestPage(1);
+              }}
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+          <div className="maintenance-footer__center">
+            {requestTotal === 0 ? '0-0 trên 0' : `${requestStart}-${requestEnd} trên ${requestTotal}`}
+          </div>
+          <div className="maintenance-footer__right">
+            <button
+              className="maintenance-footer__pager"
+              disabled={safeRequestPage <= 1}
+              onClick={() => setRequestPage((p) => Math.max(1, p - 1))}
+              type="button"
+            >
+              ⟨
+            </button>
+            <button
+              className="maintenance-footer__pager maintenance-footer__pager--active"
+              type="button"
+            >
+              {safeRequestPage}
+            </button>
+            <button
+              className="maintenance-footer__pager"
+              disabled={safeRequestPage >= requestTotalPages}
+              onClick={() => setRequestPage((p) => Math.min(requestTotalPages, p + 1))}
+              type="button"
+            >
+              ⟩
+            </button>
+          </div>
+          </div>
         </div>
       </div>
     </>

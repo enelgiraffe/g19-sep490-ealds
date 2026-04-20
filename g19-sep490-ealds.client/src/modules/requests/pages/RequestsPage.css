@@ -255,3 +255,96 @@
   border: none;
 }
 
+/* Cấp phát / hoàn trả — trưởng xưởng: card bảng giống .liquidation-card */
+.dept-alloc-requests-table-card {
+  margin-top: 0;
+  border: 1px solid #dad9d9;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  padding: 16px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dept-alloc-requests-table-card__head {
+  padding: 0;
+  margin: 0;
+  flex-shrink: 0;
+  background: #ffffff;
+}
+
+.dept-alloc-requests-table-card__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.dept-alloc-requests-table-card__table {
+  border-radius: 0;
+}
+
+/* Trang cấp phát / hoàn trả (trưởng xưởng): tab + card bảng full chiều cao còn lại */
+.requests-page--dept-alloc-fill {
+  min-height: 100%;
+}
+
+.requests-page--dept-alloc-fill .requests-card .ant-tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.requests-page--dept-alloc-fill .requests-card .ant-tabs-content-holder {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.requests-page--dept-alloc-fill .requests-card .ant-tabs-content {
+  height: 100%;
+}
+
+.requests-page--dept-alloc-fill .requests-card .ant-tabs-tabpane.ant-tabs-tabpane-active {
+  height: 100%;
+  min-height: 0;
+  display: flex !important;
+  flex-direction: column;
+}
+
+.dept-alloc-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 12px;
+}
+
+.dept-alloc-panel__toolbar {
+  flex-shrink: 0;
+}
+
+.dept-alloc-requests-table-card.dept-alloc-requests-table-card--fill {
+  flex: 1;
+  min-height: 0;
+  margin-top: 0;
+}
+
+.dept-alloc-requests-table-card--fill .dept-alloc-requests-table-card__head {
+  flex-shrink: 0;
+}
+
+.dept-alloc-requests-table-card--fill .dept-alloc-requests-table-card__table {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.dept-alloc-requests-table-card--fill .maintenance-card__footer {
+  flex-shrink: 0;
+}
+

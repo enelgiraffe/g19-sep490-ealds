@@ -17,14 +17,14 @@ public class CreateSupplierDTO
     public int Status { get; set; }
 
     [MaxLength(13)]
-    [RegularExpression(@"^(\d{10}|\d{13})$", ErrorMessage = "MST must contain exactly 10 or 13 digits.")]
+    [RegularExpression(@"^(\d{10}|\d{13})$", ErrorMessage = "MST phải gồm đúng 10 hoặc 13 chữ số.")]
     public string? TaxCode { get; set; }
 
     [MaxLength(255)]
     public string? Address { get; set; }
 
     [MaxLength(20)]
-    [RegularExpression(@"^(?:\+84|0)(?:3|5|7|8|9)\d{8}$", ErrorMessage = "Số điện thoại phải có 10 số (ví dụ: 0912345678) hoặc dạng +84 (ví dụ: +84912345678).")]
+    [RegularExpression(@"^(?:\+84|0)(?:3|5|7|8|9)\d{8}$", ErrorMessage = "Số điện thoại phải có 10 số")]
     public string? Phone { get; set; }
 
     [MaxLength(255)]

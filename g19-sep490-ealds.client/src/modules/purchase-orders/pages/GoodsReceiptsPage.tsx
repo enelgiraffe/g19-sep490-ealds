@@ -119,7 +119,12 @@ export function GoodsReceiptsPage() {
     <div className="goods-receipts-page">
       <div className="goods-receipts-header">
         <h1 className="goods-receipts-title">Biên nhận hàng</h1>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          className="goods-receipts-btn-add"
+          onClick={() => setCreateOpen(true)}
+        >
           Tạo biên nhận
         </Button>
       </div>

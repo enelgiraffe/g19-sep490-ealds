@@ -142,8 +142,6 @@ export function LiquidationExecutionModal({
 
   if (!open || assetRequestId == null) return null;
 
-  console.log('🟢 LiquidationExecutionModal RENDERING', { open, assetRequestId, requestCode });
-
   const completed = (dto?.status ?? 0) >= 2;
   const canEdit = !completed && (dto?.canEdit ?? true);
   const canFinalize = !completed && !!dto?.canFinalize;

@@ -59,7 +59,7 @@ export const LoginForm = () => {
         layout="vertical"
         className="login-form"
         initialValues={{
-          email: 'hoangbui2004@gmail.com',
+          email: '_',
         }}
       >
         <Form.Item

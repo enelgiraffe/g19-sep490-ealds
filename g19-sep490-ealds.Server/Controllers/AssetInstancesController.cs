@@ -803,6 +803,7 @@ public class AssetInstancesController : ControllerBase
             AssetInstanceId = i.AssetInstanceId,
             AssetId = i.AssetId,
             AssetTypeId = i.Asset?.AssetTypeId ?? 0,
+            AssetTypeName = i.Asset?.AssetType?.Name,
             AssetCode = i.Asset?.Code,
             AssetName = i.Asset?.Name,
             Specification = i.Asset?.Specification,

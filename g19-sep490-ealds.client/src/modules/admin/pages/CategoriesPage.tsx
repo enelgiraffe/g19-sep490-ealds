@@ -507,7 +507,7 @@ export function CategoriesPage() {
     }
 
     if (phone && !SUPPLIER_PHONE_REGEX.test(phone)) {
-      nextErrors.phone = 'Số điện thoại phải có 10 số (ví dụ: 0912345678) hoặc dạng +84 (ví dụ: +84912345678).';
+      nextErrors.phone = 'Số điện thoại phải có 10 số ';
     }
 
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {

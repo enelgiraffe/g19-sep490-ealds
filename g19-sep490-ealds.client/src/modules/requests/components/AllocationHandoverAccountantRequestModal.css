@@ -1,0 +1,107 @@
+/* Chi tiết yêu cầu cấp phát / hoàn trả (kế toán) — bổ sung cho layout acct-transfer-* */
+
+.alloc-handover-modal__close-btn {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.alloc-handover-modal__close-btn:hover {
+  background: rgba(15, 23, 42, 0.06);
+  color: #111827;
+}
+
+.alloc-handover-inline-link {
+  color: #1677ff;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.alloc-handover-inline-link:hover {
+  color: #0958d9;
+}
+
+.alloc-handover-lines-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.alloc-handover-lines-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7280;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.alloc-handover-lines-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: top;
+  color: #374151;
+}
+
+.alloc-handover-lines-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.alloc-handover-lines-table .alloc-handover-lines-table__muted {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.acct-transfer-btn-reject {
+  background: #ffffff;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.acct-transfer-btn-reject:hover {
+  background: #fef2f2;
+  border-color: #f87171;
+}
+
+.acct-transfer-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.alloc-handover-spin-wrap {
+  padding: 24px 0;
+  display: flex;
+  justify-content: center;
+}

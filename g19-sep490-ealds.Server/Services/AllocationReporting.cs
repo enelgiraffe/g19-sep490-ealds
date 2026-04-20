@@ -46,4 +46,20 @@ public static class AllocationReporting
 
         return nameByUser;
     }
+
+    /// <summary>Comment kế toán nhập khi duyệt (0 → accountant approved), lấy bản ghi mới nhất.</summary>
+    public static async Task<string?> GetAccountantApprovalCommentAsync(
+        EaldsDbContext db,
+        int assetRequestId,
+        CancellationToken cancellationToken = default)
+    {
+        return await db.AssetRequestRecords.AsNoTracking()
+            .Where(rec =>
+                rec.AssetRequestId == assetRequestId &&
+                rec.ToStatus == AllocationOrderWorkflow.RequestStatusAccountantApproved &&
+                rec.Action == 1)
+            .OrderByDescending(rec => rec.OccurredAt)
+            .Select(rec => rec.Comment)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
 }

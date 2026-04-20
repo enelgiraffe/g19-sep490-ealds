@@ -4,6 +4,7 @@ import { uploadAssetFile } from '../../assets/services/assetDocumentUploadServic
 import '../../assets/pages/AssetCreatePage.css';
 import {
   procurementPoService,
+  PO_STATUS,
   type PurchaseOrderDetail,
   type PurchaseOrderListItem,
 } from '../services/procurementPoService';
@@ -158,7 +159,12 @@ export function SupplierInvoiceFormModal({
             supplierService.getAll(),
           ]);
           if (!cancelled) {
-            setPoOptions(pos.items.filter((p) => p.status !== 2));
+            setPoOptions(
+              pos.items.filter(
+                (p) =>
+                  p.status === PO_STATUS.partiallyReceived || p.status === PO_STATUS.completed,
+              ),
+            );
             setSuppliers(sups);
           }
         } catch {
@@ -453,7 +459,7 @@ export function SupplierInvoiceFormModal({
                   }}
                   disabled={refLoading}
                 >
-                  <option value="">-- Chọn đơn mua --</option>
+                  <option value="">Chọn đơn mua </option>
                   {poOptions.map((p) => (
                     <option key={p.procurementId} value={p.procurementId}>
                       {p.contractNo || `ĐM-${p.procurementId}`} — {p.supplierName || 'NCC'}

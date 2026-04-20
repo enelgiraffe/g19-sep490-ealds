@@ -232,6 +232,8 @@ public class AssetInstanceResponseDTO
     public int AssetInstanceId { get; set; }
     public int AssetId { get; set; }
     public int AssetTypeId { get; set; }
+    /// <summary>Display name of the catalog asset type.</summary>
+    public string? AssetTypeName { get; set; }
     public string? AssetCode { get; set; }
     public string? AssetName { get; set; }
     public string? Specification { get; set; }

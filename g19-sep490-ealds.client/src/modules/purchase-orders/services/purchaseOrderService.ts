@@ -151,4 +151,10 @@ export const purchaseOrderService = {
     );
     return response.data;
   },
+
+  async deleteDraft(id: number, userId: number): Promise<void> {
+    await purchaseApi.delete(`/api/Assets/Requests/purchase/${id}`, {
+      data: { userId },
+    });
+  },
 };

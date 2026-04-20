@@ -4,7 +4,7 @@ import '../../requests/pages/RequestsPage.css';
 
 export function DepartmentAllocationRequestsPage() {
   return (
-    <div className="requests-page">
+    <div className="requests-page requests-page--dept-alloc-fill">
       <div className="requests-header">
         <h1 className="requests-title">Cấp phát &amp; hoàn trả tài sản</h1>
       </div>

@@ -19,6 +19,21 @@
   margin: 0;
 }
 
+/* Cùng phong cách nút primary đỏ như trang Hóa đơn NCC */
+.goods-receipts-btn-add {
+  background: #fe3720;
+  border-color: #fe3720;
+  font-size: 14px;
+  font-weight: 500;
+  height: 40px;
+  padding: 0 24px;
+}
+
+.goods-receipts-btn-add:hover {
+  background: #e5321c;
+  border-color: #e5321c;
+}
+
 .goods-receipts-card {
   width: 100%;
   background: #ffffff;

@@ -100,14 +100,18 @@ export function AccountantAssetListPage() {
     const grouped = new Map<number, AccountantAssetItem>();
     for (const item of allInstances) {
       const current = grouped.get(item.assetId);
+      const typeLabel = item.assetTypeName?.trim() || '—';
       if (current) {
         current.quantity += 1;
+        if (current.type === '—' && typeLabel !== '—') {
+          current.type = typeLabel;
+        }
       } else {
         grouped.set(item.assetId, {
           id: item.assetId,
           code: item.assetCode ?? item.instanceCode,
           name: item.assetName ?? item.assetCode ?? item.instanceCode,
-          type: '—',
+          type: typeLabel,
           quantity: 1,
         });
       }
@@ -144,12 +148,7 @@ export function AccountantAssetListPage() {
           >
             Thêm tài sản
           </Button>
-          <Button
-            icon={<DownloadOutlined />}
-            className="accountant-asset-btn-template"
-          >
-            Template ghi tăng
-          </Button>
+         
         </div>
       </div>
       <div className="asset-card">

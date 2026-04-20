@@ -95,6 +95,8 @@ export interface AllocationOrderDetail {
   confirmedAt?: string | null;
   confirmedByUserId?: number | null;
   confirmedByName?: string | null;
+  /** Ý kiến kế toán khi duyệt yêu cầu */
+  accountantComment?: string | null;
   lines: AllocationOrderLineDetail[];
 }
 

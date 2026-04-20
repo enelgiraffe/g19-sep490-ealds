@@ -74,9 +74,7 @@ export function LiquidationAppraisalModal({
   ]);
 
   // Chi tiết tài sản
-  const [assetSpecs, setAssetSpecs] = useState('');
   const [assetCondition, setAssetCondition] = useState('');
-  const [assetOrigin, setAssetOrigin] = useState('');
 
   // Kết quả định giá
   const [appraisedValueText, setAppraisedValueText] = useState('');
@@ -93,9 +91,7 @@ export function LiquidationAppraisalModal({
     setAppraisalLocation('');
     setMinutesNo('');
     setMembers([{ id: '1', name: '', position: '' }]);
-    setAssetSpecs('');
     setAssetCondition('');
-    setAssetOrigin('');
     setAppraisedValueText('');
     setAppraisalConclusion('');
 
@@ -104,8 +100,6 @@ export function LiquidationAppraisalModal({
   }, [open, assetRequestId]);
 
   if (!open || assetRequestId == null) return null;
-
-  console.log('🔵 LiquidationAppraisalModal RENDERING', { open, assetRequestId, requestCode });
 
   const completed = (dto?.status ?? 0) >= 2;
   const canEdit = !completed && (dto?.canEdit ?? true);
@@ -134,9 +128,7 @@ export function LiquidationAppraisalModal({
     const appraisalData = {
       location: appraisalLocation.trim() || null,
       members: members.filter(m => m.name.trim() || m.position.trim()),
-      assetSpecs: assetSpecs.trim() || null,
       assetCondition: assetCondition.trim() || null,
-      assetOrigin: assetOrigin.trim() || null,
       conclusion: appraisalConclusion.trim() || null,
     };
 
@@ -322,19 +314,6 @@ export function LiquidationAppraisalModal({
                 />
               </div>
               <div className="mark-damaged-form__item">
-                <label htmlFor="appr-specs">Đặc điểm kỹ thuật</label>
-                <textarea
-                  id="appr-specs"
-                  className="mark-damaged-textarea"
-                  rows={2}
-                  readOnly={!canEdit}
-                  disabled={!canEdit}
-                  value={assetSpecs}
-                  onChange={(e) => setAssetSpecs(e.target.value)}
-                  placeholder="Mô tả đặc điểm kỹ thuật của tài sản"
-                />
-              </div>
-              <div className="mark-damaged-form__item">
                 <label htmlFor="appr-condition">Tình trạng chất lượng</label>
                 <textarea
                   id="appr-condition"
@@ -345,18 +324,6 @@ export function LiquidationAppraisalModal({
                   value={assetCondition}
                   onChange={(e) => setAssetCondition(e.target.value)}
                   placeholder="Mô tả tình trạng hiện tại của tài sản"
-                />
-              </div>
-              <div className="mark-damaged-form__item">
-                <label htmlFor="appr-origin">Nguồn gốc tài sản</label>
-                <input
-                  id="appr-origin"
-                  type="text"
-                  className={canEdit ? 'mark-damaged-input' : 'mark-damaged-input--disabled'}
-                  disabled={!canEdit}
-                  value={assetOrigin}
-                  onChange={(e) => setAssetOrigin(e.target.value)}
-                  placeholder="Ví dụ: Mua từ nhà cung cấp X năm 2020"
                 />
               </div>
             </div>

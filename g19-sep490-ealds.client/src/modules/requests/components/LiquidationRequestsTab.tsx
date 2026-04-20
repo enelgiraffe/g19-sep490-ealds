@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, DatePicker, Input, Select, message } from 'antd';
 import { SearchOutlined, EyeOutlined, CheckOutlined } from '@ant-design/icons';
-import dayjs, { type Dayjs } from 'dayjs';
+import type { Dayjs } from 'dayjs';
 import { disposalRequestService } from '../../assets/services/disposalRequestService';
 import type { TransferRequestListItem } from '../../assets/services/transferRequestService';
 import { accountantRequestService } from '../services/accountantRequestService';
@@ -10,6 +10,7 @@ import { LiquidationDisposalDetailModal } from '../../liquidation/components/Liq
 import { LiquidationAppraisalModal } from '../../liquidation/components/LiquidationAppraisalModal';
 import { LiquidationExecutionModal } from '../../liquidation/components/LiquidationExecutionModal';
 import '../pages/RequestsPage.css';
+import '../../maintenance/pages/MaintenancePage.css';
 
 const { Option } = Select;
 
@@ -50,6 +51,7 @@ export function LiquidationRequestsTab({ userId, isAccountantRole }: Liquidation
   const [selectedLiquidationItem, setSelectedLiquidationItem] = useState<TransferRequestListItem | null>(null);
   const [liquidationDecision, setLiquidationDecision] = useState<'approved' | 'rejected'>('approved');
   const [liquidationComment, setLiquidationComment] = useState('');
+  const [liquidationDisposalMethod, setLiquidationDisposalMethod] = useState('');
   const [liquidationSubmitting, setLiquidationSubmitting] = useState(false);
   const [liquidationModalType, setLiquidationModalType] = useState<'appraisal' | 'execution' | null>(null);
   const [liquidationModalRequestId, setLiquidationModalRequestId] = useState<number | null>(null);
@@ -104,6 +106,30 @@ export function LiquidationRequestsTab({ userId, isAccountantRole }: Liquidation
     });
   }, [liquidationRows, reqSearch, reqStatusFilter, reqSentDate]);
 
+  const [liqPage, setLiqPage] = useState(1);
+  const [liqPageSize, setLiqPageSize] = useState(25);
+
+  useEffect(() => {
+    setLiqPage(1);
+  }, [reqSearch, reqStatusFilter, reqSentDate]);
+
+  const liqTotal = filteredLiquidationRows.length;
+  const liqTotalPages = Math.max(1, Math.ceil(liqTotal / liqPageSize));
+  const safeLiqPage = Math.min(liqPage, liqTotalPages);
+
+  useEffect(() => {
+    setLiqPage((p) => Math.min(p, liqTotalPages));
+  }, [liqTotalPages]);
+
+  const liqRangeStart = liqTotal === 0 ? 0 : (safeLiqPage - 1) * liqPageSize + 1;
+  const liqRangeEnd = Math.min(safeLiqPage * liqPageSize, liqTotal);
+
+  const pagedLiquidationRows = useMemo(
+    () =>
+      filteredLiquidationRows.slice((safeLiqPage - 1) * liqPageSize, safeLiqPage * liqPageSize),
+    [filteredLiquidationRows, safeLiqPage, liqPageSize],
+  );
+
   const statusPillClass = (color: string) => {
     if (color === 'success') return 'asset-status-pill asset-status-pill--active';
     if (color === 'default') return 'asset-status-pill asset-status-pill--inactive';
@@ -152,7 +178,7 @@ export function LiquidationRequestsTab({ userId, isAccountantRole }: Liquidation
         />
       </div>
 
-      <div className="asset-table-wrapper requests-table-wrapper">
+      <div className="asset-table-wrapper maintenance-table-wrapper requests-table-wrapper">
         <table className="asset-table requests-table">
           <thead>
             <tr>
@@ -174,14 +200,14 @@ export function LiquidationRequestsTab({ userId, isAccountantRole }: Liquidation
                   Đang tải...
                 </td>
               </tr>
-            ) : filteredLiquidationRows.length === 0 ? (
+            ) : pagedLiquidationRows.length === 0 ? (
               <tr>
                 <td colSpan={9} className="requests-table-empty">
                   Không có dữ liệu.
                 </td>
               </tr>
             ) : (
-              filteredLiquidationRows.map((row) => {
+              pagedLiquidationRows.map((row) => {
                 const config = LIQUIDATION_STATUS_MAP[row.status] ?? LIQUIDATION_STATUS_MAP[0];
                 return (
                   <tr key={row.assetRequestId} className="asset-row">
@@ -217,6 +243,7 @@ export function LiquidationRequestsTab({ userId, isAccountantRole }: Liquidation
                               setSelectedLiquidationItem(row);
                               setLiquidationDecision('approved');
                               setLiquidationComment('');
+                              setLiquidationDisposalMethod('');
                               setIsLiquidationApproveOpen(true);
                             }}
                           >
@@ -261,6 +288,52 @@ export function LiquidationRequestsTab({ userId, isAccountantRole }: Liquidation
         </table>
       </div>
 
+      <div className="maintenance-card__footer">
+        <div className="maintenance-footer__left">
+          Số lượng trên trang:
+          <select
+            className="maintenance-footer__select"
+            value={liqPageSize}
+            onChange={(e) => {
+              setLiqPageSize(Number(e.target.value));
+              setLiqPage(1);
+            }}
+          >
+            <option value={10}>10</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </div>
+        <div className="maintenance-footer__center">
+          {liqTotal === 0 ? '0-0 trên 0' : `${liqRangeStart}-${liqRangeEnd} trên ${liqTotal}`}
+        </div>
+        <div className="maintenance-footer__right">
+          <button
+            className="maintenance-footer__pager"
+            type="button"
+            disabled={safeLiqPage <= 1}
+            onClick={() => setLiqPage((p) => Math.max(1, p - 1))}
+          >
+            ⟨
+          </button>
+          <button
+            className="maintenance-footer__pager maintenance-footer__pager--active"
+            type="button"
+          >
+            {safeLiqPage}
+          </button>
+          <button
+            className="maintenance-footer__pager"
+            type="button"
+            disabled={safeLiqPage >= liqTotalPages}
+            onClick={() => setLiqPage((p) => Math.min(liqTotalPages, p + 1))}
+          >
+            ⟩
+          </button>
+        </div>
+      </div>
+
       <LiquidationDisposalDetailModal
         open={isLiquidationDetailOpen}
         onClose={() => {
@@ -283,9 +356,15 @@ export function LiquidationRequestsTab({ userId, isAccountantRole }: Liquidation
           onDecisionChange={setLiquidationDecision}
           comment={liquidationComment}
           onCommentChange={setLiquidationComment}
+          disposalMethod={liquidationDisposalMethod}
+          onDisposalMethodChange={setLiquidationDisposalMethod}
           submitting={liquidationSubmitting}
           onConfirm={async () => {
             if (!selectedLiquidationItem || !userId) return;
+            if (liquidationDecision === 'approved' && !liquidationDisposalMethod.trim()) {
+              message.error('Vui lòng nhập phương án thanh lý.');
+              return;
+            }
             setLiquidationSubmitting(true);
             try {
               const payload = {

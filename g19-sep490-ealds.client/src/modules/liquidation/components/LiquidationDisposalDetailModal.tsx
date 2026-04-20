@@ -25,9 +25,7 @@ function formatMoneyVnd(value: number | null | undefined): string {
 interface StoredAppraisalPayload {
   location?: string | null;
   members?: { name?: string; position?: string }[];
-  assetSpecs?: string | null;
   assetCondition?: string | null;
-  assetOrigin?: string | null;
   conclusion?: string | null;
 }
 
@@ -43,7 +41,7 @@ function tryParseStoredAppraisalNote(raw: string | null | undefined): StoredAppr
       typeof rec.location === 'string' ||
       typeof rec.assetSpecs === 'string' ||
       typeof rec.assetCondition === 'string' ||
-      typeof rec.assetOrigin === 'string';
+      typeof rec.assetOrigin === 'string'; // bản ghi cũ: vẫn nhận diện JSON hợp lệ, không hiển thị
     if (!hasMembers && !hasTextFields) return null;
     return o as StoredAppraisalPayload;
   } catch {
@@ -55,7 +53,7 @@ export interface LiquidationDisposalDetailModalProps {
   open: boolean;
   onClose: () => void;
   row: TransferRequestListItem | null;
-  /** Thông tin tài chính + nút xem cá thể — chỉ dùng cho kế toán */
+  /** Nút xem chi tiết cá thể — chỉ bật cho kế toán khi cần mở trang cá thể */
   showAccountantExtras?: boolean;
   /**
    * Trang chi tiết cá thể đọc state này làm nút “Quay lại” (tránh mặc định về /assets/:id).
@@ -124,6 +122,9 @@ export function LiquidationDisposalDetailModal({
 
   const appraisalPayload = tryParseStoredAppraisalNote(execDto?.executionNote ?? null);
   const showAppraisalSection = row.status >= 4;
+  const execFinalized = (execDto?.status ?? 0) >= 2;
+  const showLiquidationMinutesSection =
+    row.status >= 5 || execFinalized || !!execDto?.executedDate;
 
   return (
     <div className={overlayCn} role="dialog" aria-modal="true">
@@ -258,27 +259,11 @@ export function LiquidationDisposalDetailModal({
                           </div>
                         </div>
                       ) : null}
-                      {appraisalPayload.assetSpecs ? (
-                        <div className="mark-damaged-info-row">
-                          <div className="mark-damaged-info-item" style={{ gridColumn: '1 / -1' }}>
-                            <label>Đặc điểm kỹ thuật</label>
-                            <div className="mark-damaged-info-value">{appraisalPayload.assetSpecs}</div>
-                          </div>
-                        </div>
-                      ) : null}
                       {appraisalPayload.assetCondition ? (
                         <div className="mark-damaged-info-row">
                           <div className="mark-damaged-info-item" style={{ gridColumn: '1 / -1' }}>
                             <label>Tình trạng chất lượng</label>
                             <div className="mark-damaged-info-value">{appraisalPayload.assetCondition}</div>
-                          </div>
-                        </div>
-                      ) : null}
-                      {appraisalPayload.assetOrigin ? (
-                        <div className="mark-damaged-info-row">
-                          <div className="mark-damaged-info-item" style={{ gridColumn: '1 / -1' }}>
-                            <label>Nguồn gốc tài sản</label>
-                            <div className="mark-damaged-info-value">{appraisalPayload.assetOrigin}</div>
                           </div>
                         </div>
                       ) : null}
@@ -307,30 +292,84 @@ export function LiquidationDisposalDetailModal({
               </div>
             )}
 
+            {showLiquidationMinutesSection && (
+              <div className="mark-damaged-info-section" style={{ marginTop: 16 }}>
+                <h3 className="mark-damaged-section-title">Biên bản thanh lý (thực hiện)</h3>
+                {execLoading ? (
+                  <p style={{ fontSize: 13, color: '#6b7280' }}>Đang tải…</p>
+                ) : execError ? (
+                  <p style={{ fontSize: 13, color: '#b45309' }}>{execError}</p>
+                ) : !execDto ? (
+                  <p style={{ fontSize: 13, color: '#6b7280' }}>Chưa có dữ liệu thực hiện thanh lý.</p>
+                ) : (
+                  <div className="mark-damaged-info-grid">
+                    <div className="mark-damaged-info-row">
+                      <div className="mark-damaged-info-item">
+                        <label>Ngày thực hiện thanh lý</label>
+                        <div className="mark-damaged-info-value">
+                          {execDto.executedDate ? formatDate(execDto.executedDate) : '—'}
+                        </div>
+                      </div>
+                      <div className="mark-damaged-info-item">
+                        <label>Số biên bản giao nhận</label>
+                        <div className="mark-damaged-info-value">{execDto.minutesNo?.trim() || '—'}</div>
+                      </div>
+                    </div>
+                    <div className="mark-damaged-info-row">
+                      <div className="mark-damaged-info-item">
+                        <label>Bên nhận / đơn vị thu mua</label>
+                        <div className="mark-damaged-info-value">{execDto.buyerName?.trim() || '—'}</div>
+                      </div>
+                      <div className="mark-damaged-info-item">
+                        <label>Liên hệ</label>
+                        <div className="mark-damaged-info-value">{execDto.buyerContact?.trim() || '—'}</div>
+                      </div>
+                    </div>
+                    <div className="mark-damaged-info-row">
+                      <div className="mark-damaged-info-item">
+                        <label>Số hợp đồng</label>
+                        <div className="mark-damaged-info-value">{execDto.contractNo?.trim() || '—'}</div>
+                      </div>
+                      <div className="mark-damaged-info-item">
+                        <label>Số hóa đơn</label>
+                        <div className="mark-damaged-info-value">{execDto.invoiceNo?.trim() || '—'}</div>
+                      </div>
+                    </div>
+                    <div className="mark-damaged-info-row">
+                      <div className="mark-damaged-info-item">
+                        <label>Số tiền thu được thực tế</label>
+                        <div className="mark-damaged-info-value">
+                          {formatMoneyVnd(execDto.actualDisposalValue)}
+                        </div>
+                      </div>
+                      <div className="mark-damaged-info-item">
+                        <label>Chi phí liên quan</label>
+                        <div className="mark-damaged-info-value">{formatMoneyVnd(execDto.expenseValue)}</div>
+                      </div>
+                    </div>
+                    {execDto.executionNote?.trim() && !appraisalPayload ? (
+                      <div className="mark-damaged-info-row">
+                        <div className="mark-damaged-info-item" style={{ gridColumn: '1 / -1' }}>
+                          <label>Ghi chú thực hiện</label>
+                          <div className="mark-damaged-info-value" style={{ whiteSpace: 'pre-wrap' }}>
+                            {execDto.executionNote.trim()}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                    {(execFinalized || row.status >= 5) && (
+                      <p style={{ fontSize: 12, color: '#6b7280', margin: '8px 0 0', gridColumn: '1 / -1' }}>
+                        Đã hoàn tất thanh lý trên hệ thống.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {showAccountantExtras && (
               <div className="mark-damaged-info-section" style={{ marginTop: 16 }}>
-                <h3 className="mark-damaged-section-title">Thông tin phục vụ thẩm định (kế toán)</h3>
                 <div className="mark-damaged-info-grid">
-                  <div className="mark-damaged-info-row">
-                    <div className="mark-damaged-info-item">
-                      <label>Loại tài sản</label>
-                      <div className="mark-damaged-info-value">{row.assetTypeName?.trim() || '—'}</div>
-                    </div>
-                    <div className="mark-damaged-info-item">
-                      <label>Giá trị khai báo trên đơn</label>
-                      <div className="mark-damaged-info-value">{formatMoneyVnd(row.disposalDeclaredValue)}</div>
-                    </div>
-                  </div>
-                  <div className="mark-damaged-info-row">
-                    <div className="mark-damaged-info-item">
-                      <label>Nguyên giá (cá thể)</label>
-                      <div className="mark-damaged-info-value">{formatMoneyVnd(row.originalPrice)}</div>
-                    </div>
-                    <div className="mark-damaged-info-item">
-                      <label>Giá trị còn lại trên sổ</label>
-                      <div className="mark-damaged-info-value">{formatMoneyVnd(row.currentValue)}</div>
-                    </div>
-                  </div>
                   <div className="mark-damaged-info-row">
                     <div className="mark-damaged-info-item" style={{ gridColumn: '1 / -1' }}>
                       <button

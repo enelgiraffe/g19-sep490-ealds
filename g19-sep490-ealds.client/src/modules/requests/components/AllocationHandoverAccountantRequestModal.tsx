@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Input, Modal, Spin, Typography, message } from 'antd';
+import { Spin, message } from 'antd';
 import type { AccountantRequestListItem } from '../services/accountantRequestService';
 import { accountantRequestService } from '../services/accountantRequestService';
 import {
@@ -13,10 +13,8 @@ import {
   handoverRequestService,
 } from '../../allocations/services/handoverRequestService';
 import { assetService } from '../../assets/services/assetService';
-import '../../purchase-orders/components/CreatePurchaseOrderModal.css';
-
-const { Text, Title } = Typography;
-const { TextArea } = Input;
+import './AccountantTransferRequestDetailModal.css';
+import './AllocationHandoverAccountantRequestModal.css';
 
 type ProposedLine = {
   assetTypeId?: number;
@@ -43,12 +41,22 @@ const ALLOC_STATUS: Record<number, { label: string; color: string }> = {
   5: { label: 'Chờ nhận hàng (PR)', color: 'default' },
 };
 
-function statusPillClass(color: string): string {
-  if (color === 'success') return 'asset-status-pill asset-status-pill--active';
-  if (color === 'error') return 'asset-status-pill asset-status-pill--danger';
-  if (color === 'warning') return 'asset-status-pill asset-status-pill--warning';
-  if (color === 'processing') return 'asset-status-pill asset-status-pill--processing';
-  return 'asset-status-pill';
+function statusTagClassName(color: string): string {
+  const base = 'acct-transfer-status-tag';
+  if (color === 'success') return `${base} acct-transfer-status-tag--success`;
+  if (color === 'error') return `${base} acct-transfer-status-tag--error`;
+  if (color === 'warning') return `${base} acct-transfer-status-tag--warning`;
+  if (color === 'processing') return `${base} acct-transfer-status-tag--processing`;
+  return base;
+}
+
+function formatDateVi(iso?: string | null): string {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString('vi-VN');
+  } catch {
+    return iso.slice(0, 10);
+  }
 }
 
 type Props = {
@@ -74,7 +82,6 @@ export function AllocationHandoverAccountantRequestModal({
   const [actionMode, setActionMode] = useState<'approve' | 'reject'>('approve');
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  /** When đơn chưa có, map assetId → labels for proposed lines. */
   const [proposedAssetLabels, setProposedAssetLabels] = useState<
     Record<number, { name: string; code: string; assetTypeName: string }>
   >({});
@@ -202,83 +209,132 @@ export function AllocationHandoverAccountantRequestModal({
     }
   };
 
-  if (!item) return null;
+  const st = useMemo(
+    () => (item ? ALLOC_STATUS[item.status] ?? { label: `Trạng thái ${item.status}`, color: 'default' } : null),
+    [item],
+  );
 
-  const st = ALLOC_STATUS[item.status] ?? { label: `Trạng thái ${item.status}`, color: 'default' };
-  const proposedLines = parseProposedLines(item.proposedData);
-  const deptLabel = item.targetDepartmentName?.trim() || '—';
+  const proposedLines = useMemo(() => (item ? parseProposedLines(item.proposedData) : []), [item]);
+
+  const deptLabel = item?.targetDepartmentName?.trim() || '—';
+
+  if (!open) return null;
+
+  if (!item || !st) return null;
+
+  const canAct = item.status === 0 && userId != null && item.requestTypeId === typeId;
+  const modalTitle = isAlloc ? 'Chi tiết yêu cầu cấp phát' : 'Chi tiết yêu cầu hoàn trả';
 
   return (
     <>
-      {open ? (
-        <div className="create-purchase-modal-overlay" role="dialog" aria-modal="true">
-          <div className="create-purchase-modal">
-            <button
-              type="button"
-              className="create-purchase-modal__close-btn"
-              onClick={onClose}
-              aria-label="Đóng"
-            >
-              <span className="create-purchase-modal__close">×</span>
-            </button>
+      <div className="acct-transfer-modal-overlay" role="dialog" aria-modal="true">
+        <div className="acct-transfer-modal">
+          <button
+            type="button"
+            className="alloc-handover-modal__close-btn"
+            onClick={onClose}
+            aria-label="Đóng"
+          >
+            ×
+          </button>
 
-            <div className="create-purchase-modal__header">
-              <h2 className="create-purchase-modal__title">Yêu cầu YC-{item.assetRequestId}</h2>
+          <div className="acct-transfer-modal__header">
+            <div className="acct-transfer-modal__header-left">
+              <h2 className="acct-transfer-modal__title">{modalTitle}</h2>
+              <span className={statusTagClassName(st.color)}>{st.label}</span>
             </div>
+          </div>
 
-            <div className="create-purchase-modal__body">
-              <div className="create-purchase-form">
-                <div className="create-purchase-form__section" style={{ marginBottom: 16 }}>
-                  <Text type="secondary">Gửi {item.createDate?.slice(0, 10)}</Text>
-                  <Title level={5} style={{ marginTop: 8, marginBottom: 0 }}>
-                    {item.title}
-                  </Title>
+          <div className="acct-transfer-modal__body">
+            <div className="acct-transfer-modal__content">
+              <div className="acct-transfer-form__row">
+                <div className="acct-transfer-form__field">
+                  <label>Mã yêu cầu</label>
+                  <div className="acct-transfer-form__value">YC-{item.assetRequestId}</div>
                 </div>
-
-                <div className="create-purchase-form__row create-purchase-form__row--single">
-                  <div className="create-purchase-form__item" style={{ marginBottom: 12 }}>
-                    <Text strong>Phòng ban: </Text>
-                    {deptLabel}
-                  </div>
+                <div className="acct-transfer-form__field">
+                  <label>Ngày gửi</label>
+                  <div className="acct-transfer-form__value">{formatDateVi(item.createDate)}</div>
                 </div>
+              </div>
 
-                <div style={{ marginBottom: 16 }}>
-                  <span className={statusPillClass(st.color)}>{st.label}</span>
+              <div className="acct-transfer-form__row">
+                <div className="acct-transfer-form__field">
+                  <label>Phòng ban</label>
+                  <div className="acct-transfer-form__value">{deptLabel}</div>
                 </div>
+                <div className="acct-transfer-form__field">
+                  <label>Mã người gửi</label>
+                  <div className="acct-transfer-form__value">User #{item.userId}</div>
+                </div>
+              </div>
 
-                {item.assetAllocationOrderId != null && (
-                  <div style={{ marginBottom: 16 }}>
-                    <Link to={`/allocations/${orderPath}/${item.assetAllocationOrderId}`}>
-                      Mở đơn {isAlloc ? 'cấp phát' : 'hoàn trả'} #{item.assetAllocationOrderId}
-                    </Link>
-                  </div>
-                )}
+              <div className="acct-transfer-form__section">
+                <h3 className="acct-transfer-form__section-title">Tiêu đề yêu cầu</h3>
+                <div className="acct-transfer-form__value">{item.title || '—'}</div>
+              </div>
 
-                {orderLoading ? (
+              {item.assetAllocationOrderId != null && (
+                <div className="acct-transfer-form__section">
+                  <h3 className="acct-transfer-form__section-title">Đơn liên quan</h3>
+                  <Link
+                    className="alloc-handover-inline-link"
+                    to={`/allocations/${orderPath}/${item.assetAllocationOrderId}`}
+                  >
+                    Mở đơn {isAlloc ? 'cấp phát' : 'hoàn trả'} #{item.assetAllocationOrderId}
+                  </Link>
+                </div>
+              )}
+
+              {orderLoading ? (
+                <div className="alloc-handover-spin-wrap">
                   <Spin />
-                ) : orderDetail ? (
-                  <div className="create-purchase-form__section">
-                    <h3 className="create-purchase-form__section-title">Chi tiết đơn</h3>
-                    <ul style={{ paddingLeft: 18, margin: '8px 0 0' }}>
+                </div>
+              ) : orderDetail ? (
+                <div className="acct-transfer-form__section">
+                  <h3 className="acct-transfer-form__section-title">Chi tiết đơn</h3>
+                  <table className="alloc-handover-lines-table">
+                    <thead>
+                      <tr>
+                        <th>Tài sản</th>
+                        <th>Loại</th>
+                        <th style={{ width: 88 }}>SL</th>
+                        <th>Ghi chú</th>
+                      </tr>
+                    </thead>
+                    <tbody>
                       {orderDetail.lines.map((l, idx) => (
-                        <li key={`${l.assetId}-${idx}`} style={{ marginBottom: 6 }}>
-                          <strong>{l.assetName}</strong> ({l.assetCode}) — {l.assetTypeName}
-                          <br />
-                          <Text type="secondary">
-                            SL: {l.quantity}
-                            {l.reason ? ` · ${l.reason}` : ''}
-                          </Text>
-                        </li>
+                        <tr key={`${l.assetId}-${idx}`}>
+                          <td>
+                            <strong>{l.assetName}</strong>
+                            <div className="alloc-handover-lines-table__muted">{l.assetCode}</div>
+                          </td>
+                          <td>{l.assetTypeName}</td>
+                          <td>{l.quantity}</td>
+                          <td className="alloc-handover-lines-table__muted">{l.reason?.trim() || '—'}</td>
+                        </tr>
                       ))}
-                    </ul>
-                  </div>
-                ) : proposedLines.length > 0 ? (
-                  <div className="create-purchase-form__section">
-                    <h3 className="create-purchase-form__section-title">Dự kiến (theo yêu cầu)</h3>
-                    {proposedLabelsLoading ? (
-                      <Spin style={{ marginTop: 8 }} />
-                    ) : (
-                      <ul style={{ paddingLeft: 18, margin: '8px 0 0' }}>
+                    </tbody>
+                  </table>
+                </div>
+              ) : proposedLines.length > 0 ? (
+                <div className="acct-transfer-form__section">
+                  <h3 className="acct-transfer-form__section-title">Dự kiến (theo yêu cầu)</h3>
+                  {proposedLabelsLoading ? (
+                    <div className="alloc-handover-spin-wrap">
+                      <Spin />
+                    </div>
+                  ) : (
+                    <table className="alloc-handover-lines-table">
+                      <thead>
+                        <tr>
+                          <th>Tài sản</th>
+                          <th>Loại</th>
+                          <th style={{ width: 88 }}>SL</th>
+                          <th>Ghi chú</th>
+                        </tr>
+                      </thead>
+                      <tbody>
                         {proposedLines.map((l, idx) => {
                           const id = l.assetId;
                           const resolved = id != null && id > 0 ? proposedAssetLabels[id] : undefined;
@@ -291,71 +347,103 @@ export function AllocationHandoverAccountantRequestModal({
                               : '—';
                           const assetCode = resolved?.code ?? null;
                           return (
-                            <li key={idx} style={{ marginBottom: 6 }}>
-                              <strong>{assetMain}</strong>
-                              {assetCode ? ` (${assetCode})` : ''} — {typeLabel}
-                              <br />
-                              <Text type="secondary">
-                                SL: {l.quantity ?? '—'}
-                                {l.reason ? ` · ${l.reason}` : ''}
-                              </Text>
-                            </li>
+                            <tr key={idx}>
+                              <td>
+                                <strong>{assetMain}</strong>
+                                {assetCode ? (
+                                  <div className="alloc-handover-lines-table__muted">{assetCode}</div>
+                                ) : null}
+                              </td>
+                              <td>{typeLabel}</td>
+                              <td>{l.quantity ?? '—'}</td>
+                              <td className="alloc-handover-lines-table__muted">
+                                {l.reason?.trim() || '—'}
+                              </td>
+                            </tr>
                           );
                         })}
-                      </ul>
-                    )}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              ) : (
+                <div className="acct-transfer-form__section">
+                  <div className="acct-transfer-form__value" style={{ color: '#6b7280' }}>
+                    Không có dòng chi tiết trong yêu cầu.
                   </div>
-                ) : (
-                  <Text type="secondary">Không có dòng chi tiết trong yêu cầu.</Text>
-                )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="acct-transfer-modal__footer">
+            <button type="button" className="acct-transfer-btn-close" onClick={onClose}>
+              Đóng
+            </button>
+            {canAct ? (
+              <div className="acct-transfer-footer-actions">
+                <button type="button" className="acct-transfer-btn-reject" onClick={() => openAction('reject')}>
+                  Từ chối
+                </button>
+                <button type="button" className="acct-transfer-btn-approve" onClick={() => openAction('approve')}>
+                  Duyệt
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      {actionOpen ? (
+        <div className="acct-transfer-approve-overlay" role="dialog" aria-modal="true">
+          <div className="acct-transfer-approve-modal">
+            <div className="acct-transfer-approve-modal__header">
+              <h3 className="acct-transfer-approve-modal__title">
+                {actionMode === 'approve' ? 'Duyệt yêu cầu' : 'Từ chối yêu cầu'}
+              </h3>
+            </div>
+
+            <div className="acct-transfer-approve-modal__body">
+              <div className="acct-transfer-approve-form">
+                <div className="acct-transfer-approve-form__row">
+                  <div className="acct-transfer-approve-form__field" style={{ gridColumn: '1 / -1' }}>
+                    <label>Ghi chú (tùy chọn)</label>
+                    <textarea
+                      className="acct-transfer-approve-textarea"
+                      rows={3}
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                      placeholder="Nhập ghi chú nếu cần"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="create-purchase-modal__footer">
-              {item.status === 0 && userId != null && item.requestTypeId === typeId && (
-                <>
-                  <button
-                    type="button"
-                    className="create-purchase-btn-submit"
-                    onClick={() => openAction('approve')}
-                  >
-                    Duyệt
-                  </button>
-                  <button
-                    type="button"
-                    className="create-purchase-btn-cancel"
-                    style={{
-                      borderColor: '#ff4d4f',
-                      color: '#dc2626',
-                      background: '#fff',
-                    }}
-                    onClick={() => openAction('reject')}
-                  >
-                    Từ chối
-                  </button>
-                </>
-              )}
-              <button type="button" className="create-purchase-btn-cancel" onClick={onClose}>
-                Đóng
+            <div className="acct-transfer-approve-modal__footer">
+              <button
+                type="button"
+                className="acct-transfer-approve-btn-back"
+                disabled={submitting}
+                onClick={() => setActionOpen(false)}
+              >
+                ← Quay lại
+              </button>
+              <button
+                type="button"
+                className={
+                  actionMode === 'reject' ? 'acct-transfer-btn-reject' : 'acct-transfer-approve-btn-submit'
+                }
+                style={actionMode === 'reject' ? { height: 40 } : undefined}
+                disabled={submitting}
+                onClick={() => void submitAction()}
+              >
+                {submitting ? 'Đang xử lý…' : actionMode === 'approve' ? 'Duyệt' : 'Từ chối'}
               </button>
             </div>
           </div>
         </div>
       ) : null}
-
-      <Modal
-        title={actionMode === 'approve' ? 'Duyệt yêu cầu' : 'Từ chối yêu cầu'}
-        open={actionOpen}
-        onCancel={() => setActionOpen(false)}
-        onOk={() => void submitAction()}
-        okText={actionMode === 'approve' ? 'Duyệt' : 'Từ chối'}
-        okButtonProps={{ danger: actionMode === 'reject', loading: submitting }}
-        confirmLoading={submitting}
-        destroyOnClose
-      >
-        <p style={{ marginBottom: 8 }}>Ghi chú (tùy chọn)</p>
-        <TextArea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
-      </Modal>
     </>
   );
 }

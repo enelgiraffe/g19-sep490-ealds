@@ -293,6 +293,8 @@ public class HandoverRequestsController : ControllerBase
         if (order.ConfirmedByUserId.HasValue)
             detailNameIds.Add(order.ConfirmedByUserId.Value);
         var detailNames = await AllocationReporting.ResolveUserDisplayNamesAsync(_db, detailNameIds);
+        var accountantCommentRaw =
+            await AllocationReporting.GetAccountantApprovalCommentAsync(_db, order.AssetRequestId);
 
         var dto = new AllocationOrderDetailDto
         {
@@ -314,6 +316,7 @@ public class HandoverRequestsController : ControllerBase
                               detailNames.TryGetValue(order.ConfirmedByUserId.Value, out var confN)
                 ? confN
                 : null,
+            AccountantComment = string.IsNullOrWhiteSpace(accountantCommentRaw) ? null : accountantCommentRaw.Trim(),
             Lines = order.Lines
                 .OrderBy(l => l.AssetAllocationOrderLineId)
                 .Select(l => new AllocationOrderLineDetailDto

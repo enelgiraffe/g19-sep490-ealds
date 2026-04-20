@@ -3,6 +3,7 @@ import { message, InputNumber, DatePicker, Button } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { supplierService, type SupplierItem } from '../../admin/services/supplierService';
+import { assetService } from '../../assets/services/assetService';
 import { SupplierSelectionModal } from './SupplierSelectionModal';
 import { AssetSelectionModal } from './AssetSelectionModal';
 import {
@@ -32,19 +33,23 @@ interface LineRow {
 }
 
 function toRows(lines: PurchaseOrderDetail['lines']): LineRow[] {
-  return lines.map((l, i) => ({
-    key: `l-${l.lineId}-${i}`,
-    description: l.description ?? '',
-    assetId: l.assetId,
-    assetName: l.assetName ?? '',
-    requestedAssetTypeId: null,
-    requestedAssetTypeName: '',
-    quantity: Number(l.quantity),
-    unit: l.unit ?? 'Cái',
-    unitPrice: Number(l.unitPrice),
-    expectedDelivery: l.expectedDeliveryDate ? dayjs(l.expectedDeliveryDate) : null,
-    sourceLineId: undefined,
-  }));
+  return lines.map((l, i) => {
+    const typeName = (l.assetTypeName ?? '').trim() || (l.description ?? '').trim();
+    const typeId = l.assetTypeId ?? null;
+    return {
+      key: `l-${l.lineId}-${i}`,
+      description: l.description ?? '',
+      assetId: l.assetId,
+      assetName: [l.assetCode, l.assetName].filter(Boolean).join(' — ') || '',
+      requestedAssetTypeId: typeId,
+      requestedAssetTypeName: typeName,
+      quantity: Number(l.quantity),
+      unit: l.unit ?? 'Cái',
+      unitPrice: Number(l.unitPrice),
+      expectedDelivery: l.expectedDeliveryDate ? dayjs(l.expectedDeliveryDate) : null,
+      sourceLineId: undefined,
+    };
+  });
 }
 
 function emptyRow(): LineRow {
@@ -181,7 +186,19 @@ export function PurchaseOrderFormModalNew({
       const mappedLines = initial.lines.length > 0 ? toRows(initial.lines) : [emptyRow()];
       setLines(mappedLines);
       setExpectedDeliveryDate(mappedLines[0]?.expectedDelivery ?? null);
-      setExpectedRequestRows([]);
+      if (initial.assetRequestId != null && initial.assetRequestId > 0) {
+        setLinkedRequestId(initial.assetRequestId);
+        setExpectedRequestRows(
+          mappedLines.map((r) => ({
+            sourceLineId: r.sourceLineId ?? 0,
+            quantity: r.quantity,
+            requestedAssetTypeId: r.requestedAssetTypeId,
+          })),
+        );
+      } else {
+        setLinkedRequestId(null);
+        setExpectedRequestRows([]);
+      }
     } else {
       setSelectedSupplier(null);
       setCurrency('VND');
@@ -205,12 +222,27 @@ export function PurchaseOrderFormModalNew({
       setLinkedRequestId(id);
       const req = assetRequestOptions.find((x) => x.assetRequestId === id);
       const requestedTypes = parseRequestedAssetTypes(req?.proposedData);
-      const mapped = requestLinesToRows(raw).map((line, idx) => ({
-        ...line,
-        requestedAssetTypeId: requestedTypes[idx]?.assetTypeId ?? null,
-        requestedAssetTypeName: requestedTypes[idx]?.assetTypeName ?? '',
-        expectedDelivery: expectedDeliveryDate,
-      }));
+      const typeList = await assetService.getAssetTypes().catch(() => []);
+      const mapped = requestLinesToRows(raw).map((line, idx) => {
+        const t = requestedTypes[idx];
+        let requestedAssetTypeId = t?.assetTypeId ?? null;
+        let requestedAssetTypeName = String(t?.assetTypeName ?? '').trim();
+        if (requestedAssetTypeId == null && requestedAssetTypeName && typeList.length > 0) {
+          const low = requestedAssetTypeName.toLowerCase();
+          const foundByName = typeList.find((x) => x.name.trim().toLowerCase() === low);
+          if (foundByName) requestedAssetTypeId = foundByName.assetTypeId;
+        }
+        if (!requestedAssetTypeName && requestedAssetTypeId != null && typeList.length > 0) {
+          const foundById = typeList.find((x) => x.assetTypeId === requestedAssetTypeId);
+          if (foundById) requestedAssetTypeName = foundById.name;
+        }
+        return {
+          ...line,
+          requestedAssetTypeId,
+          requestedAssetTypeName,
+          expectedDelivery: expectedDeliveryDate,
+        };
+      });
       setLines(mapped);
       setExpectedRequestRows(
         mapped.map((line) => ({
@@ -434,11 +466,6 @@ export function PurchaseOrderFormModalNew({
                         Đang tải vật tư từ đơn yêu cầu…
                       </span>
                     )}
-                    {linkedRequestId != null && (
-                      <span className="po-form-inline-hint" style={{ marginTop: 4, display: 'block' }}>
-                        Đang gắn với YC-{linkedRequestId}. Chỉ có đơn giá được chỉnh sửa.
-                      </span>
-                    )}
                     {showAssetRequestDropdown && assetRequestOptions.length > 0 && (
                       <div className="po-form-dropdown">
                         {assetRequestOptions.slice(0, 10).map((req) => (
@@ -488,8 +515,8 @@ export function PurchaseOrderFormModalNew({
                   <thead>
                     <tr>
                       <th style={{ width: '40px' }}>STT</th>
+                      <th style={{ width: '140px' }}>Loại tài sản</th>
                       <th style={{ width: '200px' }}>Tài sản</th>
-                      <th style={{ width: '200px' }}>Mô tả</th>
                       <th style={{ width: '100px' }}>Số lượng</th>
                       <th style={{ width: '110px' }}>Đơn vị tính</th>
                       <th style={{ width: '120px' }}>Đơn giá</th>
@@ -500,16 +527,14 @@ export function PurchaseOrderFormModalNew({
                   </thead>
                   <tbody>
                     {lines.map((row, idx) => {
-                      const lineLocked = linkedRequestId != null;
+                      const lineFromRequest = linkedRequestId != null;
                       return (
                       <tr key={row.key}>
                         <td className="po-form-table-center">{idx + 1}</td>
+                        <td className="po-form-table-muted">
+                          {row.requestedAssetTypeName.trim() ? row.requestedAssetTypeName : '—'}
+                        </td>
                         <td>
-                          {lineLocked && row.requestedAssetTypeName && (
-                            <div className="po-form-inline-hint" style={{ marginBottom: 4 }}>
-                              Loại YC: {row.requestedAssetTypeName}
-                            </div>
-                          )}
                           <div className="po-form-asset-select">
                             <input
                               type="text"
@@ -518,7 +543,6 @@ export function PurchaseOrderFormModalNew({
                               value={row.assetName}
                               readOnly
                               onClick={() => {
-                                if (lineLocked) return;
                                 setCurrentEditingLineKey(row.key);
                                 setIsAssetModalOpen(true);
                               }}
@@ -526,9 +550,7 @@ export function PurchaseOrderFormModalNew({
                             <button
                               type="button"
                               className="po-form-btn-select-small"
-                              disabled={lineLocked}
                               onClick={() => {
-                                if (lineLocked) return;
                                 setCurrentEditingLineKey(row.key);
                                 setIsAssetModalOpen(true);
                               }}
@@ -538,23 +560,13 @@ export function PurchaseOrderFormModalNew({
                           </div>
                         </td>
                         <td>
-                          <textarea
-                            className="po-form-textarea po-form-textarea--fixed"
-                            rows={2}
-                            value={row.description}
-                            readOnly={lineLocked}
-                            onChange={(e) => updateLine(row.key, { description: e.target.value })}
-                            placeholder="Mô tả hàng hóa / dịch vụ"
-                          />
-                        </td>
-                        <td>
                           <InputNumber
                             min={0.0001}
                             step={1}
                             className="po-form-input-number--fixed"
                             style={{ width: '100%', height: '40px' }}
                             value={row.quantity}
-                            disabled={lineLocked}
+                            disabled={lineFromRequest}
                             onChange={(v) => updateLine(row.key, { quantity: Number(v) || 1 })}
                           />
                         </td>
@@ -569,7 +581,7 @@ export function PurchaseOrderFormModalNew({
                                   className="po-form-select"
                                   style={{ width: '100%', height: '40px' }}
                                   value={selectValue}
-                                  disabled={lineLocked}
+                                  disabled={lineFromRequest}
                                   onChange={(e) => {
                                     const next = e.target.value;
                                     if (next === OTHER_UNIT_VALUE) {
@@ -595,7 +607,7 @@ export function PurchaseOrderFormModalNew({
                                     style={{ marginTop: 6 }}
                                     placeholder="Nhập đơn vị tính"
                                     value={normalized}
-                                    readOnly={lineLocked}
+                                    readOnly={lineFromRequest}
                                     onChange={(e) => updateLine(row.key, { unit: e.target.value })}
                                   />
                                 )}
@@ -619,9 +631,10 @@ export function PurchaseOrderFormModalNew({
                             className="po-form-datepicker--fixed"
                             style={{ width: '100%', height: '40px' }}
                             value={row.expectedDelivery}
-                            disabled={lineLocked}
                             onChange={(d) => updateLine(row.key, { expectedDelivery: d })}
                             format="DD/MM/YYYY"
+                            popupStyle={{ zIndex: 2000 }}
+                            getPopupContainer={() => document.body}
                           />
                         </td>
                         <td className="po-form-table-right">
@@ -632,7 +645,7 @@ export function PurchaseOrderFormModalNew({
                             type="text"
                             danger
                             icon={<DeleteOutlined />}
-                            disabled={lineLocked || lines.length <= 1}
+                            disabled={lineFromRequest || lines.length <= 1}
                             onClick={() => setLines((prev) => prev.filter((r) => r.key !== row.key))}
                           />
                         </td>
@@ -687,6 +700,22 @@ export function PurchaseOrderFormModalNew({
         }}
         onSelect={(asset) => {
           if (currentEditingLineKey) {
+            const row = lines.find((l) => l.key === currentEditingLineKey);
+            if (linkedRequestId != null && row) {
+              if (row.requestedAssetTypeId != null && row.requestedAssetTypeId > 0) {
+                if (asset.assetTypeId !== row.requestedAssetTypeId) {
+                  message.error('Tài sản phải cùng loại với yêu cầu mua đã chọn.');
+                  return;
+                }
+              } else if (row.requestedAssetTypeName.trim()) {
+                const at = (asset.assetTypeName ?? '').trim().toLowerCase();
+                const req = row.requestedAssetTypeName.trim().toLowerCase();
+                if (at !== req) {
+                  message.error('Tài sản phải cùng loại với yêu cầu mua đã chọn.');
+                  return;
+                }
+              }
+            }
             updateLine(currentEditingLineKey, {
               assetId: asset.assetId,
               assetName: `${asset.code} — ${asset.name}`,
@@ -698,6 +727,11 @@ export function PurchaseOrderFormModalNew({
         filterAssetTypeId={
           currentEditingLineKey
             ? (lines.find((l) => l.key === currentEditingLineKey)?.requestedAssetTypeId ?? null)
+            : null
+        }
+        filterAssetTypeName={
+          currentEditingLineKey
+            ? (lines.find((l) => l.key === currentEditingLineKey)?.requestedAssetTypeName?.trim() || null)
             : null
         }
       />

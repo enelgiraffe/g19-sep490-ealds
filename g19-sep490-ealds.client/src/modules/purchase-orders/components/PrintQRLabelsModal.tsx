@@ -18,6 +18,11 @@ interface InstanceLabel {
   qrDataUrl: string;
 }
 
+/** Nội dung QR: URL tuyệt đối để điện thoại quét mở trình duyệt → trang chi tiết cá thể. */
+function buildAssetInstanceDetailQrUrl(instanceId: number): string {
+  return new URL(`/asset-instances/${instanceId}`, window.location.origin).href;
+}
+
 export function PrintQRLabelsModal({ open, onClose, goodsReceiptId }: PrintQRLabelsModalProps) {
   const [loading, setLoading] = useState(false);
   const [labels, setLabels] = useState<InstanceLabel[]>([]);
@@ -40,15 +45,8 @@ export function PrintQRLabelsModal({ open, onClose, goodsReceiptId }: PrintQRLab
 
       for (const line of detail.lines) {
         for (const inst of line.instances) {
-          // Tạo QR code data
-          const qrData = JSON.stringify({
-            instanceId: inst.assetInstanceId,
-            code: inst.instanceCode,
-            serial: inst.serialNumber,
-            asset: line.assetName,
-          });
+          const qrData = buildAssetInstanceDetailQrUrl(inst.assetInstanceId);
 
-          // Generate QR code
           const qrDataUrl = await QRCode.toDataURL(qrData, {
             width: 200,
             margin: 1,
@@ -119,7 +117,7 @@ export function PrintQRLabelsModal({ open, onClose, goodsReceiptId }: PrintQRLab
                     <strong>Lưu ý:</strong>
                   </div>
                   <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#6b7280' }}>
-                    <li>Mỗi nhãn chứa: Mã cá thể, Serial number, Tên tài sản, QR code</li>
+                    <li>Mỗi nhãn có mã cá thể, serial (nếu có), tên tài sản; QR mở trang chi tiết cá thể khi quét</li>
                     <li>Định dạng: 4 nhãn/trang A4 hoặc giấy nhãn dán</li>
                     <li>Khuyến nghị: In trên giấy nhãn dán để dễ dán lên tài sản</li>
                   </ul>

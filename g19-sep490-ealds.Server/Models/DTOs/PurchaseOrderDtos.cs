@@ -39,6 +39,12 @@ public class PurchaseOrderLineItemDto
     public int LineId { get; set; }
     public int LineIndex { get; set; }
     public string? Description { get; set; }
+
+    /// <summary>From linked <see cref="Asset"/> when <see cref="AssetId"/> is set.</summary>
+    public int? AssetTypeId { get; set; }
+
+    public string? AssetTypeName { get; set; }
+
     public int? AssetId { get; set; }
     public string? AssetCode { get; set; }
     public string? AssetName { get; set; }
@@ -69,6 +75,9 @@ public class PurchaseOrderListItemDto
 
 public class PurchaseOrderDetailDto : PurchaseOrderListItemDto
 {
+    /// <summary>When linked to a purchase requisition, the linked <see cref="AssetRequest.Title"/> (purchase purpose on PR screens).</summary>
+    public string? AssetRequestTitle { get; set; }
+
     public List<PurchaseOrderLineItemDto> Lines { get; set; } = new();
 }
 

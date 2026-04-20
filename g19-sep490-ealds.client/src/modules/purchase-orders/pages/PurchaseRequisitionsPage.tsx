@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Button, Input, Select, message } from 'antd';
+import { Button, Input, Select, message, Modal } from 'antd';
 import { SearchOutlined, FilterOutlined, SettingOutlined, EyeOutlined, EditOutlined, DeleteOutlined, RollbackOutlined } from '@ant-design/icons';
 import { CreatePurchaseOrderModal } from '../components/CreatePurchaseOrderModal';
 import { ViewPurchaseOrderModal } from '../components/ViewPurchaseOrderModal';
@@ -29,7 +29,6 @@ interface TableRow extends PurchaseOrderListItem {
   requestDate: string;
   equipment: string;
   quantity: number;
-  estimatedPrice: string;
 }
 
 function formatDate(iso: string): string {
@@ -43,21 +42,16 @@ function formatDate(iso: string): string {
 
 function toTableRow(item: PurchaseOrderListItem, index: number): TableRow {
   let quantity = 1;
-  let estimatedPrice = '—';
   try {
     if (item.proposedData) {
       const parsed = JSON.parse(item.proposedData) as {
         equipment?: { quantity?: number | string }[];
-        totalPrice?: string;
       };
       if (Array.isArray(parsed.equipment) && parsed.equipment.length > 0) {
         quantity = parsed.equipment.reduce((sum, line) => {
           const q = Number(line?.quantity);
           return sum + (Number.isFinite(q) && q > 0 ? q : 1);
         }, 0);
-        if (parsed.totalPrice && String(parsed.totalPrice).trim()) {
-          estimatedPrice = String(parsed.totalPrice);
-        }
       }
     }
   } catch {
@@ -71,7 +65,6 @@ function toTableRow(item: PurchaseOrderListItem, index: number): TableRow {
     requestDate: formatDate(item.createDate),
     equipment: item.title,
     quantity,
-    estimatedPrice,
   };
 }
 
@@ -263,6 +256,37 @@ export function PurchaseRequisitionsPage() {
     }
   };
 
+  const handleDeleteDraft = (record: TableRow) => {
+    if (!profile) {
+      message.error('Vui lòng đăng nhập lại.');
+      return;
+    }
+    Modal.confirm({
+      title: 'Xóa yêu cầu mua sắm?',
+      content: `Yêu cầu ${record.code} ở trạng thái Nháp sẽ bị xóa vĩnh viễn.`,
+      okText: 'Xóa',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      async onOk() {
+        try {
+          await purchaseOrderService.deleteDraft(record.assetRequestId, profile.id);
+          message.success('Đã xóa yêu cầu.');
+          await loadList();
+        } catch (e: unknown) {
+          const err = e as { response?: { data?: { message?: string } | string } };
+          const body = err?.response?.data;
+          const msg =
+            typeof body === 'object' && body?.message != null
+              ? String(body.message)
+              : typeof body === 'string'
+                ? body
+                : 'Xóa yêu cầu thất bại.';
+          message.error(msg);
+        }
+      },
+    });
+  };
+
   const filteredData = data.filter((row) => {
     const matchStatus = statusFilter === 'all' || row.status === statusFilter;
     const matchSearch =
@@ -331,7 +355,6 @@ export function PurchaseRequisitionsPage() {
                   <th>NGÀY ĐỀ XUẤT</th>
                   <th>MỤC ĐÍCH MUA</th>
                   <th>SỐ LƯỢNG</th>
-                  <th>TỔNG GIÁ TRỊ DỰ KIẾN</th>
                   <th>TRẠNG THÁI</th>
                   <th className="asset-table__cell asset-table__cell--actions" />
                 </tr>
@@ -354,7 +377,6 @@ export function PurchaseRequisitionsPage() {
                       <td>{row.requestDate}</td>
                       <td>{row.equipment}</td>
                       <td className="asset-align-right">{row.quantity}</td>
-                      <td className="asset-align-right">{row.estimatedPrice}</td>
                       <td>
                         <span
                           className={
@@ -398,6 +420,7 @@ export function PurchaseRequisitionsPage() {
                                 size="small"
                                 danger
                                 title="Xóa"
+                                onClick={() => handleDeleteDraft(row)}
                               />
                             </>
                           )}

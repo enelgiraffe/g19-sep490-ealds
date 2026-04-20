@@ -101,6 +101,7 @@ export function PurchaseOrdersPage() {
     await procurementPoService.create({
       supplierId: payload.supplierId,
       currency: payload.currency,
+      contractNo: payload.contractNo,
       assetRequestId: payload.assetRequestId,
       lines: payload.lines,
       isDraft: payload.isDraft,
@@ -116,6 +117,7 @@ export function PurchaseOrdersPage() {
     await procurementPoService.update(selected.procurementId, {
       supplierId: payload.supplierId,
       currency: payload.currency,
+      contractNo: payload.contractNo,
       assetRequestId: payload.assetRequestId,
       lines: payload.lines,
       isDraft: payload.isDraft,
@@ -130,10 +132,15 @@ export function PurchaseOrdersPage() {
     <div className="purchase-orders-page">
       <div className="purchase-orders-header">
         <h1 className="purchase-orders-title">Đơn mua</h1>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => {
-          setFormMode('create');
-          setFormOpen(true);
-        }}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          className="purchase-orders-btn-add"
+          onClick={() => {
+            setFormMode('create');
+            setFormOpen(true);
+          }}
+        >
           Tạo đơn mua
         </Button>
       </div>

@@ -13,6 +13,7 @@ import {
 } from '../services/inventoryService';
 import { getStatusLabel } from '../../assets/services/assetService';
 import { useAppStore } from '../../../stores/appStore';
+import '../../maintenance/pages/MaintenancePage.css';
 import './InventoryReviewPage.css';
 
 function formatReviewBookUseLine(bookCondition: string | undefined): string {
@@ -61,6 +62,8 @@ export function InventoryReviewPage() {
   const [finishModalOpen, setFinishModalOpen] = useState(false);
   const [finishNotes, setFinishNotes] = useState('');
   const [finishSubmitting, setFinishSubmitting] = useState(false);
+  const [pageSize, setPageSize] = useState(25);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -80,6 +83,10 @@ export function InventoryReviewPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [sessionId]);
 
   const canResolveOnBook =
     currentRole === 'department_head' || currentRole === 'admin';
@@ -150,6 +157,22 @@ export function InventoryReviewPage() {
     [showResolveUi, selectedRowKeys],
   );
 
+  const discrepancyList = summary?.discrepancies;
+  const totalFiltered = discrepancyList?.length ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+
+  useEffect(() => {
+    setCurrentPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
+
+  const safePage = Math.min(currentPage, totalPages);
+  const rangeStart = totalFiltered === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(safePage * pageSize, totalFiltered);
+  const paginatedDiscrepancies = useMemo(() => {
+    const list = discrepancyList ?? [];
+    return list.slice((safePage - 1) * pageSize, safePage * pageSize);
+  }, [discrepancyList, safePage, pageSize]);
+
   const handleBatchApplyActual = useCallback(async () => {
     if (!id || selectedRowKeys.length === 0) return;
     setBatchResolving(true);
@@ -181,18 +204,31 @@ export function InventoryReviewPage() {
 
   if (loading) {
     return (
-      <div className="inv-review inv-review--center">
-        <Spin size="large" />
+      <div className="maintenance-page inv-review">
+        <div className="maintenance-card inv-review__loading-card">
+          <div className="inv-review__loading-inner">
+            <Spin size="large" />
+          </div>
+        </div>
       </div>
     );
   }
 
   if (!summary) {
     return (
-      <div className="inv-review inv-review--center">
-        <Button type="primary" icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
-          Quay lại
-        </Button>
+      <div className="maintenance-page inv-review">
+        <div className="maintenance-card inv-review__loading-card">
+          <div className="inv-review__loading-inner">
+            <Button
+              type="primary"
+              className="maintenance-btn-add"
+              icon={<ArrowLeftOutlined />}
+              onClick={() => navigate(-1)}
+            >
+              Quay lại
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -229,19 +265,19 @@ export function InventoryReviewPage() {
   };
 
   return (
-    <div className="inv-review">
-      <div className="inv-review__header">
+    <div className="maintenance-page inv-review">
+      <div className="maintenance-header inv-review__page-header">
         <div className="inv-review__header-main">
           <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} className="inv-review__back">
             Quay lại
           </Button>
-          <h1 className="inv-review__title">Báo cáo kiểm kê</h1>
+          <h1 className="maintenance-page__title inv-review__title">Báo cáo kiểm kê</h1>
         </div>
         {canFinishSession && (
           <div className="inv-review__header-actions">
             <Button
               type="primary"
-              size="large"
+              className="maintenance-btn-add"
               icon={<CheckCircleOutlined />}
               onClick={() => setFinishModalOpen(true)}
             >
@@ -251,34 +287,94 @@ export function InventoryReviewPage() {
         )}
       </div>
 
-      <div className="inv-review__meta">
+      <div className="maintenance-card inv-review__summary-card">
         <div className="inv-review__meta-row">
           <span className="inv-review__code">{summary.code}</span>
-          <Tag color={STATUS_COLOR[summary.status] ?? 'default'}>{summary.statusName}</Tag>
+          <Tag color={STATUS_COLOR[summary.status] ?? 'default'} className="inv-review__status-tag">
+            {summary.statusName}
+          </Tag>
         </div>
         <p className="inv-review__purpose">{summary.purpose}</p>
         <div className="inv-review__grid">
-          <div><span className="inv-review__label">Phòng ban</span>{summary.departmentName}</div>
-          <div><span className="inv-review__label">Thời gian</span>{formatDate(summary.startDate)} — {formatDate(summary.endDate)}</div>
+          <div>
+            <span className="inv-review__label">Phòng ban</span>
+            {summary.departmentName}
+          </div>
+          <div>
+            <span className="inv-review__label">Thời gian</span>
+            {formatDate(summary.startDate)} — {formatDate(summary.endDate)}
+          </div>
         </div>
       </div>
 
-      <div className="inv-review__table-wrap">
+      <div className="maintenance-card inv-review__table-card">
         <h2 className="inv-review__section-title">Chi tiết chênh lệch</h2>
-        <Table<InventoryDiscrepancyDetail>
-          rowKey="discrepancyId"
-          columns={columns}
-          dataSource={summary.discrepancies}
-          rowSelection={rowSelection}
-          pagination={{ pageSize: 10, showSizeChanger: true }}
-          size="small"
-          locale={{ emptyText: 'Không có chênh lệch ghi nhận.' }}
-        />
+        <div className="inv-review-table-container">
+          <Table<InventoryDiscrepancyDetail>
+            rowKey="discrepancyId"
+            columns={columns}
+            dataSource={paginatedDiscrepancies}
+            rowSelection={rowSelection}
+            pagination={false}
+            size="small"
+            scroll={{ x: 'max-content' }}
+            locale={{ emptyText: 'Không có chênh lệch ghi nhận.' }}
+          />
+        </div>
+        <div className="maintenance-card__footer inv-review__pagination-footer">
+          <div className="maintenance-footer__left">
+            Số lượng trên trang:
+            <select
+              className="maintenance-footer__select"
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+          <div className="maintenance-footer__center">
+            {totalFiltered === 0 ? '0 trên 0' : `${rangeStart}-${rangeEnd} trên ${totalFiltered}`}
+          </div>
+          <div className="maintenance-footer__right">
+            <button
+              type="button"
+              className="maintenance-footer__pager"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              aria-label="Trang trước"
+            >
+              ⟨
+            </button>
+            <button
+              type="button"
+              className="maintenance-footer__pager maintenance-footer__pager--active"
+              tabIndex={-1}
+              aria-current="page"
+            >
+              {safePage}
+            </button>
+            <button
+              type="button"
+              className="maintenance-footer__pager"
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              aria-label="Trang sau"
+            >
+              ⟩
+            </button>
+          </div>
+        </div>
         {showResolveUi && (
           <div className="inv-review__table-footer">
             <Button
               type="primary"
-              size="large"
+              className="maintenance-btn-add"
               icon={<SyncOutlined />}
               loading={batchResolving}
               disabled={selectedRowKeys.length === 0}
@@ -304,10 +400,7 @@ export function InventoryReviewPage() {
         centered
         width={440}
       >
-        <p style={{ marginBottom: 12 }}>
-          Phiên sẽ được đánh dấu <strong>Đã xử lý</strong> và kết thúc quy trình kiểm kê. Giám đốc không cần xác nhận;
-          có thể xem kết quả trong mục báo cáo nếu cần.
-        </p>
+       
         <label htmlFor="inv-finish-notes" style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
           Ghi chú (tuỳ chọn)
         </label>

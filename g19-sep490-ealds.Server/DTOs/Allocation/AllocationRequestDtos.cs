@@ -129,5 +129,8 @@ public class AllocationOrderDetailDto
 
     public string? ConfirmedByName { get; set; }
 
+    /// <summary>Ý kiến / ghi chú kế toán khi duyệt yêu cầu (trước khi tạo đơn).</summary>
+    public string? AccountantComment { get; set; }
+
     public List<AllocationOrderLineDetailDto> Lines { get; set; } = new();
 }

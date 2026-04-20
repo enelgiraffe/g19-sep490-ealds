@@ -78,22 +78,27 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+  align-items: start;
 }
 
 .gr-form-row:has(.gr-form-item:only-child) {
   grid-template-columns: 1fr;
 }
 
+/* Giống SupplierInvoiceFormModal: khoảng cách dọc giữa label và control, giữa các field */
 .gr-form-item {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
+  margin-bottom: 16px;
 }
 
 .gr-form-item label {
+  display: block;
   font-size: 13px;
   color: #6b7280;
   font-weight: 500;
+  margin-bottom: 6px;
 }
 
 .gr-form-input,

@@ -88,6 +88,8 @@ export interface AssetInstanceResponse {
   assetInstanceId: number;
   assetId: number;
   assetTypeId: number;
+  /** Tên loại tài sản (catalog), từ Asset.AssetType */
+  assetTypeName?: string | null;
   assetCode?: string | null;
   assetName?: string | null;
   specification?: string | null;

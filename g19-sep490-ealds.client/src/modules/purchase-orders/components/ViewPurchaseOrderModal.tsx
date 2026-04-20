@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { message } from 'antd';
 import {
   purchaseOrderService,
@@ -52,40 +52,6 @@ export function ViewPurchaseOrderModal({
   const isAccountantRole = normalizedRole === 'ACCOUNTANT';
   const canAccountantApprove = isAccountantRole && !!currentUserId && data?.status === 0;
   const canRevertToDraft = !!currentUserId && data?.status === 0 && data?.createdBy === currentUserId;
-
-  // Debug log to help troubleshoot
-  useEffect(() => {
-    if (open && data) {
-      console.log('ViewPurchaseOrderModal Debug:', {
-        currentUserId,
-        createdBy: data.createdBy,
-        status: data.status,
-        canRevertToDraft,
-      });
-    }
-  }, [open, data, currentUserId, canRevertToDraft]);
-
-  const parsedProposedData = useMemo(() => {
-    try {
-      if (!data?.proposedData) return null;
-      return JSON.parse(data.proposedData) as Record<string, unknown>;
-    } catch {
-      return null;
-    }
-  }, [data?.proposedData]);
-
-  const attachmentDocs = useMemo(() => {
-    const raw = parsedProposedData && Array.isArray((parsedProposedData as { documents?: unknown }).documents)
-      ? (parsedProposedData as { documents: unknown[] }).documents
-      : [];
-    return raw
-      .filter((d): d is Record<string, unknown> => d != null && typeof d === 'object')
-      .map((d, idx) => ({
-        name: String(d.name ?? `Tài liệu ${idx + 1}`),
-        url: String((d as { url?: string; fileUrl?: string }).url ?? (d as { fileUrl?: string }).fileUrl ?? ''),
-      }))
-      .filter((d) => d.url.length > 0);
-  }, [parsedProposedData]);
 
   useEffect(() => {
     if (!open) return;
@@ -225,7 +191,7 @@ export function ViewPurchaseOrderModal({
       <div className="view-purchase-modal">
         <div className="view-purchase-modal__header">
           <div className="view-purchase-modal__header-left">
-            <h2 className="view-purchase-modal__title">Chi tiết đơn mua</h2>
+            <h2 className="view-purchase-modal__title">Chi tiết yêu cầu đơn mua</h2>
             <span className={statusClassName}>{statusConfig.label}</span>
           </div>
         </div>
@@ -261,13 +227,6 @@ export function ViewPurchaseOrderModal({
                 </div>
               </div>
 
-              <div className="view-purchase-form__row">
-                <div className="view-purchase-form__field">
-                  <label>Số dòng đề xuất</label>
-                  <div className="view-purchase-form__value">{equipment.length || '—'}</div>
-                </div>
-                <div className="view-purchase-form__field view-purchase-form__field--empty" aria-hidden="true" />
-              </div>
 
               <div className="view-purchase-form__row">
                 <div className="view-purchase-form__field">
@@ -333,29 +292,6 @@ export function ViewPurchaseOrderModal({
                   )}
                 </div>
               )}
-
-              <div className="view-purchase-form__section">
-                <h3 className="view-purchase-form__section-title">Tài liệu đính kèm</h3>
-                <div className="view-purchase-attachments">
-                  {attachmentDocs.length === 0 ? (
-                    <div className="view-purchase-form__value">—</div>
-                  ) : (
-                    attachmentDocs.map((doc, idx) => (
-                      <div key={`${doc.url}-${idx}`} className="view-purchase-attachment-item">
-                        <span className="view-purchase-attachment-number">#{idx + 1}</span>
-                        <span className="view-purchase-attachment-name">{doc.name || `Tài liệu ${idx + 1}`}</span>
-                        <button
-                          type="button"
-                          className="view-purchase-attachment-download"
-                          onClick={() => window.open(doc.url, '_blank')}
-                        >
-                          Mở
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
             </div>
           </div>
         </div>

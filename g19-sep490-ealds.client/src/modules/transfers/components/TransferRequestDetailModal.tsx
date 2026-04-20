@@ -171,7 +171,7 @@ export function TransferRequestDetailModal({
                   {request.reason || '—'}
                 </div>
               </div>
-              <div className="transfer-detail-form__row">
+              <div className="transfer-detail-form__row transfer-detail-form__row--spaced-top">
                 <div className="transfer-detail-form__item">
                   <label>Xác nhận bên gửi</label>
                   <div className="transfer-detail-info-value">

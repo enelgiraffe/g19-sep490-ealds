@@ -1,14 +1,23 @@
-import { Modal, Descriptions, Table, Button, Space, Tag, message } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { Modal, message } from 'antd';
 import type { PurchaseOrderDetail, PurchaseOrderLineItem } from '../services/procurementPoService';
 import { PO_STATUS } from '../services/procurementPoService';
+import './PurchaseOrderDetailModal.css';
 
-function statusLabel(status: number): { text: string; color: string } {
-  if (status === PO_STATUS.draft) return { text: 'Nháp', color: 'default' };
-  if (status === PO_STATUS.cancelled) return { text: 'Đã hủy', color: 'error' };
-  if (status === PO_STATUS.partiallyReceived) return { text: 'Nhận một phần', color: 'warning' };
-  if (status === PO_STATUS.completed) return { text: 'Đã nhận đủ', color: 'success' };
-  return { text: 'Đã tạo', color: 'processing' };
+function statusLabel(status: number): string {
+  if (status === PO_STATUS.draft) return 'Nháp';
+  if (status === PO_STATUS.cancelled) return 'Đã hủy';
+  if (status === PO_STATUS.partiallyReceived) return 'Nhận một phần';
+  if (status === PO_STATUS.completed) return 'Đã nhận đủ';
+  return 'Đã tạo';
+}
+
+/** Gộp tiêu đề đơn mua với mục đích mua (tiêu đề yêu cầu) khi có liên kết. */
+function formatDetailTitle(poTitle: string, purchasePurpose: string | null | undefined): string {
+  const t = (poTitle ?? '').trim();
+  const p = (purchasePurpose ?? '').trim();
+  if (!p) return t || '—';
+  if (!t || t === p) return p;
+  return `${t} — ${p}`;
 }
 
 function formatMoney(n: number, currency: string): string {
@@ -17,6 +26,30 @@ function formatMoney(n: number, currency: string): string {
   } catch {
     return `${n} ${currency}`;
   }
+}
+
+/** Ngày tạo chỉ hiển thị phần ngày (tránh lệch múi giờ với chuỗi ISO). */
+function formatCreateDateOnly(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (m) {
+    const [, y, mo, d] = m;
+    return `${d}/${mo}/${y}`;
+  }
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return '—';
+  return dt.toLocaleDateString('vi-VN');
+}
+
+function lineAssetTypeLabel(row: PurchaseOrderLineItem): string {
+  const t = (row.assetTypeName ?? '').trim();
+  if (t) return t;
+  const d = (row.description ?? '').trim();
+  return d || '—';
+}
+
+function lineAssetLabel(row: PurchaseOrderLineItem): string {
+  const parts = [row.assetCode, row.assetName].filter(Boolean);
+  return parts.length ? parts.join(' ') : '—';
 }
 
 export interface PurchaseOrderDetailModalProps {
@@ -43,52 +76,6 @@ export function PurchaseOrderDetailModal({
     data.status !== PO_STATUS.completed &&
     !hasReceipt;
 
-  const lineColumns: ColumnsType<PurchaseOrderLineItem> = [
-    { title: '#', width: 48, render: (_, __, i) => i + 1 },
-    { title: 'Mô tả', dataIndex: 'description', render: (v) => v || '—' },
-    {
-      title: 'Tài sản',
-      render: (_, r) =>
-        r.assetCode || r.assetName ? `${r.assetCode ?? ''} ${r.assetName ?? ''}`.trim() : '—',
-    },
-    {
-      title: 'SL đặt',
-      dataIndex: 'quantity',
-      align: 'right',
-      render: (v) => Number(v).toLocaleString('vi-VN'),
-    },
-    {
-      title: 'Đã nhận',
-      dataIndex: 'receivedQuantity',
-      align: 'right',
-      render: (v) => Number(v ?? 0).toLocaleString('vi-VN'),
-    },
-    {
-      title: 'Còn lại',
-      dataIndex: 'openQuantity',
-      align: 'right',
-      render: (v) => Number(v ?? 0).toLocaleString('vi-VN'),
-    },
-    { title: 'ĐVT', dataIndex: 'unit', render: (v) => v || '—' },
-    {
-      title: 'Đơn giá',
-      dataIndex: 'unitPrice',
-      align: 'right',
-      render: (v) => Number(v).toLocaleString('vi-VN'),
-    },
-    {
-      title: 'Ngày giao dự kiến',
-      dataIndex: 'expectedDeliveryDate',
-      render: (v: string | null) => (v ? new Date(v).toLocaleDateString('vi-VN') : '—'),
-    },
-    {
-      title: 'Thành tiền',
-      dataIndex: 'lineTotal',
-      align: 'right',
-      render: (v) => Number(v).toLocaleString('vi-VN'),
-    },
-  ];
-
   const handleCancel = async () => {
     Modal.confirm({
       title: 'Hủy đơn mua?',
@@ -107,61 +94,162 @@ export function PurchaseOrderDetailModal({
     });
   };
 
+  if (!open) return null;
+
+  const titleText = data ? `Đơn mua ${data.contractNo}` : 'Chi tiết đơn mua';
+  const statusText = data ? statusLabel(data.status) : '';
+
   return (
-    <Modal
-      title={data ? `Đơn mua ${data.contractNo}` : 'Chi tiết đơn mua'}
-      open={open}
-      onCancel={onClose}
-      width={900}
-      footer={
-        <Space>
-          {canEdit && <Button onClick={onEdit}>Chỉnh sửa</Button>}
-          {canCancel && (
-            <Button danger onClick={handleCancel}>
-              Hủy đơn
-            </Button>
-          )}
-          <Button type="primary" onClick={onClose}>
-            Đóng
-          </Button>
-        </Space>
-      }
-    >
-      {data && (
-        <>
-          <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>
-            <Descriptions.Item label="Mã đơn">{data.procurementId}</Descriptions.Item>
-            <Descriptions.Item label="Số chứng từ">{data.contractNo}</Descriptions.Item>
-            <Descriptions.Item label="Tiêu đề" span={2}>
-              {data.title}
-            </Descriptions.Item>
-            <Descriptions.Item label="Nhà cung cấp">
-              {data.supplierName ?? `ID ${data.supplierId}`}
-            </Descriptions.Item>
-            <Descriptions.Item label="Tiền tệ">{data.currency}</Descriptions.Item>
-            <Descriptions.Item label="Tổng tiền">
-              {formatMoney(Number(data.totalAmount), data.currency)}
-            </Descriptions.Item>
-            <Descriptions.Item label="Trạng thái">
-              <Tag color={statusLabel(data.status).color}>{statusLabel(data.status).text}</Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="Ngày tạo">
-              {new Date(data.createDate).toLocaleString('vi-VN')}
-            </Descriptions.Item>
-            {data.assetRequestId != null && (
-              <Descriptions.Item label="Yêu cầu liên kết">#{data.assetRequestId}</Descriptions.Item>
+    <div className="po-detail-modal-overlay" role="dialog" aria-modal="true">
+      <div className="po-detail-modal">
+        <button type="button" className="po-detail-modal__close-btn" onClick={onClose} aria-label="Đóng">
+          <span className="po-detail-modal__close">×</span>
+        </button>
+
+        <div className="po-detail-modal__header">
+          <h2 className="po-detail-modal__title">{titleText}</h2>
+        </div>
+
+        <div className="po-detail-modal__body">
+          <div className="po-detail-modal__content">
+            {data && (
+              <>
+                <div className="po-detail-modal-info-section">
+                  <h3 className="po-detail-modal-section-title">Thông tin đơn mua</h3>
+                  <div className="po-detail-modal-info-grid">
+                    <div className="po-detail-modal-info-row">
+                      <div className="po-detail-modal-info-item" style={{ gridColumn: '1 / -1' }}>
+                        <label>Số chứng từ</label>
+                        <div className="po-detail-modal-info-value">{data.contractNo}</div>
+                      </div>
+                    </div>
+                    <div className="po-detail-modal-info-row">
+                      <div className="po-detail-modal-info-item" style={{ gridColumn: '1 / -1' }}>
+                        <label>Tiêu đề</label>
+                        <div className="po-detail-modal-info-value">
+                          {formatDetailTitle(data.title, data.assetRequestTitle)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="po-detail-modal-info-row">
+                      <div className="po-detail-modal-info-item">
+                        <label>Nhà cung cấp</label>
+                        <div className="po-detail-modal-info-value">
+                          {data.supplierName ?? `ID ${data.supplierId}`}
+                        </div>
+                      </div>
+                      <div className="po-detail-modal-info-item">
+                        <label>Tiền tệ</label>
+                        <div className="po-detail-modal-info-value">{data.currency}</div>
+                      </div>
+                    </div>
+                    <div className="po-detail-modal-info-row">
+                      <div className="po-detail-modal-info-item">
+                        <label>Tổng tiền</label>
+                        <div className="po-detail-modal-info-value">
+                          {formatMoney(Number(data.totalAmount), data.currency)}
+                        </div>
+                      </div>
+                      <div className="po-detail-modal-info-item">
+                        <label>Trạng thái</label>
+                        <div className="po-detail-modal-info-value">{statusText}</div>
+                      </div>
+                    </div>
+                    <div className="po-detail-modal-info-row">
+                      <div className="po-detail-modal-info-item">
+                        <label>Ngày tạo</label>
+                        <div className="po-detail-modal-info-value">{formatCreateDateOnly(data.createDate)}</div>
+                      </div>
+                      {data.assetRequestId != null && (
+                        <div className="po-detail-modal-info-item">
+                          <label>Yêu cầu liên kết</label>
+                          <div className="po-detail-modal-info-value">#{data.assetRequestId}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="po-detail-modal-info-section">
+                  <h3 className="po-detail-modal-section-title">Chi tiết dòng hàng</h3>
+                  <div className="po-detail-modal-table-wrap">
+                    <table className="po-detail-modal-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: 40 }}>#</th>
+                          <th style={{ minWidth: 140 }}>Loại tài sản</th>
+                          <th style={{ minWidth: 180 }}>Tài sản</th>
+                          <th className="po-detail-modal-table-num">SL đặt</th>
+                          <th className="po-detail-modal-table-num">Đã nhận</th>
+                          <th className="po-detail-modal-table-num">Còn lại</th>
+                          <th>ĐVT</th>
+                          <th className="po-detail-modal-table-num">Đơn giá</th>
+                          <th>Ngày giao dự kiến</th>
+                          <th className="po-detail-modal-table-num">Thành tiền</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.lines.map((r, i) => (
+                          <tr key={r.lineId}>
+                            <td>{i + 1}</td>
+                            <td>{lineAssetTypeLabel(r)}</td>
+                            <td>{lineAssetLabel(r)}</td>
+                            <td className="po-detail-modal-table-num">
+                              {Number(r.quantity).toLocaleString('vi-VN')}
+                            </td>
+                            <td className="po-detail-modal-table-num">
+                              {Number(r.receivedQuantity ?? 0).toLocaleString('vi-VN')}
+                            </td>
+                            <td className="po-detail-modal-table-num">
+                              {Number(r.openQuantity ?? 0).toLocaleString('vi-VN')}
+                            </td>
+                            <td>{r.unit || '—'}</td>
+                            <td className="po-detail-modal-table-num">
+                              {Number(r.unitPrice).toLocaleString('vi-VN')}
+                            </td>
+                            <td>
+                              {r.expectedDeliveryDate
+                                ? (() => {
+                                    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(r.expectedDeliveryDate!);
+                                    if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+                                    return new Date(r.expectedDeliveryDate!).toLocaleDateString('vi-VN');
+                                  })()
+                                : '—'}
+                            </td>
+                            <td className="po-detail-modal-table-num">
+                              {Number(r.lineTotal).toLocaleString('vi-VN')}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
             )}
-          </Descriptions>
-          <Table
-            size="small"
-            rowKey={(r) => String(r.lineId)}
-            columns={lineColumns}
-            dataSource={data.lines}
-            pagination={false}
-            scroll={{ x: 800 }}
-          />
-        </>
-      )}
-    </Modal>
+          </div>
+        </div>
+
+        <div className="po-detail-modal-modal__footer">
+          {canEdit && (
+            <button type="button" className="po-detail-modal__btn po-detail-modal__btn--secondary" onClick={onEdit}>
+              Chỉnh sửa
+            </button>
+          )}
+          {canCancel && (
+            <button
+              type="button"
+              className="po-detail-modal__btn po-detail-modal__btn--danger"
+              onClick={handleCancel}
+            >
+              Hủy đơn
+            </button>
+          )}
+          <button type="button" className="po-detail-modal__btn po-detail-modal__btn--primary" onClick={onClose}>
+            Đóng
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

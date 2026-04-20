@@ -122,37 +122,7 @@ public class DirectorApproveController : ControllerBase
         };
         _db.AssetRequestRecords.Add(record);
 
-
-
-        // Bug 3 fix: create a Procurement record when a purchase request is approved by director
         var isPurchase = ar.RequestTypeId == _purchaseRequestTypeId;
-        if (isPurchase && ar.Status == 2)
-        {
-            var alreadyHasProcurement = await _db.Procurements.AsNoTracking()
-                .AnyAsync(p => p.AssetRequestId == ar.AssetRequestId);
-            if (!alreadyHasProcurement)
-            {
-                var procurementTitle = !string.IsNullOrWhiteSpace(ar.Title)
-                    ? ar.Title.Trim()
-                    : $"Procurement for request #{ar.AssetRequestId}";
-
-                var procurement = new Procurement
-                {
-                    AssetRequestId = ar.AssetRequestId,
-                    ContractNo = string.Empty,      // To be filled by accountant later
-                    ContractDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                    Title = procurementTitle,
-                    TotalAmount = 0,
-                    AdvanceAmount = 0,
-                    RemainingAmount = 0,
-                    Status = 0,                     // 0 = pending/initial
-                    CreatedBy = dto.ApprovedBy,
-                    CreateDate = DateTime.UtcNow
-                };
-                _db.Procurements.Add(procurement);
-            }
-        }
-
         if (isPurchase && ar.Status == 2)
         {
             await PurchaseLinkedAllocationRequestService.TryCreateAwaitingGoodsReceiptAllocationAsync(

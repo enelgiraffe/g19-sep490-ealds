@@ -8,6 +8,7 @@ import {
 } from '../services/allocationRequestService';
 import { handoverRequestService } from '../services/handoverRequestService';
 import '../../requests/pages/RequestsPage.css';
+import '../../maintenance/pages/MaintenancePage.css';
 
 function formatDate(iso: string): string {
   try {
@@ -75,7 +76,10 @@ export function AllocationOrdersPanel({ kind }: { kind: 'allocation' | 'handover
         </Button>
       </div>
 
-      <div className="asset-table-wrapper requests-table-wrapper" style={{ marginTop: 12 }}>
+      <div
+        className="asset-table-wrapper maintenance-table-wrapper requests-table-wrapper"
+        style={{ marginTop: 12 }}
+      >
         {loading ? (
           <div className="requests-table-loading">Đang tải danh sách đơn...</div>
         ) : (
@@ -131,11 +135,11 @@ export function AllocationOrdersPanel({ kind }: { kind: 'allocation' | 'handover
         )}
       </div>
 
-      <div className="requests-card__footer">
-        <div className="requests-footer__left">
+      <div className="maintenance-card__footer">
+        <div className="maintenance-footer__left">
           Số lượng trên trang:
           <select
-            className="requests-footer__select"
+            className="maintenance-footer__select"
             value={pageSize}
             onChange={(e) => {
               setPageSize(Number(e.target.value));
@@ -145,25 +149,29 @@ export function AllocationOrdersPanel({ kind }: { kind: 'allocation' | 'handover
             <option value={10}>10</option>
             <option value={25}>25</option>
             <option value={50}>50</option>
+            <option value={100}>100</option>
           </select>
         </div>
-        <div className="requests-footer__center">
+        <div className="maintenance-footer__center">
           {total === 0 ? '0-0 trên 0' : `${startIndex}-${endIndex} trên ${total}`}
         </div>
-        <div className="requests-footer__right">
+        <div className="maintenance-footer__right">
           <button
-            className="requests-footer__pager"
+            className="maintenance-footer__pager"
             disabled={safePage <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             type="button"
           >
             ⟨
           </button>
-          <button className="requests-footer__pager requests-footer__pager--active" type="button">
+          <button
+            className="maintenance-footer__pager maintenance-footer__pager--active"
+            type="button"
+          >
             {safePage}
           </button>
           <button
-            className="requests-footer__pager"
+            className="maintenance-footer__pager"
             disabled={safePage >= totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             type="button"

@@ -47,6 +47,8 @@ export interface PurchaseOrderLineItem {
   lineId: number;
   lineIndex: number;
   description: string | null;
+  assetTypeId?: number | null;
+  assetTypeName?: string | null;
   assetId: number | null;
   assetCode: string | null;
   assetName: string | null;
@@ -73,6 +75,8 @@ export interface PurchaseOrderListItem {
 }
 
 export interface PurchaseOrderDetail extends PurchaseOrderListItem {
+  /** Tiêu đề yêu cầu mua (mục đích mua trên màn PR) khi đơn liên kết yêu cầu. */
+  assetRequestTitle?: string | null;
   lines: PurchaseOrderLineItem[];
 }
 

@@ -12,6 +12,7 @@ import {
   isDepartmentHeadRoleCode,
 } from '../../../shared/utils/departmentHeadRole';
 import './LiquidationPage.css';
+import '../../maintenance/pages/MaintenancePage.css';
 
 const { Option } = Select;
 
@@ -122,6 +123,30 @@ export function LiquidationPage() {
     });
   }, [disposalRows, reqSearch, reqStatusFilter, reqSentDate]);
 
+  const [liqPage, setLiqPage] = useState(1);
+  const [liqPageSize, setLiqPageSize] = useState(25);
+
+  useEffect(() => {
+    setLiqPage(1);
+  }, [reqSearch, reqStatusFilter, reqSentDate]);
+
+  const liqTotal = filteredDisposalRows.length;
+  const liqTotalPages = Math.max(1, Math.ceil(liqTotal / liqPageSize));
+  const safeLiqPage = Math.min(liqPage, liqTotalPages);
+
+  useEffect(() => {
+    setLiqPage((p) => Math.min(p, liqTotalPages));
+  }, [liqTotalPages]);
+
+  const liqRangeStart = liqTotal === 0 ? 0 : (safeLiqPage - 1) * liqPageSize + 1;
+  const liqRangeEnd = Math.min(safeLiqPage * liqPageSize, liqTotal);
+
+  const pagedDisposalRows = useMemo(
+    () =>
+      filteredDisposalRows.slice((safeLiqPage - 1) * liqPageSize, safeLiqPage * liqPageSize),
+    [filteredDisposalRows, safeLiqPage, liqPageSize],
+  );
+
   const showRequestTable = isAccountantRole || isDeptManager;
 
   const statusPillClass = (color: string) => {
@@ -169,7 +194,7 @@ export function LiquidationPage() {
             </div>
           </div>
 
-          <div className="asset-table-wrapper liquidation-table-wrapper">
+          <div className="asset-table-wrapper maintenance-table-wrapper liquidation-table-wrapper">
             <table className="asset-table liquidation-table">
               <thead>
                 <tr>
@@ -191,14 +216,14 @@ export function LiquidationPage() {
                       Đang tải...
                     </td>
                   </tr>
-                ) : filteredDisposalRows.length === 0 ? (
+                ) : pagedDisposalRows.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="liquidation-table-empty">
                       Không có dữ liệu.
                     </td>
                   </tr>
                 ) : (
-                  filteredDisposalRows.map((row) => {
+                  pagedDisposalRows.map((row) => {
                     const config = LIQUIDATION_STATUS_MAP[row.status] ?? LIQUIDATION_STATUS_MAP[0];
                     return (
                       <tr key={row.assetRequestId} className="asset-row">
@@ -247,6 +272,52 @@ export function LiquidationPage() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          <div className="maintenance-card__footer">
+            <div className="maintenance-footer__left">
+              Số lượng trên trang:
+              <select
+                className="maintenance-footer__select"
+                value={liqPageSize}
+                onChange={(e) => {
+                  setLiqPageSize(Number(e.target.value));
+                  setLiqPage(1);
+                }}
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+            <div className="maintenance-footer__center">
+              {liqTotal === 0 ? '0-0 trên 0' : `${liqRangeStart}-${liqRangeEnd} trên ${liqTotal}`}
+            </div>
+            <div className="maintenance-footer__right">
+              <button
+                className="maintenance-footer__pager"
+                type="button"
+                disabled={safeLiqPage <= 1}
+                onClick={() => setLiqPage((p) => Math.max(1, p - 1))}
+              >
+                ⟨
+              </button>
+              <button
+                className="maintenance-footer__pager maintenance-footer__pager--active"
+                type="button"
+              >
+                {safeLiqPage}
+              </button>
+              <button
+                className="maintenance-footer__pager"
+                type="button"
+                disabled={safeLiqPage >= liqTotalPages}
+                onClick={() => setLiqPage((p) => Math.min(liqTotalPages, p + 1))}
+              >
+                ⟩
+              </button>
+            </div>
           </div>
         </div>
       )}

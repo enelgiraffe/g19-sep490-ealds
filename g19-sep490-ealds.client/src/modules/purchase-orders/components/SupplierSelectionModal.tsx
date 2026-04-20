@@ -9,6 +9,54 @@ interface SupplierSelectionModalProps {
   onSelect: (supplier: SupplierItem) => void;
 }
 
+/** ASP.NET ProblemDetails + ModelState: { errors: { Phone: ["..."], TaxCode: ["..."] } } */
+function parseValidationErrorsFromResponseBody(data: unknown): Record<string, string> {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+  const root = data as Record<string, unknown>;
+  const raw = root.errors;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+
+  const pascalToFormKey: Record<string, string> = {
+    Code: 'code',
+    Name: 'name',
+    TaxCode: 'taxCode',
+    Phone: 'phone',
+    Email: 'email',
+    Address: 'address',
+    Status: 'status',
+  };
+
+  const out: Record<string, string> = {};
+  for (const [pascalKey, messages] of Object.entries(raw as Record<string, unknown>)) {
+    const formKey = pascalToFormKey[pascalKey] ?? `${pascalKey.charAt(0).toLowerCase()}${pascalKey.slice(1)}`;
+    if (Array.isArray(messages) && messages.length > 0) {
+      const first = messages[0];
+      if (typeof first === 'string' && first.trim()) out[formKey] = first.trim();
+    } else if (typeof messages === 'string' && messages.trim()) {
+      out[formKey] = messages.trim();
+    }
+  }
+  return out;
+}
+
+function extractApiErrorMessage(e: unknown): string | null {
+  const err = e as { response?: { data?: unknown } };
+  const data = err?.response?.data;
+  if (typeof data === 'string' && data.trim()) return data.trim();
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const o = data as Record<string, unknown>;
+    const fromValidation = parseValidationErrorsFromResponseBody(data);
+    if (Object.keys(fromValidation).length > 0) {
+      return Object.values(fromValidation)[0] ?? null;
+    }
+    for (const v of Object.values(o)) {
+      if (Array.isArray(v) && v.length > 0 && typeof v[0] === 'string') return String(v[0]);
+      if (typeof v === 'string') return v;
+    }
+  }
+  return null;
+}
+
 export function SupplierSelectionModal({
   open,
   onClose,
@@ -75,12 +123,20 @@ export function SupplierSelectionModal({
     if (!newSupplier.name.trim()) {
       newErrors.name = 'Vui lòng nhập tên nhà cung cấp';
     }
+    const emailTrim = (newSupplier.email ?? '').trim();
+    if (emailTrim) {
+      const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim);
+      if (!ok) newErrors.email = 'Email không hợp lệ';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleCreateSupplier = async () => {
-    if (!validateNewSupplier()) return;
+    if (!validateNewSupplier()) {
+      message.warning('Vui lòng sửa các trường được đánh dấu đỏ bên dưới.');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -88,8 +144,26 @@ export function SupplierSelectionModal({
       message.success('Tạo nhà cung cấp thành công');
       onSelect(created);
       onClose();
-    } catch (e: any) {
-      message.error(e?.response?.data ?? 'Tạo nhà cung cấp thất bại');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: unknown } };
+      const data = err?.response?.data;
+      const fieldErrors = parseValidationErrorsFromResponseBody(data);
+      if (Object.keys(fieldErrors).length > 0) {
+        setErrors((prev) => ({ ...prev, ...fieldErrors }));
+        message.warning('Vui lòng sửa các trường được đánh dấu đỏ bên dưới.');
+        return;
+      }
+      const apiMsg = extractApiErrorMessage(e);
+      const dupCode =
+        apiMsg != null &&
+        (apiMsg.toLowerCase().includes('code already exists') ||
+          apiMsg.toLowerCase().includes('supplier with this code'));
+      if (dupCode) {
+        setErrors((prev) => ({ ...prev, code: 'Mã nhà cung cấp đã tồn tại.' }));
+        message.warning('Vui lòng sửa các trường được đánh dấu.');
+      } else {
+        message.error(apiMsg ?? 'Tạo nhà cung cấp thất bại');
+      }
     } finally {
       setLoading(false);
     }
@@ -210,7 +284,7 @@ export function SupplierSelectionModal({
                     <input
                       id="supplier-code"
                       type="text"
-                      className="supplier-selection-input"
+                      className={`supplier-selection-input${errors.code ? ' supplier-selection-input--error' : ''}`}
                       value={newSupplier.code}
                       onChange={(e) => {
                         setNewSupplier({ ...newSupplier, code: e.target.value });
@@ -226,7 +300,7 @@ export function SupplierSelectionModal({
                     <input
                       id="supplier-name"
                       type="text"
-                      className="supplier-selection-input"
+                      className={`supplier-selection-input${errors.name ? ' supplier-selection-input--error' : ''}`}
                       value={newSupplier.name}
                       onChange={(e) => {
                         setNewSupplier({ ...newSupplier, name: e.target.value });
@@ -243,20 +317,28 @@ export function SupplierSelectionModal({
                     <input
                       id="supplier-taxcode"
                       type="text"
-                      className="supplier-selection-input"
+                      className={`supplier-selection-input${errors.taxCode ? ' supplier-selection-input--error' : ''}`}
                       value={newSupplier.taxCode}
-                      onChange={(e) => setNewSupplier({ ...newSupplier, taxCode: e.target.value })}
+                      onChange={(e) => {
+                        setNewSupplier({ ...newSupplier, taxCode: e.target.value });
+                        setErrors({ ...errors, taxCode: '' });
+                      }}
                     />
+                    {errors.taxCode && <div className="supplier-selection-error-text">{errors.taxCode}</div>}
                   </div>
                   <div className="supplier-selection-form-item">
                     <label htmlFor="supplier-phone">Số điện thoại</label>
                     <input
                       id="supplier-phone"
                       type="text"
-                      className="supplier-selection-input"
+                      className={`supplier-selection-input${errors.phone ? ' supplier-selection-input--error' : ''}`}
                       value={newSupplier.phone}
-                      onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })}
+                      onChange={(e) => {
+                        setNewSupplier({ ...newSupplier, phone: e.target.value });
+                        setErrors({ ...errors, phone: '' });
+                      }}
                     />
+                    {errors.phone && <div className="supplier-selection-error-text">{errors.phone}</div>}
                   </div>
                 </div>
 
@@ -266,20 +348,28 @@ export function SupplierSelectionModal({
                     <input
                       id="supplier-email"
                       type="email"
-                      className="supplier-selection-input"
+                      className={`supplier-selection-input${errors.email ? ' supplier-selection-input--error' : ''}`}
                       value={newSupplier.email}
-                      onChange={(e) => setNewSupplier({ ...newSupplier, email: e.target.value })}
+                      onChange={(e) => {
+                        setNewSupplier({ ...newSupplier, email: e.target.value });
+                        setErrors({ ...errors, email: '' });
+                      }}
                     />
+                    {errors.email && <div className="supplier-selection-error-text">{errors.email}</div>}
                   </div>
                   <div className="supplier-selection-form-item">
                     <label htmlFor="supplier-address">Địa chỉ</label>
                     <input
                       id="supplier-address"
                       type="text"
-                      className="supplier-selection-input"
+                      className={`supplier-selection-input${errors.address ? ' supplier-selection-input--error' : ''}`}
                       value={newSupplier.address}
-                      onChange={(e) => setNewSupplier({ ...newSupplier, address: e.target.value })}
+                      onChange={(e) => {
+                        setNewSupplier({ ...newSupplier, address: e.target.value });
+                        setErrors({ ...errors, address: '' });
+                      }}
                     />
+                    {errors.address && <div className="supplier-selection-error-text">{errors.address}</div>}
                   </div>
                 </div>
               </div>

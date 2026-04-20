@@ -461,4 +461,60 @@ public class AssetRequestsController : ControllerBase
 
         return Ok(new { assetRequestId = request.AssetRequestId, status = request.Status });
     }
+
+    /// <summary>
+    /// DELETE /api/Assets/Requests/purchase/{id} — Xóa yêu cầu mua sắm ở trạng thái Nháp. Chỉ người tạo được xóa.
+    /// </summary>
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteDraft(int id, [FromBody] RevertToDraftDTO dto)
+    {
+        if (dto == null || dto.UserId <= 0)
+            return BadRequest(new { message = "UserId is required." });
+
+        var ar = await _db.AssetRequests
+            .FirstOrDefaultAsync(r => r.AssetRequestId == id && r.RequestTypeId == _purchaseRequestTypeId);
+        if (ar == null)
+            return NotFound(new { message = $"Purchase request with id {id} not found." });
+
+        if (ar.Status != -1)
+            return BadRequest(new { message = "Chỉ được xóa yêu cầu ở trạng thái Nháp." });
+
+        if (ar.CreatedBy != dto.UserId)
+            return Forbid();
+
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        try
+        {
+            var approvals = await _db.Approvals.Where(x => x.AssetRequestId == id).ToListAsync();
+            var records = await _db.AssetRequestRecords.Where(x => x.AssetRequestId == id).ToListAsync();
+            var purchaseLines = await _db.AssetRequestPurchaseLines.Where(x => x.AssetRequestId == id).ToListAsync();
+
+            var procurements = await _db.Procurements.Where(p => p.AssetRequestId == id).ToListAsync();
+            foreach (var proc in procurements)
+            {
+                var pLines = await _db.ProcurementLines.Where(l => l.ProcurementId == proc.ProcurementId).ToListAsync();
+                if (pLines.Count > 0)
+                    _db.ProcurementLines.RemoveRange(pLines);
+            }
+            if (procurements.Count > 0)
+                _db.Procurements.RemoveRange(procurements);
+
+            if (approvals.Count > 0)
+                _db.Approvals.RemoveRange(approvals);
+            if (records.Count > 0)
+                _db.AssetRequestRecords.RemoveRange(records);
+            if (purchaseLines.Count > 0)
+                _db.AssetRequestPurchaseLines.RemoveRange(purchaseLines);
+
+            _db.AssetRequests.Remove(ar);
+            await _db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return NoContent();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
 }

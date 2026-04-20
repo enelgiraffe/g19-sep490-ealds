@@ -91,6 +91,10 @@
   margin-bottom: 12px;
 }
 
+.transfer-detail-form__row--spaced-top {
+  margin-top: 16px;
+}
+
 .transfer-detail-info-value {
   font-size: 14px;
   color: #111827;

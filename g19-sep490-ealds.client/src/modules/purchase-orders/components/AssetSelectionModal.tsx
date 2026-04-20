@@ -9,6 +9,23 @@ interface AssetSelectionModalProps {
   onClose: () => void;
   onSelect: (asset: AssetCatalogResponse) => void;
   filterAssetTypeId?: number | null;
+  /** Khi chưa có id loại trong yêu cầu, lọc theo tên loại (khớp không phân biệt hoa thường). */
+  filterAssetTypeName?: string | null;
+}
+
+function assetMatchesRequestFilters(
+  asset: AssetCatalogResponse,
+  filterAssetTypeId: number | null,
+  filterAssetTypeName: string | null,
+): boolean {
+  if (filterAssetTypeId != null && filterAssetTypeId > 0) {
+    return asset.assetTypeId === filterAssetTypeId;
+  }
+  const name = (filterAssetTypeName ?? '').trim().toLowerCase();
+  if (name) {
+    return (asset.assetTypeName ?? '').trim().toLowerCase() === name;
+  }
+  return true;
 }
 
 export function AssetSelectionModal({
@@ -16,6 +33,7 @@ export function AssetSelectionModal({
   onClose,
   onSelect,
   filterAssetTypeId = null,
+  filterAssetTypeName = null,
 }: AssetSelectionModalProps) {
   const [assets, setAssets] = useState<AssetCatalogResponse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -43,13 +61,12 @@ export function AssetSelectionModal({
     }
   };
 
-  const filteredAssets = assets.filter((asset) =>
-    (filterAssetTypeId == null || asset.assetTypeId === filterAssetTypeId) &&
-    (
-      asset.name.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-      asset.code.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-      (asset.assetTypeName && asset.assetTypeName.toLowerCase().includes(searchKeyword.toLowerCase()))
-    )
+  const filteredAssets = assets.filter(
+    (asset) =>
+      assetMatchesRequestFilters(asset, filterAssetTypeId, filterAssetTypeName) &&
+      (asset.name.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        asset.code.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        (asset.assetTypeName && asset.assetTypeName.toLowerCase().includes(searchKeyword.toLowerCase()))),
   );
 
   const handleSelectAsset = () => {
@@ -97,7 +114,7 @@ export function AssetSelectionModal({
               <h3 className="asset-selection-section-title">
                 Danh sách tài sản ({filteredAssets.length})
               </h3>
-              {filterAssetTypeId != null && (
+              {(filterAssetTypeId != null || (filterAssetTypeName ?? '').trim() !== '') && (
                 <div className="asset-selection-section-hint">
                   Chỉ hiển thị tài sản cùng loại theo yêu cầu mua đã chọn.
                 </div>

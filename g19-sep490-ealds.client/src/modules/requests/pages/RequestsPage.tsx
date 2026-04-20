@@ -112,7 +112,6 @@ interface PurchaseTableRow {
   requestDate: string;
   equipment: string;
   quantity: number;
-  estimatedPrice: string;
 }
 
 interface TransferTableRow extends TransferRequestListItem {
@@ -162,21 +161,16 @@ function getPurchaseAssetDisplay(row: DirectorRequestListItem): string {
 
 function toPurchaseTableRow(item: AccountantRequestListItem, index: number): PurchaseTableRow {
   let quantity = 1;
-  let estimatedPrice = '—';
   try {
     if (item.proposedData) {
       const parsed = JSON.parse(item.proposedData) as {
         equipment?: { quantity?: number | string }[];
-        totalPrice?: string;
       };
       if (Array.isArray(parsed.equipment) && parsed.equipment.length > 0) {
         quantity = parsed.equipment.reduce((sum, line) => {
           const q = Number(line?.quantity);
           return sum + (Number.isFinite(q) && q > 0 ? q : 1);
         }, 0);
-      }
-      if (parsed.totalPrice && String(parsed.totalPrice).trim()) {
-        estimatedPrice = String(parsed.totalPrice);
       }
     }
   } catch {
@@ -193,7 +187,6 @@ function toPurchaseTableRow(item: AccountantRequestListItem, index: number): Pur
     requestDate: formatDate(item.createDate),
     equipment: item.title,
     quantity,
-    estimatedPrice,
   };
 }
 
@@ -475,6 +468,7 @@ export function RequestsPage() {
   const directorRequestTypeId = shouldUseDirectorView ? REQUEST_TYPE_IDS[activeTab] : null;
   const isDirectorRepairTable = shouldUseDirectorView && activeTab === 'repair';
   const isDirectorLiquidationTable = shouldUseDirectorView && activeTab === 'liquidation';
+  const isDirectorPurchaseTable = shouldUseDirectorView && activeTab === 'purchase';
 
   // Ensure director sees only requests already passed accountant step (per workflow)
   // - Purchase: accountant approves 0->1, director decides at status=1
@@ -1125,6 +1119,14 @@ export function RequestsPage() {
                       <th>TÊN TÀI SẢN</th>
                       <th>TRẠNG THÁI</th>
                     </>
+                  ) : isDirectorPurchaseTable ? (
+                    <>
+                      <th>MÃ YÊU CẦU</th>
+                      <th>PHÒNG BAN ĐỀ XUẤT</th>
+                      <th>NGÀY GỬI</th>
+                      <th>LOẠI TÀI SẢN</th>
+                      <th>TRẠNG THÁI</th>
+                    </>
                   ) : (
                     <>
                       <th>MÃ YÊU CẦU</th>
@@ -1142,7 +1144,9 @@ export function RequestsPage() {
                 {pagedRows.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={isDirectorRepairTable ? 7 : isDirectorLiquidationTable ? 8 : 7}
+                      colSpan={
+                        isDirectorRepairTable ? 7 : isDirectorLiquidationTable ? 8 : isDirectorPurchaseTable ? 6 : 7
+                      }
                       className="requests-table-empty"
                     >
                       Không có dữ liệu.
@@ -1189,6 +1193,12 @@ export function RequestsPage() {
                             <td>{row.assetCode ?? '—'}</td>
                             <td>{row.assetInstanceCode?.trim() || '—'}</td>
                             <td>{row.assetName ?? '—'}</td>
+                          </>
+                        ) : isDirectorPurchaseTable ? (
+                          <>
+                            <td>{row.creatorDepartmentName ?? row.currentDepartmentName ?? '—'}</td>
+                            <td>{formatDate(row.createDate)}</td>
+                            <td>{getPurchaseAssetDisplay(row)}</td>
                           </>
                         ) : (
                           <>
@@ -1322,7 +1332,6 @@ export function RequestsPage() {
                   <th>NGÀY ĐỀ XUẤT</th>
                   <th>MỤC ĐÍCH MUA</th>
                   <th>SỐ LƯỢNG</th>
-                  <th>TỔNG GIÁ TRỊ DỰ KIẾN</th>
                   <th>TRẠNG THÁI</th>
                   <th className="asset-table__cell asset-table__cell--actions" />
                 </tr>
@@ -1330,7 +1339,7 @@ export function RequestsPage() {
               <tbody>
                 {pagedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="requests-table-empty">
+                    <td colSpan={6} className="requests-table-empty">
                       Không có dữ liệu.
                     </td>
                   </tr>
@@ -1351,7 +1360,6 @@ export function RequestsPage() {
                         <td>{row.requestDate}</td>
                         <td>{row.equipment}</td>
                         <td className="asset-align-right">{row.quantity}</td>
-                        <td className="asset-align-right">{row.estimatedPrice}</td>
                         <td>
                           <span
                             className={
@@ -1943,13 +1951,6 @@ export function RequestsPage() {
                                   </div>
                                 </div>
 
-                                <div className="acct-transfer-form__row">
-                                  <div className="acct-transfer-form__field">
-                                    <label>Số dòng đề xuất</label>
-                                    <div className="acct-transfer-form__value">{purchaseEquipment.length || '—'}</div>
-                                  </div>
-                                </div>
-
                                 {purchaseEquipment.length > 0 ? (
                                   <div className="acct-transfer-form__section">
                                     <h3 className="acct-transfer-form__section-title">Danh mục loại tài sản đề xuất</h3>
@@ -1996,12 +1997,14 @@ export function RequestsPage() {
                                     {selectedDirectorItem.accountantComment?.trim() || '—'}
                                   </div>
                                 </div>
-                                <div className="acct-transfer-form__section">
-                                  <h3 className="acct-transfer-form__section-title">Ý kiến giám đốc</h3>
-                                  <div className="acct-transfer-form__value">
-                                    {selectedDirectorItem.directorComment?.trim() || '—'}
+                                {selectedDirectorItem.status > 1 ? (
+                                  <div className="acct-transfer-form__section">
+                                    <h3 className="acct-transfer-form__section-title">Ý kiến giám đốc</h3>
+                                    <div className="acct-transfer-form__value">
+                                      {selectedDirectorItem.directorComment?.trim() || '—'}
+                                    </div>
                                   </div>
-                                </div>
+                                ) : null}
                               </>
                             ) : selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.repair ? (
                               <>
@@ -2097,14 +2100,15 @@ export function RequestsPage() {
                                     ) : null}
                                   </div>
                                 )}
-                                {selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.liquidation && (
-                                  <div className="acct-transfer-form__section">
-                                    <h3 className="acct-transfer-form__section-title">Ý kiến giám đốc</h3>
-                                    <div className="acct-transfer-form__value">
-                                      {selectedDirectorItem.directorComment?.trim() || '—'}
+                                {selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.liquidation &&
+                                  selectedDirectorItem.status > 1 && (
+                                    <div className="acct-transfer-form__section">
+                                      <h3 className="acct-transfer-form__section-title">Ý kiến giám đốc</h3>
+                                      <div className="acct-transfer-form__value">
+                                        {selectedDirectorItem.directorComment?.trim() || '—'}
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
+                                  )}
                               </>
                             )}
 

@@ -457,26 +457,43 @@
   font-size: 13px;
 }
 
-/* Compact editable lines table inside allocation request modal */
-.alloc-request-lines-table .ant-table {
+/* Danh sách dòng trong modal tạo yêu cầu — bảng HTML (giống thanh lý / bảo dưỡng) */
+.dept-alloc-modal-lines-wrap {
+  overflow-x: auto;
+  margin-bottom: 10px;
+  border: 1px solid #e6e6e6;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.create-purchase-modal .dept-alloc-modal-lines-wrap .dept-alloc-request-lines-native.asset-table {
+  min-width: 640px;
+  width: 100%;
+}
+
+.dept-alloc-request-lines-native {
   font-size: 13px;
 }
 
-.alloc-request-lines-table .ant-table-cell {
-  padding: 6px 8px;
+.dept-alloc-request-lines-native th,
+.dept-alloc-request-lines-native td {
+  white-space: normal;
   vertical-align: top;
 }
 
-.alloc-request-lines-table .ant-table-thead > tr > th {
-  padding: 8px 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #6b7280;
-  background: #f9fafb;
+.dept-alloc-request-lines-native__th-narrow,
+.dept-alloc-request-lines-native__cell-narrow {
+  width: 96px;
+  text-align: center;
 }
 
-/* Fill table cell; do not use display:block — it breaks the trigger's inline-flex row (chevron stacks under text). */
-.alloc-request-lines-table .alloc-request-lines-table__select.ant-select {
+.dept-alloc-request-lines-native__th-actions {
+  width: 52px;
+  text-align: right;
+}
+
+/* Fill cell; không display:block — vỡ hàng trigger Select */
+.dept-alloc-request-lines-native .alloc-request-lines-table__select.ant-select {
   width: 100%;
   max-width: 100%;
   min-width: 0;

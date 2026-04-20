@@ -4,6 +4,7 @@ import { uploadAssetFile } from '../../assets/services/assetDocumentUploadServic
 import '../../assets/pages/AssetCreatePage.css';
 import {
   procurementPoService,
+  PO_STATUS,
   type PurchaseOrderDetail,
   type PurchaseOrderListItem,
 } from '../services/procurementPoService';
@@ -156,7 +157,8 @@ export function GoodsReceiptFormModal({ open, onClose, onSubmit }: GoodsReceiptF
       ]);
       setWarehouses(wh);
       setAssets(ast);
-      setPoOptions(pos.items);
+      /* receivingEligible: chưa hủy, chưa nhận đủ — vẫn cho phép lần nhận đầu (trạng thái 0). Ẩn nháp. */
+      setPoOptions(pos.items.filter((p) => p.status !== PO_STATUS.draft));
       if (wh.length > 0) setWarehouseId(wh[0].warehouseId);
     } catch {
       message.error('Không tải được dữ liệu tạo biên nhận.');
@@ -671,7 +673,7 @@ export function GoodsReceiptFormModal({ open, onClose, onSubmit }: GoodsReceiptF
                     }}
                     disabled={loading}
                   >
-                    <option value="">Chọn đơn mua còn nhận hàng</option>
+                    <option value="">Chọn đơn mua </option>
                     {poOptions.map((p) => (
                       <option key={p.procurementId} value={p.procurementId}>
                         {p.contractNo} (#{p.procurementId}) — {p.title}
@@ -728,7 +730,7 @@ export function GoodsReceiptFormModal({ open, onClose, onSubmit }: GoodsReceiptF
                 </div>
               </div>
 
-              <div className="asset-create__section" style={{ marginTop: 8 }}>
+              <div className="asset-create__section" style={{ marginTop: 16 }}>
                 <input
                   ref={docFileInputRef}
                   type="file"

@@ -15,6 +15,17 @@ import '../../requests/pages/RequestsPage.css';
 
 const { Title, Text } = Typography;
 
+/** Chỉ hiển thị phần ngày theo chuỗi ISO (tránh lệch múi giờ khi parse Date). */
+function formatDateOnly(iso?: string | null): string {
+  if (!iso) return '—';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso.trim());
+  if (m) {
+    const [, y, mo, da] = m;
+    return `${da}/${mo}/${y}`;
+  }
+  return '—';
+}
+
 export function AllocationOrderDetailPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
@@ -136,9 +147,7 @@ export function AllocationOrderDetailPage() {
             {detail.departmentName}
           </Descriptions.Item>
           <Descriptions.Item label="Người yêu cầu">{detail.requestedByName}</Descriptions.Item>
-          <Descriptions.Item label="Gửi yêu cầu lúc">
-            {detail.requestSubmittedAt?.replace('T', ' ').slice(0, 19)} UTC
-          </Descriptions.Item>
+          <Descriptions.Item label="Gửi yêu cầu lúc">{formatDateOnly(detail.requestSubmittedAt)}</Descriptions.Item>
           <Descriptions.Item label="Trạng thái đơn">
             <span
               className={
@@ -152,14 +161,15 @@ export function AllocationOrderDetailPage() {
                 : 'Chờ xác nhận'}
             </span>
           </Descriptions.Item>
-          <Descriptions.Item label="Đơn tạo lúc">
-            {detail.createdAt?.replace('T', ' ').slice(0, 19)} UTC
-          </Descriptions.Item>
+          <Descriptions.Item label="Đơn tạo lúc">{formatDateOnly(detail.createdAt)}</Descriptions.Item>
           {detail.confirmedAt && (
             <Descriptions.Item label={isReturnFlow ? 'Xác nhận hoàn trả lúc' : 'Xác nhận nhận tài sản lúc'}>
-              {detail.confirmedAt.replace('T', ' ').slice(0, 19)} UTC
+              {formatDateOnly(detail.confirmedAt)}
             </Descriptions.Item>
           )}
+          <Descriptions.Item label="Ý kiến kế toán">
+            {detail.accountantComment?.trim() ? detail.accountantComment.trim() : '—'}
+          </Descriptions.Item>
           {detail.confirmedByName && (
             <Descriptions.Item label={isReturnFlow ? 'Người xác nhận hoàn trả' : 'Người xác nhận nhận'}>
               {detail.confirmedByName}

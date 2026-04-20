@@ -108,13 +108,13 @@ public class PurchaseOrdersController : ControllerBase
         var header = await _db.Procurements
             .AsNoTracking()
             .Include(p => p.Supplier)
+            .Include(p => p.AssetRequest)
             .FirstOrDefaultAsync(p => p.ProcurementId == id);
         if (header == null)
             return NotFound();
 
         var lines = await _db.ProcurementLines
             .AsNoTracking()
-            .Include(l => l.Asset)
             .Where(l => l.ProcurementId == id)
             .OrderBy(l => l.LineIndex)
             .Select(l => new PurchaseOrderLineItemDto
@@ -122,6 +122,8 @@ public class PurchaseOrdersController : ControllerBase
                 LineId = l.LineId,
                 LineIndex = l.LineIndex,
                 Description = l.Description,
+                AssetTypeId = l.AssetId != null && l.Asset != null ? l.Asset.AssetTypeId : null,
+                AssetTypeName = l.Asset != null && l.Asset.AssetType != null ? l.Asset.AssetType.Name : null,
                 AssetId = l.AssetId,
                 AssetCode = l.Asset != null ? l.Asset.Code : null,
                 AssetName = l.Asset != null ? l.Asset.Name : null,
@@ -143,6 +145,7 @@ public class PurchaseOrdersController : ControllerBase
             SupplierName = header.Supplier?.Name,
             ContractNo = header.ContractNo,
             Title = header.Title,
+            AssetRequestTitle = header.AssetRequest != null ? header.AssetRequest.Title : null,
             Currency = header.Currency,
             TotalAmount = header.TotalAmount,
             Status = header.Status,
@@ -204,6 +207,20 @@ public class PurchaseOrdersController : ControllerBase
         var contractNo = string.IsNullOrWhiteSpace(dto.ContractNo)
             ? string.Empty
             : dto.ContractNo.Trim();
+
+        if (!dto.IsDraft && string.IsNullOrEmpty(contractNo))
+            return BadRequest("Số chứng từ là bắt buộc khi tạo đơn (không phải nháp).");
+
+        if (contractNo.Length > 100)
+            return BadRequest("Số chứng từ quá dài (tối đa 100 ký tự).");
+
+        if (!string.IsNullOrEmpty(contractNo))
+        {
+            var duplicateContract = await _db.Procurements.AsNoTracking()
+                .AnyAsync(p => p.ContractNo == contractNo);
+            if (duplicateContract)
+                return BadRequest("Số chứng từ đã tồn tại.");
+        }
 
         var entity = new Procurement
         {
@@ -289,6 +306,20 @@ public class PurchaseOrdersController : ControllerBase
 
         entity.AssetRequestId = dto.AssetRequestId;
         entity.Currency = currency;
+
+        if (dto.ContractNo != null)
+        {
+            var newContractNo = dto.ContractNo.Trim();
+            if (string.IsNullOrEmpty(newContractNo))
+                return BadRequest("Số chứng từ không được để trống.");
+            if (newContractNo.Length > 100)
+                return BadRequest("Số chứng từ quá dài (tối đa 100 ký tự).");
+            var duplicateContract = await _db.Procurements.AsNoTracking()
+                .AnyAsync(p => p.ProcurementId != id && p.ContractNo == newContractNo);
+            if (duplicateContract)
+                return BadRequest("Số chứng từ đã tồn tại.");
+            entity.ContractNo = newContractNo;
+        }
 
         if (dto.Lines == null || dto.Lines.Count == 0)
         {

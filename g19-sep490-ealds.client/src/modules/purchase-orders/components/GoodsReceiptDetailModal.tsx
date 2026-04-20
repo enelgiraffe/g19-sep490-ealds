@@ -118,8 +118,8 @@ export function GoodsReceiptDetailModal({
                       <th style={{ width: '40px' }}>#</th>
                       <th>Tài sản</th>
                       <th style={{ width: '80px', textAlign: 'right' }}>Đặt</th>
-                      <th style={{ width: '100px', textAlign: 'right' }}>Nhận (BN này)</th>
-                      <th style={{ width: '100px', textAlign: 'right' }}>Đã nhận (lũy kế)</th>
+                      <th style={{ width: '150px', textAlign: 'right' }}>Nhận (BN này)</th>
+                      <th style={{ width: '150px', textAlign: 'right' }}>Đã nhận (lũy kế)</th>
                       <th style={{ width: '80px', textAlign: 'right' }}>Còn lại</th>
                     </tr>
                   </thead>

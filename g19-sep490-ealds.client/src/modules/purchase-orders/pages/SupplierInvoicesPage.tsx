@@ -222,7 +222,6 @@ export function SupplierInvoicesPage() {
                   <th>NGÀY HÓA ĐƠN</th>
                   <th>TỔNG TIỀN</th>
                   <th>ĐƠN MUA</th>
-                  <th>BIÊN NHẬN</th>
                   <th>TRẠNG THÁI</th>
                   <th className="asset-table__cell asset-table__cell--actions" />
                 </tr>
@@ -230,7 +229,7 @@ export function SupplierInvoicesPage() {
               <tbody>
                 {items.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="supplier-invoices-table-empty">
+                    <td colSpan={8} className="supplier-invoices-table-empty">
                       Không có dữ liệu.
                     </td>
                   </tr>
@@ -258,7 +257,6 @@ export function SupplierInvoicesPage() {
                           {Number(item.totalAmount).toLocaleString('vi-VN')}
                         </td>
                         <td>#{item.procurementId}</td>
-                        <td>{item.goodsReceiptId ? `#${item.goodsReceiptId}` : '—'}</td>
                         <td>
                           <span
                             className={

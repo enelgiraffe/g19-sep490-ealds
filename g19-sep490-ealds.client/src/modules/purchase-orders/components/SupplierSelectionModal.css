@@ -77,6 +77,10 @@
   border-color: #3b82f6;
 }
 
+.supplier-selection-input--error {
+  border-color: #ef4444 !important;
+}
+
 .supplier-selection-btn-search {
   background: #3b82f6;
   border: 1px solid #3b82f6;
