@@ -29,10 +29,19 @@ export function MarkDamagedAssetModal({
   onSubmit,
   assetInfo,
 }: MarkDamagedAssetModalProps) {
+  const isMeaningfulCondition = (value: string): boolean => {
+    const normalized = value.trim();
+    if (!normalized) return false;
+    // Reject placeholder-like inputs such as "-", "--", "..."
+    if (/^[-.\s]+$/.test(normalized)) return false;
+    return true;
+  };
+
   const [damageDate, setDamageDate] = useState<string>('');
   const [recordNumber, setRecordNumber] = useState<string>('');
   const [condition, setCondition] = useState<string>('');
   const [dateError, setDateError] = useState<string | null>(null);
+  const [conditionError, setConditionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -43,6 +52,7 @@ export function MarkDamagedAssetModal({
       setRecordNumber(`BB-HONG-${datePart}-${randomPart}`);
       setCondition('');
       setDateError(null);
+      setConditionError(null);
     }
   }, [open]);
 
@@ -55,6 +65,10 @@ export function MarkDamagedAssetModal({
   const handleSubmit = () => {
     if (!damageDate) {
       setDateError('Vui lòng chọn ngày hỏng');
+      return;
+    }
+    if (!isMeaningfulCondition(condition)) {
+      setConditionError('Vui lòng nhập tình trạng hỏng hợp lệ (không để "-", "...")');
       return;
     }
 
@@ -186,15 +200,21 @@ export function MarkDamagedAssetModal({
               </div>
 
               <div className="mark-damaged-form__item">
-                <label htmlFor="mark-damaged-condition">Tình trạng</label>
+                <label htmlFor="mark-damaged-condition">
+                  Tình trạng<span style={{ color: '#ef4444' }}>*</span>
+                </label>
                 <textarea
                   id="mark-damaged-condition"
                   className="mark-damaged-textarea"
                   rows={4}
                   placeholder="-"
                   value={condition}
-                  onChange={(e) => setCondition(e.target.value)}
+                  onChange={(e) => {
+                    setCondition(e.target.value);
+                    setConditionError(null);
+                  }}
                 />
+                {conditionError && <div className="mark-damaged-error-text">{conditionError}</div>}
               </div>
 
             </div>

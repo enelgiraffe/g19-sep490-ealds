@@ -48,6 +48,18 @@ function compareYyyyMmDd(a: string, b: string): number {
   return a.localeCompare(b, undefined, { numeric: true });
 }
 
+function parseViDateToIso(value?: string | null): string | null {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  const parts = raw.split('/');
+  if (parts.length !== 3) return null;
+  const [dd, mm, yyyy] = parts;
+  if (!dd || !mm || !yyyy) return null;
+  const normalized = `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+  const date = new Date(`${normalized}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 type RepairStatus =
   | 'needsProposal'
   | 'draft'
@@ -77,6 +89,9 @@ export interface RepairRow {
   status: RepairStatus;
   rawStatus: number;
   repairKind?: string | null;
+  damageNote?: string | null;
+  directorComment?: string | null;
+  directorDecisionDate?: string | null;
 }
 
 function formatDate(value?: string | null): string {
@@ -95,12 +110,20 @@ function parseDamageDescription(description?: string | null): {
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
-  const damageDateLine = lines.find((line) => /^Ngày hỏng:\s*/i.test(line));
-  const conditionLine = lines.find((line) => /^Tình trạng:\s*/i.test(line));
+  const damageDateLine = lines.find((line) => /^Ngày hỏng(?: hóc)?:\s*/i.test(line));
+  const conditionLine = lines.find(
+    (line) =>
+      /^Tình trạng(?: hỏng(?: hóc)?)?:\s*/i.test(line) ||
+      /^Tinh trang(?: hong(?: hoc)?)?:\s*/i.test(line),
+  );
   const fallbackCondition = lines.join(' ').trim();
   return {
-    damageDate: damageDateLine?.replace(/^Ngày hỏng:\s*/i, '').trim() || null,
-    condition: conditionLine?.replace(/^Tình trạng:\s*/i, '').trim() || fallbackCondition,
+    damageDate: damageDateLine?.replace(/^Ngày hỏng(?: hóc)?:\s*/i, '').trim() || null,
+    condition:
+      conditionLine
+        ?.replace(/^Tình trạng(?: hỏng(?: hóc)?)?:\s*/i, '')
+        .replace(/^Tinh trang(?: hong(?: hoc)?)?:\s*/i, '')
+        .trim() || fallbackCondition,
   };
 }
 
@@ -159,6 +182,9 @@ function transferItemToRepairRow(t: RepairRequestListItem): RepairRow {
     status: mapStatus(t.status),
     rawStatus: t.status,
     repairKind: t.requestDescription ?? null,
+    damageNote: null,
+    directorComment: t.directorComment ?? null,
+    directorDecisionDate: t.directorDecisionDate ?? null,
   };
 }
 
@@ -180,6 +206,9 @@ function damagedPendingToRepairRow(d: DamagedInstancePendingItem): RepairRow {
     status: mapStatus(-2),
     rawStatus: -2,
     repairKind: null,
+    damageNote: d.damageNote ?? null,
+    directorComment: null,
+    directorDecisionDate: null,
   };
 }
 
@@ -574,14 +603,19 @@ export function RepairsPage() {
     if (!rows.length || !profile?.id) return;
     setProposalSubmitting(true);
     try {
-      const damageCondition = values.damageCondition.trim();
       const repairKind = values.repairKind.trim();
       for (const row of rows) {
+        const rowDamageCondition = row.condition.trim();
+        if (!rowDamageCondition) {
+          message.warning(`Cá thể ${row.assetCode} chưa có tình trạng hỏng khi đánh dấu hỏng.`);
+          return;
+        }
         await repairRequestService.create({
           assetInstanceId: row.assetInstanceId!,
           createdBy: profile.id,
-          damageCondition,
+          damageCondition: rowDamageCondition,
           repairKind,
+          damageDate: parseViDateToIso(row.brokenDate),
         });
       }
       message.success(
@@ -937,6 +971,29 @@ export function RepairsPage() {
                           <div className="repair-detail-info-item repair-detail-info-item--full">
                             <label>Phương án sửa chữa đề xuất</label>
                             <div className="repair-detail-info-value">{selected.repairKind}</div>
+                          </div>
+                        </div>
+                      ) : null}
+                      {selected.rowSource === 'damaged' && selected.damageNote?.trim() ? (
+                        <div className="repair-detail-info-row">
+                          <div className="repair-detail-info-item repair-detail-info-item--full">
+                            <label>Thông tin nhập lúc báo hỏng</label>
+                            <div className="repair-detail-info-value">{selected.damageNote.trim()}</div>
+                          </div>
+                        </div>
+                      ) : null}
+                      {selected.rowSource === 'repair' &&
+                      selected.rawStatus >= 2 &&
+                      (selected.directorComment?.trim() || selected.directorDecisionDate) ? (
+                        <div className="repair-detail-info-row">
+                          <div className="repair-detail-info-item repair-detail-info-item--full">
+                            <label>Ý kiến giám đốc</label>
+                            <div className="repair-detail-info-value">
+                              {selected.directorComment?.trim() || '—'}
+                              {selected.directorDecisionDate
+                                ? ` (${formatDate(selected.directorDecisionDate)})`
+                                : ''}
+                            </div>
                           </div>
                         </div>
                       ) : null}

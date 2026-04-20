@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import './RepairProposalModal.css';
 
 export interface RepairProposalFormValues {
-  damageCondition: string;
   repairKind: string;
 }
 
@@ -26,13 +25,11 @@ export function RepairProposalModal({
   onClose,
   onSubmit,
 }: RepairProposalModalProps) {
-  const [damageCondition, setDamageCondition] = useState('');
   const [repairKind, setRepairKind] = useState('');
 
   useEffect(() => {
     if (!open) return;
     const timer = window.setTimeout(() => {
-      setDamageCondition('');
       setRepairKind('');
     }, 0);
     return () => window.clearTimeout(timer);
@@ -41,12 +38,11 @@ export function RepairProposalModal({
   if (!open) return null;
 
   const count = items.length;
-  const canSubmit = damageCondition.trim().length > 0 && repairKind.trim().length > 0;
+  const canSubmit = repairKind.trim().length > 0;
 
   const handleSubmit = () => {
     if (!canSubmit || loading) return;
     void onSubmit({
-      damageCondition: damageCondition.trim(),
       repairKind: repairKind.trim(),
     });
   };
@@ -74,20 +70,6 @@ export function RepairProposalModal({
                 ))}
               </ul>
             ) : null}
-
-            <div className="repair-proposal-form__item">
-              <label htmlFor="repair-proposal-damage">
-                Tình trạng hỏng hóc<span className="repair-proposal-required">*</span>
-              </label>
-              <textarea
-                id="repair-proposal-damage"
-                className="repair-proposal-textarea"
-                rows={3}
-                value={damageCondition}
-                onChange={(e) => setDamageCondition(e.target.value)}
-                placeholder="Mô tả chi tiết tình trạng hỏng hóc"
-              />
-            </div>
 
             <div className="repair-proposal-form__item">
               <label htmlFor="repair-proposal-kind">

@@ -51,6 +51,8 @@ export interface RepairRequestListItem {
   /** Sửa chữa: tình trạng hỏng hóc (RepairTask). */
   damageCondition?: string | null;
   requestDescription?: string | null;
+  directorComment?: string | null;
+  directorDecisionDate?: string | null;
   fromDepartmentId: number;
   createdBy: number;
 }
