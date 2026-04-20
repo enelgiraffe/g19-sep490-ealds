@@ -182,13 +182,19 @@ public class AssetDepreciationService : IAssetDepreciationService
         if (record.IsLocked == true)
             throw new Exception("Cannot modify locked record");
 
-        record.DepreciationAmount = newAmount;
-        record.RemainingValue = Math.Max(record.OriginalValue - newAmount, 0);
+        var salvage = await _context.DepreciationPolicies
+            .Where(p => p.PolicyId == record.PolicyId)
+            .Select(p => (decimal?)p.SalvageValue)
+            .FirstOrDefaultAsync() ?? 0m;
+        var adjustedAmount = DepreciationFormula.ClampFinalPeriodAmount(record.OriginalValue, salvage, newAmount);
+
+        record.DepreciationAmount = adjustedAmount;
+        record.RemainingValue = record.OriginalValue - adjustedAmount;
         record.AccumulatedDepreciation = await RecalculateAccumulatedUntil(
             record.AssetInstanceId,
             record.Period,
             record.RecordId,
-            newAmount);
+            adjustedAmount);
 
         await RecalculateNextPeriods(record.AssetInstanceId, record.Period, record.AccumulatedDepreciation);
 
@@ -220,10 +226,12 @@ public class AssetDepreciationService : IAssetDepreciationService
         var opening = lastRecord?.RemainingValue ?? assetInstance.OriginalPrice;
         var periodStart = period.ToDateTime(TimeOnly.MinValue);
 
+        var periodEnd = period.AddMonths(1).ToDateTime(TimeOnly.MinValue);
         var latestRevaluation = await _context.AssetRevaluations
             .Where(x =>
                 x.AssetInstanceId == assetInstance.AssetInstanceId &&
-                x.EffectiveDate <= periodStart)
+                x.EffectiveDate >= periodStart &&
+                x.EffectiveDate < periodEnd)
             .OrderByDescending(x => x.EffectiveDate)
             .FirstOrDefaultAsync();
 
@@ -262,6 +270,12 @@ public class AssetDepreciationService : IAssetDepreciationService
     private async Task RecalculateNextPeriods(int assetInstanceId, DateOnly fromPeriod, decimal accumulatedAtFromPeriod)
     {
         // Lan truyền lại giá trị lũy kế/còn lại cho các kỳ sau còn được chỉnh sửa.
+        var fromRecord = await _context.DepreciationRecords
+            .Where(x => x.AssetInstanceId == assetInstanceId && x.Period == fromPeriod)
+            .OrderByDescending(x => x.CreateDate)
+            .FirstOrDefaultAsync()
+            ?? throw new Exception("Source depreciation period not found");
+
         var nextRecords = await _context.DepreciationRecords
             .Where(x => x.AssetInstanceId == assetInstanceId && x.Period > fromPeriod)
             .OrderBy(x => x.Period)
@@ -269,14 +283,44 @@ public class AssetDepreciationService : IAssetDepreciationService
             .ToListAsync();
 
         var rollingAccumulated = accumulatedAtFromPeriod;
+        var openingValue = fromRecord.RemainingValue;
         foreach (var item in nextRecords)
         {
             if (item.IsPosted || item.IsLocked == true)
                 throw new Exception("Cannot recalculate because later periods are posted/locked");
 
+            var periodStart = item.Period.ToDateTime(TimeOnly.MinValue);
+            var periodEnd = item.Period.AddMonths(1).ToDateTime(TimeOnly.MinValue);
+            var periodRevaluation = await _context.AssetRevaluations
+                .Where(x =>
+                    x.AssetInstanceId == assetInstanceId &&
+                    x.EffectiveDate >= periodStart &&
+                    x.EffectiveDate < periodEnd)
+                .OrderByDescending(x => x.EffectiveDate)
+                .FirstOrDefaultAsync();
+            if (periodRevaluation != null)
+                openingValue = periodRevaluation.NewValue;
+
+            var salvage = await _context.DepreciationPolicies
+                .Where(p => p.PolicyId == item.PolicyId)
+                .Select(p => (decimal?)p.SalvageValue)
+                .FirstOrDefaultAsync() ?? 0m;
+            var adjustedAmount = DepreciationFormula.ClampFinalPeriodAmount(
+                openingValue,
+                salvage,
+                item.DepreciationAmount);
+
+            item.OriginalValue = openingValue;
+            item.DepreciationAmount = adjustedAmount;
             rollingAccumulated += item.DepreciationAmount;
             item.AccumulatedDepreciation = rollingAccumulated;
-            item.RemainingValue = Math.Max(item.OriginalValue - item.DepreciationAmount, 0m);
+            item.RemainingValue = openingValue - item.DepreciationAmount;
+            openingValue = item.RemainingValue;
         }
+
+        var instance = await _context.AssetInstances
+            .FirstOrDefaultAsync(x => x.AssetInstanceId == assetInstanceId);
+        if (instance != null)
+            instance.CurrentValue = openingValue;
     }
 }

@@ -57,7 +57,7 @@ public class MaintenanceTaskJobs : IJob
 
         var schedules = await db.MaintenanceSchedules.Where(x => x.IsActive == true
                                                                  && x.NextDueDate != null
-                                                                 && x.NextDueDate <= nowLocal).ToListAsync();
+                                                                 && x.NextDueDate <= DateTime.UtcNow.AddHours(7)).ToListAsync();
 
         foreach (var schedule in schedules)
         {
@@ -100,7 +100,16 @@ public class MaintenanceTaskJobs : IJob
             db.MaintenanceTasks.Add(task);
 
             // Đẩy lịch sang chu kỳ kế tiếp sau khi đã tạo task.
-            schedule.NextDueDate = _service.CalculateNextDueDate(schedule);
+            // Quy định một lần (không có interval) chỉ được tạo task duy nhất.
+            if (schedule.IntervalValue is int iv && iv > 0 && schedule.IntervalUnit.HasValue)
+            {
+                schedule.NextDueDate = _service.CalculateNextDueDate(schedule);
+            }
+            else
+            {
+                schedule.NextDueDate = null;
+                schedule.IsActive = false;
+            }
         }
 
         await db.SaveChangesAsync();

@@ -35,11 +35,13 @@ public class MaintenanceTemplateController : ControllerBase
     [HttpGet("get-all")]
     [ProducesResponseType(typeof(IEnumerable<MaintenanceTemplate>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(string), (int)HttpStatusCode.BadRequest)]
-    public async Task<ActionResult<IEnumerable<MaintenanceTemplate>>> GetAllTemplateAsync()
+    public async Task<ActionResult<IEnumerable<MaintenanceTemplate>>> GetAllTemplateAsync([FromQuery] string? name)
     {
         try
         {
-            var response = await _service.GetAllTemplatesAsync();
+            var response = string.IsNullOrWhiteSpace(name)
+                ? await _service.GetAllTemplatesAsync()
+                : await _service.SearchTemplateByKeyAsync(name);
             return Ok(response);
         }
         catch (Exception ex)

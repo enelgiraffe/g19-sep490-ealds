@@ -327,7 +327,18 @@ public class AssetRequestsController : ControllerBase
             requestType = ar.RequestType == null ? null : new { ar.RequestType.RequestTypeId, ar.RequestType.WorkflowId },
             // Catalog asset (for purchase / damage-report requests)
             asset = ar.Asset == null ? null : new { ar.Asset.AssetId, ar.Asset.Name, ar.Asset.Code, ar.Asset.Quantity },
-            approvals = ar.Approvals.Select(a => new { a.ApprovalId, a.DecisionDate, a.ApprovedUserId, a.ApprovedRoleId, a.StepId }),
+            approvals = ar.Approvals.Select(a => new
+            {
+                a.ApprovalId,
+                a.DecisionDate,
+                a.ApprovedUserId,
+                a.ApprovedRoleId,
+                a.StepId,
+                a.Decision,
+                a.Comment,
+                roleCode = a.ApprovedRole != null ? a.ApprovedRole.Code : null,
+                roleName = a.ApprovedRole != null ? a.ApprovedRole.Name : null
+            }),
             records = ar.AssetRequestRecords.Select(r => new { r.RecordId, r.FromStatus, r.ToStatus, r.Action, r.ActionByUserId, r.ActionRoleId, r.Comment, r.OccurredAt }),
             // Child tasks — each stores the specific instance via AssetInstanceId
             maintenanceTasks = ar.MaintenanceTasks.Select(t => new
