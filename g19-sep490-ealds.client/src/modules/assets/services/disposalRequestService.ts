@@ -1,23 +1,7 @@
-import axios from 'axios';
 import type { TransferRequestListItem } from './transferRequestService';
+import { apiClient } from '../../../shared/services/apiClient';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-
-const disposalApi = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-disposalApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+const disposalApi = apiClient;
 
 const DEFAULT_DISPOSAL_REQUEST_TYPE_ID = 5;
 

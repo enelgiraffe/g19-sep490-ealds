@@ -1,22 +1,6 @@
-import axios from 'axios';
+import { apiClient } from '../../../shared/services/apiClient';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-
-export const directorApi = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-directorApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+export const directorApi = apiClient;
 
 /** RequestTypeId trùng backend: 1=Mua, 2=Bảo dưỡng, 3=Điều chuyển, 4=Sửa chữa, 5=Thanh lý (nếu có) */
 export const REQUEST_TYPE_IDS = {

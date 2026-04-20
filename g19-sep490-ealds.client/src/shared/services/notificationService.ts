@@ -1,22 +1,8 @@
-import axios from 'axios';
 import type { NotificationItem, NotificationType } from '../types/notification.types';
 import { NOTIFICATION_TYPE_CONFIG } from '../data/notificationsMockData';
+import { apiClient } from './apiClient';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-
-const notificationsApi = axios.create({
-  baseURL: API_BASE_URL,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-notificationsApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+const notificationsApi = apiClient;
 
 export interface ApiNotification {
   notificationId: number;

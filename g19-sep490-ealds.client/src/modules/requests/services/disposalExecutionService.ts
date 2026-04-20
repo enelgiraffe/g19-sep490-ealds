@@ -1,20 +1,6 @@
-import axios from 'axios';
+import { apiClient } from '../../../shared/services/apiClient';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-
-const executionApi = axios.create({
-  baseURL: API_BASE_URL,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-executionApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+const executionApi = apiClient;
 
 export interface DisposalExecutionDto {
   disposalExecutionId?: number | null;

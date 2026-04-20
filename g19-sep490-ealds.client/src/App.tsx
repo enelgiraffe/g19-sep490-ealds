@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { initSessionMonitoring } from './shared/services/apiClient';
 import { AppLayout } from './shared/layouts/AppLayout';
 import { HomePlaceholder } from './shared/layouts/HomePlaceholder';
 import { ModulePlaceholder } from './shared/layouts/ModulePlaceholder';
@@ -42,6 +44,8 @@ import { AllocationOrderDetailPage } from './modules/allocations/pages/Allocatio
 import './App.css';
 
 function App() {
+  useEffect(() => initSessionMonitoring(), []);
+
   return (
     <BrowserRouter>
       <Routes>

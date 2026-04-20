@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { isAxiosError } from 'axios';
 import {
   allocationRequestApiErrorMessage,
   type AllocationLineInput,
@@ -6,22 +6,9 @@ import {
   type AllocationOrderSummaryRow,
   type AllocationRequestListItem,
 } from './allocationRequestService';
+import { apiClient } from '../../../shared/services/apiClient';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+const api = apiClient;
 
 export const HANDOVER_REQUEST_TYPE_ID = 7;
 
@@ -41,7 +28,7 @@ export const handoverRequestService = {
       const res = await api.post<{ assetRequestId: number }>('/api/Assets/Requests/handover', payload);
       return res.data;
     } catch (e) {
-      if (axios.isAxiosError(e) && e.response?.data) {
+      if (isAxiosError(e) && e.response?.data) {
         const msg = allocationRequestApiErrorMessage(e.response.data);
         if (msg) throw new Error(msg);
       }

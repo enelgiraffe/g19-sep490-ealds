@@ -1,22 +1,6 @@
-import axios from 'axios';
+import { apiClient } from '../../../shared/services/apiClient';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-
-const damageReportApi = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-damageReportApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+const damageReportApi = apiClient;
 
 export interface ReportDamagePayload {
   assetInstanceId: number;

@@ -1,19 +1,6 @@
-import axios from 'axios';
+import { apiClient } from '../../../shared/services/apiClient';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-
-const uploadApi = axios.create({
-  baseURL: API_BASE_URL,
-});
-
-uploadApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+const uploadApi = apiClient;
 
 /** POST /api/files/upload — same endpoint as purchase orders; stores file and returns a public URL. */
 export async function uploadAssetFile(

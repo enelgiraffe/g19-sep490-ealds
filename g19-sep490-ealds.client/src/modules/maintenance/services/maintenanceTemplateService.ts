@@ -1,22 +1,6 @@
-import axios from 'axios';
+import { apiClient } from '../../../shared/services/apiClient';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-
-const maintenanceTemplateApi = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-maintenanceTemplateApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+const maintenanceTemplateApi = apiClient;
 
 export type MaintenanceFrequencyType = 1 | 2; // 1: OneTime, 2: Periodic
 export type MaintenanceRepeatIntervalUnit = 0 | 1 | 2 | 3 | 4; // 0 for OneTime on backend

@@ -1,25 +1,9 @@
-import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+import { apiClient } from '../../../shared/services/apiClient';
 
 /** Khớp App:TransferRequestTypeId trên backend (mặc định 3). */
 export const TRANSFER_REQUEST_TYPE_ID = 3;
 
-const transferApi = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-transferApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+const transferApi = apiClient;
 
 export interface AssetLocationOption {
   locationId: number;
