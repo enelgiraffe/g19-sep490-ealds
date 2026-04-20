@@ -42,7 +42,8 @@ type MaintenanceStatus =
   | 'pending'
   | 'approved'
   | 'rejected'
-  | 'inProgress';
+  | 'inProgress'
+  | 'completed';
 
 interface MaintenanceRow {
   id: string; // taskId (recordId from backend list)
@@ -82,6 +83,7 @@ function getStatusLabel(status: MaintenanceStatus): string {
   if (status === 'pending') return 'Chờ phê duyệt';
   if (status === 'approved') return 'Phê duyệt';
   if (status === 'inProgress') return 'Đang bảo dưỡng';
+  if (status === 'completed') return 'Đã bảo dưỡng';
   return 'Từ chối';
 }
 
@@ -96,6 +98,9 @@ function getStatusClass(status: MaintenanceStatus): string {
   }
   if (status === 'inProgress') {
     return 'maintenance-status-pill maintenance-status-pill--approved';
+  }
+  if (status === 'completed') {
+    return 'maintenance-status-pill maintenance-status-pill--completed';
   }
   return 'maintenance-status-pill maintenance-status-pill--rejected';
 }
@@ -136,13 +141,14 @@ function parseMoneyInput(value: string): number | null {
 }
 
 function mapStatus(status: number): MaintenanceStatus {
-  // -1=Nháp, 0=Đã gửi, 1=Chờ phê duyệt, 2=Đã duyệt (chưa bắt đầu), 3=Từ chối, 4=Đang thực hiện (đã start)
+  // -1=Nháp, 0=Đã gửi, 1=Chờ phê duyệt, 2=Đã duyệt (chưa bắt đầu), 3=Từ chối, 4=Đang thực hiện (đã start), 5=Đã bảo dưỡng
   if (status === -1) return 'draft';
   if (status === 0) return 'submitted';
   if (status === 1) return 'pending';
   if (status === 2) return 'approved';
   if (status === 3) return 'rejected';
   if (status === 4) return 'inProgress';
+  if (status === 5) return 'completed';
   return 'submitted';
 }
 
@@ -241,6 +247,7 @@ export function MaintenancePage() {
   const [completeSubmitting, setCompleteSubmitting] = useState(false);
   const [completeReportNumber, setCompleteReportNumber] = useState('');
   const [completeMaintenanceDateLabel, setCompleteMaintenanceDateLabel] = useState('');
+  const [completeMaintenanceStartDateRaw, setCompleteMaintenanceStartDateRaw] = useState('');
   const [completeCompletionDate, setCompleteCompletionDate] = useState('');
   const [completeReturnDate, setCompleteReturnDate] = useState('');
   const [completeActualCost, setCompleteActualCost] = useState<number | null>(null);
@@ -526,6 +533,10 @@ export function MaintenancePage() {
       message.warning('Vui lòng chọn ngày bảo dưỡng.');
       return;
     }
+    if (expectedCompletionDate && expectedCompletionDate < maintenanceDate) {
+      message.warning('Ngày dự kiến hoàn thành phải từ ngày bảo dưỡng trở đi.');
+      return;
+    }
     setStartSubmitting(true);
     try {
       const loc = locationType === 'at-unit' ? 'Tại đơn vị' : 'Nhà cung cấp';
@@ -578,24 +589,34 @@ export function MaintenancePage() {
       }
 
       let maintLabel = row.setupDate || row.expectedDate || '';
+      let maintDateRaw = '';
       let rep = '';
       let contentFromStart = '';
       let detailFromStart = '';
+      let prefillCompletionDate = toTodayInputDate();
       if (det.proposedData) {
         try {
           const pd = JSON.parse(det.proposedData) as Record<string, unknown>;
-          if (pd.maintenanceDate) maintLabel = formatDate(String(pd.maintenanceDate));
+          if (pd.maintenanceDate) {
+            maintDateRaw = String(pd.maintenanceDate);
+            maintLabel = formatDate(maintDateRaw);
+          }
           if (typeof pd.reportNumber === 'string') rep = pd.reportNumber;
           if (typeof pd.maintenanceContent === 'string') contentFromStart = pd.maintenanceContent;
           if (typeof pd.detailedDescription === 'string') detailFromStart = pd.detailedDescription;
+          if (pd.expectedCompletionDate) {
+            const expDate = dayjs(String(pd.expectedCompletionDate));
+            if (expDate.isValid()) prefillCompletionDate = expDate.format('YYYY-MM-DD');
+          }
         } catch {
           /* ignore */
         }
       }
       setCompleteMaintenanceDateLabel(maintLabel);
+      setCompleteMaintenanceStartDateRaw(maintDateRaw);
       setCompleteReportNumber(rep);
-      setCompleteCompletionDate(toTodayInputDate());
-      setCompleteReturnDate(toTodayInputDate());
+      setCompleteCompletionDate(prefillCompletionDate);
+      setCompleteReturnDate(prefillCompletionDate);
       setCompleteActualCost(null);
       setCompleteMaintenanceContent(contentFromStart);
       setCompleteDetailedDescription(detailFromStart || row.purpose || '');
@@ -619,8 +640,19 @@ export function MaintenancePage() {
       message.warning('Vui lòng chọn ngày hoàn thành bảo dưỡng.');
       return;
     }
+    if (completeMaintenanceStartDateRaw) {
+      const startDate = dayjs(completeMaintenanceStartDateRaw).format('YYYY-MM-DD');
+      if (completeCompletionDate < startDate) {
+        message.warning('Ngày hoàn thành bảo dưỡng không được trước ngày bắt đầu bảo dưỡng.');
+        return;
+      }
+    }
     if (!completeReturnDate) {
       message.warning('Vui lòng chọn ngày đưa vào sử dụng lại.');
+      return;
+    }
+    if (completeReturnDate < completeCompletionDate) {
+      message.warning('Ngày đưa vào sử dụng lại không được trước ngày hoàn thành bảo dưỡng.');
       return;
     }
     if (completeActualCost == null || completeActualCost < 0) {
@@ -758,6 +790,7 @@ export function MaintenancePage() {
               { value: 'pending', label: 'Chờ phê duyệt' },
               { value: 'approved', label: 'Phê duyệt' },
               { value: 'inProgress', label: 'Đang bảo dưỡng' },
+              { value: 'completed', label: 'Đã bảo dưỡng' },
               { value: 'rejected', label: 'Từ chối' },
             ]}
           />

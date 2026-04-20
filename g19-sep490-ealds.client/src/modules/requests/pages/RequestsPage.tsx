@@ -2105,12 +2105,7 @@ export function RequestsPage() {
                                     <div className="acct-transfer-form__value">
                                       {selectedDirectorItem.accountantComment?.trim() || '—'}
                                     </div>
-                                    {selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.liquidation ? (
-                                      <p style={{ margin: '8px 0 0', fontSize: 12, color: '#6b7280' }}>
-                                        Nội dung kế toán nhập trong ô &quot;Ghi chú&quot; khi phê duyệt tại trang Yêu cầu
-                                        → Thanh lý.
-                                      </p>
-                                    ) : null}
+                                    
                                     {selectedDirectorItem.accountantDecisionDate ? (
                                       <div
                                         className="acct-transfer-form__value"

@@ -835,7 +835,19 @@ export function AssetListPage() {
                                           <span className="asset-row-menu__icon">🛠</span>
                                           <span>Bảo dưỡng</span>
                                         </button>
-        
+
+                                        {instance.status !== 'Đã hỏng' && (
+                                          <button
+                                            className="asset-row-menu__item"
+                                            onClick={() =>
+                                              handleInstanceMenuAction('mark-broken', instance.assetInstanceId)
+                                            }
+                                          >
+                                            <span className="asset-row-menu__icon">⚠</span>
+                                            <span>Báo hỏng</span>
+                                          </button>
+                                        )}
+
                                         <button
                                           className="asset-row-menu__item"
                                           onClick={() =>

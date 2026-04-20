@@ -2,6 +2,7 @@ using g19_sep490_ealds.Server.DTO.RequestDTO.AssetDepreciation;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -21,6 +22,51 @@ public class AssetDepreciationController : ControllerBase
         _service = service;
         _context = context;
         _serviceRe = serviceRe;
+    }
+
+    /// <summary>GET /api/AssetDepreciation/instance/{instanceId} — Lịch sử khấu hao của một cá thể, sắp xếp mới nhất trước.</summary>
+    [HttpGet("instance/{instanceId:int}")]
+    public async Task<IActionResult> GetByInstanceId(int instanceId)
+    {
+        var records = await _context.DepreciationRecords
+            .AsNoTracking()
+            .Where(r => r.AssetInstanceId == instanceId)
+            .OrderByDescending(r => r.Period)
+            .ThenByDescending(r => r.CreateDate)
+            .Select(r => new
+            {
+                r.RecordId,
+                r.AssetInstanceId,
+                r.Period,
+                r.DepreciationAmount,
+                r.OriginalValue,
+                r.RemainingValue,
+                r.AccumulatedDepreciation,
+                r.CreateDate,
+                r.IsPosted
+            })
+            .ToListAsync();
+
+        return Ok(records);
+    }
+
+    /// <summary>GET /api/AssetDepreciation/policies — Danh sách chính sách khấu hao đang active.</summary>
+    [HttpGet("policies")]
+    public async Task<IActionResult> GetPolicies()
+    {
+        var policies = await _context.DepreciationPolicies
+            .Where(p => p.IsActive)
+            .OrderBy(p => p.Name)
+            .Select(p => new
+            {
+                p.PolicyId,
+                p.Name,
+                p.Method,
+                p.UsefullLifeMonths,
+                p.SalvageValue,
+            })
+            .ToListAsync();
+        return Ok(policies);
     }
 
     [HttpPost]

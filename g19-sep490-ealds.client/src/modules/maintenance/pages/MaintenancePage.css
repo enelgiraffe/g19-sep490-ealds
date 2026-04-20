@@ -209,6 +209,11 @@
   color: #b91c1c;
 }
 
+.maintenance-status-pill--completed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
 /* Modal bảo dưỡng - không dùng antd cho 2 form */
 .maintenance-form-modal-overlay {
   position: fixed;

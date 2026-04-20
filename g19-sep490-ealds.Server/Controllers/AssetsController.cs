@@ -208,6 +208,7 @@ public class AssetsController : ControllerBase
         var instanceList = visibleInstances.OrderBy(i => i.InstanceCode).ToList();
         var instanceIds = instanceList.Select(i => i.AssetInstanceId).ToList();
         var latestDepsByInstance = await LoadLatestDepreciationByInstanceAsync(instanceIds);
+        var usageHistoriesByInstance = await BuildUsageHistoriesByInstanceAsync(instanceList);
 
         var documents = await _context.Documents
             .AsNoTracking()
@@ -265,7 +266,8 @@ public class AssetsController : ControllerBase
             Instances = instanceList
                 .Select(i => ToAssetInstanceResponseDTO(
                     i,
-                    latestDepsByInstance.GetValueOrDefault(i.AssetInstanceId)))
+                    latestDepsByInstance.GetValueOrDefault(i.AssetInstanceId),
+                    usageHistoriesByInstance.GetValueOrDefault(i.AssetInstanceId)))
                 .ToList()
         };
 
@@ -954,6 +956,7 @@ public class AssetsController : ControllerBase
     private static AssetInstanceResponseDTO ToAssetInstanceResponseDTO(
         AssetInstance i,
         DepreciationRecord? latestDep,
+        List<AssetUsageHistoryDTO>? usageHistories,
         AssetStatus? forcedStatus = null)
     {
         var effectiveStatus = forcedStatus ?? (AssetStatus)i.Status;
@@ -1007,7 +1010,8 @@ public class AssetsController : ControllerBase
                 .Where(u => u.IsCurrent)
                 .Select(u => u.Employee != null ? (int?)u.Employee.UserId : null)
                 .FirstOrDefault(),
-            DepreciationPolicyId = i.DepreciationPolicyId
+            DepreciationPolicyId = i.DepreciationPolicyId,
+            UsageHistories = usageHistories
         };
 
         if (latestDep != null)
@@ -1023,6 +1027,109 @@ public class AssetsController : ControllerBase
         }
 
         return dto;
+    }
+
+    private static string GetLifecycleOperationLabel(int actionType) => actionType switch
+    {
+        (int)AssetLifeActionType.Created => "Tạo mới",
+        (int)AssetLifeActionType.StatusChanged => "Thay đổi trạng thái",
+        (int)AssetLifeActionType.Capitalized => "Vốn hóa",
+        (int)AssetLifeActionType.Disposed => "Thanh lý",
+        (int)AssetLifeActionType.Updated => "Chỉnh sửa thông tin",
+        _ => "Hoạt động khác"
+    };
+
+    private async Task<Dictionary<int, List<AssetUsageHistoryDTO>>> BuildUsageHistoriesByInstanceAsync(
+        List<AssetInstance> instances)
+    {
+        var result = instances.ToDictionary(
+            i => i.AssetInstanceId,
+            _ => new List<AssetUsageHistoryDTO>());
+        if (instances.Count == 0)
+            return result;
+
+        var instanceIds = instances.Select(i => i.AssetInstanceId).ToList();
+
+        var toLocationIds = instances
+            .SelectMany(i => i.AssetLocations)
+            .Select(l => l.LocationId)
+            .Distinct()
+            .ToList();
+
+        var transferByToLocationId = toLocationIds.Count == 0
+            ? new Dictionary<int, int>()
+            : await _context.TransferRecords
+                .AsNoTracking()
+                .Where(t => toLocationIds.Contains(t.ToLocationId))
+                .GroupBy(t => t.ToLocationId)
+                .ToDictionaryAsync(
+                    g => g.Key,
+                    g => g.OrderByDescending(t => t.TransferDate)
+                          .Select(t => t.AssetRequestId)
+                          .First());
+
+        var lifecycleActionTypes = new[]
+        {
+            (int)AssetLifeActionType.Created,
+            (int)AssetLifeActionType.StatusChanged,
+            (int)AssetLifeActionType.Capitalized,
+            (int)AssetLifeActionType.Disposed,
+            (int)AssetLifeActionType.Updated
+        };
+        var lifecyclesByInstance = await _context.AssetLifeCycles
+            .AsNoTracking()
+            .Where(lc => instanceIds.Contains(lc.AssetInstanceId) && lifecycleActionTypes.Contains(lc.ActionType))
+            .GroupBy(lc => lc.AssetInstanceId)
+            .ToDictionaryAsync(g => g.Key, g => g.ToList());
+
+        foreach (var instance in instances)
+        {
+            var locationRows = instance.AssetLocations
+                .Select(location =>
+                {
+                    transferByToLocationId.TryGetValue(location.LocationId, out var transferRequestId);
+                    var reportNumber = transferRequestId > 0
+                        ? $"YC-{transferRequestId}"
+                        : $"VT-{location.LocationId}";
+                    var operation = transferRequestId > 0 ? "Điều chuyển" : "Cập nhật vị trí";
+                    var place = string.IsNullOrWhiteSpace(location.Note)
+                        ? location.Department?.Name
+                        : $"{location.Department?.Name} · {location.Note}";
+
+                    return new AssetUsageHistoryDTO
+                    {
+                        AssetInstanceId = instance.AssetInstanceId,
+                        InstanceCode = instance.InstanceCode,
+                        ExecutionDate = location.StartDate,
+                        ReportNumber = reportNumber,
+                        Operation = operation,
+                        Condition = instance.Condition,
+                        Location = place,
+                        Value = instance.CurrentValue
+                    };
+                });
+
+            var lifecycleRows = lifecyclesByInstance.GetValueOrDefault(instance.AssetInstanceId, [])
+                .Select(lc => new AssetUsageHistoryDTO
+                {
+                    AssetInstanceId = instance.AssetInstanceId,
+                    InstanceCode = instance.InstanceCode,
+                    ExecutionDate = DateOnly.FromDateTime(lc.OccurredAt.ToLocalTime()),
+                    ReportNumber = $"LC-{lc.AuditId}",
+                    Operation = GetLifecycleOperationLabel(lc.ActionType),
+                    Condition = lc.Description,
+                    Location = null,
+                    Value = null
+                });
+
+            result[instance.AssetInstanceId] = locationRows
+                .Concat(lifecycleRows)
+                .OrderByDescending(r => r.ExecutionDate)
+                .ThenByDescending(r => r.ReportNumber)
+                .ToList();
+        }
+
+        return result;
     }
 
     private static MaintenanceScheduleDTO ToMaintenanceScheduleDto(MaintenanceSchedule s)

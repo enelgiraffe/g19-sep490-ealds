@@ -50,6 +50,28 @@ export interface GuaranteeItem {
   warrantyEndDate: string;
 }
 
+export interface AssetUsageHistoryItem {
+  assetInstanceId: number;
+  instanceCode?: string | null;
+  executionDate: string;
+  reportNumber?: string | null;
+  operation?: string | null;
+  condition?: string | null;
+  location?: string | null;
+  value?: number | null;
+}
+
+export interface DepreciationRecordItem {
+  recordId: number;
+  period: string;
+  depreciationAmount: number;
+  originalValue: number;
+  remainingValue: number;
+  accumulatedDepreciation: number;
+  createDate: string;
+  isPosted: boolean;
+}
+
 /** Catalog row from GET /api/assets */
 export interface AssetCatalogResponse {
   assetId: number;
@@ -114,6 +136,8 @@ export interface AssetInstanceResponse {
   warrantyStartDate?: string | null;
   warrantyEndDate?: string | null;
   guarantees?: GuaranteeItem[] | null;
+  usageHistories?: AssetUsageHistoryItem[] | null;
+  depreciationRecords?: DepreciationRecordItem[] | null;
 }
 
 /** GET /api/assets/{id} — catalog + instances + maintenance + documents */
@@ -135,6 +159,14 @@ export interface WarehouseItem {
   warehouseId: number;
   name: string;
   description?: string | null;
+}
+
+export interface DepreciationPolicyItem {
+  policyId: number;
+  name: string;
+  method: number;
+  usefullLifeMonths: number;
+  salvageValue: number;
 }
 
 /** Query params for GET /api/assets (catalog only) */
@@ -463,6 +495,11 @@ export const assetService = {
     return response.data;
   },
 
+  async getDepreciationPolicies(): Promise<DepreciationPolicyItem[]> {
+    const response = await assetApi.get<DepreciationPolicyItem[]>('/api/AssetDepreciation/policies');
+    return response.data;
+  },
+
   async createAssetType(payload: { name: string; description?: string | null; categoryId?: number }): Promise<AssetTypeItem> {
     const categoryId = payload.categoryId ?? 1;
     const response = await assetApi.post<AssetTypeItem>('/api/AssetTypes', {
@@ -509,6 +546,23 @@ export const assetInstanceService = {
     const response = await assetApi.delete<AssetInstanceResponse>(
       `/api/assetinstances/${id}`,
       { data: payload }
+    );
+    return response.data;
+  },
+
+  /** Vốn hoá cá thể tài sản — gọi PUT /api/AssetCapitalization/change-status. Chỉ kế toán có quyền. */
+  async capitalize(instanceId: number, note?: string | null): Promise<void> {
+    await assetApi.put('/api/AssetCapitalization/change-status', {
+      assetInstanceId: instanceId,
+      note: note ?? null,
+    });
+  },
+};
+
+export const depreciationRecordService = {
+  async getByInstanceId(instanceId: number): Promise<DepreciationRecordItem[]> {
+    const response = await assetApi.get<DepreciationRecordItem[]>(
+      `/api/AssetDepreciation/instance/${instanceId}`
     );
     return response.data;
   },

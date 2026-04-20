@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import {
   assetInstanceService,
+  depreciationRecordService,
   formatVnd,
   getStatusLabel,
   type AssetInstanceResponse,
+  type DepreciationRecordItem,
 } from '../services/assetService';
 import {
   getMaintenanceRecordStatusLabel,
@@ -31,6 +33,44 @@ function formatDate(iso?: string | null): string {
     return iso;
   }
 }
+
+const EN_STATUS_VI_MAP: Record<string, string> = {
+  Available: 'Sẵn sàng sử dụng',
+  InUse: 'Đang sử dụng',
+  Active: 'Đang sử dụng',
+  InMaintenance: 'Đang bảo trì / bảo dưỡng',
+  UnderMaintenance: 'Đang bảo trì / bảo dưỡng',
+  InRepair: 'Đang sửa chữa',
+  Reserved: 'Đã đặt trước',
+  Disposed: 'Đã thanh lý',
+  Lost: 'Bị mất',
+  Liquidated: 'Đã thanh lý (bán)',
+  Capitalized: 'Đã vốn hóa',
+  Damaged: 'Hư hỏng',
+};
+
+function mapConditionToVietnamese(raw?: string | null): string {
+  if (!raw?.trim()) return '—';
+  const trimmed = raw.trim();
+  // Xử lý pattern: "Status changed from X to Y (...)"
+  const changedMatch = /^Status changed from (\w+) to (\w+)/i.exec(trimmed);
+  if (changedMatch) {
+    const from = EN_STATUS_VI_MAP[changedMatch[1]] ?? changedMatch[1];
+    const to = EN_STATUS_VI_MAP[changedMatch[2]] ?? changedMatch[2];
+    return `${from} → ${to}`;
+  }
+  // Map từng từ đơn lẻ nếu khớp
+  if (trimmed in EN_STATUS_VI_MAP) return EN_STATUS_VI_MAP[trimmed];
+  return trimmed;
+}
+
+function formatDepreciationPeriod(dateStr?: string | null): string {
+  if (!dateStr?.trim()) return '—';
+  const m = /^(\d{4})-(\d{2})/.exec(dateStr.trim());
+  if (m) return `Tháng ${parseInt(m[2])}, ${m[1]}`;
+  return formatDate(dateStr);
+}
+
 
 function formatCalendarDateOnly(value?: string | null): string {
   if (!value?.trim()) return '—';
@@ -152,6 +192,7 @@ export function AssetInstanceDetailPage() {
     []
   );
   const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecordResponse[]>([]);
+  const [depreciationRecords, setDepreciationRecords] = useState<DepreciationRecordItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -182,18 +223,21 @@ export function AssetInstanceDetailPage() {
     setError(null);
     async function load() {
       try {
-        const [instRes, profileRes, scheduleRes, recordRes, repairRes] = await Promise.all([
-          assetInstanceService.getById(instanceId),
-          profileService.getProfile().catch(() => null),
-          maintenanceScheduleService.findByInstanceId(instanceId).catch(() => []),
-          maintenanceRecordService.getByInstanceId(instanceId).catch(() => []),
-          repairRecordService.getByInstanceId(instanceId).catch(() => []),
-        ]);
+        const [instRes, profileRes, scheduleRes, recordRes, repairRes, depRecords] =
+          await Promise.all([
+            assetInstanceService.getById(instanceId),
+            profileService.getProfile().catch(() => null),
+            maintenanceScheduleService.findByInstanceId(instanceId).catch(() => []),
+            maintenanceRecordService.getByInstanceId(instanceId).catch(() => []),
+            repairRecordService.getByInstanceId(instanceId).catch(() => []),
+            depreciationRecordService.getByInstanceId(instanceId).catch(() => []),
+          ]);
         if (cancelled) return;
         setInstance(instRes);
         if (profileRes) setProfile(profileRes);
         setMaintenanceSchedules(scheduleRes);
         setMaintenanceRecords(mergeMaintenanceAndRepairHistory(recordRes, repairRes));
+        setDepreciationRecords(depRecords);
       } catch {
         if (!cancelled) setError('Không tải được thông tin cá thể.');
       } finally {
@@ -268,6 +312,9 @@ export function AssetInstanceDetailPage() {
   const detailRecordIsRepair =
     selectedMaintenanceRecord != null &&
     isRepairMaintenanceRecord(selectedMaintenanceRecord);
+  const usageHistories = [...(instance.usageHistories ?? [])].sort((a, b) =>
+    String(b.executionDate ?? '').localeCompare(String(a.executionDate ?? ''))
+  );
 
   return (
     <div className="asset-detail-page">
@@ -398,14 +445,6 @@ export function AssetInstanceDetailPage() {
                 </span>
               </div>
               <div className="asset-detail__info-row">
-                <span className="label">Giá trị hoàn trả ước tính</span>
-                <span className="value">
-                  {instance.depreciationSalvageValue != null
-                    ? formatVnd(instance.depreciationSalvageValue)
-                    : '—'}
-                </span>
-              </div>
-              <div className="asset-detail__info-row">
                 <span className="label">Kỳ khấu hao gần nhất</span>
                 <span className="value">
                   {instance.depreciationPeriod ? formatDate(instance.depreciationPeriod) : '—'}
@@ -432,6 +471,44 @@ export function AssetInstanceDetailPage() {
                 </span>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div className="asset-detail__section">
+          <h2 className="asset-detail__section-title">Lịch sử khấu hao</h2>
+          <div className="asset-detail__table-wrapper">
+            <table className="asset-detail__table">
+              <thead>
+                <tr>
+                  <th>KỲ KHẤU HAO</th>
+                  <th>GIÁ TRỊ GỐC</th>
+                  <th>KHẤU HAO KỲ</th>
+                  <th>LŨY KẾ KHẤU HAO</th>
+                  <th>GIÁ TRỊ CÒN LẠI</th>
+                  <th>NGÀY GHI</th>
+                </tr>
+              </thead>
+              <tbody>
+                {depreciationRecords.length > 0 ? (
+                  depreciationRecords.map((rec) => (
+                    <tr key={rec.recordId}>
+                      <td>{formatDepreciationPeriod(rec.period)}</td>
+                      <td>{formatVnd(rec.originalValue)}</td>
+                      <td>{formatVnd(rec.depreciationAmount)}</td>
+                      <td>{formatVnd(rec.accumulatedDepreciation)}</td>
+                      <td>{formatVnd(rec.remainingValue)}</td>
+                      <td>{formatDate(rec.createDate)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="asset-detail__empty">
+                      Chưa có dữ liệu khấu hao cho cá thể này.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -490,11 +567,24 @@ export function AssetInstanceDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td colSpan={6} className="asset-detail__empty">
-                    Chưa có dữ liệu (cần API quá trình sử dụng theo cá thể).
-                  </td>
-                </tr>
+                {usageHistories.length > 0 ? (
+                  usageHistories.map((row, idx) => (
+                    <tr key={`${row.assetInstanceId}-${row.reportNumber ?? 'usage'}-${idx}`}>
+                      <td>{formatDate(row.executionDate)}</td>
+                      <td>{row.reportNumber?.trim() || '—'}</td>
+                      <td>{row.operation?.trim() || '—'}</td>
+                      <td>{mapConditionToVietnamese(row.condition)}</td>
+                      <td>{row.location?.trim() || '—'}</td>
+                      <td>{row.value != null ? formatVnd(row.value) : '—'}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="asset-detail__empty">
+                      Chưa có dữ liệu quá trình sử dụng.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

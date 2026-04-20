@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
-import { Form, Input, Button, Table, InputNumber, Select, DatePicker } from 'antd';
+import { useEffect, useRef, useState } from 'react';
+import { Form, Input, Button, Table, InputNumber, Select, DatePicker, Modal, message } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import { assetService, type AssetTypeItem } from '../../assets/services/assetService';
+import { assetTypeService } from '../../admin/services/assetTypeService';
+import { assetCategoryService, type AssetCategoryItem } from '../../admin/services/assetCategoryService';
 import './CreatePurchaseOrderModal.css';
 
 const { TextArea } = Input;
@@ -43,12 +45,23 @@ export function CreatePurchaseOrderModal({
   const [form] = Form.useForm<CreatePurchaseFormValues>();
   const [assetTypes, setAssetTypes] = useState<AssetTypeItem[]>([]);
 
+  // --- Create asset type inline ---
+  const [addTypeOpen, setAddTypeOpen] = useState(false);
+  const [addTypeForm] = Form.useForm<{ name: string; categoryId: number }>();
+  const [categories, setCategories] = useState<AssetCategoryItem[]>([]);
+  const [addingType, setAddingType] = useState(false);
+  const pendingRowIndexRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (!open) return;
     assetService
       .getAssetTypes()
       .then((types) => setAssetTypes(types))
       .catch(() => setAssetTypes([]));
+    assetCategoryService
+      .getAll()
+      .then((cats) => setCategories(cats))
+      .catch(() => setCategories([]));
   }, [open]);
 
   useEffect(() => {
@@ -101,6 +114,35 @@ export function CreatePurchaseOrderModal({
     return JSON.stringify({
       equipment: rows,
     });
+  };
+
+  const handleOpenAddType = (rowIndex: number) => {
+    pendingRowIndexRef.current = rowIndex;
+    addTypeForm.resetFields();
+    setAddTypeOpen(true);
+  };
+
+  const handleAddTypeSubmit = async () => {
+    try {
+      const vals = await addTypeForm.validateFields();
+      setAddingType(true);
+      const created = await assetTypeService.create({ name: vals.name.trim(), categoryId: vals.categoryId });
+      const newItem: AssetTypeItem = { assetTypeId: created.assetTypeId, name: created.name };
+      setAssetTypes((prev) => [...prev, newItem]);
+      if (pendingRowIndexRef.current !== null) {
+        const equipment = form.getFieldValue('equipment') as { assetTypeId?: string; quantity?: number }[];
+        const updated = equipment.map((row, idx) =>
+          idx === pendingRowIndexRef.current ? { ...row, assetTypeId: String(created.assetTypeId) } : row,
+        );
+        form.setFieldsValue({ equipment: updated });
+      }
+      message.success(`Đã tạo loại tài sản "${created.name}"`);
+      setAddTypeOpen(false);
+    } catch {
+      // validation error or API error already shown
+    } finally {
+      setAddingType(false);
+    }
   };
 
   const handleSubmitWithStatus = (status: number) => {
@@ -228,6 +270,23 @@ export function CreatePurchaseOrderModal({
                                   value: String(t.assetTypeId),
                                   label: t.name,
                                 }))}
+                                dropdownRender={(menu) => (
+                                  <>
+                                    {menu}
+                                    <div style={{ padding: '4px 8px', borderTop: '1px solid #f0f0f0' }}>
+                                      <Button
+                                        type="link"
+                                        icon={<PlusOutlined />}
+                                        size="small"
+                                        style={{ padding: 0 }}
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => handleOpenAddType(i)}
+                                      >
+                                        Tạo loại tài sản mới
+                                      </Button>
+                                    </div>
+                                  </>
+                                )}
                               />
                             </Form.Item>
                           ),
@@ -330,6 +389,38 @@ export function CreatePurchaseOrderModal({
         </div>
       </div>
 
+      <Modal
+        title="Tạo loại tài sản mới"
+        open={addTypeOpen}
+        onCancel={() => setAddTypeOpen(false)}
+        onOk={handleAddTypeSubmit}
+        okText="Tạo"
+        cancelText="Hủy"
+        confirmLoading={addingType}
+        width={400}
+      >
+        <Form form={addTypeForm} layout="vertical" style={{ marginTop: 12 }}>
+          <Form.Item
+            label="Tên loại tài sản"
+            name="name"
+            rules={[{ required: true, message: 'Vui lòng nhập tên loại tài sản' }]}
+          >
+            <Input placeholder="VD: Máy cắt sắt" />
+          </Form.Item>
+          <Form.Item
+            label="Danh mục"
+            name="categoryId"
+            rules={[{ required: true, message: 'Vui lòng chọn danh mục' }]}
+          >
+            <Select
+              showSearch
+              optionFilterProp="label"
+              placeholder="Chọn danh mục"
+              options={categories.map((c) => ({ value: c.categoryId, label: c.name }))}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }

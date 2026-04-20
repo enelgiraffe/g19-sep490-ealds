@@ -32,7 +32,8 @@ public enum AssetLifeActionType
     Capitalized = 3,
     Transferred = 4,
     Repaired = 5,
-    Disposed = 6
+    Disposed = 6,
+    Updated = 7
 }
 
 public enum InventorySessionStatus

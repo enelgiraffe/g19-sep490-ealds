@@ -29,6 +29,34 @@ function formatDate(iso?: string | null): string {
   }
 }
 
+const EN_STATUS_VI_MAP: Record<string, string> = {
+  Available: 'Sẵn sàng sử dụng',
+  InUse: 'Đang sử dụng',
+  Active: 'Đang sử dụng',
+  InMaintenance: 'Đang bảo trì / bảo dưỡng',
+  UnderMaintenance: 'Đang bảo trì / bảo dưỡng',
+  InRepair: 'Đang sửa chữa',
+  Reserved: 'Đã đặt trước',
+  Disposed: 'Đã thanh lý',
+  Lost: 'Bị mất',
+  Liquidated: 'Đã thanh lý (bán)',
+  Capitalized: 'Đã vốn hóa',
+  Damaged: 'Hư hỏng',
+};
+
+function mapConditionToVietnamese(raw?: string | null): string {
+  if (!raw?.trim()) return '—';
+  const trimmed = raw.trim();
+  const changedMatch = /^Status changed from (\w+) to (\w+)$/i.exec(trimmed);
+  if (changedMatch) {
+    const from = EN_STATUS_VI_MAP[changedMatch[1]] ?? changedMatch[1];
+    const to = EN_STATUS_VI_MAP[changedMatch[2]] ?? changedMatch[2];
+    return `${from} → ${to}`;
+  }
+  if (trimmed in EN_STATUS_VI_MAP) return EN_STATUS_VI_MAP[trimmed];
+  return trimmed;
+}
+
 /** API DateOnly (yyyy-MM-dd) — tránh lệch ngày theo múi giờ so với chuỗi ISO có Z. */
 function formatCalendarDateOnly(value?: string | null): string {
   if (!value?.trim()) return '—';
@@ -243,6 +271,9 @@ export function AssetDetailPage() {
   const instanceCount = instances.length;
   const primary = instances[0];
   const maintenanceSchedules = asset.maintenanceSchedules ?? [];
+  const usageHistories = instances
+    .flatMap((instance) => instance.usageHistories ?? [])
+    .sort((a, b) => String(b.executionDate ?? '').localeCompare(String(a.executionDate ?? '')));
 
   const statusLabel = getStatusLabel(asset.statusName);
 
@@ -462,11 +493,25 @@ export function AssetDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td colSpan={7} className="asset-detail__empty">
-                    Chưa có dữ liệu (cần API quá trình sử dụng theo từng cá thể).
-                  </td>
-                </tr>
+                {usageHistories.length > 0 ? (
+                  usageHistories.map((row, idx) => (
+                    <tr key={`${row.assetInstanceId}-${row.reportNumber ?? 'usage'}-${idx}`}>
+                      <td>{row.instanceCode?.trim() || '—'}</td>
+                      <td>{formatDate(row.executionDate)}</td>
+                      <td>{row.reportNumber?.trim() || '—'}</td>
+                      <td>{row.operation?.trim() || '—'}</td>
+                      <td>{mapConditionToVietnamese(row.condition)}</td>
+                      <td>{row.location?.trim() || '—'}</td>
+                      <td>{row.value != null ? formatVnd(row.value) : '—'}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="asset-detail__empty">
+                      Chưa có dữ liệu quá trình sử dụng.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

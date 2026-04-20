@@ -270,6 +270,20 @@ public class AssetInstanceResponseDTO
     public decimal? AccumulatedDepreciation { get; set; }
     public decimal? RemainingValue { get; set; }
     public List<GuaranteeDTO>? Guarantees { get; set; }
+    public List<AssetUsageHistoryDTO>? UsageHistories { get; set; }
+    public List<DepreciationRecordDTO>? DepreciationRecords { get; set; }
+}
+
+public class DepreciationRecordDTO
+{
+    public int RecordId { get; set; }
+    public DateOnly Period { get; set; }
+    public decimal DepreciationAmount { get; set; }
+    public decimal OriginalValue { get; set; }
+    public decimal RemainingValue { get; set; }
+    public decimal AccumulatedDepreciation { get; set; }
+    public DateTime CreateDate { get; set; }
+    public bool IsPosted { get; set; }
 }
 
 public class GuaranteeDTO
@@ -280,4 +294,16 @@ public class GuaranteeDTO
     public string? WarrantyConditions { get; set; }
     public DateOnly StartDate { get; set; }
     public DateOnly WarrantyEndDate { get; set; }
+}
+
+public class AssetUsageHistoryDTO
+{
+    public int AssetInstanceId { get; set; }
+    public string? InstanceCode { get; set; }
+    public DateOnly ExecutionDate { get; set; }
+    public string? ReportNumber { get; set; }
+    public string? Operation { get; set; }
+    public string? Condition { get; set; }
+    public string? Location { get; set; }
+    public decimal? Value { get; set; }
 }

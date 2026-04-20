@@ -168,6 +168,8 @@ export function AssetEditPage() {
     isActive: true,
   });
 
+  const [syncToAllInstances, setSyncToAllInstances] = useState(true);
+
   const [documents, setDocuments] = useState<AssetDocumentItem[]>([]);
   const docFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -508,6 +510,13 @@ export function AssetEditPage() {
 
     let instancePayload: Parameters<typeof assetInstanceService.update>[1] | null = null;
     if (primary) {
+      // Chỉ gửi assignedDepartmentId / responsibleEmployeeId khi user thực sự thay đổi
+      // để tránh backend tạo AssetLocation / AssetUsage record mới mỗi lần lưu.
+      const currentDeptId = primary.currentDepartmentId ?? null;
+      const currentEmpId = primary.currentResponsibleEmployeeId ?? null;
+      const deptChanged = deptId !== currentDeptId;
+      const empChanged = managerId !== currentEmpId;
+
       instancePayload = {
         warehouseId: Number(warehouseId),
         purchaseDate: purchaseIso,
@@ -517,10 +526,11 @@ export function AssetEditPage() {
         contractNo: contractNumber.trim() || null,
         condition: specification.trim() || null,
         supplierId: supId,
-        assignedDepartmentId: deptId,
-        responsibleEmployeeId: managerId,
-        assignmentEffectiveDate:
-          isAccountant && (deptId != null || managerId != null) ? purchaseIso ?? null : null,
+        ...(deptChanged && { assignedDepartmentId: deptId }),
+        ...(empChanged && { responsibleEmployeeId: managerId }),
+        ...((deptChanged || empChanged) && {
+          assignmentEffectiveDate: purchaseIso ?? null,
+        }),
       };
 
       if (hasWarrantyGroup) {
@@ -567,9 +577,59 @@ export function AssetEditPage() {
 
     try {
       await assetService.update(assetId, catalogPayload);
+
       if (primary && instancePayload) {
         await assetInstanceService.update(primary.assetInstanceId, instancePayload);
+
+        if (syncToAllInstances) {
+          const otherInstances = (asset?.instances ?? []).filter(
+            (i) => i.assetInstanceId !== primary.assetInstanceId
+          );
+          if (otherInstances.length > 0) {
+            const sharedPayload: Parameters<typeof assetInstanceService.update>[1] = {
+              warehouseId: Number(warehouseId),
+              purchaseDate: purchaseIso,
+              supplierId: supId,
+              contractNo: contractNumber.trim() || null,
+              condition: specification.trim() || null,
+            };
+
+            if (hasWarrantyGroup) {
+              sharedPayload.warrantyPeriodValue = Number(warrantyMonths);
+              sharedPayload.warrantyPeriodUnit = 'month';
+              sharedPayload.warrantyConditions = warrantyCondition.trim() || null;
+              sharedPayload.warrantyStartDate = warrantyStart;
+              sharedPayload.warrantyEndDate = warrantyEnd;
+            }
+
+            const hasDepreciationGroup =
+              depreciationBaseValue.trim().length > 0 ||
+              depreciationStartDate.trim().length > 0 ||
+              depreciationAccumulated.trim().length > 0 ||
+              depreciationRemainingValue.trim().length > 0;
+
+            if (hasDepreciationGroup) {
+              sharedPayload.depreciationPeriod = toDateOnly(depreciationStartDate) ?? null;
+              sharedPayload.depreciationAmount = depreciationBaseValue.trim()
+                ? Number(depreciationBaseValue)
+                : undefined;
+              sharedPayload.accumulatedDepreciation = depreciationAccumulated.trim()
+                ? Number(depreciationAccumulated)
+                : undefined;
+              sharedPayload.remainingValue = depreciationRemainingValue.trim()
+                ? Number(depreciationRemainingValue)
+                : undefined;
+            }
+
+            await Promise.all(
+              otherInstances.map((inst) =>
+                assetInstanceService.update(inst.assetInstanceId, sharedPayload)
+              )
+            );
+          }
+        }
       }
+
       navigate(backToListPath);
     } catch (err: unknown) {
       const msg =
@@ -628,7 +688,19 @@ export function AssetEditPage() {
         {error && <div className="asset-create__error">{error}</div>}
 
         <section className="asset-create__section">
-          <h2 className="asset-create__section-title">Thông tin chung</h2>
+          <div className="asset-create__section-header">
+            <h2 className="asset-create__section-title">Thông tin chung</h2>
+            {(asset?.instances?.length ?? 0) > 1 && (
+              <label className="asset-create__checkbox-row" style={{ fontWeight: 400, fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={syncToAllInstances}
+                  onChange={(e) => setSyncToAllInstances(e.target.checked)}
+                />
+                <span>Đồng bộ thông tin chung sang tất cả cá thể khi lưu</span>
+              </label>
+            )}
+          </div>
           <div className="asset-create__grid asset-create__grid--two">
             <div className="asset-create__column">
               <div className="asset-create__field">

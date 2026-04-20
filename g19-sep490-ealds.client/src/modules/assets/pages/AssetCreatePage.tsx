@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   assetService,
+  assetInstanceService,
   ASSET_CATALOG_DOCUMENT_TYPE,
   ASSET_MEASUREMENT_UNITS,
   type CreateAssetPayload,
@@ -62,6 +63,14 @@ type AssetFormDocRow = {
   error?: string;
 };
 
+function fromDisplayDate(display: string): string {
+  const m = display.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return '';
+  const d = m[1].padStart(2, '0');
+  const mo = m[2].padStart(2, '0');
+  return `${m[3]}-${mo}-${d}`;
+}
+
 export function AssetCreatePage() {
   const navigate = useNavigate();
   const currentRole = useAppStore((s) => s.currentRole);
@@ -98,6 +107,7 @@ export function AssetCreatePage() {
     conditions: '',
     expiryDate: '',
   });
+  const [warrantyExpiryText, setWarrantyExpiryText] = useState('');
 
   const [depreciation, setDepreciation] = useState<DepreciationForm>({
     baseValue: '',
@@ -395,7 +405,12 @@ export function AssetCreatePage() {
     };
 
     try {
-      await assetService.create(payload);
+      const created = await assetService.create(payload);
+      if (general.isFixedAsset && created.instances && created.instances.length > 0) {
+        await Promise.allSettled(
+          created.instances.map((inst) => assetInstanceService.capitalize(inst.assetInstanceId))
+        );
+      }
       navigate(backToListPath);
     } catch (err: unknown) {
       const msg =
@@ -800,10 +815,17 @@ export function AssetCreatePage() {
             <div className="asset-create__field">
               <label className="asset-create__label">Hạn bảo hành</label>
               <input
-                type="date"
+                type="text"
                 className="asset-create__input"
-                value={warranty.expiryDate}
-                onChange={(e) => setWarranty({ ...warranty, expiryDate: e.target.value })}
+                placeholder="dd/mm/yyyy"
+                value={warrantyExpiryText}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setWarrantyExpiryText(val);
+                  const iso = fromDisplayDate(val);
+                  if (iso) setWarranty({ ...warranty, expiryDate: iso });
+                  else if (!val.trim()) setWarranty({ ...warranty, expiryDate: '' });
+                }}
               />
             </div>
           </div>

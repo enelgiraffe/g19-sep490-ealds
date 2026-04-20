@@ -91,6 +91,7 @@ public class MaintenanceRequestsController : ControllerBase
                         t.AssetRequest.Status == 2 ? "Phê duyệt" :
                         t.AssetRequest.Status == 3 ? "Từ chối" :
                         t.AssetRequest.Status == 4 ? "Đang thực hiện" :
+                        t.AssetRequest.Status == 5 ? "Đã bảo dưỡng" :
                         "Không xác định",
                     Reason = t.AssetRequest.Description,
                     FromDepartmentId = t.AssetInstance.AssetLocations
@@ -562,7 +563,7 @@ public class MaintenanceRequestsController : ControllerBase
         {
             var fromRequestStatus = linkedRequest.Status;
             // Close maintenance workflow request after task completion.
-            linkedRequest.Status = 2;
+            linkedRequest.Status = 5;
 
             var completionNode = new JsonObject
             {

@@ -111,8 +111,13 @@ public class AssetInstancesController : ControllerBase
 
         var instanceIds = instances.Select(i => i.AssetInstanceId).ToList();
         var latestDeps = await LoadLatestDepreciationByInstanceAsync(instanceIds);
+        var usageHistoriesByInstance = await BuildUsageHistoriesByInstanceAsync(instances);
 
-        return Ok(instances.Select(i => ToDto(i, latestDeps.GetValueOrDefault(i.AssetInstanceId), null)));
+        return Ok(instances.Select(i => ToDto(
+            i,
+            latestDeps.GetValueOrDefault(i.AssetInstanceId),
+            usageHistoriesByInstance.GetValueOrDefault(i.AssetInstanceId),
+            null)));
     }
 
     /// <summary>
@@ -207,15 +212,18 @@ public class AssetInstancesController : ControllerBase
             !DepartmentAssetScope.InstanceBelongsToDepartment(instance, allowedDeptId))
             return NotFound();
 
-        var latestDepSnapshot = await _context.DepreciationRecords
+        var allDepRecords = await _context.DepreciationRecords
             .Include(r => r.Policy)
             .AsNoTracking()
             .Where(r => r.AssetInstanceId == id)
             .OrderByDescending(r => r.Period)
             .ThenByDescending(r => r.CreateDate)
-            .FirstOrDefaultAsync();
+            .ToListAsync();
+        var latestDepSnapshot = allDepRecords.FirstOrDefault();
 
-        return Ok(ToDto(instance, latestDepSnapshot, null));
+        var usageHistories = (await BuildUsageHistoriesByInstanceAsync(new List<AssetInstance> { instance }))
+            .GetValueOrDefault(instance.AssetInstanceId);
+        return Ok(ToDto(instance, latestDepSnapshot, usageHistories, null, allDepRecords));
     }
 
     /// <summary>
@@ -321,7 +329,12 @@ public class AssetInstancesController : ControllerBase
             .FirstAsync(i => i.AssetInstanceId == instance.AssetInstanceId);
 
         return CreatedAtAction(nameof(GetById), new { id = instance.AssetInstanceId },
-            ToDto(reloaded, latestDep, null));
+            ToDto(
+                reloaded,
+                latestDep,
+                (await BuildUsageHistoriesByInstanceAsync(new List<AssetInstance> { reloaded }))
+                    .GetValueOrDefault(reloaded.AssetInstanceId),
+                null));
     }
 
     /// <summary>
@@ -471,33 +484,57 @@ public class AssetInstancesController : ControllerBase
 
         if (hasDepreciationPayload)
         {
-            var latestDepToUpdate = await _context.DepreciationRecords
+            // Validate values first
+            if (dto.DepreciationAmount.HasValue && dto.DepreciationAmount.Value < 0)
+                return BadRequest(new { message = "Depreciation amount cannot be negative." });
+            if (dto.AccumulatedDepreciation.HasValue && dto.AccumulatedDepreciation.Value < 0)
+                return BadRequest(new { message = "Accumulated depreciation cannot be negative." });
+            if (dto.RemainingValue.HasValue && dto.RemainingValue.Value < 0)
+                return BadRequest(new { message = "Remaining value cannot be negative." });
+
+            // Bao gồm cả record chưa lưu (vừa được thêm bởi block DepreciationPolicyId ở trên)
+            var latestDepToUpdate = _context.DepreciationRecords.Local
                 .Where(r => r.AssetInstanceId == id)
                 .OrderByDescending(r => r.Period)
                 .ThenByDescending(r => r.CreateDate)
-                .FirstOrDefaultAsync();
+                .FirstOrDefault()
+                ?? await _context.DepreciationRecords
+                    .Where(r => r.AssetInstanceId == id)
+                    .OrderByDescending(r => r.Period)
+                    .ThenByDescending(r => r.CreateDate)
+                    .FirstOrDefaultAsync();
 
             if (latestDepToUpdate != null)
             {
                 if (dto.DepreciationPeriod.HasValue)
                     latestDepToUpdate.Period = dto.DepreciationPeriod.Value;
                 if (dto.DepreciationAmount.HasValue)
-                {
-                    if (dto.DepreciationAmount.Value < 0)
-                        return BadRequest(new { message = "Depreciation amount cannot be negative." });
                     latestDepToUpdate.DepreciationAmount = dto.DepreciationAmount.Value;
-                }
                 if (dto.AccumulatedDepreciation.HasValue)
-                {
-                    if (dto.AccumulatedDepreciation.Value < 0)
-                        return BadRequest(new { message = "Accumulated depreciation cannot be negative." });
                     latestDepToUpdate.AccumulatedDepreciation = dto.AccumulatedDepreciation.Value;
-                }
                 if (dto.RemainingValue.HasValue)
-                {
-                    if (dto.RemainingValue.Value < 0)
-                        return BadRequest(new { message = "Remaining value cannot be negative." });
                     latestDepToUpdate.RemainingValue = dto.RemainingValue.Value;
+            }
+            else
+            {
+                // Chưa có DepreciationRecord nào — tạo mới nếu có policy
+                var policyId = instance.DepreciationPolicyId;
+                if (policyId.HasValue)
+                {
+                    var period = dto.DepreciationPeriod
+                        ?? new DateOnly(instance.PurchaseDate.Year, instance.PurchaseDate.Month, 1);
+                    _context.DepreciationRecords.Add(new DepreciationRecord
+                    {
+                        AssetInstanceId = id,
+                        PolicyId = policyId.Value,
+                        Period = period,
+                        DepreciationAmount = dto.DepreciationAmount ?? 0m,
+                        AccumulatedDepreciation = dto.AccumulatedDepreciation ?? 0m,
+                        OriginalValue = instance.OriginalPrice,
+                        RemainingValue = dto.RemainingValue ?? instance.CurrentValue,
+                        CreateDate = DateTime.UtcNow,
+                        IsPosted = false
+                    });
                 }
             }
         }
@@ -507,6 +544,42 @@ public class AssetInstancesController : ControllerBase
             return assignmentError;
 
         await _context.SaveChangesAsync();
+
+        try
+        {
+            var actorUserId = TryGetCurrentUserId();
+            if (actorUserId.HasValue)
+            {
+                var roleId = await _context.UserRoles
+                    .Where(ur => ur.UserId == actorUserId.Value)
+                    .Select(ur => ur.RoleId)
+                    .FirstOrDefaultAsync();
+                if (roleId > 0)
+                {
+                    var updatedDesc = hasDepreciationPayload
+                        ? "Chỉnh sửa thông tin khấu hao"
+                        : hasWarrantyPayload
+                            ? "Cập nhật thông tin bảo hành"
+                            : "Chỉnh sửa thông tin cá thể";
+                    _context.AssetLifeCycles.Add(new AssetLifeCycle
+                    {
+                        AssetInstanceId = id,
+                        ActionType = (int)AssetLifeActionType.Updated,
+                        RelatedEntityType = 2,
+                        RelatedEntityId = id,
+                        ActorUserId = actorUserId.Value,
+                        ActorRoleId = roleId,
+                        Description = updatedDesc,
+                        OccurredAt = DateTime.UtcNow
+                    });
+                    await _context.SaveChangesAsync();
+                }
+            }
+        }
+        catch
+        {
+            // Không hủy update nếu ghi log lifecycle thất bại
+        }
 
         var latestDep = await _context.DepreciationRecords
             .Include(r => r.Policy)
@@ -525,7 +598,12 @@ public class AssetInstancesController : ControllerBase
             .AsNoTracking()
             .FirstAsync(i => i.AssetInstanceId == id);
 
-        return Ok(ToDto(reloaded, latestDep, null));
+        return Ok(ToDto(
+            reloaded,
+            latestDep,
+            (await BuildUsageHistoriesByInstanceAsync(new List<AssetInstance> { reloaded }))
+                .GetValueOrDefault(reloaded.AssetInstanceId),
+            null));
     }
 
     /// <summary>
@@ -562,7 +640,12 @@ public class AssetInstancesController : ControllerBase
             .AsNoTracking()
             .FirstAsync(i => i.AssetInstanceId == id);
 
-        return Ok(ToDto(reloaded, latestDep, null));
+        return Ok(ToDto(
+            reloaded,
+            latestDep,
+            (await BuildUsageHistoriesByInstanceAsync(new List<AssetInstance> { reloaded }))
+                .GetValueOrDefault(reloaded.AssetInstanceId),
+            null));
     }
 
     /// <summary>
@@ -597,7 +680,12 @@ public class AssetInstancesController : ControllerBase
             .AsNoTracking()
             .FirstAsync(i => i.AssetInstanceId == id);
 
-        return Ok(ToDto(reloaded, null, null));
+        return Ok(ToDto(
+            reloaded,
+            null,
+            (await BuildUsageHistoriesByInstanceAsync(new List<AssetInstance> { reloaded }))
+                .GetValueOrDefault(reloaded.AssetInstanceId),
+            null));
     }
 
     private async Task<Dictionary<int, DepreciationRecord>> LoadLatestDepreciationByInstanceAsync(
@@ -825,7 +913,9 @@ public class AssetInstancesController : ControllerBase
     private static AssetInstanceResponseDTO ToDto(
         AssetInstance i,
         DepreciationRecord? latestDep,
-        AssetStatus? forcedStatus)
+        List<AssetUsageHistoryDTO>? usageHistories,
+        AssetStatus? forcedStatus,
+        List<DepreciationRecord>? allDepreciationRecords = null)
     {
         var effectiveStatus = forcedStatus ?? (AssetStatus)i.Status;
         var dto = new AssetInstanceResponseDTO
@@ -880,6 +970,7 @@ public class AssetInstancesController : ControllerBase
                 .Select(u => u.Employee != null ? (int?)u.Employee.UserId : null)
                 .FirstOrDefault(),
             DepreciationPolicyId = i.DepreciationPolicyId,
+            UsageHistories = usageHistories,
             Guarantees = i.Guarantees?.Select(g => new GuaranteeDTO
             {
                 GuaranteeId = g.GuaranteeId,
@@ -888,6 +979,17 @@ public class AssetInstancesController : ControllerBase
                 WarrantyConditions = g.WarrantyConditions,
                 StartDate = g.StartDate,
                 WarrantyEndDate = g.WarrantyEndDate
+            }).ToList(),
+            DepreciationRecords = allDepreciationRecords?.Select(r => new DepreciationRecordDTO
+            {
+                RecordId = r.RecordId,
+                Period = r.Period,
+                DepreciationAmount = r.DepreciationAmount,
+                OriginalValue = r.OriginalValue,
+                RemainingValue = r.RemainingValue,
+                AccumulatedDepreciation = r.AccumulatedDepreciation,
+                CreateDate = r.CreateDate,
+                IsPosted = r.IsPosted
             }).ToList()
         };
 
@@ -904,5 +1006,118 @@ public class AssetInstancesController : ControllerBase
         }
 
         return dto;
+    }
+
+    private static string GetLifecycleOperationLabel(int actionType) => actionType switch
+    {
+        (int)AssetLifeActionType.Created => "Tạo mới",
+        (int)AssetLifeActionType.StatusChanged => "Thay đổi trạng thái",
+        (int)AssetLifeActionType.Capitalized => "Vốn hóa",
+        (int)AssetLifeActionType.Disposed => "Thanh lý",
+        (int)AssetLifeActionType.Updated => "Chỉnh sửa thông tin",
+        _ => "Hoạt động khác"
+    };
+
+    private async Task<Dictionary<int, List<AssetUsageHistoryDTO>>> BuildUsageHistoriesByInstanceAsync(
+        List<AssetInstance> instances)
+    {
+        var result = instances.ToDictionary(
+            i => i.AssetInstanceId,
+            _ => new List<AssetUsageHistoryDTO>());
+        if (instances.Count == 0)
+            return result;
+
+        var instanceIds = instances.Select(i => i.AssetInstanceId).ToList();
+
+        var toLocationIds = instances
+            .SelectMany(i => i.AssetLocations)
+            .Select(l => l.LocationId)
+            .Distinct()
+            .ToList();
+
+        var transferByToLocationId = toLocationIds.Count == 0
+            ? new Dictionary<int, int>()
+            : await _context.TransferRecords
+                .AsNoTracking()
+                .Where(t => toLocationIds.Contains(t.ToLocationId))
+                .GroupBy(t => t.ToLocationId)
+                .ToDictionaryAsync(
+                    g => g.Key,
+                    g => g.OrderByDescending(t => t.TransferDate)
+                        .Select(t => t.AssetRequestId)
+                        .First());
+
+        var lifecycleActionTypes = new[]
+        {
+            (int)AssetLifeActionType.Created,
+            (int)AssetLifeActionType.StatusChanged,
+            (int)AssetLifeActionType.Capitalized,
+            (int)AssetLifeActionType.Disposed,
+            (int)AssetLifeActionType.Updated
+        };
+        var lifecyclesByInstance = await _context.AssetLifeCycles
+            .AsNoTracking()
+            .Where(lc => instanceIds.Contains(lc.AssetInstanceId) && lifecycleActionTypes.Contains(lc.ActionType))
+            .GroupBy(lc => lc.AssetInstanceId)
+            .ToDictionaryAsync(g => g.Key, g => g.ToList());
+
+        foreach (var instance in instances)
+        {
+            var locationRows = instance.AssetLocations
+                .Select(location =>
+                {
+                    transferByToLocationId.TryGetValue(location.LocationId, out var transferRequestId);
+                    return new AssetUsageHistoryDTO
+                    {
+                        AssetInstanceId = instance.AssetInstanceId,
+                        InstanceCode = instance.InstanceCode,
+                        ExecutionDate = location.StartDate,
+                        ReportNumber = transferRequestId > 0
+                            ? $"YC-{transferRequestId}"
+                            : $"VT-{location.LocationId}",
+                        Operation = transferRequestId > 0 ? "Điều chuyển" : "Cập nhật vị trí",
+                        Condition = instance.Condition,
+                        Location = string.IsNullOrWhiteSpace(location.Note)
+                            ? location.Department?.Name
+                            : $"{location.Department?.Name} · {location.Note}",
+                        Value = instance.CurrentValue
+                    };
+                });
+
+            var lifecycleRows = lifecyclesByInstance.GetValueOrDefault(instance.AssetInstanceId, [])
+                .Select(lc =>
+                {
+                    var eventDate = DateOnly.FromDateTime(lc.OccurredAt.ToLocalTime());
+                    var locationAtTime = instance.AssetLocations
+                        .Where(loc => loc.StartDate <= eventDate
+                            && (loc.EndDate == null || loc.EndDate >= eventDate))
+                        .OrderByDescending(loc => loc.StartDate)
+                        .FirstOrDefault();
+                    var locationLabel = locationAtTime != null
+                        ? (string.IsNullOrWhiteSpace(locationAtTime.Note)
+                            ? locationAtTime.Department?.Name
+                            : $"{locationAtTime.Department?.Name} · {locationAtTime.Note}")
+                        : null;
+                    return new AssetUsageHistoryDTO
+                    {
+                        AssetInstanceId = instance.AssetInstanceId,
+                        InstanceCode = instance.InstanceCode,
+                        ExecutionDate = eventDate,
+                        ReportNumber = $"LC-{lc.AuditId}",
+                        Operation = GetLifecycleOperationLabel(lc.ActionType),
+                        Condition = lc.Description,
+                        Location = locationLabel,
+                        Value = instance.CurrentValue
+                    };
+                });
+
+            result[instance.AssetInstanceId] = locationRows
+                .Concat(lifecycleRows)
+                .OrderByDescending(r => r.ExecutionDate)
+                .ThenByDescending(r => r.ReportNumber)
+                .ToList();
+        }
+
+        return result;
     }
 }

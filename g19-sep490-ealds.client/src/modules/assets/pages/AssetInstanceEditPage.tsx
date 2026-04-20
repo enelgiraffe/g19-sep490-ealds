@@ -7,6 +7,7 @@ import {
   type AssetInstanceResponse,
   type GuaranteeItem,
   type UpdateAssetInstancePayload,
+  type DepreciationPolicyItem,
 } from '../services/assetService';
 import { transferRequestService, type AssetLocationOption } from '../services/transferRequestService';
 import { profileService } from '../../profile/services/profileService';
@@ -69,6 +70,39 @@ function buildWarrantyConditions(externalCode: string, details: string): string 
   return content;
 }
 
+function toDisplayDate(iso: string): string {
+  if (!iso) return '';
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return '';
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+
+function fromDisplayDate(display: string): string {
+  const m = display.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return '';
+  const d = m[1].padStart(2, '0');
+  const mo = m[2].padStart(2, '0');
+  return `${m[3]}-${mo}-${d}`;
+}
+
+function monthDiff(fromDate: Date, toDate: Date): number {
+  const diff = (toDate.getFullYear() - fromDate.getFullYear()) * 12 + (toDate.getMonth() - fromDate.getMonth());
+  return Math.max(0, diff);
+}
+
+function roundAwayFromZero(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  if (value === 0) return 0;
+  return Math.sign(value) * Math.round(Math.abs(value));
+}
+
+function getPeriodDate(value: string): Date | null {
+  if (!value.trim()) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
 function getLatestGuarantee(instance: AssetInstanceResponse): GuaranteeItem | null {
   if (!instance.guarantees || instance.guarantees.length === 0) return null;
   return [...instance.guarantees].sort((a, b) =>
@@ -119,12 +153,18 @@ export function AssetInstanceEditPage() {
   const [warrantyConditions, setWarrantyConditions] = useState('');
   const [warrantyStartDate, setWarrantyStartDate] = useState('');
   const [warrantyEndDate, setWarrantyEndDate] = useState('');
+  const [warrantyStartDateText, setWarrantyStartDateText] = useState('');
 
   const [depreciationPeriod, setDepreciationPeriod] = useState('');
   const [depreciationAmountInput, setDepreciationAmountInput] = useState('');
   const [accumulatedDepInput, setAccumulatedDepInput] = useState('');
   const [remainingValueInput, setRemainingValueInput] = useState('');
+  const [depreciationPolicyId, setDepreciationPolicyId] = useState('');
+  const [depreciationPolicies, setDepreciationPolicies] = useState<DepreciationPolicyItem[]>([]);
   const [advancedEditing, setAdvancedEditing] = useState(false);
+
+  const [isCapitalized, setIsCapitalized] = useState(false);
+  const [wasAlreadyCapitalized, setWasAlreadyCapitalized] = useState(false);
 
   useEffect(() => {
     if (!parsedInstanceId || Number.isNaN(parsedInstanceId)) {
@@ -174,23 +214,29 @@ export function AssetInstanceEditPage() {
         setSupplierId(inst.supplierId != null && inst.supplierId > 0 ? String(inst.supplierId) : '');
 
         try {
-          const [deptList, wh, sup] = await Promise.all([
+          const [deptList, wh, sup, policies] = await Promise.all([
             transferRequestService.getAssetLocations(),
             assetService.getWarehouses(),
             assetService.getSuppliers(),
+            assetService.getDepreciationPolicies(),
           ]);
           if (cancelled) return;
           setDepartments(deptList);
           setWarehouses(wh);
           setSuppliers(sup.map((s) => ({ supplierId: s.supplierId, name: s.name, code: s.code })));
+          setDepreciationPolicies(policies);
           setLoadMetaError(null);
         } catch {
           if (!cancelled) {
             setLoadMetaError(
-              'Không tải được danh mục (phòng ban, kho, nhà cung cấp).'
+              'Không tải được danh mục (phòng ban, kho, nhà cung cấp, chính sách khấu hao).'
             );
           }
         }
+
+        const capitalized = inst.status === 7;
+        setIsCapitalized(capitalized);
+        setWasAlreadyCapitalized(capitalized);
 
         setSerialNumber(inst.serialNumber ?? '');
         setContractNo(inst.contractNo ?? '');
@@ -209,10 +255,16 @@ export function AssetInstanceEditPage() {
         );
         setWarrantyExternalCode(parsedWarranty.externalCode);
         setWarrantyConditions(parsedWarranty.details);
-        setWarrantyStartDate(toDateInput(latestGuarantee?.startDate ?? inst.warrantyStartDate));
+        const initWarrantyStart = toDateInput(latestGuarantee?.startDate ?? inst.warrantyStartDate);
+        setWarrantyStartDate(initWarrantyStart);
+        setWarrantyStartDateText(toDisplayDate(initWarrantyStart));
         setWarrantyEndDate(toDateInput(latestGuarantee?.warrantyEndDate ?? inst.warrantyEndDate));
 
-        setDepreciationPeriod(toDateInput(inst.depreciationPeriod));
+        const sortedDepRecords = [...(inst.depreciationRecords ?? [])].sort((a, b) =>
+          String(a.period).localeCompare(String(b.period))
+        );
+        const earliestDepRecord = sortedDepRecords[0];
+        setDepreciationPeriod(toDateInput(earliestDepRecord?.period ?? inst.depreciationPeriod));
         setDepreciationAmountInput(
           inst.depreciationAmount != null ? String(inst.depreciationAmount) : ''
         );
@@ -220,6 +272,9 @@ export function AssetInstanceEditPage() {
           inst.accumulatedDepreciation != null ? String(inst.accumulatedDepreciation) : ''
         );
         setRemainingValueInput(inst.remainingValue != null ? String(inst.remainingValue) : '');
+        setDepreciationPolicyId(
+          inst.depreciationPolicyId != null ? String(inst.depreciationPolicyId) : ''
+        );
       } catch {
         if (!cancelled) setError('Không tải được thông tin cá thể.');
       } finally {
@@ -288,17 +343,76 @@ export function AssetInstanceEditPage() {
     return id != null ? `BH-${id}` : '—';
   }, [instance]);
 
+  const selectedDepreciationPolicy = useMemo(() => {
+    if (!depreciationPolicyId) return null;
+    return depreciationPolicies.find((p) => String(p.policyId) === depreciationPolicyId) ?? null;
+  }, [depreciationPolicies, depreciationPolicyId]);
+
+  const depreciationPreview = useMemo(() => {
+    if (!instance) return null;
+    const policy = selectedDepreciationPolicy;
+    const periodDate = getPeriodDate(depreciationPeriod);
+    if (!policy || !periodDate || policy.usefullLifeMonths <= 0) return null;
+
+    const records = [...(instance.depreciationRecords ?? [])]
+      .filter((r) => {
+        const recordDate = getPeriodDate(String(r.period));
+        return recordDate != null && recordDate < periodDate;
+      })
+      .sort((a, b) => String(a.period).localeCompare(String(b.period)));
+    const lastRecord = records.length > 0 ? records[records.length - 1] : null;
+
+    const openingValue = lastRecord?.remainingValue ?? Number(originalPriceInput || instance.originalPrice || 0);
+    const salvageValue = Number(policy.salvageValue || 0);
+    const inUseBase = getPeriodDate(instance.inUseDate ?? purchaseDate) ?? getPeriodDate(purchaseDate);
+    const elapsedMonths = inUseBase ? monthDiff(inUseBase, periodDate) : 0;
+    const remainingMonths = Math.max(1, policy.usefullLifeMonths - elapsedMonths);
+
+    const depreciableBase = openingValue - salvageValue;
+    const monthly = depreciableBase > 0 ? roundAwayFromZero(depreciableBase / remainingMonths) : 0;
+    const maxAllowed = Math.max(0, openingValue - salvageValue);
+    const amount = Math.min(monthly, maxAllowed);
+    const accumulated = (lastRecord?.accumulatedDepreciation ?? 0) + amount;
+    const remainingValue = openingValue - amount;
+    const remainingLifeMonths = Math.max(0, policy.usefullLifeMonths - elapsedMonths - 1);
+
+    return {
+      amount,
+      accumulated,
+      remainingValue,
+      remainingLifeMonths,
+    };
+  }, [
+    depreciationPeriod,
+    depreciationPolicyId,
+    instance,
+    originalPriceInput,
+    purchaseDate,
+    selectedDepreciationPolicy,
+  ]);
+
+  const remainingDepreciationMonths = useMemo(() => {
+    if (depreciationPreview != null) return depreciationPreview.remainingLifeMonths;
+    const totalMonths = instance?.depreciationUsefulLifeMonths;
+    if (totalMonths == null || totalMonths <= 0) return null;
+    const completedPeriods = instance?.depreciationRecords?.length ?? 0;
+    return Math.max(0, totalMonths - completedPeriods);
+  }, [depreciationPreview, instance?.depreciationUsefulLifeMonths, instance?.depreciationRecords]);
+
   const validateForm = (): string | null => {
     const originalPrice =
       originalPriceInput.trim() === '' ? NaN : Number(originalPriceInput);
     const currentValue =
       currentValueInput.trim() === '' ? NaN : Number(currentValueInput);
     const depAmount =
-      depreciationAmountInput.trim() === '' ? undefined : Number(depreciationAmountInput);
+      depreciationPreview?.amount ??
+      (depreciationAmountInput.trim() === '' ? undefined : Number(depreciationAmountInput));
     const depAccumulated =
-      accumulatedDepInput.trim() === '' ? undefined : Number(accumulatedDepInput);
+      depreciationPreview?.accumulated ??
+      (accumulatedDepInput.trim() === '' ? undefined : Number(accumulatedDepInput));
     const depRemaining =
-      remainingValueInput.trim() === '' ? undefined : Number(remainingValueInput);
+      depreciationPreview?.remainingValue ??
+      (remainingValueInput.trim() === '' ? undefined : Number(remainingValueInput));
     const warrantyValue = Number(warrantyPeriodValue || 0);
 
     if (!purchaseDate) return 'Vui lòng chọn ngày mua.';
@@ -363,6 +477,7 @@ export function AssetInstanceEditPage() {
       !!warrantyStartDate.trim() &&
       !!warrantyEndDate.trim();
     const hasDepreciationGroup =
+      !!depreciationPolicyId.trim() ||
       !!depreciationPeriod.trim() ||
       !!depreciationAmountInput.trim() ||
       !!accumulatedDepInput.trim() ||
@@ -392,7 +507,19 @@ export function AssetInstanceEditPage() {
       note: note.trim() || null,
     };
 
+    const selectedPolicyId = depreciationPolicyId ? Number(depreciationPolicyId) : null;
+    const effectiveDepAmount =
+      depreciationPreview?.amount ??
+      (depreciationAmountInput.trim() ? Number(depreciationAmountInput) : undefined);
+    const effectiveAccumulated =
+      depreciationPreview?.accumulated ??
+      (accumulatedDepInput.trim() ? Number(accumulatedDepInput) : undefined);
+    const effectiveRemainingValue =
+      depreciationPreview?.remainingValue ??
+      (remainingValueInput.trim() ? Number(remainingValueInput) : undefined);
+
     const detailOnlyPayload: UpdateAssetInstancePayload = {
+      depreciationPolicyId: selectedPolicyId,
       ...(hasWarrantyGroup
         ? {
             warrantyPeriodValue: Number(warrantyPeriodValue),
@@ -405,15 +532,9 @@ export function AssetInstanceEditPage() {
       ...(hasDepreciationGroup
         ? {
             depreciationPeriod: toDateOnly(depreciationPeriod),
-            depreciationAmount: depreciationAmountInput.trim()
-              ? Number(depreciationAmountInput)
-              : undefined,
-            accumulatedDepreciation: accumulatedDepInput.trim()
-              ? Number(accumulatedDepInput)
-              : undefined,
-            remainingValue: remainingValueInput.trim()
-              ? Number(remainingValueInput)
-              : undefined,
+            depreciationAmount: effectiveDepAmount,
+            accumulatedDepreciation: effectiveAccumulated,
+            remainingValue: effectiveRemainingValue,
           }
         : {}),
     };
@@ -428,6 +549,13 @@ export function AssetInstanceEditPage() {
     setError(null);
     try {
       await assetInstanceService.update(instance.assetInstanceId, payload);
+      if (isCapitalized && !wasAlreadyCapitalized) {
+        try {
+          await assetInstanceService.capitalize(instance.assetInstanceId);
+        } catch {
+          message.warning('Cập nhật thành công nhưng không thể vốn hoá tài sản. Vui lòng thử lại.');
+        }
+      }
       if (advancedEditing) {
         const assetDetail = await assetService.getById(instance.assetId);
         const siblingIds = (assetDetail.instances ?? [])
@@ -528,6 +656,22 @@ export function AssetInstanceEditPage() {
 
         <section className="asset-create__section">
           <h2 className="asset-create__section-title">Thông tin cá thể</h2>
+          <label className="asset-create__checkbox-row" style={{ marginBottom: 8 }}>
+            <input
+              type="checkbox"
+              checked={isCapitalized}
+              disabled={wasAlreadyCapitalized}
+              onChange={(e) => setIsCapitalized(e.target.checked)}
+            />
+            <span>
+              Là tài sản cố định (vốn hoá)
+              {wasAlreadyCapitalized && (
+                <span style={{ marginLeft: 6, color: '#888', fontStyle: 'italic' }}>
+                  — đã được vốn hoá
+                </span>
+              )}
+            </span>
+          </label>
           <label className="asset-create__checkbox-row" style={{ marginBottom: 12 }}>
             <input
               type="checkbox"
@@ -562,20 +706,20 @@ export function AssetInstanceEditPage() {
                 <label className="asset-create__label">Giá trị</label>
                 <input
                   type="number"
-                  min={0}
                   className="asset-create__input"
                   value={originalPriceInput}
-                  onChange={(e) => setOriginalPriceInput(e.target.value)}
+                  readOnly
+                  disabled
                 />
               </div>
               <div className="asset-create__field">
                 <label className="asset-create__label">Giá trị hiện tại</label>
                 <input
                   type="number"
-                  min={0}
                   className="asset-create__input"
                   value={currentValueInput}
-                  onChange={(e) => setCurrentValueInput(e.target.value)}
+                  readOnly
+                  disabled
                 />
               </div>
               <div className="asset-create__field">
@@ -741,21 +885,29 @@ export function AssetInstanceEditPage() {
             <div className="asset-create__field">
               <label className="asset-create__label">Hạn bảo hành</label>
               <input
-                type="date"
+                type="text"
                 className="asset-create__input"
-                value={warrantyEndDate}
+                value={toDisplayDate(warrantyEndDate)}
                 readOnly
                 disabled
+                placeholder="dd/mm/yyyy"
               />
             </div>
           </div>
           <div className="asset-create__field">
             <label className="asset-create__label">Ngày bắt đầu bảo hành</label>
             <input
-              type="date"
+              type="text"
               className="asset-create__input"
-              value={warrantyStartDate}
-              onChange={(e) => setWarrantyStartDate(e.target.value)}
+              placeholder="dd/mm/yyyy"
+              value={warrantyStartDateText}
+              onChange={(e) => {
+                const val = e.target.value;
+                setWarrantyStartDateText(val);
+                const iso = fromDisplayDate(val);
+                if (iso) setWarrantyStartDate(iso);
+                else if (!val.trim()) setWarrantyStartDate('');
+              }}
             />
             <p className="asset-create__hint">
               Hạn bảo hành được tính từ ngày bắt đầu và thời gian bảo hành (tháng).
@@ -770,16 +922,21 @@ export function AssetInstanceEditPage() {
               <label className="asset-create__label">Mức khấu hao kỳ gần nhất</label>
               <input
                 type="number"
-                min={0}
                 className="asset-create__input"
-                value={depreciationAmountInput}
-                onChange={(e) => setDepreciationAmountInput(e.target.value)}
+                value={depreciationPreview != null ? String(depreciationPreview.amount) : depreciationAmountInput}
+                readOnly
+                disabled
               />
             </div>
             <div className="asset-create__field">
               <label className="asset-create__label">Thời gian còn lại</label>
               <div className="asset-create__field--inline">
-                <input className="asset-create__input" value="—" disabled readOnly />
+                <input
+                  className="asset-create__input"
+                  value={remainingDepreciationMonths != null ? String(remainingDepreciationMonths) : '—'}
+                  disabled
+                  readOnly
+                />
                 <span className="asset-create__suffix">Tháng</span>
               </div>
             </div>
@@ -787,10 +944,14 @@ export function AssetInstanceEditPage() {
               <label className="asset-create__label">Giá trị còn lại</label>
               <input
                 type="number"
-                min={0}
                 className="asset-create__input"
-                value={remainingValueInput}
-                onChange={(e) => setRemainingValueInput(e.target.value)}
+                value={
+                  depreciationPreview != null
+                    ? String(depreciationPreview.remainingValue)
+                    : remainingValueInput
+                }
+                readOnly
+                disabled
               />
             </div>
             <div className="asset-create__field">
@@ -806,10 +967,14 @@ export function AssetInstanceEditPage() {
               <label className="asset-create__label">Khấu hao lũy kế</label>
               <input
                 type="number"
-                min={0}
                 className="asset-create__input"
-                value={accumulatedDepInput}
-                onChange={(e) => setAccumulatedDepInput(e.target.value)}
+                value={
+                  depreciationPreview != null
+                    ? String(depreciationPreview.accumulated)
+                    : accumulatedDepInput
+                }
+                readOnly
+                disabled
               />
             </div>
             <div className="asset-create__field">
@@ -830,20 +995,19 @@ export function AssetInstanceEditPage() {
           </div>
           <div className="asset-create__grid asset-create__grid--two">
             <div className="asset-create__field">
-              <label className="asset-create__label">Chính sách</label>
-              <input className="asset-create__input" value={instance?.depreciationPolicyName ?? '—'} disabled />
-            </div>
-            <div className="asset-create__field">
-              <label className="asset-create__label">Giá trị hoàn trả ước tính</label>
-              <input
-                className="asset-create__input"
-                value={
-                  instance?.depreciationSalvageValue != null
-                    ? String(instance.depreciationSalvageValue)
-                    : '—'
-                }
-                disabled
-              />
+              <label className="asset-create__label">Chính sách khấu hao</label>
+              <select
+                className="asset-create__select"
+                value={depreciationPolicyId}
+                onChange={(e) => setDepreciationPolicyId(e.target.value)}
+              >
+                <option value="">— Chưa chọn chính sách —</option>
+                {depreciationPolicies.map((p) => (
+                  <option key={p.policyId} value={p.policyId}>
+                    {p.name} ({p.usefullLifeMonths} tháng)
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </section>
