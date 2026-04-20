@@ -1,6 +1,5 @@
-import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+import { isAxiosError } from 'axios';
+import { apiClient } from '../../../shared/services/apiClient';
 
 /** Parses ASP.NET BadRequest `{ message }` or validation ProblemDetails `{ errors }`. */
 export function allocationRequestApiErrorMessage(data: unknown): string | null {
@@ -19,19 +18,7 @@ export function allocationRequestApiErrorMessage(data: unknown): string | null {
   return null;
 }
 
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+const api = apiClient;
 
 export const ALLOCATION_REQUEST_TYPE_ID = 6;
 
@@ -145,7 +132,7 @@ export const allocationRequestService = {
       const res = await api.post<{ assetRequestId: number }>('/api/Assets/Requests/allocation', payload);
       return res.data;
     } catch (e) {
-      if (axios.isAxiosError(e) && e.response?.data) {
+      if (isAxiosError(e) && e.response?.data) {
         const msg = allocationRequestApiErrorMessage(e.response.data);
         if (msg) throw new Error(msg);
       }

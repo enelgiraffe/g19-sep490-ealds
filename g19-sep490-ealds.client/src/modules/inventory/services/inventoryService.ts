@@ -1,7 +1,5 @@
-import axios from 'axios';
 import type { Dayjs } from 'dayjs';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+import { apiClient } from '../../../shared/services/apiClient';
 
 /**
  * Inventory sessions use calendar days; avoid Date#toISOString() on local midnight
@@ -38,34 +36,7 @@ export function inventorySessionInclusiveDayCount(startStr: string, endStr: stri
   return Math.max(1, Math.round((eu - su) / 86_400_000) + 1);
 }
 
-const inventoryApi = axios.create({
-  baseURL: API_BASE_URL,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-inventoryApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-inventoryApi.interceptors.response.use((response) => {
-  const url = response.config.url ?? '';
-  if (
-    url.includes('/complete') ||
-    url.includes('/confirm') ||
-    url.includes('/director-approve') ||
-    url.includes('/reject') ||
-    url.includes('/cancel') ||
-    url.includes('/apply-actual')
-  ) {
-    window.dispatchEvent(new Event('ealds-notifications-changed'));
-  }
-  return response;
-});
+const inventoryApi = apiClient;
 
 export interface DropdownItem {
   id: number;

@@ -1,23 +1,7 @@
-import axios from 'axios';
+import { apiClient } from '../../../shared/services/apiClient';
 import type { LoginFormData, LoginResponse } from '../types/auth.types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-
-const authApi = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Gắn access token vào mọi request (logout, refresh, v.v.)
-authApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+const authApi = apiClient;
 
 export const authService = {
   login: async (credentials: LoginFormData): Promise<LoginResponse> => {
