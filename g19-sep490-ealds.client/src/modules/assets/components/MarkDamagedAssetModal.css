@@ -145,6 +145,11 @@
   border: 1px solid #e5e7eb;
 }
 
+.mark-damaged-info-value--multiline {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .mark-damaged-form-section {
   margin-bottom: 24px;
 }

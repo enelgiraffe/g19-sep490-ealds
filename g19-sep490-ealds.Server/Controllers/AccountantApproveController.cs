@@ -144,6 +144,9 @@ public class AccountantApproveController : ControllerBase
 
         await _db.SaveChangesAsync();
 
+        if (isTransfer && ar.Status == 2)
+            await _requestNotifications.NotifyTransferDirectorsPendingApprovalAsync(ar.AssetRequestId);
+
         await _requestNotifications.NotifySenderDecisionAsync(ar.AssetRequestId, true, dto.ApprovedBy, dto.Comment);
 
         return Ok(new { assetRequestId = ar.AssetRequestId, status = ar.Status });

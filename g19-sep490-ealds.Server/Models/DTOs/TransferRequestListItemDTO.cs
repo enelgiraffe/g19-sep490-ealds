@@ -61,5 +61,11 @@ public class TransferRequestListItemDTO
     public bool IsSenderConfirmed { get; set; }
 
     public bool IsReceiverConfirmed { get; set; }
+
+    /// <summary>Ghi chú/ý kiến khi kế toán phê duyệt (Approval.Comment, role ACCOUNTANT).</summary>
+    public string? AccountantComment { get; set; }
+
+    /// <summary>Ghi chú/ý kiến khi giám đốc phê duyệt (Approval.Comment, role DIRECTOR).</summary>
+    public string? DirectorComment { get; set; }
 }
 

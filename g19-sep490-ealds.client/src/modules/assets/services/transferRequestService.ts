@@ -69,6 +69,10 @@ export interface TransferRequestListItem {
   disposalDeclaredValue?: number | null;
   isSenderConfirmed: boolean;
   isReceiverConfirmed: boolean;
+  /** Ý kiến kế toán (từ bước phê duyệt). */
+  accountantComment?: string | null;
+  /** Ý kiến giám đốc (từ bước phê duyệt). */
+  directorComment?: string | null;
 }
 
 export interface TransferHandoverDetails {

@@ -6,18 +6,12 @@ import {
   type TransferRequestListItem,
 } from '../../assets/services/transferRequestService';
 
-const STATUS_MAP: Record<
-  number,
-  {
-    label: string;
-    color: string;
-  }
-> = {
-  0: { label: 'Nháp', color: 'default' },
-  1: { label: 'Đã nộp', color: 'processing' },
-  2: { label: 'Chờ phê duyệt', color: 'warning' },
-  3: { label: 'Từ chối', color: 'error' },
-  4: { label: 'Phê duyệt', color: 'success' },
+const STATUS_LABELS: Record<number, string> = {
+  0: 'Nháp',
+  1: 'Đã nộp',
+  2: 'Chờ phê duyệt',
+  3: 'Từ chối',
+  4: 'Phê duyệt',
 };
 
 interface TransferRequestDetailModalProps {
@@ -85,18 +79,7 @@ export function TransferRequestDetailModal({
 
   if (!open || !request) return null;
 
-  const statusConfig =
-    request && STATUS_MAP[request.status] ? STATUS_MAP[request.status] : undefined;
-  const statusClass =
-    statusConfig?.color === 'success'
-      ? 'transfer-detail-status transfer-detail-status--success'
-      : statusConfig?.color === 'processing'
-        ? 'transfer-detail-status transfer-detail-status--processing'
-        : statusConfig?.color === 'warning'
-          ? 'transfer-detail-status transfer-detail-status--warning'
-          : statusConfig?.color === 'error'
-            ? 'transfer-detail-status transfer-detail-status--danger'
-            : 'transfer-detail-status transfer-detail-status--default';
+  const statusLabel = STATUS_LABELS[request.status] ?? request.statusName ?? '—';
   const displayInstanceCode = request.instanceCode || request.assetCode || '—';
 
   return (
@@ -132,9 +115,7 @@ export function TransferRequestDetailModal({
               <div className="transfer-detail-form__row">
                 <div className="transfer-detail-form__item">
                   <label>Trạng thái</label>
-                  <div className="transfer-detail-info-value">
-                    <span className={statusClass}>{statusConfig?.label ?? request.statusName ?? '—'}</span>
-                  </div>
+                  <div className="transfer-detail-info-value">{statusLabel}</div>
                 </div>
                 <div className="transfer-detail-form__item">
                   <label>Số lượng</label>
@@ -169,6 +150,18 @@ export function TransferRequestDetailModal({
                 <label>Lý do điều chuyển</label>
                 <div className="transfer-detail-info-value transfer-detail-info-value--multiline">
                   {request.reason || '—'}
+                </div>
+              </div>
+              <div className="transfer-detail-form__item transfer-detail-form__item--full">
+                <label>Ý kiến kế toán</label>
+                <div className="transfer-detail-info-value transfer-detail-info-value--multiline">
+                  {request.accountantComment?.trim() || '—'}
+                </div>
+              </div>
+              <div className="transfer-detail-form__item transfer-detail-form__item--full">
+                <label>Ý kiến giám đốc</label>
+                <div className="transfer-detail-info-value transfer-detail-info-value--multiline">
+                  {request.directorComment?.trim() || '—'}
                 </div>
               </div>
               <div className="transfer-detail-form__row transfer-detail-form__row--spaced-top">
