@@ -36,6 +36,9 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
                 if (create.RepeatIntervalUnit != 0)
                     throw new Exception("Bảo trì một lần không được có đơn vị khoảng thời gian");
 
+                if (!create.OneTimeScheduledDate.HasValue)
+                    throw new Exception("Vui lòng chọn ngày bảo dưỡng (một lần).");
+
                 break;
             //validate loaoij d?nh k?
             case MaintenanceFrequencyType.Periodic:
@@ -63,7 +66,7 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
                 throw new Exception("Loại bảo trì không hợp lệ");
         }
     }
-    public async Task<MaintenanceTemplateResponseDTO> CreateTemplateAsync(TemplateCreateDTO create)
+    public async Task<MaintenanceTemplateResponseDTO> CreateTemplateAsync(TemplateCreateDTO create, int? actorUserId = null)
     {
         try
         {
@@ -77,13 +80,13 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
             var existTemplate = await _context.MaintenanceTemplates.AnyAsync(x => x.AssetTypeId == create.AssetTypeId
                                                                                   && x.Name == create.Name && x.IsActive == true);
             if (existTemplate)
-                throw new Exception("Lịch bảo trì chung này đã tồn tại cho loại tài sản này");
+                throw new Exception("Tên quy định bảo dưỡng đã tồn tại cho loại tài sản này");
 
             MaintenanceTemplate entity = _mapper.CreateToEntity(create);
             await _context.MaintenanceTemplates.AddAsync(entity);
             await _context.SaveChangesAsync();
 
-            await ApplyTemplateToExistingAssetsAsync(entity);
+            await ApplyTemplateToExistingAssetsAsync(entity, actorUserId);
             return _mapper.EntityToResponse(entity);
         }
         catch (Exception ex)
@@ -93,7 +96,59 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
         }
     }
 
-    private async Task ApplyTemplateToExistingAssetsAsync(MaintenanceTemplate template)
+    private static MaintenanceSchedule BuildScheduleFromTemplate(
+        MaintenanceTemplate template,
+        int assetInstanceId,
+        int createdByUserId,
+        DateTime nowLocal)
+    {
+        MaintenanceRepeatIntervalUnit parsedUnit = MaintenanceRepeatIntervalUnit.Month;
+        var hasInterval = template.FrequencyType == (int)MaintenanceFrequencyType.Periodic
+                          && template.RepeatIntervalValue > 0
+                          && Enum.TryParse(template.RepeatIntervalUnit, true, out parsedUnit);
+
+        var anchor = nowLocal;
+        if (template.FrequencyType == (int)MaintenanceFrequencyType.OneTime && template.OneTimeScheduledDate.HasValue)
+            anchor = template.OneTimeScheduledDate.Value.Date.AddHours(12);
+
+        return new MaintenanceSchedule
+        {
+            // Lịch từ quy định template áp theo từng cá thể => để AssetId = null để thỏa CK_MaintenanceSchedule_Scope.
+            AssetId = null,
+            AssetInstanceId = assetInstanceId,
+            TemplateId = template.TemplateId,
+            Content = template.Content,
+            ScheduleType = (int)ScheduleType.Auto,
+            IntervalValue = hasInterval ? template.RepeatIntervalValue : null,
+            IntervalUnit = hasInterval ? (int)parsedUnit : null,
+            StartDate = anchor,
+            NextDueDate = anchor,
+            EndDate = null,
+            IsActive = true,
+            CreateBy = createdByUserId,
+            CreateDate = nowLocal
+        };
+    }
+
+    private async Task<int?> ResolveScheduleCreatorUserIdAsync(int? actorUserId)
+    {
+        if (actorUserId.HasValue && actorUserId.Value > 0)
+        {
+            var actorExists = await _context.Users
+                .AsNoTracking()
+                .AnyAsync(u => u.UserId == actorUserId.Value);
+            if (actorExists)
+                return actorUserId.Value;
+        }
+
+        return await _context.Users
+            .AsNoTracking()
+            .OrderBy(u => u.UserId)
+            .Select(u => (int?)u.UserId)
+            .FirstOrDefaultAsync();
+    }
+
+    private async Task ApplyTemplateToExistingAssetsAsync(MaintenanceTemplate template, int? actorUserId = null)
     {
         if (!template.IsActive)
             return;
@@ -117,36 +172,53 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
             .ToListAsync();
         var existingSet = existingInstanceIds.ToHashSet();
 
-        MaintenanceRepeatIntervalUnit parsedUnit = MaintenanceRepeatIntervalUnit.Month;
-        var hasInterval = template.FrequencyType == (int)MaintenanceFrequencyType.Periodic
-                          && template.RepeatIntervalValue > 0
-                          && Enum.TryParse(template.RepeatIntervalUnit, true, out parsedUnit);
-
         var nowLocal = DateTime.UtcNow.AddHours(7);
+        var creatorUserId = await ResolveScheduleCreatorUserIdAsync(actorUserId);
+        if (!creatorUserId.HasValue)
+            throw new Exception("Không tìm thấy người dùng để ghi nhận lịch bảo dưỡng tự động.");
         var newSchedules = instances
             .Where(i => !existingSet.Contains(i.AssetInstanceId))
-            .Select(i => new MaintenanceSchedule
-            {
-                AssetId = i.AssetId,
-                AssetInstanceId = i.AssetInstanceId,
-                TemplateId = template.TemplateId,
-                Content = template.Content,
-                ScheduleType = (int)ScheduleType.Auto,
-                IntervalValue = hasInterval ? template.RepeatIntervalValue : null,
-                IntervalUnit = hasInterval ? (int)parsedUnit : null,
-                StartDate = nowLocal,
-                NextDueDate = nowLocal,
-                EndDate = null,
-                IsActive = true,
-                CreateBy = 1,
-                CreateDate = nowLocal
-            })
+            .Select(i => BuildScheduleFromTemplate(template, i.AssetInstanceId, creatorUserId.Value, nowLocal))
             .ToList();
 
         if (newSchedules.Count == 0)
             return;
 
         await _context.MaintenanceSchedules.AddRangeAsync(newSchedules);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task EnsureSchedulesForNewInstanceAsync(int assetInstanceId, int? actorUserId = null)
+    {
+        var inst = await _context.AssetInstances
+            .AsNoTracking()
+            .Include(i => i.Asset)
+            .FirstOrDefaultAsync(i => i.AssetInstanceId == assetInstanceId);
+        if (inst?.Asset == null)
+            return;
+
+        var templates = await _context.MaintenanceTemplates
+            .AsNoTracking()
+            .Where(t => t.AssetTypeId == inst.Asset.AssetTypeId && t.IsActive)
+            .ToListAsync();
+        if (templates.Count == 0)
+            return;
+
+        var nowLocal = DateTime.UtcNow.AddHours(7);
+        var creatorUserId = await ResolveScheduleCreatorUserIdAsync(actorUserId);
+        if (!creatorUserId.HasValue)
+            return;
+        foreach (var t in templates)
+        {
+            var exists = await _context.MaintenanceSchedules.AnyAsync(s =>
+                s.TemplateId == t.TemplateId && s.AssetInstanceId == assetInstanceId);
+            if (exists)
+                continue;
+
+            await _context.MaintenanceSchedules.AddAsync(
+                BuildScheduleFromTemplate(t, assetInstanceId, creatorUserId.Value, nowLocal));
+        }
+
         await _context.SaveChangesAsync();
     }
 
@@ -164,6 +236,11 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
         if (template == null)
             throw new Exception("Không có bản ghi nào");
 
+        foreach (var activeTemplate in template.Where(t => t.IsActive))
+        {
+            await ApplyTemplateToExistingAssetsAsync(activeTemplate);
+        }
+
         return _mapper.ListEntityToResponse(template);
     }
 
@@ -171,6 +248,26 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
     {
         var template = await _context.MaintenanceTemplates.FindAsync(id)
             ?? throw new KeyNotFoundException($"Không có Id {id} tồn tại");
+
+        var scheduleIds = await _context.MaintenanceSchedules
+            .Where(s => s.TemplateId == id)
+            .Select(s => s.ScheduleId)
+            .ToListAsync();
+
+        if (scheduleIds.Count > 0)
+        {
+            var tasks = await _context.MaintenanceTasks
+                .Where(t => t.ScheduleId.HasValue && scheduleIds.Contains(t.ScheduleId.Value))
+                .ToListAsync();
+
+            foreach (var task in tasks)
+                task.ScheduleId = null;
+
+            var schedules = await _context.MaintenanceSchedules
+                .Where(s => s.TemplateId == id)
+                .ToListAsync();
+            _context.MaintenanceSchedules.RemoveRange(schedules);
+        }
 
         _context.MaintenanceTemplates.Remove(template);
         await _context.SaveChangesAsync();
@@ -226,12 +323,13 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
         ValidateFrequency(new TemplateCreateDTO
         {
             AssetTypeId = update.AssetTypeId,
-            Name = update.Name,
-            Content = update.Content,
+            Name = normalizedName,
+            Content = update.Content ?? string.Empty,
             FrequencyType = update.FrequencyType,
             RepeatIntervalValue = update.RepeatIntervalValue,
             RepeatIntervalUnit = update.RepeatIntervalUnit,
-            IsActive = template.IsActive
+            IsActive = template.IsActive,
+            OneTimeScheduledDate = update.OneTimeScheduledDate
         });
 
         var result = _mapper.UpdateToEntity(update);
@@ -241,6 +339,7 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
         template.FrequencyType = result.FrequencyType;
         template.RepeatIntervalValue = result.RepeatIntervalValue;
         template.RepeatIntervalUnit = result.RepeatIntervalUnit;
+        template.OneTimeScheduledDate = result.OneTimeScheduledDate;
         await _context.SaveChangesAsync();
 
         return _mapper.EntityToResponse(template);

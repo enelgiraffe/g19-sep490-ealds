@@ -71,6 +71,12 @@ function toDateOnly(value: string): string | undefined {
   return trimmed.split('T')[0] ?? undefined;
 }
 
+function todayDateInput(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 type MaintenanceTemplateForm = {
   assetTypeId: number | null;
   name: string;
@@ -78,6 +84,7 @@ type MaintenanceTemplateForm = {
   frequencyType: 1 | 2;
   repeatIntervalValue: number;
   repeatIntervalUnit: 1 | 2 | 3 | 4;
+  oneTimeScheduledDate: string;
   isActive: boolean;
 };
 
@@ -145,7 +152,6 @@ export function AssetEditPage() {
   const [warrantyStartDate, setWarrantyStartDate] = useState('');
   const [depreciationBaseValue, setDepreciationBaseValue] = useState('');
   const [depreciationStartDate, setDepreciationStartDate] = useState('');
-  const [depreciationRemainingMonths, setDepreciationRemainingMonths] = useState('');
   const [depreciationAccumulated, setDepreciationAccumulated] = useState('');
   const [depreciationRemainingValue, setDepreciationRemainingValue] = useState('');
   const [maintenanceTemplates, setMaintenanceTemplates] = useState<MaintenanceTemplateItem[]>([]);
@@ -158,6 +164,7 @@ export function AssetEditPage() {
     frequencyType: 2,
     repeatIntervalValue: 1,
     repeatIntervalUnit: 3,
+    oneTimeScheduledDate: todayDateInput(),
     isActive: true,
   });
 
@@ -270,7 +277,6 @@ export function AssetEditPage() {
           primary?.depreciationAmount != null ? String(primary.depreciationAmount) : ''
         );
         setDepreciationStartDate(toDateInput(primary?.depreciationPeriod));
-        setDepreciationRemainingMonths('');
         setDepreciationAccumulated(
           primary?.accumulatedDepreciation != null ? String(primary.accumulatedDepreciation) : ''
         );
@@ -370,6 +376,7 @@ export function AssetEditPage() {
       frequencyType: 2,
       repeatIntervalValue: 1,
       repeatIntervalUnit: 3,
+      oneTimeScheduledDate: todayDateInput(),
       isActive: true,
     });
   };
@@ -386,6 +393,7 @@ export function AssetEditPage() {
       frequencyType: 2,
       repeatIntervalValue: 1,
       repeatIntervalUnit: 3,
+      oneTimeScheduledDate: todayDateInput(),
       isActive: true,
     });
     setTemplateFormOpen(true);
@@ -418,6 +426,11 @@ export function AssetEditPage() {
     }
 
     const isOneTime = templateForm.frequencyType === 1;
+    if (isOneTime && !templateForm.oneTimeScheduledDate?.trim()) {
+      message.warning('Vui lòng chọn ngày bảo dưỡng.');
+      return;
+    }
+
     const payload = {
       assetTypeId: templateForm.assetTypeId,
       name: templateForm.name.trim(),
@@ -426,6 +439,7 @@ export function AssetEditPage() {
       repeatIntervalValue: isOneTime ? 0 : Math.max(1, Number(templateForm.repeatIntervalValue || 1)),
       repeatIntervalUnit: isOneTime ? 0 : templateForm.repeatIntervalUnit,
       isActive: templateForm.isActive,
+      oneTimeScheduledDate: isOneTime ? templateForm.oneTimeScheduledDate.trim() : null,
     } as const;
 
     setTemplateFormSubmitting(true);
@@ -531,7 +545,6 @@ export function AssetEditPage() {
       const hasDepreciationGroup =
         depreciationBaseValue.trim().length > 0 ||
         depreciationStartDate.trim().length > 0 ||
-        depreciationRemainingMonths.trim().length > 0 ||
         depreciationAccumulated.trim().length > 0 ||
         depreciationRemainingValue.trim().length > 0;
 
@@ -900,9 +913,11 @@ export function AssetEditPage() {
                     <td>{t.content?.trim() || '—'}</td>
                     <td>{getFrequencyLabel(t.frequencyType)}</td>
                     <td>
-                      {Number(t.repeatIntervalValue || 0) > 0
-                        ? `${t.repeatIntervalValue} ${getRepeatUnitLabel(t.repeatIntervalUnit)}`
-                        : '—'}
+                      {parseEnumNumber(t.frequencyType) === 1 && t.oneTimeScheduledDate
+                        ? new Date(t.oneTimeScheduledDate).toLocaleDateString('vi-VN')
+                        : Number(t.repeatIntervalValue || 0) > 0
+                          ? `${t.repeatIntervalValue} ${getRepeatUnitLabel(t.repeatIntervalUnit)}`
+                          : '—'}
                     </td>
                     <td>{t.isActive ? 'Đang áp dụng' : 'Ngưng áp dụng'}</td>
                   </tr>
@@ -956,7 +971,7 @@ export function AssetEditPage() {
           <h2 className="asset-create__section-title">Thông tin khấu hao</h2>
           <div className="asset-create__grid asset-create__grid--three">
             <div className="asset-create__field">
-              <label className="asset-create__label">Giá trị tính khấu hao</label>
+              <label className="asset-create__label">Mức khấu hao kỳ gần nhất</label>
               <input
                 type="number"
                 min={0}
@@ -969,11 +984,10 @@ export function AssetEditPage() {
               <label className="asset-create__label">Thời gian còn lại</label>
               <div className="asset-create__field--inline">
                 <input
-                  type="number"
-                  min={0}
                   className="asset-create__input"
-                  value={depreciationRemainingMonths}
-                  onChange={(e) => setDepreciationRemainingMonths(e.target.value)}
+                  value="—"
+                  disabled
+                  readOnly
                 />
                 <span className="asset-create__suffix">Tháng</span>
               </div>
@@ -1142,7 +1156,15 @@ export function AssetEditPage() {
                       <input
                         type="radio"
                         checked={templateForm.frequencyType === 1}
-                        onChange={() => setTemplateForm((prev) => ({ ...prev, frequencyType: 1 }))}
+                        onChange={() =>
+                          setTemplateForm((prev) => ({
+                            ...prev,
+                            frequencyType: 1,
+                            oneTimeScheduledDate: prev.oneTimeScheduledDate?.trim()
+                              ? prev.oneTimeScheduledDate
+                              : todayDateInput(),
+                          }))
+                        }
                       />{' '}
                       Một lần
                     </label>
@@ -1156,43 +1178,61 @@ export function AssetEditPage() {
                     </label>
                   </div>
                 </div>
-                <div className="template-form-modal__item">
-                  <label htmlFor="asset-edit-template-repeat-value">Giá trị lặp lại</label>
-                  <input
-                    id="asset-edit-template-repeat-value"
-                    className="template-form-modal__input"
-                    type="number"
-                    min={1}
-                    value={templateForm.repeatIntervalValue}
-                    disabled={templateForm.frequencyType === 1}
-                    onChange={(e) =>
-                      setTemplateForm((prev) => ({
-                        ...prev,
-                        repeatIntervalValue: Math.max(1, Number(e.target.value || 1)),
-                      }))
-                    }
-                  />
-                </div>
-                <div className="template-form-modal__item">
-                  <label htmlFor="asset-edit-template-repeat-unit">Lặp lại theo</label>
-                  <select
-                    id="asset-edit-template-repeat-unit"
-                    className="template-form-modal__input"
-                    value={templateForm.repeatIntervalUnit}
-                    disabled={templateForm.frequencyType === 1}
-                    onChange={(e) =>
-                      setTemplateForm((prev) => ({
-                        ...prev,
-                        repeatIntervalUnit: Number(e.target.value) as 1 | 2 | 3 | 4,
-                      }))
-                    }
-                  >
-                    <option value={1}>Ngày</option>
-                    <option value={2}>Tuần</option>
-                    <option value={3}>Tháng</option>
-                    <option value={4}>Năm</option>
-                  </select>
-                </div>
+                {templateForm.frequencyType === 1 ? (
+                  <div className="template-form-modal__item">
+                    <label htmlFor="asset-edit-template-one-time-date">Ngày bảo dưỡng</label>
+                    <input
+                      id="asset-edit-template-one-time-date"
+                      className="template-form-modal__input"
+                      type="date"
+                      value={templateForm.oneTimeScheduledDate}
+                      onChange={(e) =>
+                        setTemplateForm((prev) => ({
+                          ...prev,
+                          oneTimeScheduledDate: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div className="template-form-modal__item">
+                      <label htmlFor="asset-edit-template-repeat-value">Giá trị lặp lại</label>
+                      <input
+                        id="asset-edit-template-repeat-value"
+                        className="template-form-modal__input"
+                        type="number"
+                        min={1}
+                        value={templateForm.repeatIntervalValue}
+                        onChange={(e) =>
+                          setTemplateForm((prev) => ({
+                            ...prev,
+                            repeatIntervalValue: Math.max(1, Number(e.target.value || 1)),
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="template-form-modal__item">
+                      <label htmlFor="asset-edit-template-repeat-unit">Lặp lại theo</label>
+                      <select
+                        id="asset-edit-template-repeat-unit"
+                        className="template-form-modal__input"
+                        value={templateForm.repeatIntervalUnit}
+                        onChange={(e) =>
+                          setTemplateForm((prev) => ({
+                            ...prev,
+                            repeatIntervalUnit: Number(e.target.value) as 1 | 2 | 3 | 4,
+                          }))
+                        }
+                      >
+                        <option value={1}>Ngày</option>
+                        <option value={2}>Tuần</option>
+                        <option value={3}>Tháng</option>
+                        <option value={4}>Năm</option>
+                      </select>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
             <div className="template-form-modal__footer">

@@ -44,7 +44,6 @@ interface DepreciationForm {
   baseValue: string;
   startDate: string;
   lifeTimeMonths: string;
-  remainingMonths: string;
   accumulatedDepreciation: string;
   remainingValue: string;
   depreciationPolicyId: string;
@@ -104,7 +103,6 @@ export function AssetCreatePage() {
     baseValue: '',
     startDate: '',
     lifeTimeMonths: '',
-    remainingMonths: '',
     accumulatedDepreciation: '',
     remainingValue: '',
     depreciationPolicyId: '',
@@ -818,7 +816,7 @@ export function AssetCreatePage() {
           <h2 className="asset-create__section-title">Thông tin khấu hao</h2>
           <div className="asset-create__grid asset-create__grid--three">
             <div className="asset-create__field">
-              <label className="asset-create__label">Giá trị tính khấu hao</label>
+              <label className="asset-create__label">Mức khấu hao kỳ gần nhất</label>
               <input
                 type="number"
                 min={0}
@@ -832,13 +830,10 @@ export function AssetCreatePage() {
               <label className="asset-create__label">Thời gian còn lại</label>
               <div className="asset-create__field--inline">
                 <input
-                  type="number"
-                  min={0}
                   className="asset-create__input"
-                  value={depreciation.remainingMonths}
-                  onChange={(e) =>
-                    setDepreciation({ ...depreciation, remainingMonths: e.target.value })
-                  }
+                  value="—"
+                  disabled
+                  readOnly
                 />
                 <span className="asset-create__suffix">Tháng</span>
               </div>

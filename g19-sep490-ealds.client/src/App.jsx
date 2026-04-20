@@ -176,13 +176,7 @@ function App() {
                             <span className="asset-row-menu__icon">🛠</span>
                             <span>Bảo dưỡng</span>
                           </button>
-                          <button
-                            className="asset-row-menu__item"
-                            onClick={() => handleMenuAction('mark-lost', asset)}
-                          >
-                            <span className="asset-row-menu__icon">−</span>
-                            <span>Đánh dấu mất</span>
-                          </button>
+                      
                           <button
                             className="asset-row-menu__item"
                             onClick={() => handleMenuAction('liquidate', asset)}

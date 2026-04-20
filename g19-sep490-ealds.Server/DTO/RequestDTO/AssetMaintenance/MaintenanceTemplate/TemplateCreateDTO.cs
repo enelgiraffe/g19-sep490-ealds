@@ -18,4 +18,7 @@ public class TemplateCreateDTO
     public MaintenanceRepeatIntervalUnit RepeatIntervalUnit { get; set; }
 
     public bool IsActive { get; set; }
+
+    /// <summary>Khi <see cref="FrequencyType"/> là một lần: ngày cần bảo dưỡng.</summary>
+    public DateTime? OneTimeScheduledDate { get; set; }
 }

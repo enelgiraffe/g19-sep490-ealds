@@ -89,8 +89,14 @@ function parseEnumNumber(value: number | string | null | undefined): number {
   return 0;
 }
 
-function getScheduleTypeLabel(value: number | string): string {
-  return parseEnumNumber(value) === 1 ? 'Một lần' : 'Định kỳ';
+function getMaintenanceCadenceLabel(schedule: {
+  intervalValue?: number | null;
+  intervalUnit?: number | string | null;
+}): string {
+  const iv = schedule.intervalValue;
+  const iu = schedule.intervalUnit;
+  if (iv != null && iv > 0 && iu != null && Number(iu) > 0) return 'Định kỳ';
+  return 'Một lần';
 }
 
 function getRepeatUnitLabel(value?: number | string | null): string {
@@ -117,8 +123,8 @@ function getScheduleContentLabel(row: {
   templateName?: string | null;
   templateId?: number | null;
 }): string {
-  if (row.content?.trim()) return row.content.trim();
   if (row.templateName?.trim()) return row.templateName.trim();
+  if (row.content?.trim()) return row.content.trim();
   if (row.templateId) return `Mẫu quy định #${row.templateId}`;
   return '—';
 }
@@ -449,7 +455,7 @@ export function AssetInstanceDetailPage() {
                       <td>{scheduleScopeLabel(schedule)}</td>
                       <td>{getScheduleContentLabel(schedule)}</td>
                       <td>{formatDate(schedule.startDate)}</td>
-                      <td>{getScheduleTypeLabel(schedule.scheduleType)}</td>
+                      <td>{getMaintenanceCadenceLabel(schedule)}</td>
                       <td>
                         {schedule.intervalValue && schedule.intervalUnit
                           ? `${schedule.intervalValue} ${getRepeatUnitLabel(schedule.intervalUnit)}`

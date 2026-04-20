@@ -48,10 +48,19 @@ public class MaintenanceRequestsController : ControllerBase
                     .ThenInclude(ai => ai.AssetLocations)
                         .ThenInclude(al => al.Department)
                 .Include(t => t.AssetRequest)
-                .Where(t => t.AssetRequest != null && t.AssetRequest.RequestTypeId == _maintenanceRequestTypeId)
-                .OrderByDescending(t => t.PlannedDate);
+                .Where(t => t.AssetRequest != null && t.AssetRequest.RequestTypeId == _maintenanceRequestTypeId);
+
+            var (allowAll, viewerDeptId) = await ResolveMaintenanceListVisibilityAsync();
+            if (!allowAll)
+            {
+                if (!viewerDeptId.HasValue || viewerDeptId.Value <= 0)
+                    return Ok(Array.Empty<TransferRequestListItemDTO>());
+                query = query.Where(t => t.AssetInstance.AssetLocations.Any(al =>
+                    al.IsCurrent && al.DepartmentId == viewerDeptId.Value));
+            }
 
             var list = await query
+                .OrderByDescending(t => t.PlannedDate)
                 .Select(t => new TransferRequestListItemDTO
                 {
                     RecordId = t.TaskId,
@@ -385,9 +394,6 @@ public class MaintenanceRequestsController : ControllerBase
             _db.MaintenanceTasks.Update(task);
         }
 
-        if (!string.IsNullOrWhiteSpace(dto.DetailedDescription))
-            ar.Description = dto.DetailedDescription;
-
         var linkedInstanceId = task?.AssetInstanceId ?? 0;
         if (linkedInstanceId > 0)
         {
@@ -636,5 +642,39 @@ public class MaintenanceRequestsController : ControllerBase
         await _db.SaveChangesAsync();
 
         return Ok(new { recordId = mr.RecordId, taskId = task.TaskId });
+    }
+
+    /// <summary>
+    /// Admin / Giám đốc / Kế toán: xem toàn bộ. Người dùng khác: chỉ yêu cầu liên quan phòng ban hiện tại của tài sản (vị trí IsCurrent).
+    /// </summary>
+    private async Task<(bool AllowAll, int? DepartmentId)> ResolveMaintenanceListVisibilityAsync()
+    {
+        if (User.Identity?.IsAuthenticated != true)
+            return (false, null);
+
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!int.TryParse(userIdClaim, out var userId) || userId <= 0)
+            return (false, null);
+
+        var roleIds = await _db.UserRoles
+            .AsNoTracking()
+            .Where(ur => ur.UserId == userId)
+            .Select(ur => ur.RoleId)
+            .ToListAsync();
+
+        if (roleIds.Any(r => r is 1 or 2 or 3))
+            return (true, null);
+
+        if (User.IsInRole("ADMIN") || User.IsInRole("DIRECTOR") || User.IsInRole("ACCOUNTANT"))
+            return (true, null);
+
+        var employee = await _db.Employees
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.UserId == userId);
+
+        if (employee?.DepartmentId is int deptId && deptId > 0)
+            return (false, deptId);
+
+        return (false, null);
     }
 }

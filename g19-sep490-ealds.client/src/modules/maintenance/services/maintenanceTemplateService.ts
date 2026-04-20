@@ -29,6 +29,8 @@ export interface MaintenanceTemplatePayload {
   repeatIntervalValue: number;
   repeatIntervalUnit: MaintenanceRepeatIntervalUnit;
   isActive?: boolean;
+  /** Khi frequencyType = 1 (một lần): ngày yyyy-MM-dd hoặc ISO. */
+  oneTimeScheduledDate?: string | null;
 }
 
 export interface MaintenanceTemplateItem {
@@ -40,6 +42,7 @@ export interface MaintenanceTemplateItem {
   repeatIntervalValue: number;
   repeatIntervalUnit: number | string;
   isActive: boolean;
+  oneTimeScheduledDate?: string | null;
 }
 
 export const maintenanceTemplateService = {

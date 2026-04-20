@@ -14,5 +14,7 @@ public class TemplateUpdateDTO
 
     public int RepeatIntervalValue { get; set; }
 
-    public MaintenanceRepeatIntervalUnit RepeatIntervalUnit { get; set; } 
+    public MaintenanceRepeatIntervalUnit RepeatIntervalUnit { get; set; }
+
+    public DateTime? OneTimeScheduledDate { get; set; }
 }

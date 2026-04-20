@@ -1690,6 +1690,9 @@ namespace g19_sep490_ealds.Server.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<DateTime?>("OneTimeScheduledDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("RepeatIntervalUnit")
                         .IsRequired()
                         .HasMaxLength(100)

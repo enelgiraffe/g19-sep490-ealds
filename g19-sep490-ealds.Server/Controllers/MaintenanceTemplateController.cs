@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using System.Net;
 using g19_sep490_ealds.Server.DTO.RequestDTO.AssetMaintenance.MaintenanceTemplate;
 using g19_sep490_ealds.Server.Models;
+using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -23,12 +25,13 @@ public class MaintenanceTemplateController : ControllerBase
     {
         try
         {
-            var response = await _service.CreateTemplateAsync(create);
+            var actorUserId = TryGetCurrentUserId();
+            var response = await _service.CreateTemplateAsync(create, actorUserId);
             return Ok(response);
         }
         catch (Exception ex)
         {
-            return BadRequest(ex.Message);
+            return BadRequest(GetDetailedErrorMessage(ex));
         }
     }
 
@@ -110,7 +113,31 @@ public class MaintenanceTemplateController : ControllerBase
         }
         catch (Exception ex)
         {
-            return BadRequest(ex.Message);
+            return BadRequest(GetDetailedErrorMessage(ex));
         }
+    }
+
+    private int? TryGetCurrentUserId()
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!int.TryParse(userIdClaim, out var userId) || userId <= 0)
+            return null;
+        return userId;
+    }
+
+    private static string GetDetailedErrorMessage(Exception ex)
+    {
+        if (ex is DbUpdateException dbEx)
+        {
+            var inner = dbEx.InnerException?.Message;
+            if (!string.IsNullOrWhiteSpace(inner))
+                return inner;
+        }
+
+        var cursor = ex;
+        while (cursor.InnerException != null)
+            cursor = cursor.InnerException;
+
+        return string.IsNullOrWhiteSpace(cursor.Message) ? ex.Message : cursor.Message;
     }
 }

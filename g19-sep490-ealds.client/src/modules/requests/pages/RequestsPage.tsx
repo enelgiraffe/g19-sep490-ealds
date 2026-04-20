@@ -2036,12 +2036,33 @@ export function RequestsPage() {
                                     </div>
                                   </div>
                                 ) : null}
+                                {(selectedDirectorItem.status === 2 || selectedDirectorItem.status === 4) ? (
+                                  <div className="acct-transfer-form__section">
+                                    <h3 className="acct-transfer-form__section-title">Ý kiến giám đốc</h3>
+                                    <div className="acct-transfer-form__value">
+                                      {selectedDirectorItem.directorComment?.trim() || '—'}
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </>
+                            ) : selectedDirectorItem.requestTypeId === REQUEST_TYPE_IDS.maintenance ? (
+                              <>
                                 <div className="acct-transfer-form__section">
-                                  <h3 className="acct-transfer-form__section-title">Ý kiến giám đốc</h3>
+                                  <h3 className="acct-transfer-form__section-title">Nội dung bảo dưỡng</h3>
                                   <div className="acct-transfer-form__value">
-                                    {selectedDirectorItem.directorComment?.trim() || '—'}
+                                    {selectedDirectorItem.description?.trim() ||
+                                      selectedDirectorItem.title?.trim() ||
+                                      '—'}
                                   </div>
                                 </div>
+                                {(selectedDirectorItem.status === 2 || selectedDirectorItem.status === 4) ? (
+                                  <div className="acct-transfer-form__section">
+                                    <h3 className="acct-transfer-form__section-title">Ý kiến giám đốc</h3>
+                                    <div className="acct-transfer-form__value">
+                                      {selectedDirectorItem.directorComment?.trim() || '—'}
+                                    </div>
+                                  </div>
+                                ) : null}
                               </>
                             ) : (
                               <>

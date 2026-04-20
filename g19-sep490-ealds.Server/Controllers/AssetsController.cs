@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using g19_sep490_ealds.Server.Services.Interface;
 using System.Security.Claims;
 
 namespace g19_sep490_ealds.Server.Controllers;
@@ -16,11 +17,16 @@ public class AssetsController : ControllerBase
 {
     private readonly EaldsDbContext _context;
     private readonly int _departmentHeadRoleId;
+    private readonly IMaintenanceTemplateService _maintenanceTemplates;
 
-    public AssetsController(EaldsDbContext context, IConfiguration configuration)
+    public AssetsController(
+        EaldsDbContext context,
+        IConfiguration configuration,
+        IMaintenanceTemplateService maintenanceTemplates)
     {
         _context = context;
         _departmentHeadRoleId = configuration.GetValue<int>("App:DepartmentHeadRoleId", 4);
+        _maintenanceTemplates = maintenanceTemplates;
     }
 
     /// <summary>
@@ -216,18 +222,24 @@ public class AssetsController : ControllerBase
             })
             .ToListAsync();
 
-        var schedules = asset.MaintenanceSchedules
+        // Gộp lịch theo toàn bộ cá thể của tài sản (không chỉ instanceList đã lọc PB), tránh thiếu quy định khi lịch gắn cá thể ngoài phạm vi xem.
+        var allInstances = asset.AssetInstances.OrderBy(i => i.InstanceCode).ToList();
+        var fromAssetNav = asset.MaintenanceSchedules
             .Where(s => s.IsActive)
-            .Select(ToMaintenanceScheduleDto)
-            .Concat(
-                instanceList.SelectMany(inst =>
-                    inst.MaintenanceSchedules.Where(s => s.IsActive).Select(s =>
-                    {
-                        var schedDto = ToMaintenanceScheduleDto(s);
-                        schedDto.AssetInstanceId = inst.AssetInstanceId;
-                        schedDto.InstanceCode = inst.InstanceCode;
-                        return schedDto;
-                    })))
+            .Select(ToMaintenanceScheduleDto);
+        var fromAllInstances = allInstances.SelectMany(inst =>
+            inst.MaintenanceSchedules.Where(s => s.IsActive).Select(s =>
+            {
+                var schedDto = ToMaintenanceScheduleDto(s);
+                schedDto.AssetInstanceId ??= inst.AssetInstanceId;
+                if (string.IsNullOrWhiteSpace(schedDto.InstanceCode))
+                    schedDto.InstanceCode = inst.InstanceCode;
+                return schedDto;
+            }));
+        var schedules = fromAssetNav
+            .Concat(fromAllInstances)
+            .GroupBy(s => s.ScheduleId)
+            .Select(g => g.First())
             .OrderBy(s => s.ScheduleId)
             .ToList();
 
@@ -452,6 +464,16 @@ public class AssetsController : ControllerBase
                 _context.AssetInstances.Add(instance);
                 await _context.SaveChangesAsync();
 
+                try
+                {
+                    var actorUserId = TryGetCurrentUserId();
+                    await _maintenanceTemplates.EnsureSchedulesForNewInstanceAsync(instance.AssetInstanceId, actorUserId);
+                }
+                catch
+                {
+                    // Không hủy tạo cá thể nếu đồng bộ quy định bảo dưỡng lỗi.
+                }
+
                 if (init.DepreciationPolicyId.HasValue)
                 {
                     var policy = await _context.DepreciationPolicies.FindAsync(init.DepreciationPolicyId.Value);
@@ -484,6 +506,14 @@ public class AssetsController : ControllerBase
         if (created == null)
             return NotFound();
         return CreatedAtAction(nameof(GetById), new { id = asset.AssetId }, created);
+    }
+
+    private int? TryGetCurrentUserId()
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!int.TryParse(userIdClaim, out var userId) || userId <= 0)
+            return null;
+        return userId;
     }
 
     /// <summary>

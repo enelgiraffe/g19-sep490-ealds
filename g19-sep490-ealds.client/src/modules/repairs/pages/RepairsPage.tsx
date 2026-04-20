@@ -983,7 +983,7 @@ export function RepairsPage() {
                         </div>
                       ) : null}
                       {selected.rowSource === 'repair' &&
-                      selected.rawStatus >= 2 &&
+                      ['approved', 'inProgress', 'completed'].includes(selected.status) &&
                       (selected.directorComment?.trim() || selected.directorDecisionDate) ? (
                         <div className="repair-detail-info-row">
                           <div className="repair-detail-info-item repair-detail-info-item--full">

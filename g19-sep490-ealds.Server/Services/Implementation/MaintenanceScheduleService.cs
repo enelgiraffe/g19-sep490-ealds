@@ -35,6 +35,8 @@ public class MaintenanceScheduleService : IMaintenanceScheduleService
         }
 
         var schedule = _mapper.CreateToEntity(create);
+        // Lịch gắn theo cá thể thì không set AssetId để đúng CHECK constraint phạm vi.
+        schedule.AssetId = null;
         schedule.NextDueDate = CalculateNextDueDate(schedule);
         await _context.MaintenanceSchedules.AddAsync(schedule);
         await _context.SaveChangesAsync();

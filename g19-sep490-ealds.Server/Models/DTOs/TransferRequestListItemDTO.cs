@@ -48,7 +48,7 @@ public class TransferRequestListItemDTO
 
     /// <summary>Mô tả đơn / phương án sửa chữa (AssetRequest.Description) khi có.</summary>
     public string? RequestDescription { get; set; }
-    public string? DirectorComment { get; set; }
+
     public DateTime? DirectorDecisionDate { get; set; }
 
     /// <summary>Chỉ gán cho danh sách thanh lý: nguyên giá cá thể tại thời điểm tra cứu.</summary>

@@ -19,6 +19,7 @@ public class MaintenanceTemplateMapper : IMaintenanceTemplateMapper
         template.RepeatIntervalValue = create.RepeatIntervalValue;
         template.RepeatIntervalUnit = RepeatIntervalUnitToString(create.RepeatIntervalUnit);
         template.IsActive = true;
+        template.OneTimeScheduledDate = create.OneTimeScheduledDate;
         return template;
     }
 
@@ -49,6 +50,7 @@ public class MaintenanceTemplateMapper : IMaintenanceTemplateMapper
             ? ru
             : MaintenanceRepeatIntervalUnit.Month;
         response.IsActive = entity.IsActive;
+        response.OneTimeScheduledDate = entity.OneTimeScheduledDate;
         return response;
     }
 
@@ -66,6 +68,7 @@ public class MaintenanceTemplateMapper : IMaintenanceTemplateMapper
         template.FrequencyType = (int)update.FrequencyType;
         template.RepeatIntervalValue = update.RepeatIntervalValue;
         template.RepeatIntervalUnit = RepeatIntervalUnitToString(update.RepeatIntervalUnit);
+        template.OneTimeScheduledDate = update.OneTimeScheduledDate;
         return template;
     }
 }

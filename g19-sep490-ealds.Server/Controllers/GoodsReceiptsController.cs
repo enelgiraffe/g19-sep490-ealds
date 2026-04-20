@@ -29,15 +29,18 @@ public class GoodsReceiptsController : ControllerBase
 
     private readonly EaldsDbContext _db;
     private readonly IAssetRequestNotificationService _requestNotifications;
+    private readonly IMaintenanceTemplateService _maintenanceTemplates;
     private readonly int _allocationRequestTypeId;
 
     public GoodsReceiptsController(
         EaldsDbContext db,
         IAssetRequestNotificationService requestNotifications,
+        IMaintenanceTemplateService maintenanceTemplates,
         IConfiguration configuration)
     {
         _db = db;
         _requestNotifications = requestNotifications;
+        _maintenanceTemplates = maintenanceTemplates;
         _allocationRequestTypeId = configuration.GetValue<int>("App:AllocationRequestTypeId", 6);
     }
 
@@ -460,6 +463,24 @@ public class GoodsReceiptsController : ControllerBase
 
             ApplyProcurementReceiptStatus(procurement);
             await _db.SaveChangesAsync();
+
+            var newInstanceIds = await _db.AssetInstances
+                .AsNoTracking()
+                .Where(i => i.GoodsReceiptLine != null && i.GoodsReceiptLine.GoodsReceiptId == receipt.GoodsReceiptId)
+                .Select(i => i.AssetInstanceId)
+                .ToListAsync();
+
+            foreach (var instanceId in newInstanceIds)
+            {
+                try
+                {
+                    await _maintenanceTemplates.EnsureSchedulesForNewInstanceAsync(instanceId, userId.Value);
+                }
+                catch
+                {
+                    // Không hủy post goods receipt nếu đồng bộ quy định bảo dưỡng lỗi.
+                }
+            }
 
             var promotedIds = await PurchaseLinkedAllocationRequestService.TryPromoteAwaitingGoodsReceiptForProcurementAsync(
                 _db,

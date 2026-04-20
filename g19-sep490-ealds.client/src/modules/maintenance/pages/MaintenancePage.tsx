@@ -59,6 +59,12 @@ interface MaintenanceRow {
   rawStatus: number;
 }
 
+interface MaintenanceStartMeta {
+  maintenanceProvider: string | null;
+  location: string | null;
+  locationType: string | null;
+}
+
 function getApiErrorMessage(error: unknown, fallback: string): string {
   const axiosErr = error as { response?: { data?: unknown } };
   const data = axiosErr?.response?.data;
@@ -164,6 +170,8 @@ type MaintenanceTemplateForm = {
   frequencyType: 1 | 2;
   repeatIntervalValue: number;
   repeatIntervalUnit: 1 | 2 | 3 | 4;
+  /** yyyy-MM-dd khi tần suất = một lần */
+  oneTimeScheduledDate: string;
   isActive: boolean;
 };
 
@@ -206,6 +214,7 @@ export function MaintenancePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [selected, setSelected] = useState<MaintenanceRow | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [detailMeta, setDetailMeta] = useState<MaintenanceStartMeta | null>(null);
   const [approveOpen, setApproveOpen] = useState(false);
   const [decision, setDecision] = useState<'approved' | 'rejected'>('approved');
   const [comment, setComment] = useState('');
@@ -220,7 +229,6 @@ export function MaintenancePage() {
   const [reportNumber, setReportNumber] = useState('');
   const [maintenanceDate, setMaintenanceDate] = useState('');
   const [expectedCompletionDate, setExpectedCompletionDate] = useState('');
-  const [maintenanceContent, setMaintenanceContent] = useState('');
   const [detailedDescription, setDetailedDescription] = useState('');
   const [maintenanceProvider, setMaintenanceProvider] = useState('');
   const [locationType, setLocationType] = useState<'at-unit' | 'provider'>('at-unit');
@@ -256,6 +264,7 @@ export function MaintenancePage() {
     frequencyType: 2,
     repeatIntervalValue: 1,
     repeatIntervalUnit: 3,
+    oneTimeScheduledDate: toTodayInputDate(),
     isActive: true,
   });
 
@@ -327,6 +336,25 @@ export function MaintenancePage() {
     }
   };
 
+  const loadDetailMeta = async (assetRequestId: number) => {
+    try {
+      const detail = await assetRequestService.getById(assetRequestId);
+      if (!detail?.proposedData) {
+        setDetailMeta(null);
+        return;
+      }
+      const parsed = JSON.parse(detail.proposedData) as Record<string, unknown>;
+      setDetailMeta({
+        maintenanceProvider:
+          typeof parsed.maintenanceProvider === 'string' ? parsed.maintenanceProvider : null,
+        location: typeof parsed.location === 'string' ? parsed.location : null,
+        locationType: typeof parsed.locationType === 'string' ? parsed.locationType : null,
+      });
+    } catch {
+      setDetailMeta(null);
+    }
+  };
+
   const openTemplateSetupModal = async () => {
     setSetupTemplateOpen(true);
     try {
@@ -349,6 +377,7 @@ export function MaintenancePage() {
       frequencyType: 2,
       repeatIntervalValue: 1,
       repeatIntervalUnit: 3,
+      oneTimeScheduledDate: toTodayInputDate(),
       isActive: true,
     });
   };
@@ -375,6 +404,9 @@ export function MaintenancePage() {
         repeatIntervalUnit: ([1, 2, 3, 4].includes(parseEnumNumber(detail.repeatIntervalUnit))
           ? parseEnumNumber(detail.repeatIntervalUnit)
           : 3) as 1 | 2 | 3 | 4,
+        oneTimeScheduledDate: detail.oneTimeScheduledDate
+          ? dayjs(detail.oneTimeScheduledDate).format('YYYY-MM-DD')
+          : toTodayInputDate(),
         isActive: Boolean(detail.isActive),
       });
     } catch {
@@ -400,6 +432,11 @@ export function MaintenancePage() {
     }
 
     const isOneTime = templateForm.frequencyType === 1;
+    if (isOneTime && !templateForm.oneTimeScheduledDate?.trim()) {
+      message.warning('Vui lòng chọn ngày bảo dưỡng.');
+      return;
+    }
+
     const payload = {
       assetTypeId: templateForm.assetTypeId,
       name: templateForm.name.trim(),
@@ -409,6 +446,7 @@ export function MaintenancePage() {
       repeatIntervalValue: isOneTime ? 0 : Math.max(1, Number(templateForm.repeatIntervalValue || 1)),
       repeatIntervalUnit: isOneTime ? 0 : templateForm.repeatIntervalUnit,
       isActive: templateForm.isActive,
+      oneTimeScheduledDate: isOneTime ? templateForm.oneTimeScheduledDate.trim() : null,
     } as const;
 
     setTemplateFormSubmitting(true);
@@ -465,7 +503,6 @@ export function MaintenancePage() {
       setReportNumber(generateMaintenanceReportNumber());
       setMaintenanceDate(toTodayInputDate());
       setExpectedCompletionDate('');
-      setMaintenanceContent('');
       setDetailedDescription(row.purpose || '');
       setMaintenanceProvider('');
       setLocationType('at-unit');
@@ -504,7 +541,7 @@ export function MaintenancePage() {
         maintenanceDate: toIsoDate(maintenanceDate),
         maintenanceProvider: maintenanceProvider.trim() || null,
         expectedCompletionDate: expectedCompletionDateIso,
-        maintenanceContent: maintenanceContent.trim() || null,
+        maintenanceContent: detailedDescription.trim() || null,
         detailedDescription: detailedDescription.trim() || null,
         locationType,
         location: loc || null,
@@ -790,6 +827,7 @@ export function MaintenancePage() {
                         icon={<EyeOutlined />}
                         onClick={() => {
                           setSelected(row);
+                          void loadDetailMeta(row.assetRequestId);
                           setDetailOpen(true);
                         }}
                       />
@@ -893,7 +931,7 @@ export function MaintenancePage() {
                   <thead>
                     <tr>
                       <th>Loại tài sản</th>
-                      <th>Nội dung bảo dưỡng</th>
+                      <th>Tên quy định</th>
                       <th>Xác định bảo dưỡng theo</th>
                       <th>Tần suất bảo dưỡng</th>
                       <th>Lặp lại theo</th>
@@ -918,13 +956,16 @@ export function MaintenancePage() {
                       filteredTemplates.map((template) => (
                         <tr key={template.templateId} className="asset-row">
                           <td>{assetTypes.find((a) => a.assetTypeId === template.assetTypeId)?.name ?? '—'}</td>
-                          <td>{template.content || '—'}</td>
+                          <td>{template.name?.trim() || '—'}</td>
                           <td>Thời gian</td>
                           <td>{getFrequencyLabel(template.frequencyType)}</td>
                           <td>
-                            {Number(template.repeatIntervalValue || 0) > 0
-                              ? `${template.repeatIntervalValue} ${getRepeatUnitLabel(template.repeatIntervalUnit)}`
-                              : '—'}
+                            {parseEnumNumber(template.frequencyType) === 1 &&
+                            template.oneTimeScheduledDate
+                              ? formatDate(template.oneTimeScheduledDate)
+                              : Number(template.repeatIntervalValue || 0) > 0
+                                ? `${template.repeatIntervalValue} ${getRepeatUnitLabel(template.repeatIntervalUnit)}`
+                                : '—'}
                           </td>
                           <td>
                             <button
@@ -1079,7 +1120,15 @@ export function MaintenancePage() {
                       <input
                         type="radio"
                         checked={templateForm.frequencyType === 1}
-                        onChange={() => setTemplateForm((prev) => ({ ...prev, frequencyType: 1 }))}
+                        onChange={() =>
+                          setTemplateForm((prev) => ({
+                            ...prev,
+                            frequencyType: 1,
+                            oneTimeScheduledDate: prev.oneTimeScheduledDate?.trim()
+                              ? prev.oneTimeScheduledDate
+                              : toTodayInputDate(),
+                          }))
+                        }
                       />{' '}
                       Một lần
                     </label>
@@ -1093,43 +1142,61 @@ export function MaintenancePage() {
                     </label>
                   </div>
                 </div>
-                <div className="template-form-modal__item">
-                  <label htmlFor="template-repeat-value">Giá trị lặp lại</label>
-                  <input
-                    id="template-repeat-value"
-                    className="template-form-modal__input"
-                    type="number"
-                    min={1}
-                    value={templateForm.repeatIntervalValue}
-                    disabled={templateForm.frequencyType === 1}
-                    onChange={(e) =>
-                      setTemplateForm((prev) => ({
-                        ...prev,
-                        repeatIntervalValue: Math.max(1, Number(e.target.value || 1)),
-                      }))
-                    }
-                  />
-                </div>
-                <div className="template-form-modal__item">
-                  <label htmlFor="template-repeat-unit">Lặp lại theo</label>
-                  <select
-                    id="template-repeat-unit"
-                    className="template-form-modal__input"
-                    value={templateForm.repeatIntervalUnit}
-                    disabled={templateForm.frequencyType === 1}
-                    onChange={(e) =>
-                      setTemplateForm((prev) => ({
-                        ...prev,
-                        repeatIntervalUnit: Number(e.target.value) as 1 | 2 | 3 | 4,
-                      }))
-                    }
-                  >
-                    <option value={1}>Ngày</option>
-                    <option value={2}>Tuần</option>
-                    <option value={3}>Tháng</option>
-                    <option value={4}>Năm</option>
-                  </select>
-                </div>
+                {templateForm.frequencyType === 1 ? (
+                  <div className="template-form-modal__item">
+                    <label htmlFor="template-one-time-date">Ngày bảo dưỡng</label>
+                    <input
+                      id="template-one-time-date"
+                      className="template-form-modal__input"
+                      type="date"
+                      value={templateForm.oneTimeScheduledDate}
+                      onChange={(e) =>
+                        setTemplateForm((prev) => ({
+                          ...prev,
+                          oneTimeScheduledDate: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div className="template-form-modal__item">
+                      <label htmlFor="template-repeat-value">Giá trị lặp lại</label>
+                      <input
+                        id="template-repeat-value"
+                        className="template-form-modal__input"
+                        type="number"
+                        min={1}
+                        value={templateForm.repeatIntervalValue}
+                        onChange={(e) =>
+                          setTemplateForm((prev) => ({
+                            ...prev,
+                            repeatIntervalValue: Math.max(1, Number(e.target.value || 1)),
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="template-form-modal__item">
+                      <label htmlFor="template-repeat-unit">Lặp lại theo</label>
+                      <select
+                        id="template-repeat-unit"
+                        className="template-form-modal__input"
+                        value={templateForm.repeatIntervalUnit}
+                        onChange={(e) =>
+                          setTemplateForm((prev) => ({
+                            ...prev,
+                            repeatIntervalUnit: Number(e.target.value) as 1 | 2 | 3 | 4,
+                          }))
+                        }
+                      >
+                        <option value={1}>Ngày</option>
+                        <option value={2}>Tuần</option>
+                        <option value={3}>Tháng</option>
+                        <option value={4}>Năm</option>
+                      </select>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
             <div className="template-form-modal__footer">
@@ -1167,6 +1234,7 @@ export function MaintenancePage() {
               onClick={() => {
                 setDetailOpen(false);
                 setSelected(null);
+                setDetailMeta(null);
               }}
               aria-label="Đóng"
             >
@@ -1249,6 +1317,25 @@ export function MaintenancePage() {
                           </div>
                         </div>
                       </div>
+                      <div className="maintenance-form-modal__info-row">
+                        <div className="maintenance-form-modal__info-item">
+                          <label>Đơn vị bảo dưỡng</label>
+                          <div className="maintenance-form-modal__info-value">
+                            {detailMeta?.maintenanceProvider?.trim() || '—'}
+                          </div>
+                        </div>
+                        <div className="maintenance-form-modal__info-item">
+                          <label>Nơi thực hiện</label>
+                          <div className="maintenance-form-modal__info-value">
+                            {detailMeta?.location?.trim() ||
+                              (detailMeta?.locationType === 'provider'
+                                ? 'Tại nhà cung cấp'
+                                : detailMeta?.locationType === 'at-unit'
+                                  ? 'Tại đơn vị'
+                                  : '—')}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1262,6 +1349,7 @@ export function MaintenancePage() {
                   onClick={() => {
                     setDetailOpen(false);
                     setSelected(null);
+                    setDetailMeta(null);
                   }}
                 >
                   Đóng
@@ -1434,7 +1522,7 @@ export function MaintenancePage() {
                     className="maintenance-form-modal__input"
                     value={maintenanceProvider}
                     onChange={(e) => setMaintenanceProvider(e.target.value)}
-                    placeholder="Tên đơn vị"
+                    placeholder="Tên đơn vị (để trống nếu nội bộ thực hiện)"
                   />
                 </div>
                 <div>
@@ -1448,14 +1536,6 @@ export function MaintenancePage() {
                 </div>
                 <div className="maintenance-form-modal__form-grid-full">
                   <div className="maintenance-form-modal__label">Nội dung bảo dưỡng</div>
-                  <input
-                    className="maintenance-form-modal__input"
-                    value={maintenanceContent}
-                    onChange={(e) => setMaintenanceContent(e.target.value)}
-                  />
-                </div>
-                <div className="maintenance-form-modal__form-grid-full">
-                  <div className="maintenance-form-modal__label">Mô tả chi tiết</div>
                   <textarea
                     className="maintenance-form-modal__textarea"
                     value={detailedDescription}
@@ -1463,7 +1543,7 @@ export function MaintenancePage() {
                   />
                 </div>
                 <div className="maintenance-form-modal__form-grid-full">
-                  <div className="maintenance-form-modal__label">Địa điểm bảo dưỡng</div>
+                  <div className="maintenance-form-modal__label">Nơi thực hiện</div>
                   <div className="maintenance-form-modal__radio-group">
                     <label>
                       <input
@@ -1473,7 +1553,7 @@ export function MaintenancePage() {
                         checked={locationType === 'at-unit'}
                         onChange={() => setLocationType('at-unit')}
                       />
-                      Tại đơn vị
+                      Tại chỗ
                     </label>
                     <label>
                       <input
@@ -1483,9 +1563,10 @@ export function MaintenancePage() {
                         checked={locationType === 'provider'}
                         onChange={() => setLocationType('provider')}
                       />
-                      Nhà cung cấp
+                      Tại đơn vị bảo dưỡng
                     </label>
                   </div>
+                  
                 </div>
               </div>
             </div>

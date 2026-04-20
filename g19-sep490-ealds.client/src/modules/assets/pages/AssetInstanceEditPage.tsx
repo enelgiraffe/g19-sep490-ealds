@@ -327,13 +327,22 @@ export function AssetInstanceEditPage() {
       }
     }
 
-    if (depAmount != null && Number.isFinite(depAmount) && depAmount < 0) {
+    if (depAmount != null && !Number.isFinite(depAmount)) {
       return 'Mức khấu hao kỳ gần nhất không hợp lệ.';
     }
-    if (depAccumulated != null && Number.isFinite(depAccumulated) && depAccumulated < 0) {
+    if (depAmount != null && depAmount < 0) {
+      return 'Mức khấu hao kỳ gần nhất không hợp lệ.';
+    }
+    if (depAccumulated != null && !Number.isFinite(depAccumulated)) {
       return 'Khấu hao lũy kế không hợp lệ.';
     }
-    if (depRemaining != null && Number.isFinite(depRemaining) && depRemaining < 0) {
+    if (depAccumulated != null && depAccumulated < 0) {
+      return 'Khấu hao lũy kế không hợp lệ.';
+    }
+    if (depRemaining != null && !Number.isFinite(depRemaining)) {
+      return 'Giá trị còn lại không hợp lệ.';
+    }
+    if (depRemaining != null && depRemaining < 0) {
       return 'Giá trị còn lại không hợp lệ.';
     }
     return null;
@@ -381,6 +390,9 @@ export function AssetInstanceEditPage() {
       currentValue: Number(currentValueInput),
       condition: condition.trim() || null,
       note: note.trim() || null,
+    };
+
+    const detailOnlyPayload: UpdateAssetInstancePayload = {
       ...(hasWarrantyGroup
         ? {
             warrantyPeriodValue: Number(warrantyPeriodValue),
@@ -409,6 +421,7 @@ export function AssetInstanceEditPage() {
     const payload: UpdateAssetInstancePayload = {
       serialNumber: serialNumber.trim() || null,
       ...sharedAdvancedPayload,
+      ...detailOnlyPayload,
     };
 
     setSaving(true);
@@ -754,7 +767,7 @@ export function AssetInstanceEditPage() {
           <h2 className="asset-create__section-title">Thông tin khấu hao</h2>
           <div className="asset-create__grid asset-create__grid--three">
             <div className="asset-create__field">
-              <label className="asset-create__label">Giá trị tính khấu hao</label>
+              <label className="asset-create__label">Mức khấu hao kỳ gần nhất</label>
               <input
                 type="number"
                 min={0}

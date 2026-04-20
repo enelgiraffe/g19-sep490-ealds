@@ -81,6 +81,10 @@ export function TransferRequestDetailModal({
 
   const statusLabel = STATUS_LABELS[request.status] ?? request.statusName ?? '—';
   const displayInstanceCode = request.instanceCode || request.assetCode || '—';
+  const isSubmittedStatus = request.status === 1;
+  const showAccountantComment = request.status === 2 || request.status === 4;
+  const showDirectorComment = request.status === 4;
+  const showHandoverInfo = !isSubmittedStatus;
 
   return (
     <div className="transfer-detail-modal-overlay" role="dialog" aria-modal="true">
@@ -152,70 +156,78 @@ export function TransferRequestDetailModal({
                   {request.reason || '—'}
                 </div>
               </div>
-              <div className="transfer-detail-form__item transfer-detail-form__item--full">
-                <label>Ý kiến kế toán</label>
-                <div className="transfer-detail-info-value transfer-detail-info-value--multiline">
-                  {request.accountantComment?.trim() || '—'}
-                </div>
-              </div>
-              <div className="transfer-detail-form__item transfer-detail-form__item--full">
-                <label>Ý kiến giám đốc</label>
-                <div className="transfer-detail-info-value transfer-detail-info-value--multiline">
-                  {request.directorComment?.trim() || '—'}
-                </div>
-              </div>
-              <div className="transfer-detail-form__row transfer-detail-form__row--spaced-top">
-                <div className="transfer-detail-form__item">
-                  <label>Xác nhận bên gửi</label>
-                  <div className="transfer-detail-info-value">
-                    {request.isSenderConfirmed ? 'Đã xác nhận đã gửi' : 'Chưa xác nhận'}
+              {showAccountantComment ? (
+                <div className="transfer-detail-form__item transfer-detail-form__item--full">
+                  <label>Ý kiến kế toán</label>
+                  <div className="transfer-detail-info-value transfer-detail-info-value--multiline">
+                    {request.accountantComment?.trim() || '—'}
                   </div>
                 </div>
-                <div className="transfer-detail-form__item">
-                  <label>Xác nhận bên nhận</label>
-                  <div className="transfer-detail-info-value">
-                    {request.isReceiverConfirmed ? 'Đã xác nhận đã nhận' : 'Chưa xác nhận'}
+              ) : null}
+              {showDirectorComment ? (
+                <div className="transfer-detail-form__item transfer-detail-form__item--full">
+                  <label>Ý kiến giám đốc</label>
+                  <div className="transfer-detail-info-value transfer-detail-info-value--multiline">
+                    {request.directorComment?.trim() || '—'}
                   </div>
                 </div>
-              </div>
+              ) : null}
+              {showHandoverInfo ? (
+                <div className="transfer-detail-form__row transfer-detail-form__row--spaced-top">
+                  <div className="transfer-detail-form__item">
+                    <label>Xác nhận bên gửi</label>
+                    <div className="transfer-detail-info-value">
+                      {request.isSenderConfirmed ? 'Đã xác nhận đã gửi' : 'Chưa xác nhận'}
+                    </div>
+                  </div>
+                  <div className="transfer-detail-form__item">
+                    <label>Xác nhận bên nhận</label>
+                    <div className="transfer-detail-info-value">
+                      {request.isReceiverConfirmed ? 'Đã xác nhận đã nhận' : 'Chưa xác nhận'}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
-            <div className="transfer-detail-form__section">
-              <h3 className="transfer-detail-section-title">Biên bản bàn giao / tiếp nhận</h3>
-              {handoverLoading ? (
-                <div className="transfer-detail-info-value">Đang tải…</div>
-              ) : handoverLogs.length === 0 ? (
-                <div className="transfer-detail-info-value">
-                  Chưa có biên bản (sau khi bên gửi / bên nhận xác nhận, thông tin sẽ hiển thị tại đây).
-                </div>
-              ) : (
-                <ul className="transfer-detail-handover-list">
-                  {handoverLogs.map((log) => (
-                    <li key={log.transferHandoverRecordId} className="transfer-detail-handover-item">
-                      <div className="transfer-detail-handover-item__meta">
-                        <strong>{handoverSideLabel(log.side)}</strong>
-                        <span className="transfer-detail-handover-item__time">
-                          {formatDateTime(log.occurredAt)}
-                        </span>
-                      </div>
-                      <div className="transfer-detail-info-value transfer-detail-info-value--multiline">
-                        {log.details?.summary || '—'}
-                      </div>
-                      <div className="transfer-detail-handover-item__actor">
-                        Người thực hiện:{' '}
-                        {log.actionByUserName?.trim() || `User #${log.actionByUserId}`}
-                      </div>
-                      {log.userNote ? (
-                        <div className="transfer-detail-handover-item__note">
-                          <span className="transfer-detail-handover-item__note-label">Ghi chú:</span>{' '}
-                          {log.userNote}
+            {showHandoverInfo ? (
+              <div className="transfer-detail-form__section">
+                <h3 className="transfer-detail-section-title">Biên bản bàn giao / tiếp nhận</h3>
+                {handoverLoading ? (
+                  <div className="transfer-detail-info-value">Đang tải…</div>
+                ) : handoverLogs.length === 0 ? (
+                  <div className="transfer-detail-info-value">
+                    Chưa có biên bản (sau khi bên gửi / bên nhận xác nhận, thông tin sẽ hiển thị tại đây).
+                  </div>
+                ) : (
+                  <ul className="transfer-detail-handover-list">
+                    {handoverLogs.map((log) => (
+                      <li key={log.transferHandoverRecordId} className="transfer-detail-handover-item">
+                        <div className="transfer-detail-handover-item__meta">
+                          <strong>{handoverSideLabel(log.side)}</strong>
+                          <span className="transfer-detail-handover-item__time">
+                            {formatDateTime(log.occurredAt)}
+                          </span>
                         </div>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+                        <div className="transfer-detail-info-value transfer-detail-info-value--multiline">
+                          {log.details?.summary || '—'}
+                        </div>
+                        <div className="transfer-detail-handover-item__actor">
+                          Người thực hiện:{' '}
+                          {log.actionByUserName?.trim() || `User #${log.actionByUserId}`}
+                        </div>
+                        {log.userNote ? (
+                          <div className="transfer-detail-handover-item__note">
+                            <span className="transfer-detail-handover-item__note-label">Ghi chú:</span>{' '}
+                            {log.userNote}
+                          </div>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
 

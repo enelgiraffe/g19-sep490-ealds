@@ -21,6 +21,9 @@ public partial class MaintenanceTemplate
 
     public bool IsActive { get; set; }
 
+    /// <summary>Ngày bảo dưỡng áp dụng khi <see cref="FrequencyType"/> là một lần.</summary>
+    public DateTime? OneTimeScheduledDate { get; set; }
+
     public virtual AssetType AssetType { get; set; } = null!;
 
     public virtual ICollection<MaintenanceSchedule> MaintenanceSchedules { get; set; } = new List<MaintenanceSchedule>();

@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using g19_sep490_ealds.Server.Services.Interface;
+using System.Security.Claims;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -18,11 +20,16 @@ public class AssetInstancesController : ControllerBase
 {
     private readonly EaldsDbContext _context;
     private readonly int _departmentHeadRoleId;
+    private readonly IMaintenanceTemplateService _maintenanceTemplates;
 
-    public AssetInstancesController(EaldsDbContext context, IConfiguration configuration)
+    public AssetInstancesController(
+        EaldsDbContext context,
+        IConfiguration configuration,
+        IMaintenanceTemplateService maintenanceTemplates)
     {
         _context = context;
         _departmentHeadRoleId = configuration.GetValue<int>("App:DepartmentHeadRoleId", 4);
+        _maintenanceTemplates = maintenanceTemplates;
     }
 
     /// <summary>
@@ -259,6 +266,16 @@ public class AssetInstancesController : ControllerBase
 
         _context.AssetInstances.Add(instance);
         await _context.SaveChangesAsync();
+
+        try
+        {
+            var actorUserId = TryGetCurrentUserId();
+            await _maintenanceTemplates.EnsureSchedulesForNewInstanceAsync(instance.AssetInstanceId, actorUserId);
+        }
+        catch
+        {
+            // Không hủy tạo cá thể nếu đồng bộ quy định bảo dưỡng lỗi.
+        }
 
         if (dto.DepreciationPolicyId.HasValue)
         {
@@ -610,6 +627,14 @@ public class AssetInstancesController : ControllerBase
         dto.ResponsibleEmployeeId.HasValue ||
         dto.ClearDepartmentAssignment ||
         dto.ClearResponsibleEmployee;
+
+    private int? TryGetCurrentUserId()
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!int.TryParse(userIdClaim, out var userId) || userId <= 0)
+            return null;
+        return userId;
+    }
 
     private ActionResult<AssetInstanceResponseDTO>? RequireAccountantForAssignment()
     {

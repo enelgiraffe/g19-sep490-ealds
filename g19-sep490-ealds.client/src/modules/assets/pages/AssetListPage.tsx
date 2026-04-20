@@ -835,15 +835,7 @@ export function AssetListPage() {
                                           <span className="asset-row-menu__icon">🛠</span>
                                           <span>Bảo dưỡng</span>
                                         </button>
-                                        <button
-                                          className="asset-row-menu__item"
-                                          onClick={() =>
-                                            handleInstanceMenuAction('mark-lost', instance.assetInstanceId)
-                                          }
-                                        >
-                                          <span className="asset-row-menu__icon">−</span>
-                                          <span>Đánh dấu mất</span>
-                                        </button>
+        
                                         <button
                                           className="asset-row-menu__item"
                                           onClick={() =>
@@ -852,15 +844,6 @@ export function AssetListPage() {
                                         >
                                           <span className="asset-row-menu__icon">$</span>
                                           <span>Đề nghị thanh lý</span>
-                                        </button>
-                                        <button
-                                          className="asset-row-menu__item"
-                                          onClick={() =>
-                                            handleInstanceMenuAction('mark-broken', instance.assetInstanceId)
-                                          }
-                                        >
-                                          <span className="asset-row-menu__icon">!</span>
-                                          <span>Đánh dấu hỏng</span>
                                         </button>
                                         <button
                                           className="asset-row-menu__item"

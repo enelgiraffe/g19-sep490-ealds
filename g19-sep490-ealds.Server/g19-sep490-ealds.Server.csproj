@@ -32,7 +32,7 @@
     <PackageReference Include="Quartz.Extensions.Hosting" Version="3.16.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.*" />
-    <PackageReference Include="MailKit" Version="4.15.1" />
+    <PackageReference Include="MailKit" Version="4.16.0" />
   </ItemGroup>
 
   <ItemGroup>
