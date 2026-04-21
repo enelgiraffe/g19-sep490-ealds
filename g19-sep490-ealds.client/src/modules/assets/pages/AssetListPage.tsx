@@ -21,7 +21,9 @@ import { LiquidationRequestModal } from '../components/LiquidationRequestModal';
 import { TransferAssetModal } from '../components/TransferAssetModal';
 import { MaintenanceProposalModal } from '../components/MaintenanceProposalModal';
 import { profileService, type UserProfile } from '../../profile/services/profileService';
+import { allocationRequestApiErrorMessage } from '../../allocations/services/allocationRequestService';
 import { isDepartmentHeadRoleCode } from '../../../shared/utils/departmentHeadRole';
+import axios from 'axios';
 import './AssetListPage.css';
 
 interface AssetItem {
@@ -316,16 +318,6 @@ export function AssetListPage() {
       const assetInfo = instanceToAssetInfo(raw, catalog);
       
       if (actionKey === 'move') {
-        if (
-          deptHeadFromId != null &&
-          raw.currentDepartmentId != null &&
-          Number(raw.currentDepartmentId) !== deptHeadFromId
-        ) {
-          message.warning(
-            'Chỉ có thể tạo yêu cầu điều chuyển cho tài sản đang thuộc phòng ban của bạn.',
-          );
-          return;
-        }
         setSelectedAssetInfo(assetInfo);
         setTransferAssetInstanceId(raw.assetInstanceId);
         setIsTransferModalOpen(true);
@@ -546,11 +538,8 @@ export function AssetListPage() {
         return;
       }
 
-      let fromLocationId = Number(values.fromLocationId);
+      const fromLocationId = Number(values.fromLocationId);
       const toLocationId = Number(values.toLocationId);
-      if (deptHeadFromId != null) {
-        fromLocationId = deptHeadFromId;
-      }
       if (!fromLocationId || !toLocationId) {
         message.error('Vui lòng nhập ID vị trí hợp lệ.');
         return;
@@ -582,9 +571,12 @@ export function AssetListPage() {
 
       message.success('Gửi yêu cầu điều chuyển thành công.');
       handleCloseTransferModal();
-    } catch (e: any) {
-      const msg = e?.response?.data ?? 'Gửi yêu cầu điều chuyển thất bại.';
-      message.error(msg);
+    } catch (e: unknown) {
+      const fromApi =
+        axios.isAxiosError(e) && e.response?.data != null
+          ? allocationRequestApiErrorMessage(e.response.data)
+          : null;
+      message.error(fromApi ?? 'Gửi yêu cầu điều chuyển thất bại.');
     }
   };
 
@@ -942,8 +934,7 @@ export function AssetListPage() {
         assetInfo={selectedAssetInfo}
         mode="department"
         currentUserDepartmentId={profile?.departmentId ?? null}
-        fromDepartmentId={deptHeadFromId ?? selectedAssetInfo?.currentDepartmentId ?? null}
-        lockFromDepartment={deptHeadFromId != null}
+        fromDepartmentId={selectedAssetInfo?.currentDepartmentId ?? deptHeadFromId ?? null}
       />
 
       <MaintenanceProposalModal

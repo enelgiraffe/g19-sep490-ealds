@@ -37,7 +37,6 @@ import { CategoriesPage } from './modules/admin/pages/CategoriesPage';
 import { DepartmentsPage } from './modules/admin/pages/DepartmentsPage';
 import { UsersPage } from './modules/admin/pages/UsersPage';
 import { UserDetailPage } from './modules/admin/pages/UserDetailPage';
-import { CostRecordingPage } from './modules/cost-recording/pages/CostRecordingPage';
 import { AccountantAllocationsPage } from './modules/allocations/pages/AccountantAllocationsPage';
 import { DepartmentAllocationRequestsPage } from './modules/allocations/pages/DepartmentAllocationRequestsPage';
 import { AllocationOrderDetailPage } from './modules/allocations/pages/AllocationOrderDetailPage';
@@ -107,7 +106,6 @@ function App() {
           <Route path="allocations/order/:orderId" element={<AllocationOrderDetailPage />} />
           <Route path="allocations/handover-order/:orderId" element={<AllocationOrderDetailPage />} />
           <Route path="allocation-requests" element={<DepartmentAllocationRequestsPage />} />
-          <Route path="cost-recording" element={<CostRecordingPage />} />
           <Route path="requests" element={<RequestsPage />} />
           <Route path="dashboard" element={<DirectorDashboardPage />} />
           <Route path="approval-detail/:id" element={<ApprovalDetailPage />} />

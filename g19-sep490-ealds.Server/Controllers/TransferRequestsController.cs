@@ -11,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
 using g19_sep490_ealds.Server.Services.Interface;
+using g19_sep490_ealds.Server.Utils;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
 namespace g19_sep490_ealds.Server.Controllers;
@@ -229,6 +230,11 @@ public class TransferRequestsController : ControllerBase
         if (!toDeptExists)
             return BadRequest("Phòng ban đích (ToLocationId) không tồn tại trong hệ thống.");
 
+        if (await DepartmentAssetScope.AnyDepartmentsHaveInventoryInProgressAsync(
+                _db,
+                new[] { dto.FromLocationId, dto.ToLocationId }))
+            return BadRequest(new { message = DepartmentAssetScope.InventoryInProgressBlockingMessage });
+
         var isAccountant = User.IsInRole("ACCOUNTANT");
         if (!isAccountant)
         {
@@ -431,6 +437,11 @@ public class TransferRequestsController : ControllerBase
             || (userDeptId.HasValue && transfer.FromLocation.DepartmentId == userDeptId.Value);
         if (!canSend) return Forbid();
 
+        if (await DepartmentAssetScope.DepartmentHasInventoryInProgressAsync(
+                _db,
+                transfer.FromLocation.DepartmentId))
+            return BadRequest(new { message = DepartmentAssetScope.InventoryInProgressBlockingMessage });
+
         var note = string.IsNullOrWhiteSpace(body?.Note) ? null : body!.Note!.Trim();
         if (note != null && note.Length > 2000)
             return BadRequest("Ghi chú không quá 2000 ký tự.");
@@ -500,6 +511,11 @@ public class TransferRequestsController : ControllerBase
             || transfer.ToUserId == userId
             || (userDeptId.HasValue && transfer.ToLocation.DepartmentId == userDeptId.Value);
         if (!canReceive) return Forbid();
+
+        if (await DepartmentAssetScope.DepartmentHasInventoryInProgressAsync(
+                _db,
+                transfer.ToLocation.DepartmentId))
+            return BadRequest(new { message = DepartmentAssetScope.InventoryInProgressBlockingMessage });
 
         var note = string.IsNullOrWhiteSpace(body?.Note) ? null : body!.Note!.Trim();
         if (note != null && note.Length > 2000)

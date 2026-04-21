@@ -7,11 +7,13 @@ import {
   EyeOutlined,
   DeleteOutlined,
 } from '@ant-design/icons';
+import axios from 'axios';
 import {
   transferRequestService,
   TRANSFER_REQUEST_TYPE_ID,
   type TransferRequestListItem,
 } from '../../assets/services/transferRequestService';
+import { allocationRequestApiErrorMessage } from '../../allocations/services/allocationRequestService';
 import { TransferAssetModal } from '../../assets/components/TransferAssetModal';
 import { TransferRequestDetailModal } from '../components/TransferRequestDetailModal';
 import { profileService, type UserProfile } from '../../profile/services/profileService';
@@ -315,9 +317,12 @@ export function TransfersPage() {
                                     await transferRequestService.delete(row.assetRequestId);
                                     message.success('Đã xóa yêu cầu điều chuyển.');
                                     await loadList();
-                                  } catch (e: any) {
-                                    const msg = e?.response?.data ?? 'Xóa yêu cầu thất bại.';
-                                    message.error(msg);
+                                  } catch (e: unknown) {
+                                    const fromApi =
+                                      axios.isAxiosError(e) && e.response?.data != null
+                                        ? allocationRequestApiErrorMessage(e.response.data)
+                                        : null;
+                                    message.error(fromApi ?? 'Xóa yêu cầu thất bại.');
                                   }
                                 }}
                               >
@@ -434,9 +439,12 @@ export function TransfersPage() {
             message.success('Gửi yêu cầu điều chuyển thành công.');
             setIsTransferModalOpen(false);
             await loadList();
-          } catch (e: any) {
-            const msg = e?.response?.data ?? 'Gửi yêu cầu điều chuyển thất bại.';
-            message.error(msg);
+          } catch (e: unknown) {
+            const fromApi =
+              axios.isAxiosError(e) && e.response?.data != null
+                ? allocationRequestApiErrorMessage(e.response.data)
+                : null;
+            message.error(fromApi ?? 'Gửi yêu cầu điều chuyển thất bại.');
           }
         }}
         assetInfo={null}
@@ -610,16 +618,15 @@ export function TransfersPage() {
                     }
                     setConfirmModal(null);
                     await loadList();
-                  } catch (e: any) {
-                    const data = e?.response?.data;
-                    const msg =
-                      typeof data === 'string'
-                        ? data
-                        : data?.message ??
-                          (confirmModal.type === 'send'
-                            ? 'Xác nhận gửi thất bại.'
-                            : 'Xác nhận nhận thất bại.');
-                    message.error(msg);
+                  } catch (e: unknown) {
+                    const fromApi =
+                      axios.isAxiosError(e) && e.response?.data != null
+                        ? allocationRequestApiErrorMessage(e.response.data)
+                        : null;
+                    message.error(
+                      fromApi ??
+                        (confirmModal.type === 'send' ? 'Xác nhận gửi thất bại.' : 'Xác nhận nhận thất bại.'),
+                    );
                   } finally {
                     setConfirmSubmitting(false);
                   }

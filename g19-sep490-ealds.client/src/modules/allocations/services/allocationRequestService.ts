@@ -1,9 +1,14 @@
 import { isAxiosError } from 'axios';
 import { apiClient } from '../../../shared/services/apiClient';
 
-/** Parses ASP.NET BadRequest `{ message }` or validation ProblemDetails `{ errors }`. */
+/** Parses ASP.NET BadRequest: plain JSON string, `{ message }`, ProblemDetails `{ errors }`, etc. */
 export function allocationRequestApiErrorMessage(data: unknown): string | null {
-  if (!data || typeof data !== 'object') return null;
+  if (data == null) return null;
+  if (typeof data === 'string') {
+    const t = data.trim();
+    return t.length ? t : null;
+  }
+  if (typeof data !== 'object') return null;
   const o = data as Record<string, unknown>;
   if (typeof o.message === 'string' && o.message.trim()) return o.message.trim();
   if (typeof o.detail === 'string' && o.detail.trim()) return o.detail.trim();

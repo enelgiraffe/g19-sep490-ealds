@@ -4,12 +4,14 @@ import { Button, Descriptions, Spin, Table, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import {
+  allocationRequestApiErrorMessage,
   allocationRequestService,
   type AllocationOrderDetail,
   type AllocationOrderLineDetail,
 } from '../services/allocationRequestService';
 import { handoverRequestService } from '../services/handoverRequestService';
 import { useAppStore } from '../../../stores/appStore';
+import axios from 'axios';
 import './AccountantAllocationsPage.css';
 import '../../requests/pages/RequestsPage.css';
 
@@ -71,8 +73,12 @@ export function AllocationOrderDetailPage() {
         isHandover ? 'Đã xác nhận hoàn trả tài sản về kho.' : 'Đã xác nhận và gán tài sản về phòng ban.',
       );
       await load();
-    } catch {
-      message.error('Xác nhận thất bại.');
+    } catch (e: unknown) {
+      const fromApi =
+        axios.isAxiosError(e) && e.response?.data != null
+          ? allocationRequestApiErrorMessage(e.response.data)
+          : null;
+      message.error(fromApi ?? 'Xác nhận thất bại.');
     } finally {
       setConfirming(false);
     }

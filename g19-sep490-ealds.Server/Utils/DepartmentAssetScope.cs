@@ -1,4 +1,8 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
+using System.Threading;
+using System.Threading.Tasks;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +19,32 @@ public readonly record struct AssetDepartmentScope(bool IsRestricted, int? Depar
 
 public static class DepartmentAssetScope
 {
+    public const string InventoryInProgressBlockingMessage = "Phòng ban đang kiểm kê, không thể thực hiện.";
+
+    public static Task<bool> DepartmentHasInventoryInProgressAsync(
+        EaldsDbContext db,
+        int departmentId,
+        CancellationToken cancellationToken = default) =>
+        AnyDepartmentsHaveInventoryInProgressAsync(db, new[] { departmentId }, cancellationToken);
+
+    public static Task<bool> AnyDepartmentsHaveInventoryInProgressAsync(
+        EaldsDbContext db,
+        IReadOnlyCollection<int>? departmentIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (departmentIds == null || departmentIds.Count == 0)
+            return Task.FromResult(false);
+
+        var distinct = departmentIds.Distinct().ToList();
+        if (distinct.Count == 0)
+            return Task.FromResult(false);
+
+        return db.InventorySessions.AsNoTracking()
+            .AnyAsync(
+                s => distinct.Contains(s.DepartmentId) && s.Status == (int)InventorySessionStatus.InProgress,
+                cancellationToken);
+    }
+
     /// <summary>
     /// Instance is counted as belonging to <paramref name="departmentId"/> when its current location is that department
     /// and it is not disposed, lost, or liquidated (same rules as GET /api/assets/department/{id}).

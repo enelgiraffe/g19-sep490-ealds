@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using g19_sep490_ealds.Server.DTOs.Allocation;
 using g19_sep490_ealds.Server.Models;
+using g19_sep490_ealds.Server.Utils;
 using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Services;
@@ -308,6 +309,12 @@ public static class AllocationOrderWorkflow
 
         if (order.DepartmentId != employeeDeptId.Value)
             return "Bạn không thuộc phòng ban của đơn này.";
+
+        if (await DepartmentAssetScope.DepartmentHasInventoryInProgressAsync(
+                db,
+                order.DepartmentId,
+                cancellationToken))
+            return DepartmentAssetScope.InventoryInProgressBlockingMessage;
 
         if (order.Status != AssetAllocationOrderStatus.AwaitingDepartmentConfirm)
             return "Đơn đã được xác nhận hoặc không hợp lệ.";
