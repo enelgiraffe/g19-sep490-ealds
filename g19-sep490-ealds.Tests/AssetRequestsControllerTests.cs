@@ -430,6 +430,83 @@ public class AssetRequestsControllerTests
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
+    /// <summary>
+    /// Test case 1 (Normal): userId = 1, requestId = 1
+    /// Expected output: 200 OK with status=-1 (draft)
+    /// </summary>
+    [Fact]
+    public async Task RevertToDraft_ValidUserAndRequest_ReturnsOk()
+    {
+        // Arrange
+        await SeedPurchaseRequest(userId: 1, status: 0, title: "Test Request");
+
+        var dto = new RevertToDraftDTO { UserId = 1 };
+
+        // Act
+        var result = await _controller.RevertToDraft(1, dto);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var updated = await _context.AssetRequests.FindAsync(1);
+        Assert.NotNull(updated);
+        Assert.Equal(-1, updated.Status);
+    }
+
+    /// <summary>
+    /// Test case 2 (Abnormal): userId = 999 (don't exist), requestId = 1
+    /// Expected output: 403 Forbid (user is not the creator)
+    /// </summary>
+    [Fact]
+    public async Task RevertToDraft_NonExistentUser_ReturnsForbid()
+    {
+        // Arrange
+        await SeedPurchaseRequest(userId: 1, status: 0, title: "Test Request");
+
+        var dto = new RevertToDraftDTO { UserId = 999 };
+
+        // Act
+        var result = await _controller.RevertToDraft(1, dto);
+
+        // Assert
+        Assert.IsType<ForbidResult>(result);
+    }
+
+    /// <summary>
+    /// Test case 3 (Abnormal): userId = 1, requestId = 999 (don't exist)
+    /// Expected output: 404 Not Found
+    /// </summary>
+    [Fact]
+    public async Task RevertToDraft_NonExistentRequest_ReturnsNotFound()
+    {
+        // Arrange
+        await SeedUser(1, status: 1);
+
+        var dto = new RevertToDraftDTO { UserId = 1 };
+
+        // Act
+        var result = await _controller.RevertToDraft(999, dto);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Test case 4 (Abnormal): userId = 999, requestId = 999 (both don't exist)
+    /// Expected output: 404 Not Found (request not found takes precedence)
+    /// </summary>
+    [Fact]
+    public async Task RevertToDraft_NonExistentUserAndRequest_ReturnsNotFound()
+    {
+        // Arrange
+        var dto = new RevertToDraftDTO { UserId = 999 };
+
+        // Act
+        var result = await _controller.RevertToDraft(999, dto);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
     #endregion
 
     #region Helper Methods

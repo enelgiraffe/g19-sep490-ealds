@@ -1165,4 +1165,248 @@ public class RepairRequestsControllerCreateRepairRequestTests
         var result = await _controller.CreateRepairRequest(dto);
         Assert.IsType<OkObjectResult>(result);
     }
+
+    /// <summary>
+    /// Test case 1 (Normal): AssetInstanceId = 1, DamageCondition = Valid reason, Status = 0 (Damaged).
+    /// Expected output: 200 OK
+    /// </summary>
+    [Fact]
+    public async Task CreateRepairRequest_NormalCase_ReturnsOk()
+    {
+        // Arrange
+        await SeedMinimalAsync();
+        var dto = new RepairRequestDTO
+        {
+            AssetInstanceId = 1,
+            DamageCondition = "Screen broken",
+            RepairKind = "Replace screen",
+            CreatedBy = 1,
+            Status = 0
+        };
+
+        // Act
+        var result = await _controller.CreateRepairRequest(dto);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+        var task = await _context.RepairTasks.FirstOrDefaultAsync(t => t.AssetInstanceId == 1);
+        Assert.NotNull(task);
+        Assert.Equal(0, task.Status); // Status = Pending
+    }
+
+    /// <summary>
+    /// Test case 2 (Abnormal): AssetInstanceId = 0, DamageCondition = Valid reason, Status = 0.
+    /// Expected output: 404 Not Found
+    /// </summary>
+    [Fact]
+    public async Task CreateRepairRequest_AssetInstanceIdZero_ReturnsNotFound()
+    {
+        // Arrange
+        await SeedMinimalAsync();
+        var dto = new RepairRequestDTO
+        {
+            AssetInstanceId = 0,
+            DamageCondition = "Screen broken",
+            RepairKind = "Replace screen",
+            CreatedBy = 1,
+            Status = 0
+        };
+
+        // Act
+        var result = await _controller.CreateRepairRequest(dto);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Test case 3 (Abnormal): AssetInstanceId = -1, DamageCondition = Valid reason, Status = 0.
+    /// Expected output: 404 Not Found
+    /// </summary>
+    [Fact]
+    public async Task CreateRepairRequest_AssetInstanceIdNegative_ReturnsNotFound()
+    {
+        // Arrange
+        await SeedMinimalAsync();
+        var dto = new RepairRequestDTO
+        {
+            AssetInstanceId = -1,
+            DamageCondition = "Screen broken",
+            RepairKind = "Replace screen",
+            CreatedBy = 1,
+            Status = 0
+        };
+
+        // Act
+        var result = await _controller.CreateRepairRequest(dto);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Test case 4 (Abnormal): AssetInstanceId = 999, DamageCondition = Valid reason, Status = 0.
+    /// Expected output: 404 Not Found
+    /// </summary>
+    [Fact]
+    public async Task CreateRepairRequest_AssetInstanceIdNonExistent_ReturnsNotFound()
+    {
+        // Arrange
+        await SeedMinimalAsync();
+        var dto = new RepairRequestDTO
+        {
+            AssetInstanceId = 999,
+            DamageCondition = "Screen broken",
+            RepairKind = "Replace screen",
+            CreatedBy = 1,
+            Status = 0
+        };
+
+        // Act
+        var result = await _controller.CreateRepairRequest(dto);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Test case 5 (Abnormal): AssetInstanceId = 1, DamageCondition = Empty, Status = 0.
+    /// Expected output: 400 Bad Request
+    /// </summary>
+    [Fact]
+    public async Task CreateRepairRequest_EmptyDamageCondition_ReturnsBadRequest()
+    {
+        // Arrange
+        await SeedMinimalAsync();
+        var dto = new RepairRequestDTO
+        {
+            AssetInstanceId = 1,
+            DamageCondition = "",
+            RepairKind = "Replace screen",
+            CreatedBy = 1,
+            Status = 0
+        };
+
+        // Act
+        var result = await _controller.CreateRepairRequest(dto);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Test case 6 (Abnormal): AssetInstanceId = 1, DamageCondition = Valid reason, Status = 1 (InUse).
+    /// Expected output: 400 Bad Request
+    /// </summary>
+    [Fact]
+    public async Task CreateRepairRequest_AssetStatusInUse_ReturnsBadRequest()
+    {
+        // Arrange
+        await SeedMinimalAsync();
+        var instance = await _context.AssetInstances.FindAsync(1);
+        instance!.Status = 1; // InUse
+        await _context.SaveChangesAsync();
+
+        var dto = new RepairRequestDTO
+        {
+            AssetInstanceId = 1,
+            DamageCondition = "Screen broken",
+            RepairKind = "Replace screen",
+            CreatedBy = 1,
+            Status = 1
+        };
+
+        // Act
+        var result = await _controller.CreateRepairRequest(dto);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Test case 7 (Abnormal): AssetInstanceId = 1, DamageCondition = Valid reason, Status = 2 (InRepair).
+    /// Expected output: 400 Bad Request
+    /// </summary>
+    [Fact]
+    public async Task CreateRepairRequest_AssetStatusInRepair_ReturnsBadRequest()
+    {
+        // Arrange
+        await SeedMinimalAsync();
+        var instance = await _context.AssetInstances.FindAsync(1);
+        instance!.Status = 2; // InRepair
+        await _context.SaveChangesAsync();
+
+        var dto = new RepairRequestDTO
+        {
+            AssetInstanceId = 1,
+            DamageCondition = "Screen broken",
+            RepairKind = "Replace screen",
+            CreatedBy = 1,
+            Status = 2
+        };
+
+        // Act
+        var result = await _controller.CreateRepairRequest(dto);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Test case 8 (Abnormal): AssetInstanceId = 1, DamageCondition = Valid reason, Status = 3 (Reserved).
+    /// Expected output: 400 Bad Request
+    /// </summary>
+    [Fact]
+    public async Task CreateRepairRequest_AssetStatusReserved_ReturnsBadRequest()
+    {
+        // Arrange
+        await SeedMinimalAsync();
+        var instance = await _context.AssetInstances.FindAsync(1);
+        instance!.Status = 3; // Reserved
+        await _context.SaveChangesAsync();
+
+        var dto = new RepairRequestDTO
+        {
+            AssetInstanceId = 1,
+            DamageCondition = "Screen broken",
+            RepairKind = "Replace screen",
+            CreatedBy = 1,
+            Status = 3
+        };
+
+        // Act
+        var result = await _controller.CreateRepairRequest(dto);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Test case 9 (Abnormal): AssetInstanceId = 1, DamageCondition = Valid reason, Status = -1.
+    /// Expected output: 400 Bad Request
+    /// </summary>
+    [Fact]
+    public async Task CreateRepairRequest_AssetStatusNegative_ReturnsBadRequest()
+    {
+        // Arrange
+        await SeedMinimalAsync();
+        var instance = await _context.AssetInstances.FindAsync(1);
+        instance!.Status = -1;
+        await _context.SaveChangesAsync();
+
+        var dto = new RepairRequestDTO
+        {
+            AssetInstanceId = 1,
+            DamageCondition = "Screen broken",
+            RepairKind = "Replace screen",
+            CreatedBy = 1,
+            Status = -1
+        };
+
+        // Act
+        var result = await _controller.CreateRepairRequest(dto);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
 }

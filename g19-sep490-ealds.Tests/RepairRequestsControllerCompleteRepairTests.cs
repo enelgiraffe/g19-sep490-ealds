@@ -334,20 +334,256 @@ public class RepairRequestsControllerCompleteRepairTests
         Assert.Contains("repairCompletion", updated!.ProposedData ?? "");
     }
 
-    // ─── No linked AssetRequest ───────────────────────────────────────────────
+    // ─── Specific Test Cases ─────────────────────────────────────────────────
 
+    /// <summary>
+    /// Test case 1 (Normal): Status = InProgress, RepairDate = today, TaskId = 1,
+    /// ReturnToUseDate = RepairDate, ActualCost = 1.
+    /// Expected output: 200 OK
+    /// </summary>
     [Fact]
-    public async Task NoLinkedAssetRequest_StillCreatesRepairRecord()
+    public async Task CompleteRepair_NormalCase_ReturnsOk()
     {
+        // Arrange
         await SeedAsync();
+        var dto = new RepairCompleteDto
+        {
+            CompletedBy = 1,
+            RepairDate = DateTime.UtcNow,
+            ReturnToUseDate = DateTime.UtcNow,
+            ActualCost = 1,
+            Result = "Fixed"
+        };
+
+        // Act
+        var result = await _controller.CompleteRepair(taskId: 1, dto: dto);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
         var task = await _context.RepairTasks.FindAsync(1);
-        task!.AssetRequestId = 0;
-        await _context.SaveChangesAsync();
+        Assert.Equal(2, task!.Status); // Status = completed
+    }
 
-        var result = await _controller.CompleteRepair(taskId: 1, dto: MinimalDto());
+    /// <summary>
+    /// Test case 2 (Abnormal): Status = InProgress, RepairDate <= today, TaskId = 1,
+    /// ReturnToUseDate = RepairDate, ActualCost = 1.
+    /// Expected output: 200 OK (no validation on RepairDate)
+    /// </summary>
+    [Fact]
+    public async Task CompleteRepair_RepairDateInPast_ReturnsOk()
+    {
+        // Arrange
+        await SeedAsync();
+        var pastDate = DateTime.UtcNow.AddDays(-1);
+        var dto = new RepairCompleteDto
+        {
+            CompletedBy = 1,
+            RepairDate = pastDate,
+            ReturnToUseDate = pastDate,
+            ActualCost = 1,
+            Result = "Fixed"
+        };
 
+        // Act
+        var result = await _controller.CompleteRepair(taskId: 1, dto: dto);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Test case 3 (Abnormal): Status = InProgress, RepairDate >= today, TaskId = 1,
+    /// ReturnToUseDate = RepairDate, ActualCost = 1.
+    /// Expected output: 200 OK (no validation on RepairDate)
+    /// </summary>
+    [Fact]
+    public async Task CompleteRepair_RepairDateInFuture_ReturnsOk()
+    {
+        // Arrange
+        await SeedAsync();
+        var futureDate = DateTime.UtcNow.AddDays(1);
+        var dto = new RepairCompleteDto
+        {
+            CompletedBy = 1,
+            RepairDate = futureDate,
+            ReturnToUseDate = futureDate,
+            ActualCost = 1,
+            Result = "Fixed"
+        };
+
+        // Act
+        var result = await _controller.CompleteRepair(taskId: 1, dto: dto);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Test case 4 (Abnormal): Status = InProgress, RepairDate = today, TaskId = 0,
+    /// ReturnToUseDate = RepairDate, ActualCost = 1.
+    /// Expected output: 404 Not Found
+    /// </summary>
+    [Fact]
+    public async Task CompleteRepair_TaskIdZero_ReturnsNotFound()
+    {
+        // Arrange
+        var dto = new RepairCompleteDto
+        {
+            CompletedBy = 1,
+            RepairDate = DateTime.UtcNow,
+            ReturnToUseDate = DateTime.UtcNow,
+            ActualCost = 1,
+            Result = "Fixed"
+        };
+
+        // Act
+        var result = await _controller.CompleteRepair(taskId: 0, dto: dto);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Test case 5 (Abnormal): Status = InProgress, RepairDate = today, TaskId = 999,
+    /// ReturnToUseDate = RepairDate, ActualCost = 1.
+    /// Expected output: 404 Not Found
+    /// </summary>
+    [Fact]
+    public async Task CompleteRepair_TaskIdNonExistent_ReturnsNotFound()
+    {
+        // Arrange
+        await SeedAsync();
+        var dto = new RepairCompleteDto
+        {
+            CompletedBy = 1,
+            RepairDate = DateTime.UtcNow,
+            ReturnToUseDate = DateTime.UtcNow,
+            ActualCost = 1,
+            Result = "Fixed"
+        };
+
+        // Act
+        var result = await _controller.CompleteRepair(taskId: 999, dto: dto);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    /// <summary>
+    /// Test case 6 (Abnormal): Status = InProgress, RepairDate = today, TaskId = 1,
+    /// ReturnToUseDate <= RepairDate, ActualCost = 1.
+    /// Expected output: 200 OK (but asset not restored to InUse because ReturnToUseDate is not in the future)
+    /// </summary>
+    [Fact]
+    public async Task CompleteRepair_ReturnToUseDateInPast_DoesNotRestoreAssetToInUse()
+    {
+        // Arrange
+        await SeedAsync();
+        var pastDate = DateTime.UtcNow.AddDays(-1);
+        var dto = new RepairCompleteDto
+        {
+            CompletedBy = 1,
+            RepairDate = DateTime.UtcNow,
+            ReturnToUseDate = pastDate,
+            ActualCost = 1,
+            Result = "Fixed"
+        };
+
+        // Act
+        var result = await _controller.CompleteRepair(taskId: 1, dto: dto);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+        var instance = await _context.AssetInstances.FindAsync(1);
+        Assert.Equal((int)g19_sep490_ealds.Server.Utils.EnumsStatus.AssetStatus.InRepair, instance!.Status);
+    }
+
+    /// <summary>
+    /// Test case 7 (Abnormal): Status = InProgress, RepairDate = today, TaskId = 1,
+    /// ReturnToUseDate >= RepairDate, ActualCost = 1.
+    /// Expected output: 200 OK (asset restored to InUse because ReturnToUseDate is today or future)
+    /// </summary>
+    [Fact]
+    public async Task CompleteRepair_ReturnToUseDateTodayOrFuture_RestoresAssetToInUse()
+    {
+        // Arrange
+        await SeedAsync();
+        var today = DateTime.UtcNow;
+        var dto = new RepairCompleteDto
+        {
+            CompletedBy = 1,
+            RepairDate = today,
+            ReturnToUseDate = today,
+            ActualCost = 1,
+            Result = "Fixed"
+        };
+
+        // Act
+        var result = await _controller.CompleteRepair(taskId: 1, dto: dto);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+        var instance = await _context.AssetInstances.FindAsync(1);
+        Assert.Equal((int)g19_sep490_ealds.Server.Utils.EnumsStatus.AssetStatus.InUse, instance!.Status);
+    }
+
+    /// <summary>
+    /// Test case 8 (Abnormal): Status = InProgress, RepairDate = today, TaskId = 1,
+    /// ReturnToUseDate = RepairDate, ActualCost = 0.
+    /// Expected output: 200 OK (saves record with ActualCost = 0)
+    /// </summary>
+    [Fact]
+    public async Task CompleteRepair_ActualCostZero_ReturnsOk()
+    {
+        // Arrange
+        await SeedAsync();
+        var dto = new RepairCompleteDto
+        {
+            CompletedBy = 1,
+            RepairDate = DateTime.UtcNow,
+            ReturnToUseDate = DateTime.UtcNow,
+            ActualCost = 0,
+            Result = "Fixed"
+        };
+
+        // Act
+        var result = await _controller.CompleteRepair(taskId: 1, dto: dto);
+
+        // Assert
         Assert.IsType<OkObjectResult>(result);
         var record = await _context.RepairRecords.FirstOrDefaultAsync(r => r.TaskId == 1);
         Assert.NotNull(record);
+        Assert.Equal(0, record.ActualCost);
+    }
+
+    /// <summary>
+    /// Test case 9 (Abnormal): Status = InProgress, RepairDate = today, TaskId = 1,
+    /// ReturnToUseDate = RepairDate, ActualCost = -1.
+    /// Expected output: 200 OK (saves record with ActualCost = -1, but RepairWarrantyPeriodValue becomes null)
+    /// </summary>
+    [Fact]
+    public async Task CompleteRepair_ActualCostNegative_ReturnsOk()
+    {
+        // Arrange
+        await SeedAsync();
+        var dto = new RepairCompleteDto
+        {
+            CompletedBy = 1,
+            RepairDate = DateTime.UtcNow,
+            ReturnToUseDate = DateTime.UtcNow,
+            ActualCost = -1,
+            Result = "Fixed",
+            RepairWarrantyPeriodValue = -1 // This should become null
+        };
+
+        // Act
+        var result = await _controller.CompleteRepair(taskId: 1, dto: dto);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+        var record = await _context.RepairRecords.FirstOrDefaultAsync(r => r.TaskId == 1);
+        Assert.NotNull(record);
+        Assert.Equal(-1, record.ActualCost);
+        Assert.Null(record.RepairWarrantyPeriodValue); // Should be null because it was -1
     }
 }

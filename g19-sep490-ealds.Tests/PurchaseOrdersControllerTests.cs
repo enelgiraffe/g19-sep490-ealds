@@ -30,6 +30,55 @@ public class PurchaseOrdersControllerTests
         _controller = new PurchaseOrdersController(_context);
 
         SetUserContext(actorUserId: 1);
+        SeedTestDataAsync().Wait();
+    }
+
+    private async Task SeedTestDataAsync()
+    {
+        // Seed Supplier
+        if (!await _context.Suppliers.AnyAsync())
+        {
+            _context.Suppliers.Add(new Supplier
+            {
+                SupplierId = 1,
+                Code = "SUP001",
+                Name = "Tech Supply Co.",
+                Status = 1,
+                CreateDate = DateTime.UtcNow
+            });
+        }
+
+        // Seed AssetRequest for tests
+        if (!await _context.AssetRequests.AnyAsync())
+        {
+            // Seed Department first
+            if (!await _context.Departments.AnyAsync())
+            {
+                _context.Departments.Add(new Department
+                {
+                    DepartmentId = 1,
+                    Name = "IT Department",
+                    Code = "IT",
+                    Status = 1,
+                    CreateDate = DateTime.UtcNow,
+                    CreatedBy = 1
+                });
+            }
+
+            _context.AssetRequests.Add(new AssetRequest
+            {
+                AssetRequestId = 1,
+                UserId = 2,
+                RequestTypeId = 1,
+                Title = "Purchase Laptop",
+                Status = 2,
+                CreatedBy = 2,
+                CreateDate = DateTime.UtcNow,
+                StepId = 1
+            });
+        }
+
+        await _context.SaveChangesAsync();
     }
 
     #region Helper Methods
@@ -825,6 +874,212 @@ public class PurchaseOrdersControllerTests
 
         // Assert
         Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    #endregion
+
+    #region Create Purchase Order Tests
+
+    private PurchaseOrderCreateDto CreateValidPurchaseOrderDto(
+        int supplierId = 1,
+        string? contractNo = "PO-2025-TEST",
+        string currency = "VND",
+        int? assetRequestId = null)
+    {
+        return new PurchaseOrderCreateDto
+        {
+            SupplierId = supplierId,
+            ContractNo = contractNo,
+            Currency = currency,
+            AssetRequestId = assetRequestId,
+            Lines = new List<PurchaseOrderLineWriteDto>
+            {
+                new() { Description = "Test Item", Quantity = 5, Unit = "pcs", UnitPrice = 1000000m }
+            }
+        };
+    }
+
+    /// <summary>
+    /// Test case 1 (Normal): SupplierId = 1, ContractNo = Valid ContractNo, Currency = VND, AssetRequestId = 1.
+    /// Expected output: 201 Created
+    /// </summary>
+    [Fact]
+    public async Task CreatePurchaseOrder_ValidData_ReturnsCreated()
+    {
+        // Arrange
+        var dto = CreateValidPurchaseOrderDto(
+            supplierId: 1,
+            contractNo: "PO-2025-001",
+            currency: "VND",
+            assetRequestId: 1);
+
+        // Act
+        var result = await _controller.Create(dto);
+
+        // Assert
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+    }
+
+    /// <summary>
+    /// Test case 2 (Abnormal): SupplierId = 0, ContractNo = Valid ContractNo, Currency = VND, AssetRequestId = 1.
+    /// Expected output: 400 Bad Request (Supplier is required)
+    /// </summary>
+    [Fact]
+    public async Task CreatePurchaseOrder_SupplierIdZero_ReturnsBadRequest()
+    {
+        // Arrange
+        var dto = CreateValidPurchaseOrderDto(
+            supplierId: 0,
+            contractNo: "PO-2025-002",
+            currency: "VND",
+            assetRequestId: 1);
+
+        // Act
+        var result = await _controller.Create(dto);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    /// <summary>
+    /// Test case 3 (Abnormal): SupplierId = -1, ContractNo = Valid ContractNo, Currency = VND, AssetRequestId = 1.
+    /// Expected output: 400 Bad Request (Supplier is required)
+    /// </summary>
+    [Fact]
+    public async Task CreatePurchaseOrder_SupplierIdNegative_ReturnsBadRequest()
+    {
+        // Arrange
+        var dto = CreateValidPurchaseOrderDto(
+            supplierId: -1,
+            contractNo: "PO-2025-003",
+            currency: "VND",
+            assetRequestId: 1);
+
+        // Act
+        var result = await _controller.Create(dto);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    /// <summary>
+    /// Test case 4 (Abnormal): SupplierId = 1, ContractNo = Empty, Currency = VND, AssetRequestId = 1.
+    /// Expected output: 400 Bad Request (Số chứng từ là bắt buộc khi tạo đơn)
+    /// Note: Empty ContractNo is allowed for draft orders (IsDraft = true)
+    /// </summary>
+    [Fact]
+    public async Task CreatePurchaseOrder_EmptyContractNo_ReturnsBadRequest()
+    {
+        // Arrange
+        var dto = CreateValidPurchaseOrderDto(
+            supplierId: 1,
+            contractNo: "",
+            currency: "VND",
+            assetRequestId: 1);
+
+        // Act
+        var result = await _controller.Create(dto);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    /// <summary>
+    /// Test case 5 (Normal): SupplierId = 1, ContractNo = Valid ContractNo, Currency = USD, AssetRequestId = 1.
+    /// Expected output: 201 Created
+    /// </summary>
+    [Fact]
+    public async Task CreatePurchaseOrder_ValidCurrencyUSD_ReturnsCreated()
+    {
+        // Arrange
+        var dto = CreateValidPurchaseOrderDto(
+            supplierId: 1,
+            contractNo: "PO-2025-005",
+            currency: "USD",
+            assetRequestId: 1);
+
+        // Act
+        var result = await _controller.Create(dto);
+
+        // Assert
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+    }
+
+    /// <summary>
+    /// Test case 6 (Normal): SupplierId = 1, ContractNo = Valid ContractNo, Currency = EUR, AssetRequestId = 1.
+    /// Expected output: 201 Created
+    /// </summary>
+    [Fact]
+    public async Task CreatePurchaseOrder_ValidCurrencyEUR_ReturnsCreated()
+    {
+        // Arrange
+        var dto = CreateValidPurchaseOrderDto(
+            supplierId: 1,
+            contractNo: "PO-2025-006",
+            currency: "EUR",
+            assetRequestId: 1);
+
+        // Act
+        var result = await _controller.Create(dto);
+
+        // Assert
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+    }
+
+    /// <summary>
+    /// Test case 7 (Abnormal): SupplierId = 1, ContractNo = Valid ContractNo, Currency = VND, AssetRequestId = 0.
+    /// Expected output: 201 Created (AssetRequestId = 0 is treated as null/not provided)
+    /// Note: When AssetRequestId = 0, it's considered as no linked request, which is valid
+    /// </summary>
+    [Fact]
+    public async Task CreatePurchaseOrder_AssetRequestIdZero_ReturnsCreated()
+    {
+        // Arrange
+        var dto = new PurchaseOrderCreateDto
+        {
+            SupplierId = 1,
+            ContractNo = "PO-2025-007",
+            Currency = "VND",
+            AssetRequestId = 0, // Treated as null
+            Lines = new List<PurchaseOrderLineWriteDto>
+            {
+                new() { Description = "Test Item", Quantity = 5, Unit = "pcs", UnitPrice = 1000000m }
+            }
+        };
+
+        // Act
+        var result = await _controller.Create(dto);
+
+        // Assert
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+    }
+
+    /// <summary>
+    /// Test case 8 (Abnormal): SupplierId = 1, ContractNo = Valid ContractNo, Currency = VND, AssetRequestId = -1.
+    /// Expected output: 400 Bad Request (Linked requisition not found)
+    /// Note: AssetRequestId = -1 is treated as -1, which doesn't exist
+    /// </summary>
+    [Fact]
+    public async Task CreatePurchaseOrder_AssetRequestIdNegative_ReturnsBadRequest()
+    {
+        // Arrange
+        var dto = new PurchaseOrderCreateDto
+        {
+            SupplierId = 1,
+            ContractNo = "PO-2025-008",
+            Currency = "VND",
+            AssetRequestId = -1, // Invalid - doesn't exist
+            Lines = new List<PurchaseOrderLineWriteDto>
+            {
+                new() { Description = "Test Item", Quantity = 5, Unit = "pcs", UnitPrice = 1000000m }
+            }
+        };
+
+        // Act
+        var result = await _controller.Create(dto);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
     #endregion
