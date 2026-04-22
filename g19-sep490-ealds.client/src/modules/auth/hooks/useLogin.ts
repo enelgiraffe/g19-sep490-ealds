@@ -4,7 +4,7 @@ import { message } from 'antd';
 import { useAppStore } from '../../../stores/appStore';
 import { authService } from '../services/authService';
 import type { LoginFormData } from '../types/auth.types';
-import { mapBackendRoleToAppRole } from '../types/auth.types';
+import { getDefaultLandingPath, mapBackendRoleToAppRole } from '../types/auth.types';
 
 export const useLogin = () => {
   const [loading, setLoading] = useState(false);
@@ -27,13 +27,7 @@ export const useLogin = () => {
 
       message.success('Đăng nhập thành công!');
 
-      if (appRole === 'department_head') {
-        navigate('/assets');
-      } else if (appRole === 'accountant') {
-        navigate('/accountant-assets');
-      } else {
-        navigate('/dashboard');
-      }
+      navigate(getDefaultLandingPath(appRole));
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || 'Đăng nhập thất bại. Vui lòng thử lại.';
       message.error(errorMessage);
