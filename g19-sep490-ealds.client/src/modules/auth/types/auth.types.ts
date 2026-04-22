@@ -33,3 +33,17 @@ export function mapBackendRoleToAppRole(role: string | undefined | null): AppRol
     return 'department_head';
   return 'department_head';
 }
+
+/** First screen after login / when opening the app with an existing session */
+export function getDefaultLandingPath(appRole: AppRole): string {
+  switch (appRole) {
+    case 'department_head':
+      return '/assets';
+    case 'accountant':
+      return '/accountant-assets';
+    case 'admin':
+      return '/users';
+    default:
+      return '/dashboard';
+  }
+}

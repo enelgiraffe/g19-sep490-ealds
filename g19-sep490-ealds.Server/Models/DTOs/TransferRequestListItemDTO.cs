@@ -69,5 +69,11 @@ public class TransferRequestListItemDTO
 
     /// <summary>Ghi chú/ý kiến khi giám đốc phê duyệt (Approval.Comment, role DIRECTOR).</summary>
     public string? DirectorComment { get; set; }
+
+    /// <summary>Bản nháp chưa tạo bản ghi điều chuyển; chỉ có <c>ProposedData</c> trên yêu cầu.</summary>
+    public bool IsIncompleteProposedDraft { get; set; }
+
+    /// <summary>JSON form đã lưu (khi <see cref="IsIncompleteProposedDraft"/>).</summary>
+    public string? DraftFormJson { get; set; }
 }
 

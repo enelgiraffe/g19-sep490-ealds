@@ -11,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Models.DTOs;
 using g19_sep490_ealds.Server.Services.Interface;
+using g19_sep490_ealds.Server.Utils;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
 namespace g19_sep490_ealds.Server.Controllers;
@@ -23,8 +24,6 @@ public class TransferRequestsController : ControllerBase
     private readonly EaldsDbContext _db;
     private readonly IAssetRequestNotificationService _requestNotifications;
     private readonly int _transferRequestTypeId;
-    /// <summary>RoleId trưởng phòng ban (seed: 4, giống DisposalRequestsController).</summary>
-    private readonly int _departmentHeadRoleId;
 
     public TransferRequestsController(
         EaldsDbContext db,
@@ -34,7 +33,6 @@ public class TransferRequestsController : ControllerBase
         _db = db;
         _requestNotifications = requestNotifications;
         _transferRequestTypeId = configuration.GetValue<int>("App:TransferRequestTypeId", 3);
-        _departmentHeadRoleId = configuration.GetValue<int>("App:DepartmentHeadRoleId", 4);
     }
 
     /// <summary>
@@ -99,6 +97,7 @@ public class TransferRequestsController : ControllerBase
                 Reason = tr.AssetRequest.Description,
                 IsSenderConfirmed = tr.IsSenderConfirmed,
                 IsReceiverConfirmed = tr.IsReceiverConfirmed,
+                IsIncompleteProposedDraft = false,
                 AccountantComment = _db.Approvals.AsNoTracking()
                     .Join(_db.Roles.AsNoTracking(), a => a.ApprovedRoleId, r => r.RoleId, (a, r) => new { a, r })
                     .Where(x => x.a.AssetRequestId == tr.AssetRequestId
@@ -118,7 +117,46 @@ public class TransferRequestsController : ControllerBase
             })
             .ToListAsync();
 
-        return Ok(list);
+        var proposedDrafts = await _db.AssetRequests
+            .AsNoTracking()
+            .Where(ar => ar.RequestTypeId == _transferRequestTypeId
+                && ar.Status == 0
+                && (isAccountant || ar.CreatedBy == userId)
+                && !_db.TransferRecords.Any(t => t.AssetRequestId == ar.AssetRequestId))
+            .OrderByDescending(ar => ar.CreateDate)
+            .Select(ar => new TransferRequestListItemDTO
+            {
+                RecordId = 0,
+                AssetRequestId = ar.AssetRequestId,
+                Code = "BN" + ar.AssetRequestId,
+                TransferDate = ar.CreateDate,
+                AssetCode = "—",
+                AssetName = "Bản nháp chưa hoàn tất",
+                AssetInstanceId = null,
+                InstanceCode = null,
+                FromDepartment = "—",
+                ToDepartment = "—",
+                FromDepartmentId = 0,
+                ToDepartmentId = 0,
+                CreatedBy = ar.CreatedBy,
+                CreatedByName = _db.Employees
+                    .Where(e => e.UserId == ar.CreatedBy)
+                    .Select(e => e.Name)
+                    .FirstOrDefault(),
+                Quantity = 0,
+                Status = 0,
+                StatusName = "Nháp",
+                Reason = ar.Description,
+                IsSenderConfirmed = false,
+                IsReceiverConfirmed = false,
+                IsIncompleteProposedDraft = true,
+                DraftFormJson = ar.ProposedData,
+                AccountantComment = null,
+                DirectorComment = null
+            })
+            .ToListAsync();
+
+        return Ok(list.Concat(proposedDrafts).OrderByDescending(x => x.TransferDate).ToList());
     }
 
     /// <summary>
@@ -206,6 +244,13 @@ public class TransferRequestsController : ControllerBase
         if (!int.TryParse(userIdClaim, out var userId))
             return Unauthorized();
 
+        if (dto.IncompleteDraft)
+        {
+            if (!dto.SaveAsDraft)
+                return BadRequest("Bản nháp chưa hoàn tất phải được lưu ở trạng thái nháp.");
+            return await CreateProposedDataOnlyTransferDraft(dto, userId);
+        }
+
         if (dto.AssetInstanceId <= 0)
             return BadRequest("AssetInstanceId is required.");
 
@@ -229,23 +274,10 @@ public class TransferRequestsController : ControllerBase
         if (!toDeptExists)
             return BadRequest("Phòng ban đích (ToLocationId) không tồn tại trong hệ thống.");
 
-        var isAccountant = User.IsInRole("ACCOUNTANT");
-        if (!isAccountant)
-        {
-            var isDepartmentHead = await _db.UserRoles.AsNoTracking()
-                .AnyAsync(ur => ur.UserId == userId && ur.RoleId == _departmentHeadRoleId);
-            if (isDepartmentHead)
-            {
-                var userDeptId = await _db.Employees.AsNoTracking()
-                    .Where(e => e.UserId == userId)
-                    .Select(e => (int?)e.DepartmentId)
-                    .FirstOrDefaultAsync();
-                if (!userDeptId.HasValue)
-                    return BadRequest("Trưởng phòng ban cần được gán phòng ban trong hồ sơ nhân viên để tạo yêu cầu điều chuyển.");
-                if (dto.FromLocationId != userDeptId.Value)
-                    return BadRequest("Phòng ban nguồn phải là phòng ban của bạn (đơn vị đang quản lý tài sản).");
-            }
-        }
+        if (await DepartmentAssetScope.AnyDepartmentsHaveInventoryInProgressAsync(
+                _db,
+                new[] { dto.FromLocationId, dto.ToLocationId }))
+            return BadRequest(new { message = DepartmentAssetScope.InventoryInProgressBlockingMessage });
 
         var now = dto.TransferDate ?? DateTime.UtcNow;
         var today = DateOnly.FromDateTime(now);
@@ -283,6 +315,9 @@ public class TransferRequestsController : ControllerBase
         if (!initialStepId.HasValue)
             return BadRequest($"No workflow step configured for RequestTypeId '{_transferRequestTypeId}'.");
 
+        var saveAsDraft = dto.SaveAsDraft;
+        var requestStatus = saveAsDraft ? 0 : 1;
+
         var assetRequest = new AssetRequest
         {
             UserId = userId,
@@ -292,7 +327,7 @@ public class TransferRequestsController : ControllerBase
             Title = title,
             Description = dto.Description,
             ProposedData = null,
-            Status = 1,
+            Status = requestStatus,
             CreatedBy = userId,
             CreateDate = DateTime.UtcNow,
             StepId = initialStepId.Value
@@ -324,11 +359,11 @@ public class TransferRequestsController : ControllerBase
         {
             AssetRequestId = assetRequest.AssetRequestId,
             FromStatus = 0,
-            ToStatus = 1,
+            ToStatus = requestStatus,
             Action = 0,
             ActionByUserId = userId,
             ActionRoleId = actionRoleId,
-            Comment = "Transfer requested",
+            Comment = saveAsDraft ? "Lưu nháp điều chuyển" : "Transfer requested",
             OccurredAt = DateTime.UtcNow
         };
 
@@ -336,9 +371,113 @@ public class TransferRequestsController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        await _requestNotifications.NotifyFirstApproversAsync(assetRequest.AssetRequestId);
+        if (dto.ReplaceIncompleteAssetRequestId is int rId && rId > 0)
+            await TryDeleteReplacedIncompleteTransferDraftAsync(rId, userId);
+
+        if (!saveAsDraft)
+            await _requestNotifications.NotifyFirstApproversAsync(assetRequest.AssetRequestId);
 
         return Ok(new { assetRequestId = assetRequest.AssetRequestId, recordId = transfer.TransferId });
+    }
+
+    private async Task TryDeleteReplacedIncompleteTransferDraftAsync(int assetRequestId, int userId)
+    {
+        var ar = await _db.AssetRequests
+            .FirstOrDefaultAsync(a => a.AssetRequestId == assetRequestId && a.RequestTypeId == _transferRequestTypeId);
+        if (ar == null) return;
+        if (ar.CreatedBy != userId) return;
+        if (ar.Status != 0) return;
+        if (await _db.TransferRecords.AnyAsync(t => t.AssetRequestId == assetRequestId)) return;
+        var records = await _db.AssetRequestRecords
+            .Where(r => r.AssetRequestId == assetRequestId)
+            .ToListAsync();
+        if (records.Count > 0) _db.AssetRequestRecords.RemoveRange(records);
+        _db.AssetRequests.Remove(ar);
+        await _db.SaveChangesAsync();
+    }
+
+    private async Task<IActionResult> CreateProposedDataOnlyTransferDraft(TransferRequestDTO dto, int userId)
+    {
+        var json = string.IsNullOrWhiteSpace(dto.DraftFormJson) ? "{}" : dto.DraftFormJson.Trim();
+        if (json.Length > 1_000_000)
+            return BadRequest("Bản nháp quá lớn.");
+
+        var initialStepId = await _db.RequestTypes
+            .AsNoTracking()
+            .Where(rt => rt.RequestTypeId == _transferRequestTypeId)
+            .SelectMany(rt => _db.WorkflowSteps.Where(ws => ws.WorkflowId == rt.WorkflowId))
+            .OrderBy(ws => ws.StepOrder)
+            .Select(ws => (int?)ws.StepId)
+            .FirstOrDefaultAsync();
+        if (!initialStepId.HasValue)
+            return BadRequest($"No workflow step configured for RequestTypeId '{_transferRequestTypeId}'.");
+
+        const string title = "Bản nháp điều chuyển";
+        var assetRequest = new AssetRequest
+        {
+            UserId = userId,
+            RequestTypeId = _transferRequestTypeId,
+            AssetId = null,
+            AssetInstanceId = null,
+            Title = title,
+            Description = null,
+            ProposedData = json,
+            Status = 0,
+            CreatedBy = userId,
+            CreateDate = DateTime.UtcNow,
+            StepId = initialStepId.Value
+        };
+
+        _db.AssetRequests.Add(assetRequest);
+        await _db.SaveChangesAsync();
+
+        var userRole = await _db.UserRoles.AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == userId);
+        var actionRoleId = userRole?.RoleId ?? 1;
+        _db.AssetRequestRecords.Add(new AssetRequestRecord
+        {
+            AssetRequestId = assetRequest.AssetRequestId,
+            FromStatus = 0,
+            ToStatus = 0,
+            Action = 0,
+            ActionByUserId = userId,
+            ActionRoleId = actionRoleId,
+            Comment = "Lưu nháp (chưa hoàn tất thông tin)",
+            OccurredAt = DateTime.UtcNow
+        });
+        await _db.SaveChangesAsync();
+
+        return Ok(new { assetRequestId = assetRequest.AssetRequestId, recordId = 0, incompleteDraft = true });
+    }
+
+    /// <summary>
+    /// PUT /api/Assets/Requests/transfer/{assetRequestId}/draft — cập nhật bản nháp chưa hoàn tất (chỉ <c>ProposedData</c>).
+    /// </summary>
+    [HttpPut("{assetRequestId:int}/draft")]
+    public async Task<IActionResult> UpdateIncompleteTransferDraft(int assetRequestId, [FromBody] UpdateTransferDraftBody? body)
+    {
+        if (body == null)
+            return BadRequest("Request body is required.");
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            return Unauthorized();
+
+        var json = string.IsNullOrWhiteSpace(body.DraftFormJson) ? "{}" : body.DraftFormJson.Trim();
+        if (json.Length > 1_000_000)
+            return BadRequest("Bản nháp quá lớn.");
+
+        var ar = await _db.AssetRequests
+            .FirstOrDefaultAsync(a => a.AssetRequestId == assetRequestId && a.RequestTypeId == _transferRequestTypeId);
+        if (ar == null)
+            return NotFound(new { message = $"Transfer request {assetRequestId} not found." });
+        if (ar.CreatedBy != userId)
+            return Forbid();
+        if (ar.Status != 0)
+            return BadRequest("Chỉ được sửa bản nháp (Nháp) chưa gửi.");
+        if (await _db.TransferRecords.AnyAsync(t => t.AssetRequestId == assetRequestId))
+            return BadRequest("Yêu cầu đã có bản ghi điều chuyển, không cập nhật theo bản nháp JSON.");
+
+        ar.ProposedData = json;
+        await _db.SaveChangesAsync();
+        return Ok(new { assetRequestId = ar.AssetRequestId });
     }
 
     /// <summary>
@@ -351,27 +490,51 @@ public class TransferRequestsController : ControllerBase
         if (!int.TryParse(userIdClaim, out var userId))
             return Unauthorized();
 
+        var ar = await _db.AssetRequests
+            .FirstOrDefaultAsync(a => a.AssetRequestId == assetRequestId && a.RequestTypeId == _transferRequestTypeId);
+        if (ar == null)
+            return NotFound(new { message = $"Transfer request {assetRequestId} not found." });
+
+        if (ar.CreatedBy != userId)
+            return Forbid();
+
+        if (ar.Status > 1)
+            return BadRequest("Chỉ được xóa yêu cầu khi đang ở trạng thái Nháp hoặc Đã nộp.");
+
         var transfer = await _db.TransferRecords
-            .Include(tr => tr.AssetRequest)
             .Include(tr => tr.FromLocation)
             .Include(tr => tr.ToLocation)
             .FirstOrDefaultAsync(tr => tr.AssetRequestId == assetRequestId);
 
         if (transfer == null)
-            return NotFound(new { message = $"Transfer request {assetRequestId} not found." });
-
-        if (transfer.AssetRequest?.CreatedBy != userId)
-            return Forbid();
-
-        var status = transfer.AssetRequest?.Status ?? 0;
-        if (status > 1)
-            return BadRequest("Chỉ được xóa yêu cầu khi đang ở trạng thái Nháp hoặc Đã nộp.");
+        {
+            await using var txDraft = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                if (ar.Status != 0)
+                {
+                    await txDraft.RollbackAsync();
+                    return BadRequest("Chỉ được xóa bản nháp chưa gửi.");
+                }
+                var records = await _db.AssetRequestRecords
+                    .Where(r => r.AssetRequestId == assetRequestId)
+                    .ToListAsync();
+                if (records.Count > 0) _db.AssetRequestRecords.RemoveRange(records);
+                _db.AssetRequests.Remove(ar);
+                await _db.SaveChangesAsync();
+                await txDraft.CommitAsync();
+                return NoContent();
+            }
+            catch
+            {
+                await txDraft.RollbackAsync();
+                throw;
+            }
+        }
 
         await using var tx = await _db.Database.BeginTransactionAsync();
         try
         {
-            var assetInstanceId = transfer.AssetInstanceId;
-
             // Trả lại trạng thái IsCurrent cho vị trí đích nếu nó chưa được cấp quyền
             var toLocation = await _db.AssetLocations.FirstOrDefaultAsync(al => al.LocationId == transfer.ToLocationId);
             if (toLocation != null)
@@ -386,8 +549,8 @@ public class TransferRequestsController : ControllerBase
 
             _db.TransferRecords.Remove(transfer);
 
-            var assetRequest = await _db.AssetRequests.FirstOrDefaultAsync(r => r.AssetRequestId == assetRequestId);
-            if (assetRequest != null) _db.AssetRequests.Remove(assetRequest);
+            var arReload = await _db.AssetRequests.FirstOrDefaultAsync(r => r.AssetRequestId == assetRequestId);
+            if (arReload != null) _db.AssetRequests.Remove(arReload);
 
             await _db.SaveChangesAsync();
             await tx.CommitAsync();
@@ -430,6 +593,11 @@ public class TransferRequestsController : ControllerBase
             || transfer.FromUserId == userId
             || (userDeptId.HasValue && transfer.FromLocation.DepartmentId == userDeptId.Value);
         if (!canSend) return Forbid();
+
+        if (await DepartmentAssetScope.DepartmentHasInventoryInProgressAsync(
+                _db,
+                transfer.FromLocation.DepartmentId))
+            return BadRequest(new { message = DepartmentAssetScope.InventoryInProgressBlockingMessage });
 
         var note = string.IsNullOrWhiteSpace(body?.Note) ? null : body!.Note!.Trim();
         if (note != null && note.Length > 2000)
@@ -500,6 +668,11 @@ public class TransferRequestsController : ControllerBase
             || transfer.ToUserId == userId
             || (userDeptId.HasValue && transfer.ToLocation.DepartmentId == userDeptId.Value);
         if (!canReceive) return Forbid();
+
+        if (await DepartmentAssetScope.DepartmentHasInventoryInProgressAsync(
+                _db,
+                transfer.ToLocation.DepartmentId))
+            return BadRequest(new { message = DepartmentAssetScope.InventoryInProgressBlockingMessage });
 
         var note = string.IsNullOrWhiteSpace(body?.Note) ? null : body!.Note!.Trim();
         if (note != null && note.Length > 2000)

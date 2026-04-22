@@ -230,6 +230,21 @@
   border-color: #ff7875;
 }
 
+.transfer-btn-draft {
+  border: 1px solid #ff8c77;
+  background: #fff5f2;
+  color: #c92a1a;
+  border-radius: 6px;
+  padding: 0 32px;
+  height: 40px;
+  cursor: pointer;
+}
+
+.transfer-btn-draft:hover {
+  background: #ffe8e0;
+  border-color: #fe5c3d;
+}
+
 .transfer-btn-cancel {
   border: 1px solid #d9d9d9;
   background: #f9fafb;

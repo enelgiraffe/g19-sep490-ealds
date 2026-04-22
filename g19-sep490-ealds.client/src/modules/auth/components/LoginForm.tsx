@@ -4,7 +4,7 @@ import { LockOutlined, EyeInvisibleOutlined, EyeTwoTone } from '@ant-design/icon
 import { Link, useNavigate } from 'react-router-dom';
 import { useLogin } from '../hooks/useLogin';
 import type { LoginFormData } from '../types/auth.types';
-import { mapBackendRoleToAppRole } from '../types/auth.types';
+import { getDefaultLandingPath, mapBackendRoleToAppRole } from '../types/auth.types';
 import logoImg from '/images/logoCompany.png';
 import './LoginForm.css';
 
@@ -22,16 +22,8 @@ export const LoginForm = () => {
       try {
         const user = JSON.parse(storedUser);
         const appRole = mapBackendRoleToAppRole(user.role);
-
-        if (appRole === 'department_head') {
-          navigate('/assets', { replace: true });
-          return;
-        }
-
-        if (appRole === 'accountant') {
-          navigate('/accountant-assets', { replace: true });
-          return;
-        }
+        navigate(getDefaultLandingPath(appRole), { replace: true });
+        return;
       } catch {
         // ignore parse error and fallback to default redirect below
       }

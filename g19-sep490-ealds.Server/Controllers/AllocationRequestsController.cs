@@ -7,6 +7,7 @@ using g19_sep490_ealds.Server.DTOs.Allocation;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services;
 using g19_sep490_ealds.Server.Services.Interface;
+using g19_sep490_ealds.Server.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -80,6 +81,9 @@ public class AllocationRequestsController : ControllerBase
             .FirstOrDefaultAsync();
         if (!departmentId.HasValue)
             return BadRequest(new { message = "Tài khoản chưa gắn phòng ban (nhân viên)." });
+
+        if (await DepartmentAssetScope.DepartmentHasInventoryInProgressAsync(_db, departmentId.Value))
+            return BadRequest(new { message = DepartmentAssetScope.InventoryInProgressBlockingMessage });
 
         if (!await _db.RequestTypes.AsNoTracking().AnyAsync(rt => rt.RequestTypeId == _allocationRequestTypeId))
             return BadRequest(new

@@ -62,12 +62,22 @@ export function AccountantAssetListPage() {
   const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
   const [assetTypeFilter, setAssetTypeFilter] = useState<number | undefined>(undefined);
   const [expandedAssetId, setExpandedAssetId] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const navigate = useNavigate();
 
   useEffect(() => {
     const t = setTimeout(() => setKeyword(searchInput.trim()), 400);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [keyword, statusFilter, assetTypeFilter]);
+
+  useEffect(() => {
+    setExpandedAssetId(null);
+  }, [keyword, statusFilter, assetTypeFilter, page, pageSize]);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,6 +128,21 @@ export function AccountantAssetListPage() {
     }
     return Array.from(grouped.values());
   }, [allInstances]);
+
+  const total = assets.length;
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(total / pageSize)),
+    [total, pageSize],
+  );
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
+
+  const safePage = Math.min(page, totalPages);
+  const startIndex = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const endIndex = Math.min(safePage * pageSize, total);
+  const pagedAssets = assets.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const instancesMap = useMemo(() => {
     const grouped: Record<number, AccountantInstanceItem[]> = {};
@@ -227,14 +252,14 @@ export function AccountantAssetListPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {assets.length === 0 ? (
+                  {total === 0 ? (
                     <tr>
                       <td colSpan={6} style={{ textAlign: 'center', padding: '16px' }}>
                         Không có dữ liệu.
                       </td>
                     </tr>
                   ) : (
-                    assets.map((asset, index) => (
+                    pagedAssets.map((asset, index) => (
                       <tr
                         key={asset.id}
                         className={
@@ -243,7 +268,9 @@ export function AccountantAssetListPage() {
                             : 'asset-row'
                         }
                       >
-                        <td className="asset-table__cell asset-table__cell--stt">{index + 1}</td>
+                        <td className="asset-table__cell asset-table__cell--stt">
+                          {(safePage - 1) * pageSize + index + 1}
+                        </td>
                         <td>
                           <button
                             type="button"
@@ -358,25 +385,45 @@ export function AccountantAssetListPage() {
         <div className="asset-card__footer">
           <div className="asset-footer__left">
             Số lượng trên trang:
-            <select className="asset-footer__select" defaultValue={25}>
+            <select
+              className="asset-footer__select"
+              value={pageSize}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                setPageSize(next);
+                setPage(1);
+              }}
+            >
               <option value={10}>10</option>
               <option value={25}>25</option>
               <option value={50}>50</option>
               <option value={100}>100</option>
             </select>
           </div>
-          <div className="asset-footer__center">1-25 trên {assets.length}</div>
+          <div className="asset-footer__center">
+            {total === 0 ? '0-0 trên 0' : `${startIndex}-${endIndex} trên ${total}`}
+          </div>
           <div className="asset-footer__right">
-            <button className="asset-footer__pager" disabled type="button">
+            <button
+              className="asset-footer__pager"
+              disabled={safePage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              type="button"
+            >
               ⟨
             </button>
             <button
               className="asset-footer__pager asset-footer__pager--active"
               type="button"
             >
-              1
+              {safePage}
             </button>
-            <button className="asset-footer__pager" type="button">
+            <button
+              className="asset-footer__pager"
+              disabled={safePage >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              type="button"
+            >
               ⟩
             </button>
           </div>
