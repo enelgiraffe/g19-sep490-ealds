@@ -4,8 +4,10 @@ import { Button, Input, Select, Tag, Spin, Space, message, Modal, Form, DatePick
 import { SearchOutlined, PlayCircleOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import { SchedulePeriodicModal } from '../components/SchedulePeriodicModal';
+import { INVENTORY_PERIOD_PRESETS, SchedulePeriodicModal } from '../components/SchedulePeriodicModal';
 import { ScheduleIndividualModal } from '../components/ScheduleIndividualModal';
+import '../components/SchedulePeriodicModal.css';
+import '../components/ScheduleIndividualModal.css';
 import {
   inventoryService,
   inventorySessionDateToUtcIso,
@@ -52,13 +54,6 @@ function execDurationLabel(startStr: string | null | undefined, endStr: string |
   return `${inventorySessionInclusiveDayCount(startStr, endStr)} ngày`;
 }
 
-interface EditFormValues {
-  purpose: string;
-  startDate: Dayjs;
-  executionDays: number;
-  periodDays?: number;
-}
-
 export function InventoryPage() {
   const navigate = useNavigate();
   const [isPeriodicModalOpen, setIsPeriodicModalOpen] = useState(false);
@@ -79,7 +74,8 @@ export function InventoryPage() {
   // Edit modal
   const [editTarget, setEditTarget] = useState<InventorySessionListItem | null>(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
-  const [editForm] = Form.useForm<EditFormValues>();
+  const [editForm] = Form.useForm();
+  const [editCustomPeriod, setEditCustomPeriod] = useState(false);
 
   // Cancel (delete) confirmation
   const [cancelTarget, setCancelTarget] = useState<InventorySessionListItem | null>(null);
@@ -165,34 +161,76 @@ export function InventoryPage() {
   // --- Edit ---
   const openEditModal = (row: InventorySessionListItem) => {
     setEditTarget(row);
-    const start = dayjs(row.startDate);
-    const execDays = inventorySessionInclusiveDayCount(row.startDate, row.endDate);
-    editForm.setFieldsValue({
-      purpose: row.purpose,
-      startDate: start,
-      executionDays: execDays,
-      periodDays: row.periodDays ?? undefined,
-    });
+    if (row.isPeriodic) {
+      const pd = row.periodDays ?? 90;
+      const presetMatch = INVENTORY_PERIOD_PRESETS.find((p) => p.value !== -1 && p.value === pd);
+      const useCustom = !presetMatch;
+      setEditCustomPeriod(useCustom);
+      editForm.setFieldsValue({
+        departmentId: row.departmentId,
+        purpose: row.purpose,
+        periodPreset: useCustom ? -1 : pd,
+        periodCustomDays: useCustom ? pd : undefined,
+        startDate: dayjs(row.startDate),
+        executionDays: inventorySessionInclusiveDayCount(row.startDate, row.endDate),
+      });
+    } else {
+      setEditCustomPeriod(false);
+      editForm.setFieldsValue({
+        checkDate: dayjs(row.startDate),
+        departmentId: row.departmentId,
+        purpose: row.purpose,
+        executionDays: inventorySessionInclusiveDayCount(row.startDate, row.endDate),
+      });
+    }
+  };
+
+  const handleEditPeriodicPresetChange = (value: number) => {
+    setEditCustomPeriod(value === -1);
+    if (value !== -1) {
+      editForm.setFieldValue('periodCustomDays', undefined);
+    }
   };
 
   const handleEditSubmit = async () => {
     if (!editTarget) return;
-    const values = await editForm.validateFields();
     setEditSubmitting(true);
     try {
-      const endDate = inventorySessionEndDayForInclusiveDuration(values.startDate, values.executionDays);
-      await inventoryService.updateSession(editTarget.sessionId, {
-        purpose: values.purpose,
-        startDate: inventorySessionDateToUtcIso(values.startDate),
-        endDate: inventorySessionEndOfDayUtcIso(endDate),
-        periodDays: editTarget.isPeriodic ? values.periodDays : undefined,
-      });
+      const values = await editForm.validateFields();
+      if (editTarget.isPeriodic) {
+        const periodDays = values.periodPreset === -1 ? values.periodCustomDays : values.periodPreset;
+        if (!periodDays || periodDays <= 0) {
+          message.error('Vui lòng nhập chu kỳ kiểm kê hợp lệ.');
+          throw new Error('INVALID_PERIOD');
+        }
+        const endDay = inventorySessionEndDayForInclusiveDuration(values.startDate, values.executionDays);
+        await inventoryService.updateSession(editTarget.sessionId, {
+          purpose: values.purpose,
+          startDate: inventorySessionDateToUtcIso(values.startDate),
+          endDate: inventorySessionEndOfDayUtcIso(endDay),
+          periodDays,
+        });
+      } else {
+        const endDay = inventorySessionEndDayForInclusiveDuration(values.checkDate, values.executionDays);
+        await inventoryService.updateSession(editTarget.sessionId, {
+          purpose: values.purpose,
+          startDate: inventorySessionDateToUtcIso(values.checkDate),
+          endDate: inventorySessionEndOfDayUtcIso(endDay),
+        });
+      }
       message.success('Đã cập nhật thông tin phiên kiểm kê.');
       setEditTarget(null);
       fetchSessions();
     } catch (err: unknown) {
+      if ((err as { errorFields?: unknown })?.errorFields) {
+        throw err;
+      }
+      if (err instanceof Error && err.message === 'INVALID_PERIOD') {
+        throw err;
+      }
       const axiosErr = err as { response?: { data?: { message?: string } } };
       message.error(axiosErr?.response?.data?.message ?? 'Cập nhật thất bại. Vui lòng thử lại.');
+      throw err;
     } finally {
       setEditSubmitting(false);
     }
@@ -463,86 +501,202 @@ export function InventoryPage() {
         )}
       </Modal>
 
-      {/* Edit modal */}
+      {/* Edit modal — aligned with ScheduleIndividualModal / SchedulePeriodicModal */}
       <Modal
         open={!!editTarget}
-        title="Chỉnh sửa lịch kiểm kê"
+        title={
+          editTarget?.isPeriodic
+            ? 'Chỉnh sửa lịch kiểm kê định kỳ'
+            : 'Chỉnh sửa lịch kiểm kê bất thường'
+        }
         okText="Lưu thay đổi"
         cancelText="Hủy bỏ"
         okButtonProps={{ loading: editSubmitting }}
-        onOk={handleEditSubmit}
+        onOk={() => void handleEditSubmit()}
         onCancel={() => setEditTarget(null)}
         centered
-        width={480}
+        width={640}
+        className={
+          editTarget?.isPeriodic
+            ? 'inventory-session-edit-modal inventory-session-edit-modal--periodic'
+            : 'inventory-session-edit-modal inventory-session-edit-modal--individual'
+        }
+        destroyOnClose
       >
-        <Form form={editForm} layout="vertical" style={{ marginTop: 16 }}>
-          <Form.Item
-            label="Mục đích"
-            name="purpose"
-            rules={[{ required: true, message: 'Vui lòng nhập mục đích kiểm kê' }]}
+        {editTarget && (
+          <Form
+            key={`${editTarget.sessionId}-${editTarget.isPeriodic}`}
+            form={editForm}
+            layout="vertical"
+            className="create-purchase-form schedule-periodic-form"
+            style={{ marginTop: 16 }}
           >
-            <TextArea rows={3} placeholder="Nhập mục đích kiểm kê" />
-          </Form.Item>
+            {editTarget.isPeriodic ? (
+              <>
+                <Form.Item label="Phòng ban" name="departmentId">
+                  <Select
+                    disabled
+                    showSearch
+                    optionFilterProp="label"
+                    options={departmentOptions.map((d) => ({ value: d.id, label: d.name }))}
+                  />
+                </Form.Item>
 
-          <div style={{ display: 'flex', gap: 12 }}>
-            <Form.Item
-              label="Ngày bắt đầu"
-              name="startDate"
-              style={{ flex: 1 }}
-              rules={[{ required: true, message: 'Vui lòng chọn ngày bắt đầu' }]}
-            >
-              <DatePicker
-                format="DD/MM/YYYY"
-                placeholder="Chọn ngày"
-                style={{ width: '100%' }}
-                disabledDate={(current) =>
-                  !!current && current.isBefore(dayjs().startOf('day'))
-                }
-              />
-            </Form.Item>
-            <Form.Item
-              label="Thời gian thực hiện (ngày)"
-              name="executionDays"
-              style={{ flex: 1 }}
-              rules={[
-                { required: true, message: 'Vui lòng nhập số ngày' },
-                { type: 'number', min: 1, message: 'Phải ít nhất 1 ngày' },
-              ]}
-            >
-              <InputNumber min={1} max={365} style={{ width: '100%' }} placeholder="Ví dụ: 7" />
-            </Form.Item>
-          </div>
+                <Form.Item
+                  label="Mục đích"
+                  name="purpose"
+                  rules={[{ required: true, message: 'Vui lòng nhập mục đích kiểm kê' }]}
+                >
+                  <TextArea rows={3} placeholder="Ví dụ: Kiểm kê định kỳ quý I năm 2026" />
+                </Form.Item>
 
-          {/* Live end-date preview */}
-          <Form.Item shouldUpdate noStyle>
-            {() => {
-              const startDate = editForm.getFieldValue('startDate') as Dayjs | undefined;
-              const execDays = editForm.getFieldValue('executionDays') as number | undefined;
-              if (!startDate || !execDays || execDays <= 0) return null;
-              return (
-                <div style={{ marginBottom: 16, color: '#595959', fontSize: 13 }}>
-                  Hạn hoàn thành:{' '}
-                  <strong>
-                    {inventorySessionEndDayForInclusiveDuration(startDate, execDays).format('DD/MM/YYYY')}
-                  </strong>
+                <Form.Item
+                  label="Chu kỳ kiểm kê"
+                  name="periodPreset"
+                  rules={[{ required: true, message: 'Vui lòng chọn chu kỳ kiểm kê' }]}
+                >
+                  <Select
+                    placeholder="Chọn chu kỳ"
+                    options={INVENTORY_PERIOD_PRESETS.map((p) => ({ value: p.value, label: p.label }))}
+                    onChange={handleEditPeriodicPresetChange}
+                  />
+                </Form.Item>
+
+                {editCustomPeriod && (
+                  <Form.Item
+                    label="Số ngày tùy chỉnh (ngày)"
+                    name="periodCustomDays"
+                    rules={[
+                      { required: true, message: 'Vui lòng nhập số ngày' },
+                      { type: 'number', min: 1, message: 'Chu kỳ phải ít nhất 1 ngày' },
+                    ]}
+                  >
+                    <InputNumber
+                      min={1}
+                      max={3650}
+                      style={{ width: '100%' }}
+                      placeholder="Nhập số ngày (ví dụ: 45)"
+                    />
+                  </Form.Item>
+                )}
+
+                <div className="schedule-periodic-form__date-row">
+                  <Form.Item
+                    label="Ngày bắt đầu đầu tiên"
+                    name="startDate"
+                    rules={[{ required: true, message: 'Vui lòng chọn ngày bắt đầu' }]}
+                  >
+                    <DatePicker
+                      format="DD/MM/YYYY"
+                      placeholder="Chọn ngày"
+                      style={{ width: '100%' }}
+                      disabledDate={(current) =>
+                        !!current && current.isBefore(dayjs().startOf('day'))
+                      }
+                    />
+                  </Form.Item>
+
+                  <Form.Item
+                    label="Thời gian thực hiện (ngày)"
+                    name="executionDays"
+                    rules={[
+                      { required: true, message: 'Vui lòng nhập số ngày thực hiện' },
+                      { type: 'number', min: 1, message: 'Phải ít nhất 1 ngày' },
+                    ]}
+                  >
+                    <InputNumber min={1} max={365} style={{ width: '100%' }} placeholder="Ví dụ: 7" />
+                  </Form.Item>
                 </div>
-              );
-            }}
-          </Form.Item>
 
-          {editTarget?.isPeriodic && (
-            <Form.Item
-              label="Chu kỳ kiểm kê (ngày)"
-              name="periodDays"
-              rules={[
-                { required: true, message: 'Vui lòng nhập chu kỳ' },
-                { type: 'number', min: 1, message: 'Chu kỳ phải ít nhất 1 ngày' },
-              ]}
-            >
-              <InputNumber min={1} max={3650} style={{ width: '100%' }} placeholder="Ví dụ: 90" />
-            </Form.Item>
-          )}
-        </Form>
+                <Form.Item shouldUpdate noStyle>
+                  {() => {
+                    const startDate = editForm.getFieldValue('startDate') as Dayjs | undefined;
+                    const execDays = editForm.getFieldValue('executionDays') as number | undefined;
+                    if (!startDate || !execDays || execDays <= 0) return null;
+                    const endDate = inventorySessionEndDayForInclusiveDuration(startDate, execDays);
+                    return (
+                      <div className="schedule-periodic-form__enddate-preview">
+                        <span className="schedule-periodic-form__enddate-label">Hạn hoàn thành:</span>
+                        <strong className="schedule-periodic-form__enddate-value">
+                          {endDate.format('DD/MM/YYYY')}
+                        </strong>
+                      </div>
+                    );
+                  }}
+                </Form.Item>
+              </>
+            ) : (
+              <>
+                <Form.Item label="Phòng ban" name="departmentId">
+                  <Select
+                    disabled
+                    showSearch
+                    optionFilterProp="label"
+                    options={departmentOptions.map((d) => ({ value: d.id, label: d.name }))}
+                  />
+                </Form.Item>
+
+                <Form.Item
+                  label="Mục đích"
+                  name="purpose"
+                  rules={[{ required: true, message: 'Vui lòng nhập mục đích kiểm kê' }]}
+                >
+                  <TextArea
+                    rows={3}
+                    placeholder="Ví dụ: Kiểm kê tài sản định kỳ tháng 3"
+                    className="schedule-form__textarea"
+                  />
+                </Form.Item>
+
+                <div className="schedule-periodic-form__date-row">
+                  <Form.Item
+                    label="Ngày kiểm kê"
+                    name="checkDate"
+                    rules={[{ required: true, message: 'Vui lòng chọn ngày kiểm kê' }]}
+                  >
+                    <DatePicker
+                      format="DD/MM/YYYY"
+                      placeholder="Chọn ngày"
+                      className="schedule-form__datepicker"
+                      style={{ width: '100%' }}
+                      disabledDate={(current) =>
+                        !!current && current.isBefore(dayjs().startOf('day'))
+                      }
+                    />
+                  </Form.Item>
+
+                  <Form.Item
+                    label="Thời gian thực hiện (ngày)"
+                    name="executionDays"
+                    rules={[
+                      { required: true, message: 'Vui lòng nhập số ngày thực hiện' },
+                      { type: 'number', min: 1, message: 'Phải ít nhất 1 ngày' },
+                    ]}
+                  >
+                    <InputNumber min={1} max={365} style={{ width: '100%' }} placeholder="Ví dụ: 7" />
+                  </Form.Item>
+                </div>
+
+                <Form.Item shouldUpdate noStyle>
+                  {() => {
+                    const checkDate = editForm.getFieldValue('checkDate') as Dayjs | undefined;
+                    const execDays = editForm.getFieldValue('executionDays') as number | undefined;
+                    if (!checkDate || !execDays || execDays <= 0) return null;
+                    const endDate = inventorySessionEndDayForInclusiveDuration(checkDate, execDays);
+                    return (
+                      <div className="schedule-periodic-form__enddate-preview">
+                        <span className="schedule-periodic-form__enddate-label">Hạn hoàn thành:</span>
+                        <strong className="schedule-periodic-form__enddate-value">
+                          {endDate.format('DD/MM/YYYY')}
+                        </strong>
+                      </div>
+                    );
+                  }}
+                </Form.Item>
+              </>
+            )}
+          </Form>
+        )}
       </Modal>
 
       {/* Cancel (delete) confirmation modal */}
@@ -561,7 +715,6 @@ export function InventoryPage() {
           <div>
             <p style={{ marginBottom: 8 }}>
               Bạn có chắc muốn hủy lịch kiểm kê <strong>{cancelTarget.purpose}</strong>?
-              Trạng thái sẽ chuyển sang <strong>Đã hủy</strong>.
             </p>
             {cancelTarget.isPeriodic && (
               <p style={{ marginBottom: 12, color: '#cf1322', fontSize: 13 }}>
@@ -569,12 +722,6 @@ export function InventoryPage() {
                 chu kỳ, người lập và có ngày bắt đầu sau phiên này) cũng sẽ bị hủy.
               </p>
             )}
-            <TextArea
-              rows={3}
-              value={cancelNote}
-              onChange={(e) => setCancelNote(e.target.value)}
-              placeholder="Lý do hủy (không bắt buộc)"
-            />
           </div>
         )}
       </Modal>

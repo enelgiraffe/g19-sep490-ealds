@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, type Key } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Spin, Table, Tag, message, Modal, Input } from 'antd';
+import { Button, Spin, Table, Tag, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { TableRowSelection } from 'antd/es/table/interface';
 import { ArrowLeftOutlined, SyncOutlined, CheckCircleOutlined } from '@ant-design/icons';
@@ -59,8 +59,6 @@ export function InventoryReviewPage() {
   const [summary, setSummary] = useState<InventoryReviewSummary | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [batchResolving, setBatchResolving] = useState(false);
-  const [finishModalOpen, setFinishModalOpen] = useState(false);
-  const [finishNotes, setFinishNotes] = useState('');
   const [finishSubmitting, setFinishSubmitting] = useState(false);
   const [pageSize, setPageSize] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
@@ -106,7 +104,6 @@ export function InventoryReviewPage() {
           <div className="inv-review__cell-stack">
             <span>{formatReviewBookUseLine(r.bookCondition)}</span>
             <span>{r.bookDepartmentName ?? '—'}</span>
-            <span className="inv-review__muted">{r.bookUserName ?? '—'}</span>
           </div>
         ),
       },
@@ -117,7 +114,6 @@ export function InventoryReviewPage() {
           <div className="inv-review__cell-stack">
             <span>{formatReviewActualUseLine(r.actualQuantity, r.actualCondition)}</span>
             <span>{r.actualDepartmentName ?? '—'}</span>
-            <span className="inv-review__muted">{r.actualUserName ?? '—'}</span>
           </div>
         ),
       },
@@ -247,14 +243,11 @@ export function InventoryReviewPage() {
       const res = await inventoryService.confirmSession(id, {
         reviewedBy: getCurrentUserId(),
         reviewerRoleId: currentRole === 'admin' ? 1 : 4,
-        reviewNotes: finishNotes.trim() || undefined,
         applyCorrections: false,
       });
       message.success(
         (res as { message?: string })?.message ?? 'Phiên kiểm kê đã được đánh dấu Đã xử lý.',
       );
-      setFinishModalOpen(false);
-      setFinishNotes('');
       await load();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -279,7 +272,8 @@ export function InventoryReviewPage() {
               type="primary"
               className="maintenance-btn-add"
               icon={<CheckCircleOutlined />}
-              onClick={() => setFinishModalOpen(true)}
+              loading={finishSubmitting}
+              onClick={() => void handleFinishResolution()}
             >
               Hoàn tất
             </Button>
@@ -385,33 +379,6 @@ export function InventoryReviewPage() {
           </div>
         )}
       </div>
-
-      <Modal
-        title="Hoàn tất xử lý chênh lệch"
-        open={finishModalOpen}
-        okText="Xác nhận"
-        cancelText="Hủy"
-        confirmLoading={finishSubmitting}
-        onOk={handleFinishResolution}
-        onCancel={() => {
-          setFinishModalOpen(false);
-          setFinishNotes('');
-        }}
-        centered
-        width={440}
-      >
-       
-        <label htmlFor="inv-finish-notes" style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-          Ghi chú (tuỳ chọn)
-        </label>
-        <Input.TextArea
-          id="inv-finish-notes"
-          rows={3}
-          value={finishNotes}
-          onChange={(e) => setFinishNotes(e.target.value)}
-          placeholder="Ghi chú gửi kèm (nếu có)…"
-        />
-      </Modal>
     </div>
   );
 }

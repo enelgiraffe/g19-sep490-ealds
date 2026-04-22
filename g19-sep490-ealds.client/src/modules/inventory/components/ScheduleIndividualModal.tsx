@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Form, Input, Select, DatePicker, message } from 'antd';
+import { Form, Input, Select, DatePicker, InputNumber, message } from 'antd';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import { profileService } from '../../profile/services/profileService';
@@ -7,11 +7,13 @@ import {
   inventoryService,
   getCurrentUserId,
   inventorySessionDateToUtcIso,
+  inventorySessionEndDayForInclusiveDuration,
   inventorySessionEndOfDayUtcIso,
   type DropdownItem,
 } from '../services/inventoryService';
 import '../../purchase-orders/components/CreatePurchaseOrderModal.css';
 import './ScheduleIndividualModal.css';
+import './SchedulePeriodicModal.css';
 
 const { TextArea } = Input;
 
@@ -19,6 +21,7 @@ export interface ScheduleIndividualFormValues {
   checkDate: Dayjs;
   departmentId: number;
   purpose: string;
+  executionDays: number;
 }
 
 interface ScheduleIndividualModalProps {
@@ -51,9 +54,11 @@ export function ScheduleIndividualModal({
       setDepartments(deps);
       const profile = await profileService.getProfile();
       const defaultDeptId = profile.departmentId ?? undefined;
+      const patch: Partial<ScheduleIndividualFormValues> = { executionDays: 1 };
       if (defaultDeptId != null && deps.some((d) => d.id === defaultDeptId)) {
-        form.setFieldsValue({ departmentId: defaultDeptId });
+        patch.departmentId = defaultDeptId;
       }
+      form.setFieldsValue(patch);
     } catch {
       message.error('Không thể tải dữ liệu. Vui lòng thử lại.');
     } finally {
@@ -70,11 +75,11 @@ export function ScheduleIndividualModal({
       }
       setSubmitting(true);
       try {
-        const startIso = inventorySessionDateToUtcIso(values.checkDate);
+        const endDay = inventorySessionEndDayForInclusiveDuration(values.checkDate, values.executionDays);
         await inventoryService.createSession({
-          purpose: values.purpose ?? '',
-          startDate: startIso,
-          endDate: inventorySessionEndOfDayUtcIso(values.checkDate),
+          purpose: values.purpose,
+          startDate: inventorySessionDateToUtcIso(values.checkDate),
+          endDate: inventorySessionEndOfDayUtcIso(endDay),
           departmentId,
           createdBy: getCurrentUserId(),
         });
@@ -100,7 +105,7 @@ export function ScheduleIndividualModal({
 
   return (
     <div className="create-purchase-modal-overlay" role="dialog" aria-modal="true">
-      <div className="create-purchase-modal inventory-schedule-modal">
+      <div className="create-purchase-modal inventory-schedule-modal inventory-schedule-modal--wide">
         <button type="button" className="create-purchase-modal__close-btn" onClick={onClose} aria-label="Đóng">
           <span className="create-purchase-modal__close">×</span>
         </button>
@@ -110,23 +115,7 @@ export function ScheduleIndividualModal({
         </div>
 
         <div className="create-purchase-modal__body">
-          <Form form={form} layout="vertical" className="create-purchase-form">
-            <Form.Item
-              label="Ngày kiểm kê"
-              name="checkDate"
-              rules={[{ required: true, message: 'Vui lòng chọn ngày kiểm kê' }]}
-            >
-              <DatePicker
-                format="DD/MM/YYYY"
-                placeholder="Chọn ngày"
-                className="schedule-form__datepicker"
-                style={{ width: '100%' }}
-                disabledDate={(current) =>
-                  !!current && current.isBefore(dayjs().startOf('day'))
-                }
-              />
-            </Form.Item>
-
+          <Form form={form} layout="vertical" className="create-purchase-form schedule-periodic-form">
             <Form.Item
               label="Phòng ban"
               name="departmentId"
@@ -141,12 +130,62 @@ export function ScheduleIndividualModal({
               />
             </Form.Item>
 
-            <Form.Item label="Mục đích" name="purpose">
+            <Form.Item
+              label="Mục đích"
+              name="purpose"
+              rules={[{ required: true, message: 'Vui lòng nhập mục đích kiểm kê' }]}
+            >
               <TextArea
                 rows={3}
                 placeholder="Ví dụ: Kiểm kê tài sản định kỳ tháng 3"
                 className="schedule-form__textarea"
               />
+            </Form.Item>
+
+            <div className="schedule-periodic-form__date-row">
+              <Form.Item
+                label="Ngày kiểm kê"
+                name="checkDate"
+                rules={[{ required: true, message: 'Vui lòng chọn ngày kiểm kê' }]}
+              >
+                <DatePicker
+                  format="DD/MM/YYYY"
+                  placeholder="Chọn ngày"
+                  className="schedule-form__datepicker"
+                  style={{ width: '100%' }}
+                  disabledDate={(current) =>
+                    !!current && current.isBefore(dayjs().startOf('day'))
+                  }
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="Thời gian thực hiện (ngày)"
+                name="executionDays"
+                rules={[
+                  { required: true, message: 'Vui lòng nhập số ngày thực hiện' },
+                  { type: 'number', min: 1, message: 'Phải ít nhất 1 ngày' },
+                ]}
+              >
+                <InputNumber min={1} max={365} style={{ width: '100%' }} placeholder="Ví dụ: 7" />
+              </Form.Item>
+            </div>
+
+            <Form.Item shouldUpdate noStyle>
+              {() => {
+                const checkDate = form.getFieldValue('checkDate') as Dayjs | undefined;
+                const execDays = form.getFieldValue('executionDays') as number | undefined;
+                if (!checkDate || !execDays || execDays <= 0) return null;
+                const endDate = inventorySessionEndDayForInclusiveDuration(checkDate, execDays);
+                return (
+                  <div className="schedule-periodic-form__enddate-preview">
+                    <span className="schedule-periodic-form__enddate-label">Hạn hoàn thành:</span>
+                    <strong className="schedule-periodic-form__enddate-value">
+                      {endDate.format('DD/MM/YYYY')}
+                    </strong>
+                  </div>
+                );
+              }}
             </Form.Item>
           </Form>
         </div>

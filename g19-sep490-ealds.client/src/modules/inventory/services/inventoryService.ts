@@ -86,6 +86,8 @@ export interface SessionAssetCheckItem {
   /** Reported status after check; null if not yet submitted */
   actualStatus: number | null;
   checkStatus: number; // 0=Chưa kiểm kê, 1=Đang kiểm kê, 2=Hoàn tất
+  /** True when the server stored an inventory discrepancy for this task (any mismatch type). */
+  hasDiscrepancy?: boolean;
 }
 
 export interface AssetInventoryDetail {
@@ -411,7 +413,13 @@ export const inventoryService = {
 
   async updateSession(
     sessionId: number,
-    payload: { purpose: string; startDate: string; endDate: string; periodDays?: number },
+    payload: {
+      purpose: string;
+      startDate: string;
+      endDate: string;
+      periodDays?: number;
+      departmentId?: number;
+    },
   ): Promise<unknown> {
     const res = await inventoryApi.put(`/api/inventory/sessions/${sessionId}`, payload);
     return res.data;
