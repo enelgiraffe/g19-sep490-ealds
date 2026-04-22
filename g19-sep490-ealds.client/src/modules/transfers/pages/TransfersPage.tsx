@@ -6,6 +6,7 @@ import {
   SettingOutlined,
   EyeOutlined,
   DeleteOutlined,
+  EditOutlined,
 } from '@ant-design/icons';
 import axios from 'axios';
 import {
@@ -14,7 +15,10 @@ import {
   type TransferRequestListItem,
 } from '../../assets/services/transferRequestService';
 import { allocationRequestApiErrorMessage } from '../../allocations/services/allocationRequestService';
-import { TransferAssetModal } from '../../assets/components/TransferAssetModal';
+import {
+  TransferAssetModal,
+  type TransferEditDraft,
+} from '../../assets/components/TransferAssetModal';
 import { TransferRequestDetailModal } from '../components/TransferRequestDetailModal';
 import { profileService, type UserProfile } from '../../profile/services/profileService';
 import './TransfersPage.css';
@@ -60,6 +64,7 @@ export function TransfersPage() {
   const [searchText, setSearchText] = useState('');
   const [activeTab, setActiveTab] = useState<'outgoing' | 'incoming'>('outgoing');
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [transferEditDraft, setTransferEditDraft] = useState<TransferEditDraft | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<TableRow | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ type: 'send' | 'receive'; row: TableRow } | null>(
@@ -85,7 +90,7 @@ export function TransfersPage() {
       const list = await transferRequestService.getList();
       const rows: TableRow[] = list.map((item) => ({
         ...item,
-        key: String(item.recordId),
+        key: `ar-${item.assetRequestId}`,
         transferDateText: formatDate(item.transferDate),
       }));
       setData(rows);
@@ -109,7 +114,14 @@ export function TransfersPage() {
 
   const filteredData = useMemo(() => {
     return data.filter((row) => {
-      if (activeTab === 'outgoing') {
+      if (row.isIncompleteProposedDraft) {
+        if (isAccountant) {
+          // include on both tabs; optional nuance: restrict by tab is unnecessary for accountants
+        } else {
+          if (profile?.id == null || row.createdBy !== profile.id) return false;
+          if (activeTab !== 'outgoing') return false;
+        }
+      } else if (activeTab === 'outgoing') {
         if (!isAccountant) {
           const fromMyDept =
             profile?.departmentId != null && row.fromDepartmentId === profile.departmentId;
@@ -153,7 +165,10 @@ export function TransfersPage() {
           type="primary"
           danger
           className="transfers-btn-add"
-          onClick={() => setIsTransferModalOpen(true)}
+          onClick={() => {
+            setTransferEditDraft(null);
+            setIsTransferModalOpen(true);
+          }}
         >
           + Tạo yêu cầu điều chuyển
         </Button>
@@ -192,7 +207,14 @@ export function TransfersPage() {
               </Option>
             ))}
           </Select>
-          <Button icon={<FilterOutlined />} className="transfers-filter-advanced">
+          <Button
+            icon={<FilterOutlined />}
+            className="transfers-filter-advanced"
+            onClick={() => {
+              setSearchText('');
+              setStatusFilter('all');
+            }}
+          >
             Gỡ bộ lọc
           </Button>
           <Button icon={<SettingOutlined />} className="transfers-settings" />
@@ -235,6 +257,12 @@ export function TransfersPage() {
                             type="button"
                             className="asset-code asset-code--link"
                             onClick={() => {
+                              if (row.isIncompleteProposedDraft) {
+                                message.info(
+                                  'Bản nháp chưa gửi: hoàn tất thông tin rồi lưu hoặc gửi yêu cầu để xem chi tiết biên bản.',
+                                );
+                                return;
+                              }
                               setSelectedRequest(row);
                               setIsDetailModalOpen(true);
                             }}
@@ -296,10 +324,33 @@ export function TransfersPage() {
                         </td>
                         <td className="asset-table__cell asset-table__cell--actions">
                           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
+                            {row.isIncompleteProposedDraft &&
+                              profile?.id != null &&
+                              row.createdBy === profile.id &&
+                              typeof row.draftFormJson === 'string' && (
+                                <Button
+                                  type="text"
+                                  title="Sửa bản nháp"
+                                  icon={<EditOutlined />}
+                                  onClick={() => {
+                                    setTransferEditDraft({
+                                      assetRequestId: row.assetRequestId,
+                                      draftFormJson: row.draftFormJson!,
+                                    });
+                                    setIsTransferModalOpen(true);
+                                  }}
+                                />
+                              )}
                             <Button
                               type="text"
                               icon={<EyeOutlined />}
                               onClick={() => {
+                                if (row.isIncompleteProposedDraft) {
+                                  message.info(
+                                    'Bản nháp chưa gửi: hoàn tất thông tin rồi lưu hoặc gửi yêu cầu để xem chi tiết biên bản.',
+                                  );
+                                  return;
+                                }
                                 setSelectedRequest(row);
                                 setIsDetailModalOpen(true);
                               }}
@@ -390,12 +441,55 @@ export function TransfersPage() {
 
       <TransferAssetModal
         open={isTransferModalOpen}
-        onClose={() => setIsTransferModalOpen(false)}
+        onClose={() => {
+          setIsTransferModalOpen(false);
+          setTransferEditDraft(null);
+        }}
         mode="department"
         currentUserDepartmentId={profile?.departmentId ?? null}
+        editDraft={transferEditDraft}
         onSubmit={async (values: any) => {
           if (!profile) {
             message.error('Không lấy được thông tin người dùng. Vui lòng đăng nhập lại.');
+            return;
+          }
+          if (values.incompleteDraft === true) {
+            if (typeof values.draftFormJson !== 'string') {
+              message.error('Không lưu được bản nháp.');
+              return;
+            }
+            const editId =
+              typeof values.editingAssetRequestId === 'number' && values.editingAssetRequestId > 0
+                ? values.editingAssetRequestId
+                : null;
+            try {
+              if (editId != null) {
+                await transferRequestService.updateIncompleteDraft(editId, values.draftFormJson);
+                message.success('Đã cập nhật bản nháp.');
+              } else {
+                await transferRequestService.create({
+                  assetInstanceId: 0,
+                  requestTypeId: TRANSFER_REQUEST_TYPE_ID,
+                  fromLocationId: 0,
+                  toLocationId: 0,
+                  executeBy: profile.id,
+                  createdBy: profile.id,
+                  incompleteDraft: true,
+                  saveAsDraft: true,
+                  draftFormJson: values.draftFormJson,
+                });
+                message.success('Đã lưu bản nháp (chưa hoàn tất thông tin).');
+              }
+              setIsTransferModalOpen(false);
+              setTransferEditDraft(null);
+              await loadList();
+            } catch (e: unknown) {
+              const fromApi =
+                axios.isAxiosError(e) && e.response?.data != null
+                  ? allocationRequestApiErrorMessage(e.response.data)
+                  : null;
+              message.error(fromApi ?? 'Lưu bản nháp thất bại.');
+            }
             return;
           }
           const assetIds: number[] =
@@ -420,8 +514,13 @@ export function TransfersPage() {
               ? transferDateValue.toISOString()
               : undefined;
 
+          const saveAsDraft = values.saveAsDraft === true;
+          const nRep = Number(values.replaceIncompleteAssetRequestId);
+          const replaceProposedId =
+            Number.isFinite(nRep) && nRep > 0 ? nRep : null;
           try {
-            for (const assetInstanceId of assetIds) {
+            for (let i = 0; i < assetIds.length; i++) {
+              const assetInstanceId = assetIds[i]!;
               await transferRequestService.create({
                 assetInstanceId,
                 requestTypeId: TRANSFER_REQUEST_TYPE_ID,
@@ -434,10 +533,17 @@ export function TransfersPage() {
                 createdBy: profile.id,
                 title: values.reason ? `Điều chuyển: ${values.reason}` : `Yêu cầu điều chuyển tài sản ${assetInstanceId}`,
                 description: values.reason ?? undefined,
+                saveAsDraft,
+                incompleteDraft: false,
+                replaceIncompleteAssetRequestId:
+                  i === 0 && replaceProposedId != null ? replaceProposedId : undefined,
               });
             }
-            message.success('Gửi yêu cầu điều chuyển thành công.');
+            message.success(
+              saveAsDraft ? 'Đã lưu bản nháp điều chuyển.' : 'Gửi yêu cầu điều chuyển thành công.',
+            );
             setIsTransferModalOpen(false);
+            setTransferEditDraft(null);
             await loadList();
           } catch (e: unknown) {
             const fromApi =

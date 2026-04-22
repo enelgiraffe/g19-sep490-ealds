@@ -171,6 +171,8 @@ export function AssetListPage() {
   const [transferAssetInstanceId, setTransferAssetInstanceId] = useState<number | null>(null);
   const [maintenanceAssetInstanceId, setMaintenanceAssetInstanceId] = useState<number | null>(null);
   const [assetTypes, setAssetTypes] = useState<AssetTypeItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const navigate = useNavigate();
 
   const isDeptHead = profile?.isDepartmentHead ?? isDepartmentHeadRoleCode(profile?.role);
@@ -185,6 +187,16 @@ export function AssetListPage() {
       mapAssetToItem(a, instanceCountByAssetId[a.assetId] ?? 0)
     );
   }, [apiAssets, instanceCountByAssetId]);
+
+  const total = assets.length;
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(total / pageSize)),
+    [total, pageSize],
+  );
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
 
   const fetchAssets = useCallback(async () => {
     setLoading(true);
@@ -249,6 +261,14 @@ export function AssetListPage() {
   useEffect(() => {
     fetchAssets();
   }, [fetchAssets]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [keyword, statusFilter, assetTypeFilter]);
+
+  useEffect(() => {
+    setExpandedAssetId(null);
+  }, [keyword, statusFilter, assetTypeFilter, page, pageSize]);
 
   const handleSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -526,6 +546,34 @@ export function AssetListPage() {
       message.error('Không xác định được người dùng hoặc tài sản để điều chuyển.');
       return;
     }
+    if (values.incompleteDraft === true) {
+      if (typeof values.draftFormJson !== 'string') {
+        message.error('Không lưu được bản nháp.');
+        return;
+      }
+      try {
+        await transferRequestService.create({
+          assetInstanceId: 0,
+          requestTypeId: TRANSFER_REQUEST_TYPE_ID,
+          fromLocationId: 0,
+          toLocationId: 0,
+          executeBy: profile.id,
+          createdBy: profile.id,
+          incompleteDraft: true,
+          saveAsDraft: true,
+          draftFormJson: values.draftFormJson,
+        });
+        message.success('Đã lưu bản nháp (chưa hoàn tất thông tin).');
+        handleCloseTransferModal();
+      } catch (e: unknown) {
+        const fromApi =
+          axios.isAxiosError(e) && e.response?.data != null
+            ? allocationRequestApiErrorMessage(e.response.data)
+            : null;
+        message.error(fromApi ?? 'Lưu bản nháp thất bại.');
+      }
+      return;
+    }
     try {
       const assetIds: number[] =
         Array.isArray(values.assetIds) && values.assetIds.length > 0
@@ -551,6 +599,7 @@ export function AssetListPage() {
           ? transferDateValue.toISOString()
           : undefined;
 
+      const saveAsDraft = values.saveAsDraft === true;
       for (const assetInstanceId of assetIds) {
         await transferRequestService.create({
           assetInstanceId,
@@ -566,10 +615,14 @@ export function AssetListPage() {
             ? `Điều chuyển: ${values.reason}`
             : `Yêu cầu điều chuyển tài sản ${assetInstanceId}`,
           description: values.reason ?? undefined,
+          saveAsDraft,
+          incompleteDraft: false,
         });
       }
 
-      message.success('Gửi yêu cầu điều chuyển thành công.');
+      message.success(
+        saveAsDraft ? 'Đã lưu bản nháp điều chuyển.' : 'Gửi yêu cầu điều chuyển thành công.',
+      );
       handleCloseTransferModal();
     } catch (e: unknown) {
       const fromApi =
@@ -607,6 +660,11 @@ export function AssetListPage() {
 
   const selectedListAsset =
     expandedAssetId != null ? assets.find((a) => a.id === expandedAssetId) : undefined;
+
+  const safePage = Math.min(page, totalPages);
+  const startIndex = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const endIndex = Math.min(safePage * pageSize, total);
+  const pagedAssets = assets.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   return (
     <div className="asset-page">
@@ -699,7 +757,7 @@ export function AssetListPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {assets.map((asset, index) => (
+                  {pagedAssets.map((asset, index) => (
                     <tr
                       key={asset.id}
                       className={
@@ -708,7 +766,9 @@ export function AssetListPage() {
                           : 'asset-row'
                       }
                     >
-                      <td className="asset-table__cell asset-table__cell--stt">{index + 1}</td>
+                      <td className="asset-table__cell asset-table__cell--stt">
+                        {(safePage - 1) * pageSize + index + 1}
+                      </td>
                       <td>
                         <button
                           type="button"
@@ -888,25 +948,45 @@ export function AssetListPage() {
         <div className="asset-card__footer">
           <div className="asset-footer__left">
             Số lượng trên trang:
-            <select className="asset-footer__select" defaultValue={25}>
+            <select
+              className="asset-footer__select"
+              value={pageSize}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                setPageSize(next);
+                setPage(1);
+              }}
+            >
               <option value={10}>10</option>
               <option value={25}>25</option>
               <option value={50}>50</option>
               <option value={100}>100</option>
             </select>
           </div>
-          <div className="asset-footer__center">1-25 trên 289</div>
+          <div className="asset-footer__center">
+            {total === 0 ? '0-0 trên 0' : `${startIndex}-${endIndex} trên ${total}`}
+          </div>
           <div className="asset-footer__right">
-            <button className="asset-footer__pager" disabled type="button">
+            <button
+              className="asset-footer__pager"
+              disabled={safePage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              type="button"
+            >
               ⟨
             </button>
             <button
               className="asset-footer__pager asset-footer__pager--active"
               type="button"
             >
-              1
+              {safePage}
             </button>
-            <button className="asset-footer__pager" type="button">
+            <button
+              className="asset-footer__pager"
+              disabled={safePage >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              type="button"
+            >
               ⟩
             </button>
           </div>

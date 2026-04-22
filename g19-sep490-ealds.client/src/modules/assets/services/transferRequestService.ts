@@ -22,6 +22,14 @@ export interface TransferRequestPayload {
   createdBy: number;
   title?: string | null;
   description?: string | null;
+  /** Tạo ở trạng thái Nháp (không gửi thông báo bước phê duyệt). */
+  saveAsDraft?: boolean;
+  /** Lưu mà không tạo TransferRecord (form chưa đủ thông tin); gửi kèm draftFormJson. */
+  incompleteDraft?: boolean;
+  /** JSON nội dung form (chỉ dùng khi incompleteDraft). */
+  draftFormJson?: string;
+  /** Bản ghi bản nháp JSON cần xóa sau khi tạo yêu cầu thật (gửi ở lần tạo đầu tiên nếu nhiều tài sản). */
+  replaceIncompleteAssetRequestId?: number;
 }
 
 export interface TransferRequestListItem {
@@ -51,6 +59,10 @@ export interface TransferRequestListItem {
   currentValue?: number | null;
   /** Chỉ API thanh lý: giá trị khai báo trên đơn */
   disposalDeclaredValue?: number | null;
+  /** Bản nháp chỉ lưu ProposedData, chưa có bản ghi điều chuyển. */
+  isIncompleteProposedDraft?: boolean;
+  /** JSON form (khi bản nháp chưa hoàn tất). */
+  draftFormJson?: string | null;
   isSenderConfirmed: boolean;
   isReceiverConfirmed: boolean;
   /** Ý kiến kế toán (từ bước phê duyệt). */
@@ -93,16 +105,30 @@ export const transferRequestService = {
     return response.data;
   },
 
-  async create(payload: TransferRequestPayload): Promise<{ assetRequestId: number; recordId: number }> {
-    const response = await transferApi.post<{ assetRequestId: number; recordId: number }>(
-      '/api/Assets/Requests/transfer',
-      payload
-    );
+  async create(
+    payload: TransferRequestPayload
+  ): Promise<{ assetRequestId: number; recordId: number; incompleteDraft?: boolean }> {
+    const response = await transferApi.post<{
+      assetRequestId: number;
+      recordId: number;
+      incompleteDraft?: boolean;
+    }>('/api/Assets/Requests/transfer', payload);
     return response.data;
   },
 
   async delete(assetRequestId: number): Promise<void> {
     await transferApi.delete(`/api/Assets/Requests/transfer/${assetRequestId}`);
+  },
+
+  async updateIncompleteDraft(
+    assetRequestId: number,
+    draftFormJson: string
+  ): Promise<{ assetRequestId: number }> {
+    const response = await transferApi.put<{ assetRequestId: number }>(
+      `/api/Assets/Requests/transfer/${assetRequestId}/draft`,
+      { draftFormJson }
+    );
+    return response.data;
   },
 
   async getHandoverRecords(assetRequestId: number): Promise<TransferHandoverRecordItem[]> {
