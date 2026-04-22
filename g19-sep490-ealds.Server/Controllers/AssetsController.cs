@@ -476,27 +476,8 @@ public class AssetsController : ControllerBase
                     // Không hủy tạo cá thể nếu đồng bộ quy định bảo dưỡng lỗi.
                 }
 
-                if (init.DepreciationPolicyId.HasValue)
-                {
-                    var policy = await _context.DepreciationPolicies.FindAsync(init.DepreciationPolicyId.Value);
-                    if (policy != null)
-                    {
-                        var firstPeriod = new DateOnly(init.PurchaseDate.Year, init.PurchaseDate.Month, 1);
-                        _context.DepreciationRecords.Add(new DepreciationRecord
-                        {
-                            AssetInstanceId = instance.AssetInstanceId,
-                            PolicyId = policy.PolicyId,
-                            Period = firstPeriod,
-                            DepreciationAmount = 0,
-                            AccumulatedDepreciation = 0,
-                            OriginalValue = currents[index],
-                            RemainingValue = currents[index],
-                            CreateDate = DateTime.UtcNow,
-                            IsPosted = false
-                        });
-                        await _context.SaveChangesAsync();
-                    }
-                }
+                // Không tạo DepreciationRecord tại thời điểm tạo instance/gán policy.
+                // Record khấu hao sẽ được sinh bởi job định kỳ cuối tháng hoặc chạy thủ công.
 
                 await ApplyCreateInstanceAssignmentAsync(instance.AssetInstanceId, init);
                 if (InstanceCreateHasAssignment(init))
