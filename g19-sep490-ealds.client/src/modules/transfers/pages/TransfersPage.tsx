@@ -355,7 +355,7 @@ export function TransfersPage() {
                                 setIsDetailModalOpen(true);
                               }}
                             />
-                            {(row.status === 0 || row.status === 1) &&
+                            {row.status === 0 &&
                               profile?.id != null &&
                               row.createdBy === profile.id && (
                               <Popconfirm
