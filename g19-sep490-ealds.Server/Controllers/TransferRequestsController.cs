@@ -481,7 +481,7 @@ public class TransferRequestsController : ControllerBase
     }
 
     /// <summary>
-    /// DELETE /api/Assets/Requests/transfer/{assetRequestId} - Xóa yêu cầu điều chuyển (chỉ khi chưa duyệt).
+    /// DELETE /api/Assets/Requests/transfer/{assetRequestId} - Xóa yêu cầu điều chuyển (chỉ bản nháp).
     /// </summary>
     [HttpDelete("{assetRequestId:int}")]
     public async Task<IActionResult> DeleteTransferRequest(int assetRequestId)
@@ -498,8 +498,8 @@ public class TransferRequestsController : ControllerBase
         if (ar.CreatedBy != userId)
             return Forbid();
 
-        if (ar.Status > 1)
-            return BadRequest("Chỉ được xóa yêu cầu khi đang ở trạng thái Nháp hoặc Đã nộp.");
+        if (ar.Status != 0)
+            return BadRequest("Chỉ được xóa yêu cầu ở trạng thái Nháp.");
 
         var transfer = await _db.TransferRecords
             .Include(tr => tr.FromLocation)
