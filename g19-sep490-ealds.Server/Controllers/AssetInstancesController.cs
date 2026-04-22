@@ -285,27 +285,6 @@ public class AssetInstancesController : ControllerBase
             // Không hủy tạo cá thể nếu đồng bộ quy định bảo dưỡng lỗi.
         }
 
-        if (dto.DepreciationPolicyId.HasValue)
-        {
-            var policy = await _context.DepreciationPolicies.FindAsync(dto.DepreciationPolicyId.Value);
-            if (policy != null)
-            {
-                var firstPeriod = new DateOnly(dto.PurchaseDate.Year, dto.PurchaseDate.Month, 1);
-                _context.DepreciationRecords.Add(new DepreciationRecord
-                {
-                    AssetInstanceId = instance.AssetInstanceId,
-                    PolicyId = policy.PolicyId,
-                    Period = firstPeriod,
-                    DepreciationAmount = 0,
-                    AccumulatedDepreciation = 0,
-                    OriginalValue = dto.CurrentValue,
-                    RemainingValue = dto.CurrentValue,
-                    CreateDate = DateTime.UtcNow,
-                    IsPosted = false
-                });
-                await _context.SaveChangesAsync();
-            }
-        }
 
         await ApplyCreateAssignmentAsync(instance.AssetInstanceId, dto);
         if (InstanceCreateHasAssignment(dto))
@@ -382,31 +361,12 @@ public class AssetInstancesController : ControllerBase
         if (dto.DepreciationPolicyId.HasValue)
         {
             var existingDep = await _context.DepreciationRecords
-                .FirstOrDefaultAsync(r => r.AssetInstanceId == id);
-            if (existingDep == null)
-            {
-                var policy = await _context.DepreciationPolicies.FindAsync(dto.DepreciationPolicyId.Value);
-                if (policy != null)
-                {
-                    var firstPeriod = new DateOnly(instance.PurchaseDate.Year, instance.PurchaseDate.Month, 1);
-                    _context.DepreciationRecords.Add(new DepreciationRecord
-                    {
-                        AssetInstanceId = id,
-                        PolicyId = policy.PolicyId,
-                        Period = firstPeriod,
-                        DepreciationAmount = 0,
-                        AccumulatedDepreciation = 0,
-                        OriginalValue = instance.CurrentValue,
-                        RemainingValue = instance.CurrentValue,
-                        CreateDate = DateTime.UtcNow,
-                        IsPosted = false
-                    });
-                }
-            }
-            else
-            {
+                .Where(r => r.AssetInstanceId == id)
+                .OrderByDescending(r => r.Period)
+                .ThenByDescending(r => r.CreateDate)
+                .FirstOrDefaultAsync();
+            if (existingDep != null)
                 existingDep.PolicyId = dto.DepreciationPolicyId.Value;
-            }
         }
 
         var hasWarrantyPayload =
@@ -515,28 +475,8 @@ public class AssetInstancesController : ControllerBase
                 if (dto.RemainingValue.HasValue)
                     latestDepToUpdate.RemainingValue = dto.RemainingValue.Value;
             }
-            else
-            {
-                // Chưa có DepreciationRecord nào — tạo mới nếu có policy
-                var policyId = instance.DepreciationPolicyId;
-                if (policyId.HasValue)
-                {
-                    var period = dto.DepreciationPeriod
-                        ?? new DateOnly(instance.PurchaseDate.Year, instance.PurchaseDate.Month, 1);
-                    _context.DepreciationRecords.Add(new DepreciationRecord
-                    {
-                        AssetInstanceId = id,
-                        PolicyId = policyId.Value,
-                        Period = period,
-                        DepreciationAmount = dto.DepreciationAmount ?? 0m,
-                        AccumulatedDepreciation = dto.AccumulatedDepreciation ?? 0m,
-                        OriginalValue = instance.OriginalPrice,
-                        RemainingValue = dto.RemainingValue ?? instance.CurrentValue,
-                        CreateDate = DateTime.UtcNow,
-                        IsPosted = false
-                    });
-                }
-            }
+            // Chưa có DepreciationRecord nào thì không tự tạo record tại API update.
+            // Record sẽ được sinh bởi job cuối tháng hoặc chạy thủ công từ module khấu hao.
         }
 
         var assignmentError = await ApplyUpdateAssignmentAsync(id, dto);

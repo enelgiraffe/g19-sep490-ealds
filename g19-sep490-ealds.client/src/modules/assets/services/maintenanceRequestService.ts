@@ -102,6 +102,18 @@ export const maintenanceRequestService = {
     return response.data;
   },
 
+  /** Bắt đầu task bảo dưỡng được tạo tự động từ job — POST .../maintenance/tasks/{taskId}/start */
+  async startTask(
+    taskId: number,
+    payload: MaintenanceStartPayload
+  ): Promise<{ taskId: number; status: number }> {
+    const response = await maintenanceApi.post<{ taskId: number; status: number }>(
+      `/api/Assets/Requests/maintenance/tasks/${taskId}/start`,
+      payload
+    );
+    return response.data;
+  },
+
   /** Hoàn thành bảo dưỡng — POST .../maintenance/tasks/{taskId}/complete */
   async complete(
     taskId: number,

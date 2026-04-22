@@ -127,12 +127,14 @@ builder.Services.AddMediatR(typeof(Program));
 //Quarzt chạy job
 builder.Services.AddQuartz(q =>
 {
+    //Job cho Maintenance
     var maintenanceJobKey = new JobKey("MaintenanceTaskJob");
     q.AddJob<MaintenanceTaskJobs>(opts => opts.WithIdentity(maintenanceJobKey));
     q.AddTrigger(opts => opts
         .ForJob(maintenanceJobKey)
         .WithIdentity("MaintenanceTaskJob-trigger")
-        .WithCronSchedule("0 * * * * ?")); //test 1 phút
+        .WithCronSchedule("0 0 1 * * ?")); // 1 ngày 1 lần
+        //.WithCronSchedule("0 * * * * ?")); //test 1 phút
 
     var inventoryNotifyJobKey = new JobKey("InventoryScheduledCheckNotificationJob");
     q.AddJob<InventoryScheduledCheckNotificationJob>(opts => opts.WithIdentity(inventoryNotifyJobKey));
@@ -151,7 +153,7 @@ builder.Services.AddQuartz(q =>
     q.AddTrigger(opts => opts
         .ForJob(jobKey)
         .WithIdentity("DepreciationJob-trigger")
-        .WithCronSchedule("0 59 23 L * ?")); // BR-26: 23:59 ngày cuối tháng
+        .WithCronSchedule("0 59 23 L * ?")); // 23:59 ngày cuối tháng
 });
 //dky host service cho Quarzt
 builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);

@@ -264,7 +264,9 @@ export function AssetInstanceEditPage() {
           String(a.period).localeCompare(String(b.period))
         );
         const earliestDepRecord = sortedDepRecords[0];
-        setDepreciationPeriod(toDateInput(earliestDepRecord?.period ?? inst.depreciationPeriod));
+        setDepreciationPeriod(
+          toDateInput(earliestDepRecord?.period ?? inst.depreciationPeriod ?? inst.inUseDate)
+        );
         setDepreciationAmountInput(
           inst.depreciationAmount != null ? String(inst.depreciationAmount) : ''
         );
@@ -508,6 +510,7 @@ export function AssetInstanceEditPage() {
     };
 
     const selectedPolicyId = depreciationPolicyId ? Number(depreciationPolicyId) : null;
+    const hasExistingDepRecord = (instance.depreciationRecords?.length ?? 0) > 0;
     const effectiveDepAmount =
       depreciationPreview?.amount ??
       (depreciationAmountInput.trim() ? Number(depreciationAmountInput) : undefined);
@@ -520,6 +523,11 @@ export function AssetInstanceEditPage() {
 
     const detailOnlyPayload: UpdateAssetInstancePayload = {
       depreciationPolicyId: selectedPolicyId,
+      ...(depreciationPeriod.trim()
+        ? {
+            inUseDate: toDateOnly(depreciationPeriod),
+          }
+        : {}),
       ...(hasWarrantyGroup
         ? {
             warrantyPeriodValue: Number(warrantyPeriodValue),
@@ -529,7 +537,7 @@ export function AssetInstanceEditPage() {
             warrantyEndDate: toDateOnly(warrantyEndDate),
           }
         : {}),
-      ...(hasDepreciationGroup
+      ...(hasDepreciationGroup && hasExistingDepRecord
         ? {
             depreciationPeriod: toDateOnly(depreciationPeriod),
             depreciationAmount: effectiveDepAmount,

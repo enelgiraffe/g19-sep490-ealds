@@ -445,7 +445,7 @@ export function AssetInstanceDetailPage() {
                 </span>
               </div>
               <div className="asset-detail__info-row">
-                <span className="label">Kỳ khấu hao gần nhất</span>
+                <span className="label">Kỳ khấu hao</span>
                 <span className="value">
                   {instance.depreciationPeriod ? formatDate(instance.depreciationPeriod) : '—'}
                 </span>
