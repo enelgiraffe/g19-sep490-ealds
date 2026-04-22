@@ -43,6 +43,8 @@ public class UpdateInventorySessionDTO
     public DateTime EndDate { get; set; }
     /// <summary>New recurrence interval in days. Only applied when the session is periodic.</summary>
     public int? PeriodDays { get; set; }
+    /// <summary>When set and different from the stored department, pending tasks are replaced for the new department.</summary>
+    public int? DepartmentId { get; set; }
 }
 
 /// <summary>Request payload for inventory session cancellation (optional review notes).</summary>

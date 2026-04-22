@@ -65,3 +65,32 @@
   min-width: 32px;
   text-align: right;
 }
+
+/* Edit session modal: match create schedule modals (labels, controls) */
+.inventory-session-edit-modal .ant-modal-body {
+  padding-top: 8px;
+}
+
+.inventory-session-edit-modal .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.inventory-session-edit-modal .ant-form-item-label > label {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.inventory-session-edit-modal .ant-select,
+.inventory-session-edit-modal .ant-picker {
+  width: 100%;
+}
+
+.inventory-session-edit-modal .ant-input,
+.inventory-session-edit-modal .ant-input-affix-wrapper,
+.inventory-session-edit-modal .ant-select-selector,
+.inventory-session-edit-modal .ant-picker,
+.inventory-session-edit-modal .ant-input-number {
+  border-radius: 6px;
+  border-color: #e5e7eb;
+}

@@ -359,6 +359,7 @@ public class InventoryController : ControllerBase
                 .ThenInclude(ai => ai.AssetLocations)
                     .ThenInclude(al => al.Department)
             .Include(t => t.InventoryRecords)
+            .Include(t => t.InventoryDiscrepancies)
             .Include(t => t.Department)
             .AsNoTracking()
             .AsQueryable();
@@ -404,7 +405,8 @@ public class InventoryController : ControllerBase
                 DepartmentName = currentLoc?.Department?.Name ?? t.Department?.Name ?? string.Empty,
                 BookStatus = inst.Status,
                 ActualStatus = ResolveRecordedActualStatus(record, inst.Status),
-                CheckStatus = cs
+                CheckStatus = cs,
+                HasDiscrepancy = t.InventoryDiscrepancies.Count > 0
             };
         }).ToList();
 
@@ -1284,8 +1286,9 @@ public class InventoryController : ControllerBase
         var effectivePeriodDays = session.IsPeriodic
             ? (dto.PeriodDays is int pd && pd > 0 ? pd : session.PeriodDays)
             : null;
+        var targetDepartmentId = dto.DepartmentId ?? session.DepartmentId;
         var scheduleError = await ValidateInventoryScheduleAgainstDepartmentAsync(
-            session.DepartmentId,
+            targetDepartmentId,
             dto.StartDate,
             dto.EndDate,
             session.IsPeriodic,
@@ -1293,6 +1296,58 @@ public class InventoryController : ControllerBase
             excludeSessionId: id);
         if (scheduleError != null)
             return BadRequest(new { message = scheduleError });
+
+        if (targetDepartmentId != session.DepartmentId)
+        {
+            var department = await _context.Departments.FindAsync(targetDepartmentId);
+            if (department == null)
+                return BadRequest(new { message = "Phòng ban không tồn tại." });
+
+            var existingTasks = await _context.InventoryTasks
+                .Include(t => t.InventoryRecords)
+                .Include(t => t.InventoryDiscrepancies)
+                .Where(t => t.SessionId == id)
+                .ToListAsync();
+
+            foreach (var t in existingTasks)
+            {
+                if (t.Status != (int)InventoryTaskStatus.Pending
+                    || t.InventoryRecords.Count > 0
+                    || t.InventoryDiscrepancies.Count > 0)
+                    return BadRequest(new { message = "Không thể đổi phòng ban khi phiên đã có kết quả kiểm kê trên một số nhiệm vụ." });
+            }
+
+            var instances = await _context.AssetInstances
+                .Where(ai =>
+                    ai.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == targetDepartmentId) &&
+                    ai.Status != (int)AssetStatus.Disposed &&
+                    ai.Status != (int)AssetStatus.Lost &&
+                    ai.Status != (int)AssetStatus.Liquidated &&
+                    ai.Status != (int)AssetStatus.Damaged)
+                .AsNoTracking()
+                .ToListAsync();
+
+            if (!instances.Any())
+                return BadRequest(new { message = "Không có tài sản hợp lệ nào trong phòng ban này." });
+
+            _context.InventoryTasks.RemoveRange(existingTasks);
+
+            foreach (var inst in instances)
+            {
+                _context.InventoryTasks.Add(new InventoryTask
+                {
+                    SessionId = id,
+                    AssetInstanceId = inst.AssetInstanceId,
+                    AssignedUserId = session.CreatedBy,
+                    DepartmentId = targetDepartmentId,
+                    Status = (int)InventoryTaskStatus.Pending,
+                    CheckDate = dto.EndDate
+                });
+            }
+
+            session.DepartmentId = targetDepartmentId;
+            session.ProgressPercent = 0;
+        }
 
         session.Purpose = dto.Purpose ?? string.Empty;
         session.StartDate = dto.StartDate;

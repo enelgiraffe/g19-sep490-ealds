@@ -16,14 +16,14 @@ import './SchedulePeriodicModal.css';
 
 const { TextArea } = Input;
 
-const PERIOD_PRESETS = [
+export const INVENTORY_PERIOD_PRESETS = [
   { label: 'Hàng tháng (30 ngày)', value: 30 },
   { label: '2 tháng (60 ngày)', value: 60 },
   { label: 'Hàng quý (90 ngày)', value: 90 },
   { label: 'Nửa năm (180 ngày)', value: 180 },
   { label: 'Hàng năm (365 ngày)', value: 365 },
   { label: 'Tùy chỉnh...', value: -1 },
-];
+] as const;
 
 export interface SchedulePeriodicFormValues {
   departmentId: number;
@@ -174,7 +174,7 @@ export function SchedulePeriodicModal({
             >
               <Select
                 placeholder="Chọn chu kỳ"
-                options={PERIOD_PRESETS.map((p) => ({ value: p.value, label: p.label }))}
+                options={INVENTORY_PERIOD_PRESETS.map((p) => ({ value: p.value, label: p.label }))}
                 onChange={handlePeriodPresetChange}
               />
             </Form.Item>

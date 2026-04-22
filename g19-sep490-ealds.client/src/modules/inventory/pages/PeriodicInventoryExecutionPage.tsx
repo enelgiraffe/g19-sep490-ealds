@@ -472,10 +472,13 @@ export function PeriodicInventoryExecutionPage() {
                     </tr>
                   ) : (
                     assets.map((asset) => {
-                      const statusMatch =
-                        asset.actualStatus == null
+                      /** Khớp: ✓ only when đã lưu và không có discrepancy (mọi loại lệch đều tạo bản ghi trên server). */
+                      const rowMatch =
+                        asset.checkStatus !== 2
                           ? null
-                          : asset.actualStatus === asset.bookStatus;
+                          : asset.hasDiscrepancy !== undefined
+                            ? !asset.hasDiscrepancy
+                            : asset.actualStatus === asset.bookStatus;
                       return (
                       <tr
                         key={asset.assetInstanceId}
@@ -492,8 +495,8 @@ export function PeriodicInventoryExecutionPage() {
                             ? '—'
                             : formatAssetStatusVi(asset.actualStatus)}
                         </td>
-                        <td className={statusMatch === false ? 'exec-diff-cell' : ''}>
-                          {formatStatusMatch(statusMatch)}
+                        <td className={rowMatch === false ? 'exec-diff-cell' : ''}>
+                          {formatStatusMatch(rowMatch)}
                         </td>
                       </tr>
                       );

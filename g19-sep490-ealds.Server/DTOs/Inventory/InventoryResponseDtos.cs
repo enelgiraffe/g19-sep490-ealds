@@ -57,6 +57,9 @@ public class SessionAssetCheckItemDTO
     public int? ActualStatus { get; set; }
 
     public int CheckStatus { get; set; } // 0=Chưa kiểm kê, 2=Hoàn tất
+
+    /// <summary>True when this task has at least one inventory discrepancy row (any mismatch type).</summary>
+    public bool HasDiscrepancy { get; set; }
 }
 
 public class AssetInventoryDetailDTO
