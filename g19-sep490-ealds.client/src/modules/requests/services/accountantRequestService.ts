@@ -16,6 +16,8 @@ export interface AccountantRequestListItem {
   status: number;
   requestTypeId: number;
   userId: number;
+  /** Display name from linked Employee, when present. */
+  requesterName?: string | null;
   createDate: string;
   proposedData?: string | null;
   allocationTargetDepartmentId?: number | null;

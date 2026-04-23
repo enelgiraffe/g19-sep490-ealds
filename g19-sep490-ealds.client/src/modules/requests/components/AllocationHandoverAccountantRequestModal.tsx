@@ -264,8 +264,10 @@ export function AllocationHandoverAccountantRequestModal({
                   <div className="acct-transfer-form__value">{deptLabel}</div>
                 </div>
                 <div className="acct-transfer-form__field">
-                  <label>Mã người gửi</label>
-                  <div className="acct-transfer-form__value">User #{item.userId}</div>
+                  <label>Người gửi</label>
+                  <div className="acct-transfer-form__value">
+                    {item.requesterName?.trim() || '—'}
+                  </div>
                 </div>
               </div>
 
