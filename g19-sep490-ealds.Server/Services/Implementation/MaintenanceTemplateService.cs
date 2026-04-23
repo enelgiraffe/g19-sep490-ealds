@@ -27,7 +27,7 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
     {
         switch (create.FrequencyType)
         {
-            //validate lo?i m?t l?n
+            //validate loai mot lan
             case MaintenanceFrequencyType.OneTime:
 
                 if (create.RepeatIntervalValue != 0)
@@ -40,7 +40,7 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
                     throw new Exception("Vui lòng chọn ngày bảo dưỡng (một lần).");
 
                 break;
-            //validate loaoij d?nh k?
+            //validate loai dinh ki
             case MaintenanceFrequencyType.Periodic:
 
                 if (create.RepeatIntervalValue <= 0)
@@ -50,7 +50,7 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
                     throw new Exception("Đơn vị khoảng thời gian không hợp lệ");
 
                 var unit = create.RepeatIntervalUnit;
-                //business rule th�m cho t?ng laoij don v? 
+                //business rule them cho loai don vi
                 switch (unit)
                 {
                     case MaintenanceRepeatIntervalUnit.Day when create.RepeatIntervalValue < 7:
@@ -70,11 +70,12 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
     {
         try
         {
-            //ki?m tra AssetType c� t?n t?i kh�ng
+            //kiem tra AssetType ton tai khong
             var type = await _context.AssetTypes.AnyAsync(x => x.AssetTypeId == create.AssetTypeId);
             if (!type)
                 throw new Exception("Không có loại tài sản nào");
 
+            //Kiem tra loai template
             ValidateFrequency(create);
 
             var existTemplate = await _context.MaintenanceTemplates.AnyAsync(x => x.AssetTypeId == create.AssetTypeId

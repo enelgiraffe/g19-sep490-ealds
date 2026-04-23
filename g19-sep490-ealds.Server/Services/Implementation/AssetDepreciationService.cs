@@ -142,6 +142,7 @@ public class AssetDepreciationService : IAssetDepreciationService
             carryingAtPeriodStart,
             policy.SalvageValue,
             remainingMonths);
+
         var amount = DepreciationFormula.ClampFinalPeriodAmount(
             carryingAtPeriodStart,
             policy.SalvageValue,

@@ -110,6 +110,11 @@ function getLatestGuarantee(instance: AssetInstanceResponse): GuaranteeItem | nu
   )[instance.guarantees.length - 1] ?? null;
 }
 
+function getDepreciationMethodName(method: number): string {
+  if (method === 1) return 'đường thẳng';
+  return `phương pháp ${method}`;
+}
+
 export function AssetInstanceEditPage() {
   const navigate = useNavigate();
   const { instanceId } = useParams<{ instanceId: string }>();
@@ -162,6 +167,11 @@ export function AssetInstanceEditPage() {
   const [depreciationPolicyId, setDepreciationPolicyId] = useState('');
   const [depreciationPolicies, setDepreciationPolicies] = useState<DepreciationPolicyItem[]>([]);
   const [advancedEditing, setAdvancedEditing] = useState(false);
+  const [showCreatePolicyModal, setShowCreatePolicyModal] = useState(false);
+  const [creatingPolicy, setCreatingPolicy] = useState(false);
+  const [newPolicyMethod, setNewPolicyMethod] = useState('1');
+  const [newPolicyLifeMonths, setNewPolicyLifeMonths] = useState('');
+  const [newPolicySalvageValue, setNewPolicySalvageValue] = useState('');
 
   const [isCapitalized, setIsCapitalized] = useState(false);
   const [wasAlreadyCapitalized, setWasAlreadyCapitalized] = useState(false);
@@ -350,6 +360,62 @@ export function AssetInstanceEditPage() {
     return depreciationPolicies.find((p) => String(p.policyId) === depreciationPolicyId) ?? null;
   }, [depreciationPolicies, depreciationPolicyId]);
   const isDepreciationPolicyLocked = instance?.depreciationPolicyId != null;
+
+  const handleCreatePolicy = async () => {
+    const method = Number(newPolicyMethod);
+    const lifeMonths = Number(newPolicyLifeMonths);
+    const salvage = Number(newPolicySalvageValue);
+    const generatedName = `Khấu hao ${getDepreciationMethodName(method)} ${lifeMonths} tháng`;
+    const originalPrice =
+      originalPriceInput.trim() !== ''
+        ? Number(originalPriceInput)
+        : Number(instance?.originalPrice ?? 0);
+
+    if (!Number.isFinite(method) || method < 0) {
+      message.error('Phương pháp khấu hao không hợp lệ.');
+      return;
+    }
+    if (!Number.isFinite(lifeMonths) || lifeMonths <= 0) {
+      message.error('Thời gian khấu hao phải lớn hơn 0.');
+      return;
+    }
+    if (!Number.isFinite(salvage) || salvage < 0) {
+      message.error('Giá trị thu hồi phải lớn hơn hoặc bằng 0.');
+      return;
+    }
+    if (Number.isFinite(originalPrice) && salvage >= originalPrice) {
+      message.warning('Giá trị thu hồi phải nhỏ hơn giá gốc của tài sản.');
+      return;
+    }
+
+    setCreatingPolicy(true);
+    try {
+      const created = await assetService.createDepreciationPolicy({
+        name: generatedName,
+        method,
+        usefullLifeMonths: lifeMonths,
+        salvageValue: salvage,
+      });
+
+      const updatedPolicies = await assetService.getDepreciationPolicies();
+      setDepreciationPolicies(updatedPolicies);
+      setDepreciationPolicyId(String(created.policyId));
+      setShowCreatePolicyModal(false);
+      setNewPolicyMethod('1');
+      setNewPolicyLifeMonths('');
+      setNewPolicySalvageValue('');
+      message.success('Tạo chính sách khấu hao thành công.');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } | string } };
+      const msg =
+        err?.response?.data && typeof err.response.data === 'object'
+          ? err.response.data.message
+          : err?.response?.data ?? 'Không thể tạo chính sách khấu hao.';
+      message.error(typeof msg === 'string' ? msg : 'Không thể tạo chính sách khấu hao.');
+    } finally {
+      setCreatingPolicy(false);
+    }
+  };
 
   const depreciationPreview = useMemo(() => {
     if (!instance) return null;
@@ -1005,19 +1071,30 @@ export function AssetInstanceEditPage() {
           <div className="asset-create__grid asset-create__grid--two">
             <div className="asset-create__field">
               <label className="asset-create__label">Chính sách khấu hao</label>
-              <select
-                className="asset-create__select"
-                value={depreciationPolicyId}
-                onChange={(e) => setDepreciationPolicyId(e.target.value)}
-                disabled={isDepreciationPolicyLocked}
-              >
-                <option value="">— Chưa chọn chính sách —</option>
-                {depreciationPolicies.map((p) => (
-                  <option key={p.policyId} value={p.policyId}>
-                    {p.name} ({p.usefullLifeMonths} tháng)
-                  </option>
-                ))}
-              </select>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <select
+                  className="asset-create__select"
+                  value={depreciationPolicyId}
+                  onChange={(e) => setDepreciationPolicyId(e.target.value)}
+                  disabled={isDepreciationPolicyLocked}
+                  style={{ flex: 1 }}
+                >
+                  <option value="">— Chưa chọn chính sách —</option>
+                  {depreciationPolicies.map((p) => (
+                    <option key={p.policyId} value={p.policyId}>
+                      {p.name} ({p.usefullLifeMonths} tháng)
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="asset-create__btn asset-create__btn--secondary"
+                  onClick={() => setShowCreatePolicyModal(true)}
+                  style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}
+                >
+                  + Tạo chính sách
+                </button>
+              </div>
               {isDepreciationPolicyLocked && (
                 <p className="asset-create__hint">
                   Chính sách khấu hao đã được gán trước đó và không thể thay đổi.
@@ -1027,6 +1104,93 @@ export function AssetInstanceEditPage() {
           </div>
         </section>
       </form>
+
+      {showCreatePolicyModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 520,
+              background: '#fff',
+              borderRadius: 10,
+              padding: 18,
+              boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: 12 }}>Tạo chính sách khấu hao</h3>
+
+            <div className="asset-create__grid asset-create__grid--three">
+              <div className="asset-create__field">
+                <label className="asset-create__label">Phương pháp</label>
+                <select
+                  className="asset-create__select"
+                  value={newPolicyMethod}
+                  onChange={(e) => setNewPolicyMethod(e.target.value)}
+                >
+                  <option value="1">Đường thẳng</option>
+                </select>
+              </div>
+
+              <div className="asset-create__field">
+                <label className="asset-create__label">Thời gian (tháng)</label>
+                <input
+                  type="number"
+                  min={1}
+                  className="asset-create__input"
+                  value={newPolicyLifeMonths}
+                  onChange={(e) => setNewPolicyLifeMonths(e.target.value)}
+                />
+              </div>
+
+              <div className="asset-create__field">
+                <label className="asset-create__label">Giá trị thu hồi</label>
+                <input
+                  type="number"
+                  min={0}
+                  className="asset-create__input"
+                  value={newPolicySalvageValue}
+                  onChange={(e) => setNewPolicySalvageValue(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+              <button
+                type="button"
+                className="asset-create__btn asset-create__btn--secondary"
+                disabled={creatingPolicy}
+                onClick={() => {
+                  setShowCreatePolicyModal(false);
+                  setNewPolicyMethod('1');
+                  setNewPolicyLifeMonths('');
+                  setNewPolicySalvageValue('');
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                className="asset-create__btn asset-create__btn--primary"
+                disabled={creatingPolicy}
+                onClick={handleCreatePolicy}
+              >
+                {creatingPolicy ? 'Đang tạo...' : 'Lưu chính sách'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
