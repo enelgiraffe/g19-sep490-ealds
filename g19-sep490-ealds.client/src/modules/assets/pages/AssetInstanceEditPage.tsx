@@ -349,6 +349,7 @@ export function AssetInstanceEditPage() {
     if (!depreciationPolicyId) return null;
     return depreciationPolicies.find((p) => String(p.policyId) === depreciationPolicyId) ?? null;
   }, [depreciationPolicies, depreciationPolicyId]);
+  const isDepreciationPolicyLocked = instance?.depreciationPolicyId != null;
 
   const depreciationPreview = useMemo(() => {
     if (!instance) return null;
@@ -1008,6 +1009,7 @@ export function AssetInstanceEditPage() {
                 className="asset-create__select"
                 value={depreciationPolicyId}
                 onChange={(e) => setDepreciationPolicyId(e.target.value)}
+                disabled={isDepreciationPolicyLocked}
               >
                 <option value="">— Chưa chọn chính sách —</option>
                 {depreciationPolicies.map((p) => (
@@ -1016,6 +1018,11 @@ export function AssetInstanceEditPage() {
                   </option>
                 ))}
               </select>
+              {isDepreciationPolicyLocked && (
+                <p className="asset-create__hint">
+                  Chính sách khấu hao đã được gán trước đó và không thể thay đổi.
+                </p>
+              )}
             </div>
           </div>
         </section>

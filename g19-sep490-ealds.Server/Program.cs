@@ -20,7 +20,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // DbContext
 builder.Services.AddDbContext<EaldsDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("MyCnn")));
 
 // JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"]
@@ -133,8 +133,8 @@ builder.Services.AddQuartz(q =>
     q.AddTrigger(opts => opts
         .ForJob(maintenanceJobKey)
         .WithIdentity("MaintenanceTaskJob-trigger")
-        .WithCronSchedule("0 0 1 * * ?")); // 1 ngày 1 lần
-        //.WithCronSchedule("0 * * * * ?")); //test 1 phút
+        //.WithCronSchedule("0 0 1 * * ?")); // 1 ngày 1 lần
+        .WithCronSchedule("0 * * * * ?")); //test 1 phút
 
     var inventoryNotifyJobKey = new JobKey("InventoryScheduledCheckNotificationJob");
     q.AddJob<InventoryScheduledCheckNotificationJob>(opts => opts.WithIdentity(inventoryNotifyJobKey));
