@@ -351,23 +351,6 @@ public class RepairRequestsControllerCreateRepairRequestTests
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
-    /// <summary>
-    /// Input:  RepairRequestDTO + AssetInstance with Status = Reserved
-    /// Expected return: BadRequestObjectResult (line: "Chỉ có thể tạo đơn sửa chữa khi tài sản đang ở trạng thái hỏng.")
-    /// Controller line: if (instance.Status != (int)AssetStatus.Damaged) return BadRequest(...)
-    /// </summary>
-    [Fact]
-    public async Task AssetInstanceReserved_ReturnsBadRequest()
-    {
-        await SeedMinimalAsync();
-        var instance = await _context.AssetInstances.FindAsync(1);
-        instance!.Status = (int)AssetStatus.Reserved;
-        await _context.SaveChangesAsync();
-
-        var result = await _controller.CreateRepairRequest(MinimalDto());
-        Assert.IsType<BadRequestObjectResult>(result);
-    }
-
     // ─── Blocking repair request ─────────────────────────────────────────────────
 
     /// <summary>

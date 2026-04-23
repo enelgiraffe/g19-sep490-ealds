@@ -44,7 +44,7 @@ function formatVnd(value: number): string {
 
 function mapInstanceToItem(a: AssetInstanceResponse): AccountantInstanceItem {
   const statusName = a.statusName ?? 'Available';
-  const activeStatuses = ['Available', 'InUse', 'InMaintenance', 'Reserved'];
+  const activeStatuses = ['Available', 'InUse', 'InMaintenance'];
   const statusColor: 'green' | 'gray' =
     activeStatuses.includes(statusName) ? 'green' : 'gray';
   return {

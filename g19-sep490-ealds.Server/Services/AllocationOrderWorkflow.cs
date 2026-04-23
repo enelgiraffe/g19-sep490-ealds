@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using g19_sep490_ealds.Server.DTOs.Allocation;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Utils;
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Services;
@@ -347,7 +348,11 @@ public static class AllocationOrderWorkflow
                 }
 
                 foreach (var inst in instances)
+                {
                     await CloseCurrentLocationAsync(db, inst.AssetInstanceId, effective, cancellationToken);
+                    inst.Status = (int)AssetStatus.Available;
+                    inst.InUseDate = null;
+                }
             }
         }
         else
@@ -380,6 +385,8 @@ public static class AllocationOrderWorkflow
                         EndDate = null,
                         IsCurrent = true
                     });
+                    inst.Status = (int)AssetStatus.InUse;
+                    inst.InUseDate = effective;
                 }
             }
         }

@@ -8,7 +8,6 @@ export type AssetStatus =
   | 'InUse'
   | 'InMaintenance'
   | 'InRepair'
-  | 'Reserved'
   | 'Disposed'
   | 'Lost'
   | 'Liquidated'
@@ -353,7 +352,6 @@ export function getStatusLabel(statusName: string): string {
     InMaintenance: 'Đang bảo trì',
     UnderMaintenance: 'Đang bảo trì',
     InRepair: 'Đang sửa chữa',
-    Reserved: 'Đã đặt trước',
     Disposed: 'Đã loại bỏ',
     Lost: 'Mất',
     Liquidated: 'Đã thanh lý',
@@ -364,11 +362,12 @@ export function getStatusLabel(statusName: string): string {
 }
 
 /** Backend `AssetStatus` int → enum member name (see `Status.cs`). */
+// Int 3 was legacy Reserved (DB migrated); still map to Available for any stale response.
 const ASSET_STATUS_INT_TO_NAME: Record<number, string> = {
   0: 'Available',
   1: 'InUse',
   2: 'InMaintenance',
-  3: 'Reserved',
+  3: 'Available',
   4: 'Disposed',
   5: 'Lost',
   6: 'Liquidated',
@@ -402,7 +401,6 @@ export function getAssetInstanceStatusFilterOptions(): { value: number; label: s
       [0, 'Available'],
       [1, 'InUse'],
       [2, 'InMaintenance'],
-      [3, 'Reserved'],
       [4, 'Disposed'],
       [5, 'Lost'],
       [6, 'Liquidated'],

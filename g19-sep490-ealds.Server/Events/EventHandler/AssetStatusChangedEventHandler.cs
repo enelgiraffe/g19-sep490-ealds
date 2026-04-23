@@ -40,7 +40,6 @@ public class AssetStatusChangedEventHandler : INotificationHandler<AssetStatusCh
         AssetStatus.Available => "Sẵn sàng sử dụng",
         AssetStatus.InUse => "Đang sử dụng",
         AssetStatus.InMaintenance => "Đang bảo trì / bảo dưỡng",
-        AssetStatus.Reserved => "Đã đặt trước",
         AssetStatus.Disposed => "Đã thanh lý",
         AssetStatus.Lost => "Bị mất",
         AssetStatus.Liquidated => "Đã thanh lý (bán)",

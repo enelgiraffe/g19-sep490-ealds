@@ -809,14 +809,13 @@ export function AssetInstanceEditPage() {
                 </select>
               </div>
               <div className="asset-create__field">
-                <label className="asset-create__label">
-                  Ngày mua<span className="asset-create__required">*</span>
-                </label>
+                <label className="asset-create__label">Ngày mua</label>
                 <input
                   type="date"
                   className="asset-create__input"
                   value={purchaseDate}
-                  onChange={(e) => setPurchaseDate(e.target.value)}
+                  readOnly
+                  title="Ngày mua không thể chỉnh sửa"
                 />
               </div>
               <div className="asset-create__field">

@@ -129,7 +129,7 @@ function buildCatalogRowsFromInstances(instances: AssetInstanceResponse[]): Asse
 
 function mapInstanceToInstanceItem(a: AssetInstanceResponse): InstanceItem {
   const statusName = a.statusName ?? 'Available';
-  const activeStatuses = ['Available', 'InUse', 'InMaintenance', 'Reserved'];
+  const activeStatuses = ['Available', 'InUse', 'InMaintenance'];
   const statusColor: 'green' | 'gray' =
     activeStatuses.includes(statusName) ? 'green' : 'gray';
   return {
