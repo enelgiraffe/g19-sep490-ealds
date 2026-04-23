@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { message } from 'antd';
 import { uploadAssetFile } from '../../assets/services/assetDocumentUploadService';
+import {
+  ALLOWED_DOCUMENT_FILE_ACCEPT,
+  DISALLOWED_DOCUMENT_TYPE_MESSAGE,
+  isAllowedDocumentFile,
+} from '../../../shared/utils/allowedDocumentFiles';
 import '../../assets/pages/AssetCreatePage.css';
 import {
   procurementPoService,
@@ -102,6 +107,10 @@ export function GoodsReceiptFormModal({ open, onClose, onSubmit }: GoodsReceiptF
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    if (!isAllowedDocumentFile(file)) {
+      message.error(DISALLOWED_DOCUMENT_TYPE_MESSAGE);
+      return;
+    }
     const rowId = crypto.randomUUID();
     setDocuments((prev) => [...prev, { id: rowId, fileName: file.name, uploading: true }]);
     try {
@@ -734,6 +743,7 @@ export function GoodsReceiptFormModal({ open, onClose, onSubmit }: GoodsReceiptF
                 <input
                   ref={docFileInputRef}
                   type="file"
+                  accept={ALLOWED_DOCUMENT_FILE_ACCEPT}
                   style={{ display: 'none' }}
                   onChange={onDocFileSelected}
                 />

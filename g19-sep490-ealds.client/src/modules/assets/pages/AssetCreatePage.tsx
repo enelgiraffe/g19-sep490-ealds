@@ -8,11 +8,8 @@ import {
   ASSET_MEASUREMENT_UNITS,
   type CreateAssetPayload,
 } from '../services/assetService';
-import {
-  ASSET_DOCUMENT_FILE_ACCEPT,
-  isAllowedAssetDocumentFile,
-  uploadAssetFile,
-} from '../services/assetDocumentUploadService';
+import { ASSET_DOCUMENT_FILE_ACCEPT, isAllowedAssetDocumentFile, uploadAssetFile } from '../services/assetDocumentUploadService';
+import { DISALLOWED_DOCUMENT_TYPE_MESSAGE } from '../../../shared/utils/allowedDocumentFiles';
 import { message } from 'antd';
 import { transferRequestService, type AssetLocationOption } from '../services/transferRequestService';
 import { useAppStore } from '../../../stores/appStore';
@@ -154,7 +151,7 @@ export function AssetCreatePage() {
     e.target.value = '';
     if (!file) return;
     if (!isAllowedAssetDocumentFile(file)) {
-      message.error('Chỉ chấp nhận file ảnh hoặc PDF.');
+      message.error(DISALLOWED_DOCUMENT_TYPE_MESSAGE);
       return;
     }
     const rowId = crypto.randomUUID();

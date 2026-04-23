@@ -10,11 +10,8 @@ import {
   type AssetDocumentItem,
   type UpdateAssetPayload,
 } from '../services/assetService';
-import {
-  ASSET_DOCUMENT_FILE_ACCEPT,
-  isAllowedAssetDocumentFile,
-  uploadAssetFile,
-} from '../services/assetDocumentUploadService';
+import { ASSET_DOCUMENT_FILE_ACCEPT, isAllowedAssetDocumentFile, uploadAssetFile } from '../services/assetDocumentUploadService';
+import { DISALLOWED_DOCUMENT_TYPE_MESSAGE } from '../../../shared/utils/allowedDocumentFiles';
 import { transferRequestService, type AssetLocationOption } from '../services/transferRequestService';
 import {
   maintenanceTemplateService,
@@ -184,7 +181,7 @@ export function AssetEditPage() {
     e.target.value = '';
     if (!file || !assetId || Number.isNaN(assetId)) return;
     if (!isAllowedAssetDocumentFile(file)) {
-      message.error('Chỉ chấp nhận file ảnh hoặc PDF.');
+      message.error(DISALLOWED_DOCUMENT_TYPE_MESSAGE);
       return;
     }
     try {
