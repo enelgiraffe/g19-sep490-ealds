@@ -72,10 +72,17 @@ public class AssetDepreciationController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(CreatePolicyDTO dto)
     {
+        if (string.IsNullOrWhiteSpace(dto.Name))
+            return BadRequest("Policy name is required");
+        if (dto.UsefullLifeMonths <= 0)
+            return BadRequest("Useful life months must be greater than 0");
+        if (dto.SalvageValue < 0)
+            return BadRequest("Salvage value cannot be negative");
+
         // Create a new depreciation policy.
         var policy = new DepreciationPolicy
         {
-            Name = dto.Name,
+            Name = dto.Name.Trim(),
             Method = dto.Method,
             UsefullLifeMonths = dto.UsefullLifeMonths,
             SalvageValue = dto.SalvageValue,

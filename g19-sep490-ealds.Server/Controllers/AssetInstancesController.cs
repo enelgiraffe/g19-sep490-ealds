@@ -355,6 +355,24 @@ public class AssetInstancesController : ControllerBase
         if (dto.InUseDate.HasValue) instance.InUseDate = dto.InUseDate;
         if (dto.DepreciationPolicyId.HasValue)
         {
+            var policy = await _context.DepreciationPolicies
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.PolicyId == dto.DepreciationPolicyId.Value && p.IsActive);
+            if (policy == null)
+            {
+                return BadRequest(new
+                {
+                    message = "Depreciation policy not found or inactive."
+                });
+            }
+            if (policy.SalvageValue >= instance.OriginalPrice)
+            {
+                return BadRequest(new
+                {
+                    message = "Salvage value must be less than asset original price."
+                });
+            }
+
             if (instance.DepreciationPolicyId.HasValue &&
                 instance.DepreciationPolicyId.Value != dto.DepreciationPolicyId.Value)
             {

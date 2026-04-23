@@ -169,6 +169,13 @@ export interface DepreciationPolicyItem {
   salvageValue: number;
 }
 
+export interface CreateDepreciationPolicyPayload {
+  name: string;
+  method: number;
+  usefullLifeMonths: number;
+  salvageValue: number;
+}
+
 /** Query params for GET /api/assets (catalog only) */
 export interface GetAssetCatalogParams {
   keyword?: string;
@@ -497,6 +504,13 @@ export const assetService = {
 
   async getDepreciationPolicies(): Promise<DepreciationPolicyItem[]> {
     const response = await assetApi.get<DepreciationPolicyItem[]>('/api/AssetDepreciation/policies');
+    return response.data;
+  },
+
+  async createDepreciationPolicy(
+    payload: CreateDepreciationPolicyPayload
+  ): Promise<DepreciationPolicyItem> {
+    const response = await assetApi.post<DepreciationPolicyItem>('/api/AssetDepreciation', payload);
     return response.data;
   },
 
