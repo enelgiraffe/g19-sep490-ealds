@@ -4,6 +4,7 @@ import { message } from 'antd';
 import {
   assetService,
   assetInstanceService,
+  isAssetInstanceNonEditableStatus,
   type AssetInstanceResponse,
   type GuaranteeItem,
   type UpdateAssetInstancePayload,
@@ -197,6 +198,16 @@ export function AssetInstanceEditPage() {
         })();
         const allowed = mapBackendRoleToAppRole(profile?.role ?? storedRole) === 'accountant';
         setIsAccountant(allowed);
+
+        if (isAssetInstanceNonEditableStatus(inst.status)) {
+          if (!cancelled) {
+            message.warning(
+              'Không thể chỉnh sửa cá thể ở trạng thái đã loại bỏ, mất, đã thanh lý hoặc đã vốn hóa.'
+            );
+            navigate(`/asset-instances/${parsedInstanceId}`, { replace: true });
+          }
+          return;
+        }
 
         const latestGuarantee = getLatestGuarantee(inst);
         setInstance(inst);

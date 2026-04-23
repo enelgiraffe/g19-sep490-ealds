@@ -385,8 +385,18 @@ export function formatAssetStatusVi(status: number): string {
   return getStatusLabel(assetStatusNameFromValue(status));
 }
 
+/** Disposed, Lost, Liquidated, Capitalized — instance must not be edited via PUT / forms. */
+export function isAssetInstanceNonEditableStatus(status: number): boolean {
+  return status === 4 || status === 5 || status === 6 || status === 7;
+}
+
 /** Select options for inventory execution (all statuses). */
 export function getInventoryExecutionStatusSelectOptions(): { value: number; label: string }[] {
+  return getAssetInstanceStatusFilterOptions();
+}
+
+/** Cá thể (instance) status — for GET /api/assetinstances?status= and list filters. */
+export function getAssetInstanceStatusFilterOptions(): { value: number; label: string }[] {
   return (
     [
       [0, 'Available'],

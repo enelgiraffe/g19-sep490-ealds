@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button, message } from 'antd';
-import { DownloadOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   assetInstanceService,
+  getAssetInstanceStatusFilterOptions,
   getStatusLabel,
+  isAssetInstanceNonEditableStatus,
   type AssetInstanceResponse,
   type GetAssetInstancesParams,
 } from '../../assets/services/assetService';
@@ -24,6 +26,8 @@ interface AccountantInstanceItem {
   instanceCode: string;
   serialNumber: string;
   status: string;
+  /** Raw numeric status (matches backend) — used to hide edit for terminal states. */
+  statusValue: number;
   originalPrice: string;
   currentValue: string;
   statusColor: 'green' | 'gray';
@@ -48,6 +52,7 @@ function mapInstanceToItem(a: AssetInstanceResponse): AccountantInstanceItem {
     instanceCode: a.instanceCode,
     serialNumber: a.serialNumber ?? '—',
     status: getStatusLabel(statusName),
+    statusValue: a.status,
     originalPrice: formatVnd(a.originalPrice),
     currentValue: formatVnd(a.currentValue),
     statusColor,
@@ -65,6 +70,11 @@ export function AccountantAssetListPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const navigate = useNavigate();
+
+  const instanceStatusFilterOptions = useMemo(
+    () => getAssetInstanceStatusFilterOptions(),
+    []
+  );
 
   useEffect(() => {
     const t = setTimeout(() => setKeyword(searchInput.trim()), 400);
@@ -176,7 +186,7 @@ export function AccountantAssetListPage() {
          
         </div>
       </div>
-      <div className="asset-card">
+      <div className="asset-card" aria-busy={loading}>
         <div className="asset-card__header">
           <div className="accountant-asset-header">
             <div className="accountant-asset-header-left">
@@ -208,9 +218,11 @@ export function AccountantAssetListPage() {
                 }}
               >
                 <option value="">Tất cả trạng thái</option>
-                <option value={0}>Sẵn có</option>
-                <option value={1}>Đang sử dụng</option>
-                <option value={2}>Đang bảo trì</option>
+                {instanceStatusFilterOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
               </select>
               <button
                 className="asset-filter-reset"
@@ -356,17 +368,19 @@ export function AccountantAssetListPage() {
                               <td className="asset-align-right">{instance.originalPrice}</td>
                               <td className="asset-align-right">{instance.currentValue}</td>
                               <td className="asset-table__cell asset-table__cell--actions">
-                                <button
-                                  type="button"
-                                  className="asset-row__more-btn asset-row__more-btn--icon"
-                                  aria-label="Sửa thông tin cá thể"
-                                  title="Sửa thông tin cá thể"
-                                  onClick={() =>
-                                    navigate(`/asset-instances/${instance.assetInstanceId}/edit`)
-                                  }
-                                >
-                                  <EditOutlined />
-                                </button>
+                                {!isAssetInstanceNonEditableStatus(instance.statusValue) ? (
+                                  <button
+                                    type="button"
+                                    className="asset-row__more-btn asset-row__more-btn--icon"
+                                    aria-label="Sửa thông tin cá thể"
+                                    title="Sửa thông tin cá thể"
+                                    onClick={() =>
+                                      navigate(`/asset-instances/${instance.assetInstanceId}/edit`)
+                                    }
+                                  >
+                                    <EditOutlined />
+                                  </button>
+                                ) : null}
                               </td>
                             </tr>
                           ))}

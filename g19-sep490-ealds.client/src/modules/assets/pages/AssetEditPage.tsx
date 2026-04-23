@@ -6,6 +6,7 @@ import {
   assetService,
   ASSET_CATALOG_DOCUMENT_TYPE,
   ASSET_MEASUREMENT_UNITS,
+  isAssetInstanceNonEditableStatus,
   type AssetDetailResponse,
   type AssetDocumentItem,
   type UpdateAssetPayload,
@@ -584,12 +585,15 @@ export function AssetEditPage() {
       await assetService.update(assetId, catalogPayload);
 
       if (primary && instancePayload) {
-        await assetInstanceService.update(primary.assetInstanceId, instancePayload);
+        if (!isAssetInstanceNonEditableStatus(primary.status)) {
+          await assetInstanceService.update(primary.assetInstanceId, instancePayload);
 
-        if (syncToAllInstances) {
-          const otherInstances = (asset?.instances ?? []).filter(
-            (i) => i.assetInstanceId !== primary.assetInstanceId
-          );
+          if (syncToAllInstances) {
+            const otherInstances = (asset?.instances ?? []).filter(
+              (i) =>
+                i.assetInstanceId !== primary.assetInstanceId &&
+                !isAssetInstanceNonEditableStatus(i.status)
+            );
           if (otherInstances.length > 0) {
             const sharedPayload: Parameters<typeof assetInstanceService.update>[1] = {
               warehouseId: Number(warehouseId),
@@ -631,6 +635,7 @@ export function AssetEditPage() {
                 assetInstanceService.update(inst.assetInstanceId, sharedPayload)
               )
             );
+          }
           }
         }
       }
