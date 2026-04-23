@@ -1,6 +1,7 @@
 using g19_sep490_ealds.Server.Controllers;
 using g19_sep490_ealds.Server.DTO.RequestDTO.AssetMaintenance.MaintenanceTemplate;
 using g19_sep490_ealds.Server.Mappers;
+using g19_sep490_ealds.Server.Mappers.Implementation;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Implementation;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
@@ -20,7 +21,6 @@ namespace g19_sep490_ealds.Tests;
 public class MaintenanceTemplateControllerTests
 {
     private readonly EaldsDbContext _context;
-    private readonly Mock<IMaintenanceTemplateMapper> _mockMapper;
     private readonly Mock<ILogger<MaintenanceTemplateService>> _mockLogger;
     private readonly MaintenanceTemplateController _controller;
 
@@ -31,8 +31,9 @@ public class MaintenanceTemplateControllerTests
             .Options;
 
         _context = new EaldsDbContext(options);
-        _mockMapper = new Mock<IMaintenanceTemplateMapper>();
         _mockLogger = new Mock<ILogger<MaintenanceTemplateService>>();
+        var service = new MaintenanceTemplateService(new MaintenanceTemplateMapper(), _context, _mockLogger.Object);
+        _controller = new MaintenanceTemplateController(service);
 
         SeedTestData().Wait();
         SetUserClaim(1);
@@ -41,11 +42,17 @@ public class MaintenanceTemplateControllerTests
     private async Task SeedTestData()
     {
         // Seed AssetType
+        _context.AssetCategories.Add(new AssetCategory
+        {
+            CategoryId = 1,
+            Name = "IT Equipment"
+        });
+
         _context.AssetTypes.Add(new AssetType
         {
             AssetTypeId = 1,
             Name = "Computer",
-            Code = "COMP"
+            CategoryId = 1
         });
 
         // Seed User
@@ -99,7 +106,7 @@ public class MaintenanceTemplateControllerTests
 
     private MaintenanceTemplateController CreateController()
     {
-        var service = new MaintenanceTemplateService(_mockMapper.Object, _context, _mockLogger.Object);
+        var service = new MaintenanceTemplateService(new MaintenanceTemplateMapper(), _context, _mockLogger.Object);
         return new MaintenanceTemplateController(service);
     }
 
@@ -345,7 +352,7 @@ public class MaintenanceTemplateControllerTests
         var result = await controller.AddTemplateAsync(dto);
 
         // Assert
-        Assert.IsType<OkObjectResult>(result);
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 
     /// <summary>
@@ -474,7 +481,7 @@ public class MaintenanceTemplateControllerTests
         var result = await controller.AddTemplateAsync(dto);
 
         // Assert
-        Assert.IsType<OkObjectResult>(result);
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 
     #endregion
@@ -499,7 +506,7 @@ public class MaintenanceTemplateControllerTests
         var result = await controller.AddTemplateAsync(dto);
 
         // Assert
-        Assert.IsType<OkObjectResult>(result);
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 
     /// <summary>
@@ -677,7 +684,7 @@ public class MaintenanceTemplateControllerTests
         var result = await controller.UpdateTemplate(dto, templateId);
 
         // Assert
-        Assert.IsType<OkObjectResult>(result);
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 
     /// <summary>

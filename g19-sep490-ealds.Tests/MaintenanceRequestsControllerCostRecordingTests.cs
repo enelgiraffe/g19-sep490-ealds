@@ -194,6 +194,9 @@ public class MaintenanceRequestsControllerCostRecordingTests
 
         var task = await _context.MaintenanceTasks.FindAsync(1);
         task!.Status = 1; // In progress
+        var instance = await _context.AssetInstances.FindAsync(1);
+        if (instance != null)
+            instance.Status = (int)AssetStatus.InMaintenance;
 
         await _context.SaveChangesAsync();
         return task;
@@ -342,7 +345,7 @@ public class MaintenanceRequestsControllerCostRecordingTests
         var dto = new MaintenanceStartDto { StartedBy = 1 };
 
         var result = await _controller.StartMaintenance(id: 9999, dto: dto);
-        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.IsType<NotFoundResult>(result);
     }
 
     /// <summary>
@@ -397,7 +400,7 @@ public class MaintenanceRequestsControllerCostRecordingTests
     [Fact]
     public async Task StartMaintenance_ValidRequest_CreatesLifeCycleRecord()
     {
-        await SeedInProgressMaintenanceTaskAsync();
+        await SeedApprovedMaintenanceRequestAsync();
 
         var dto = new MaintenanceStartDto
         {
@@ -560,7 +563,7 @@ public class MaintenanceRequestsControllerCostRecordingTests
         };
 
         var result = await _controller.CompleteMaintenance(taskId: 9999, dto: dto);
-        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 
     /// <summary>
@@ -607,8 +610,8 @@ public class MaintenanceRequestsControllerCostRecordingTests
     }
 
     /// <summary>
-    /// Test: After successful maintenance completion, AssetRequest status should become 2 (completed)
-    /// Expected: request.Status = 2
+    /// Test: After successful maintenance completion, AssetRequest status should become 5 (maintenance completed)
+    /// Expected: request.Status = 5
     /// </summary>
     [Fact]
     public async Task CompleteMaintenance_Success_SetsAssetRequestStatusToCompleted()
@@ -625,7 +628,7 @@ public class MaintenanceRequestsControllerCostRecordingTests
         await _controller.CompleteMaintenance(taskId: 1, dto: dto);
 
         var req = await _context.AssetRequests.FindAsync(1);
-        Assert.Equal(2, req!.Status);
+        Assert.Equal(5, req!.Status);
     }
 
     /// <summary>

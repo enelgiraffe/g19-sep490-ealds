@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,6 +24,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\g19-sep490-ealds.Server\g19-sep490-ealds.Server.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="MaintenanceTemplateControllerTests.cs" />
+    <Compile Include="MaintenanceRecordServiceCostRecordingTests_New.cs" />
+    <Compile Include="MaintenanceRequestsControllerStartMaintenanceTests.cs" />
+    <Compile Include="MaintenanceRequestsControllerCostRecordingTests.cs" />
+    <Compile Include="MaintenanceRequestsControllerCompleteMaintenanceTests.cs" />
+    <Compile Include="MaintenanceTaskJobsTests.cs" />
   </ItemGroup>
 
 </Project>

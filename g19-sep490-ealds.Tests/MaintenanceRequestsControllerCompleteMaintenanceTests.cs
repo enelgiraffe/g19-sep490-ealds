@@ -114,6 +114,7 @@ public class MaintenanceRequestsControllerCompleteMaintenanceTests
         _context.Departments.Add(new Department
         {
             DepartmentId = 1,
+            Code = "IT",
             Name = "IT Department"
         });
 
@@ -478,7 +479,7 @@ public class MaintenanceRequestsControllerCompleteMaintenanceTests
         await SeedInProgressMaintenanceAsync();
         var dto = new MaintenanceCompleteDto { CompletedBy = 1 };
         var result = await _controller.CompleteMaintenance(taskId: 999, dto: dto);
-        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.IsType<NotFoundResult>(result);
     }
 
     /// <summary>

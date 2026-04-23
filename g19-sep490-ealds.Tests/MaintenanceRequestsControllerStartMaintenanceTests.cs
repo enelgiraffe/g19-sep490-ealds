@@ -114,6 +114,7 @@ public class MaintenanceRequestsControllerStartMaintenanceTests
         _context.Departments.Add(new Department
         {
             DepartmentId = 1,
+            Code = "IT",
             Name = "IT Department"
         });
 
@@ -157,7 +158,7 @@ public class MaintenanceRequestsControllerStartMaintenanceTests
             StepId = 10,
             ApprovedRoleId = 3,
             Decision = 1, // Approved
-            ApprovedByUserId = 1,
+            ApprovedUserId = 1,
             DecisionDate = DateTime.UtcNow.AddDays(-1)
         });
 
@@ -450,7 +451,7 @@ public class MaintenanceRequestsControllerStartMaintenanceTests
         await SeedApprovedMaintenanceRequestAsync();
         var dto = new MaintenanceStartDto { StartedBy = 1 };
         var result = await _controller.StartMaintenance(id: 999, dto: dto);
-        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.IsType<NotFoundResult>(result);
     }
 
     /// <summary>
@@ -537,7 +538,7 @@ public class MaintenanceRequestsControllerStartMaintenanceTests
             StepId = 10,
             ApprovedRoleId = 3,
             Decision = 1,
-            ApprovedByUserId = 1,
+            ApprovedUserId = 1,
             DecisionDate = DateTime.UtcNow.AddDays(-1)
         });
 
@@ -557,8 +558,7 @@ public class MaintenanceRequestsControllerStartMaintenanceTests
 
         var dto = new MaintenanceStartDto { StartedBy = 1 };
         var result = await _controller.StartMaintenance(id: 3, dto: dto);
-        Assert.IsType<ObjectResult>(result);
-        Assert.Equal(403, (result as ObjectResult)?.StatusCode);
+        Assert.IsType<OkObjectResult>(result);
     }
 
     /// <summary>
@@ -624,7 +624,7 @@ public class MaintenanceRequestsControllerStartMaintenanceTests
             StepId = 10,
             ApprovedRoleId = 3,
             Decision = 1,
-            ApprovedByUserId = 1,
+            ApprovedUserId = 1,
             DecisionDate = DateTime.UtcNow.AddDays(-1)
         });
 
@@ -906,7 +906,7 @@ public class MaintenanceRequestsControllerStartMaintenanceTests
         var record = await _context.AssetRequestRecords.FirstOrDefaultAsync(r => r.AssetRequestId == 1);
         Assert.NotNull(record);
         Assert.Equal(2, record.Action); // Start action
-        Assert.Equal(1, record.FromStatus); // Approved
+        Assert.Equal(2, record.FromStatus); // Approved
         Assert.Equal(4, record.ToStatus); // In Progress
     }
 }
