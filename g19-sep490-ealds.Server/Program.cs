@@ -20,7 +20,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // DbContext
 builder.Services.AddDbContext<EaldsDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("MyCnn")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"]

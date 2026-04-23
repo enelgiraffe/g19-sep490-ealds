@@ -110,7 +110,6 @@ public class MaintenanceTaskJobs : IJob
         if (expired.Any())
             await db.SaveChangesAsync(ct);
     }
-
     private async Task<List<MaintenanceSchedule>> GetSchedulesDueSoon(EaldsDbContext db, DateTime today, DateTime dueSoonEnd, CancellationToken ct)
     {
         return await db.MaintenanceSchedules
@@ -123,7 +122,6 @@ public class MaintenanceTaskJobs : IJob
                         && x.NextDueDate.Value.Date <= dueSoonEnd)
             .ToListAsync(ct);
     }
-
     private async Task<List<int>> GetDepartmentHeadRoleIds(EaldsDbContext db, CancellationToken ct)
     {
         return await db.Roles.AsNoTracking()
@@ -139,7 +137,6 @@ public class MaintenanceTaskJobs : IJob
             .Distinct()
             .ToListAsync(ct);
     }
-
     private async Task<List<int>> GetRecipients(EaldsDbContext db, MaintenanceSchedule schedule, List<int> roleIds, CancellationToken ct)
     {
         var departmentIds = await ResolveCurrentDepartmentIdsAsync(db, schedule, ct);
