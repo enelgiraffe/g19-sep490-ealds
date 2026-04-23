@@ -10,7 +10,11 @@ import {
   type AssetDocumentItem,
   type UpdateAssetPayload,
 } from '../services/assetService';
-import { uploadAssetFile } from '../services/assetDocumentUploadService';
+import {
+  ASSET_DOCUMENT_FILE_ACCEPT,
+  isAllowedAssetDocumentFile,
+  uploadAssetFile,
+} from '../services/assetDocumentUploadService';
 import { transferRequestService, type AssetLocationOption } from '../services/transferRequestService';
 import {
   maintenanceTemplateService,
@@ -179,6 +183,10 @@ export function AssetEditPage() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !assetId || Number.isNaN(assetId)) return;
+    if (!isAllowedAssetDocumentFile(file)) {
+      message.error('Chỉ chấp nhận file ảnh hoặc PDF.');
+      return;
+    }
     try {
       message.loading({ content: 'Đang tải tài liệu…', key: 'asset-doc-upload', duration: 0 });
       const { url } = await uploadAssetFile(file);
@@ -1115,6 +1123,7 @@ export function AssetEditPage() {
           <input
             ref={docFileInputRef}
             type="file"
+            accept={ASSET_DOCUMENT_FILE_ACCEPT}
             style={{ display: 'none' }}
             onChange={onEditDocFileSelected}
           />

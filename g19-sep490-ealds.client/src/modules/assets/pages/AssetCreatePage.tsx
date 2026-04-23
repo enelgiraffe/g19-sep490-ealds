@@ -8,7 +8,12 @@ import {
   ASSET_MEASUREMENT_UNITS,
   type CreateAssetPayload,
 } from '../services/assetService';
-import { uploadAssetFile } from '../services/assetDocumentUploadService';
+import {
+  ASSET_DOCUMENT_FILE_ACCEPT,
+  isAllowedAssetDocumentFile,
+  uploadAssetFile,
+} from '../services/assetDocumentUploadService';
+import { message } from 'antd';
 import { transferRequestService, type AssetLocationOption } from '../services/transferRequestService';
 import { useAppStore } from '../../../stores/appStore';
 import { profileService } from '../../profile/services/profileService';
@@ -148,6 +153,10 @@ export function AssetCreatePage() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    if (!isAllowedAssetDocumentFile(file)) {
+      message.error('Chỉ chấp nhận file ảnh hoặc PDF.');
+      return;
+    }
     const rowId = crypto.randomUUID();
     setDocuments((prev) => [...prev, { id: rowId, fileName: file.name, uploading: true }]);
     try {
@@ -956,6 +965,7 @@ export function AssetCreatePage() {
           <input
             ref={docFileInputRef}
             type="file"
+            accept={ASSET_DOCUMENT_FILE_ACCEPT}
             style={{ display: 'none' }}
             onChange={onDocFileSelected}
           />
