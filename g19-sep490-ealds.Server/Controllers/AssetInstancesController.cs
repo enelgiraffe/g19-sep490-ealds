@@ -332,6 +332,7 @@ public class AssetInstancesController : ControllerBase
         var instance = await _context.AssetInstances.FindAsync(id);
         if (instance == null)
             return NotFound();
+        var hadDepreciationPolicy = instance.DepreciationPolicyId.HasValue;
 
         if (dto.InstanceCode != null)
         {
@@ -352,13 +353,25 @@ public class AssetInstancesController : ControllerBase
         if (dto.CurrentValue.HasValue) instance.CurrentValue = dto.CurrentValue.Value;
         if (dto.Status.HasValue) instance.Status = (int)dto.Status.Value;
         if (dto.InUseDate.HasValue) instance.InUseDate = dto.InUseDate;
-        if (dto.DepreciationPolicyId.HasValue) instance.DepreciationPolicyId = dto.DepreciationPolicyId;
+        if (dto.DepreciationPolicyId.HasValue)
+        {
+            if (instance.DepreciationPolicyId.HasValue &&
+                instance.DepreciationPolicyId.Value != dto.DepreciationPolicyId.Value)
+            {
+                return BadRequest(new
+                {
+                    message = "Depreciation policy has already been assigned and cannot be changed."
+                });
+            }
+
+            instance.DepreciationPolicyId = dto.DepreciationPolicyId;
+        }
         if (dto.SupplierId.HasValue) instance.SupplierId = dto.SupplierId;
         if (dto.ContractNo != null) instance.ContractNo = dto.ContractNo;
         if (dto.Condition != null) instance.Condition = dto.Condition;
         if (dto.Note != null) instance.Note = dto.Note;
 
-        if (dto.DepreciationPolicyId.HasValue)
+        if (dto.DepreciationPolicyId.HasValue && !hadDepreciationPolicy)
         {
             var existingDep = await _context.DepreciationRecords
                 .Where(r => r.AssetInstanceId == id)

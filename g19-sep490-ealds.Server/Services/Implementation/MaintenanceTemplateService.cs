@@ -110,6 +110,9 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
         var anchor = nowLocal;
         if (template.FrequencyType == (int)MaintenanceFrequencyType.OneTime && template.OneTimeScheduledDate.HasValue)
             anchor = template.OneTimeScheduledDate.Value.Date.AddHours(12);
+        var nextDueDate = hasInterval
+            ? CalculateNextDueDate(anchor, template.RepeatIntervalValue, parsedUnit)
+            : anchor;
 
         return new MaintenanceSchedule
         {
@@ -122,11 +125,29 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
             IntervalValue = hasInterval ? template.RepeatIntervalValue : null,
             IntervalUnit = hasInterval ? (int)parsedUnit : null,
             StartDate = anchor,
-            NextDueDate = anchor,
+            NextDueDate = nextDueDate,
             EndDate = null,
             IsActive = true,
             CreateBy = createdByUserId,
             CreateDate = nowLocal
+        };
+    }
+
+    private static DateTime CalculateNextDueDate(
+        DateTime baseDate,
+        int intervalValue,
+        MaintenanceRepeatIntervalUnit intervalUnit)
+    {
+        if (intervalValue <= 0)
+            return baseDate;
+
+        return intervalUnit switch
+        {
+            MaintenanceRepeatIntervalUnit.Day => baseDate.AddDays(intervalValue),
+            MaintenanceRepeatIntervalUnit.Week => baseDate.AddDays(7 * intervalValue),
+            MaintenanceRepeatIntervalUnit.Month => baseDate.AddMonths(intervalValue),
+            MaintenanceRepeatIntervalUnit.Year => baseDate.AddYears(intervalValue),
+            _ => baseDate
         };
     }
 
@@ -162,15 +183,36 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
             return;
 
         var instanceIds = instances.Select(i => i.AssetInstanceId).ToList();
-        var existingInstanceIds = await _context.MaintenanceSchedules
-            .AsNoTracking()
+        var existingSchedules = await _context.MaintenanceSchedules
             .Where(s => s.TemplateId == template.TemplateId
                         && s.AssetInstanceId.HasValue
                         && instanceIds.Contains(s.AssetInstanceId.Value))
-            .Select(s => s.AssetInstanceId!.Value)
-            .Distinct()
             .ToListAsync();
-        var existingSet = existingInstanceIds.ToHashSet();
+        var existingSet = existingSchedules
+            .Where(s => s.AssetInstanceId.HasValue)
+            .Select(s => s.AssetInstanceId!.Value)
+            .ToHashSet();
+
+        // Backfill old periodic schedules that were created with NextDueDate == StartDate.
+        var changedExisting = false;
+        foreach (var schedule in existingSchedules)
+        {
+            if (schedule.IntervalValue is int iv && iv > 0 && schedule.IntervalUnit is int iu)
+            {
+                var unit = (MaintenanceRepeatIntervalUnit)iu;
+                var expectedNext = CalculateNextDueDate(schedule.StartDate, iv, unit);
+                if (schedule.NextDueDate == null || schedule.NextDueDate.Value <= schedule.StartDate)
+                {
+                    schedule.NextDueDate = expectedNext;
+                    changedExisting = true;
+                }
+            }
+            else if (schedule.NextDueDate == null)
+            {
+                schedule.NextDueDate = schedule.StartDate;
+                changedExisting = true;
+            }
+        }
 
         var nowLocal = DateTime.UtcNow.AddHours(7);
         var creatorUserId = await ResolveScheduleCreatorUserIdAsync(actorUserId);
@@ -181,10 +223,11 @@ public class MaintenanceTemplateService : IMaintenanceTemplateService
             .Select(i => BuildScheduleFromTemplate(template, i.AssetInstanceId, creatorUserId.Value, nowLocal))
             .ToList();
 
-        if (newSchedules.Count == 0)
+        if (newSchedules.Count == 0 && !changedExisting)
             return;
 
-        await _context.MaintenanceSchedules.AddRangeAsync(newSchedules);
+        if (newSchedules.Count > 0)
+            await _context.MaintenanceSchedules.AddRangeAsync(newSchedules);
         await _context.SaveChangesAsync();
     }
 

@@ -208,6 +208,13 @@ public class AssetDepreciationService : IAssetDepreciationService
             .FirstOrDefaultAsync(x => x.AssetInstanceId == assetInstanceId)
             ?? throw new Exception("Asset instance not found");
 
+        if (instance.DepreciationPolicyId.HasValue)
+        {
+            if (instance.DepreciationPolicyId.Value == policyId)
+                return;
+            throw new Exception("Depreciation policy is already assigned and cannot be changed");
+        }
+
         var policy = await _context.DepreciationPolicies
             .FirstOrDefaultAsync(x => x.PolicyId == policyId && x.IsActive);
         if (policy == null)
