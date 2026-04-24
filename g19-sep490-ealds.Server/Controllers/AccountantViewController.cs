@@ -44,6 +44,10 @@ public class AccountantViewController : ControllerBase
                     .Where(d => d.DepartmentId == ar.AllocationTargetDepartmentId)
                     .Select(d => d.Name)
                     .FirstOrDefault(),
+                RequesterName = _db.Employees
+                    .Where(e => e.UserId == ar.UserId)
+                    .Select(e => e.Name)
+                    .FirstOrDefault(),
                 AssetAllocationOrderId = _db.AssetAllocationOrders
                     .Where(o => o.AssetRequestId == ar.AssetRequestId)
                     .Select(o => (int?)o.AssetAllocationOrderId)

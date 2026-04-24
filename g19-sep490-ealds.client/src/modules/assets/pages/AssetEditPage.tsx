@@ -6,11 +6,13 @@ import {
   assetService,
   ASSET_CATALOG_DOCUMENT_TYPE,
   ASSET_MEASUREMENT_UNITS,
+  isAssetInstanceNonEditableStatus,
   type AssetDetailResponse,
   type AssetDocumentItem,
   type UpdateAssetPayload,
 } from '../services/assetService';
-import { uploadAssetFile } from '../services/assetDocumentUploadService';
+import { ASSET_DOCUMENT_FILE_ACCEPT, isAllowedAssetDocumentFile, uploadAssetFile } from '../services/assetDocumentUploadService';
+import { DISALLOWED_DOCUMENT_TYPE_MESSAGE } from '../../../shared/utils/allowedDocumentFiles';
 import { transferRequestService, type AssetLocationOption } from '../services/transferRequestService';
 import {
   maintenanceTemplateService,
@@ -179,6 +181,10 @@ export function AssetEditPage() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !assetId || Number.isNaN(assetId)) return;
+    if (!isAllowedAssetDocumentFile(file)) {
+      message.error(DISALLOWED_DOCUMENT_TYPE_MESSAGE);
+      return;
+    }
     try {
       message.loading({ content: 'Đang tải tài liệu…', key: 'asset-doc-upload', duration: 0 });
       const { url } = await uploadAssetFile(file);
@@ -579,12 +585,15 @@ export function AssetEditPage() {
       await assetService.update(assetId, catalogPayload);
 
       if (primary && instancePayload) {
-        await assetInstanceService.update(primary.assetInstanceId, instancePayload);
+        if (!isAssetInstanceNonEditableStatus(primary.status)) {
+          await assetInstanceService.update(primary.assetInstanceId, instancePayload);
 
-        if (syncToAllInstances) {
-          const otherInstances = (asset?.instances ?? []).filter(
-            (i) => i.assetInstanceId !== primary.assetInstanceId
-          );
+          if (syncToAllInstances) {
+            const otherInstances = (asset?.instances ?? []).filter(
+              (i) =>
+                i.assetInstanceId !== primary.assetInstanceId &&
+                !isAssetInstanceNonEditableStatus(i.status)
+            );
           if (otherInstances.length > 0) {
             const sharedPayload: Parameters<typeof assetInstanceService.update>[1] = {
               warehouseId: Number(warehouseId),
@@ -626,6 +635,7 @@ export function AssetEditPage() {
                 assetInstanceService.update(inst.assetInstanceId, sharedPayload)
               )
             );
+          }
           }
         }
       }
@@ -1115,6 +1125,7 @@ export function AssetEditPage() {
           <input
             ref={docFileInputRef}
             type="file"
+            accept={ASSET_DOCUMENT_FILE_ACCEPT}
             style={{ display: 'none' }}
             onChange={onEditDocFileSelected}
           />

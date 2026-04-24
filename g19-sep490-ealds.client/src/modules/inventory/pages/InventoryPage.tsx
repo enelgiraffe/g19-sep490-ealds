@@ -32,6 +32,7 @@ const STATUS_COLOR: Record<number, string> = {
   4: 'success',     // Đã xử lý
   5: 'orange',      // Đến lịch
   6: 'purple',      // Chờ xử lý
+  7: 'magenta',     // Quá hạn
 };
 
 /** Progress bar fill: red (low) → yellow → green (100%). */
@@ -316,6 +317,7 @@ export function InventoryPage() {
             <Option value={3}>Đã hủy</Option>
             <Option value={4}>Đã xử lý</Option>
             <Option value={6}>Chờ xử lý</Option>
+            <Option value={7}>Quá hạn</Option>
           </Select>
         </div>
 
@@ -351,6 +353,10 @@ export function InventoryPage() {
                   const canStartInWindow = row.status === SESSION_STATUS.Due;
                   const openSession = () => {
                     if (isScheduled) return;
+                    if (row.status === SESSION_STATUS.Overdue) {
+                      navigate(`/inventory/${row.sessionId}`);
+                      return;
+                    }
                     if (row.status === SESSION_STATUS.InProgress) {
                       navigate(`/inventory/${row.sessionId}`);
                       return;

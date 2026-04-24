@@ -26,14 +26,55 @@ export function inventorySessionEndDayForInclusiveDuration(
   return start.add(n - 1, 'day');
 }
 
+/**
+ * UTC midnight for the **first** included calendar day (window start) from the leading `YYYY-MM-DD`.
+ * Do not use `new Date(iso).getUTC*()` for start: .NET/JSON may omit `Z` so local-midnight parsing
+ * shifts the UTC calendar day in GMT+7.
+ */
+function inventorySessionInclusiveStartDayMsFromIso(iso: string): number | null {
+  const m = /^\d{4}-\d{2}-\d{2}/.exec(iso.trim());
+  if (!m) return null;
+  const [y, mo, d] = m[0].split('-').map((x) => parseInt(x, 10));
+  if (Number.isNaN(y) || Number.isNaN(mo) || Number.isNaN(d)) return null;
+  const t = Date.UTC(y, mo - 1, d);
+  return Number.isNaN(t) ? null : t;
+}
+
+/**
+ * The **last** included UTC calendar day of the window. Use the instant 1ms *before* the
+ * stored end bound so that:
+ * - `T23:59:59.999Z` on day D still maps to D
+ * - `T00:00:00.000Z` on day D (exclusive upper bound, common after EOD is rounded/serialized)
+ *   maps to D−1, matching our client’s `inventorySessionEndOfDayUtcIso` intent.
+ * Plain `YYYY-MM-DD` of `end` would wrongly count +1 in that case (e.g. 2 days → 3).
+ */
+function inventorySessionInclusiveEndDayMsFromIso(iso: string): number | null {
+  const end = new Date(iso);
+  if (Number.isNaN(end.getTime())) return null;
+  const before = new Date(end.getTime() - 1);
+  return Date.UTC(
+    before.getUTCFullYear(),
+    before.getUTCMonth(),
+    before.getUTCDate(),
+  );
+}
+
 /** Inclusive UTC calendar-day count between session start and end (matches {@link inventorySessionEndDayForInclusiveDuration}). */
 export function inventorySessionInclusiveDayCount(startStr: string, endStr: string): number {
-  const start = new Date(startStr);
-  const end = new Date(endStr);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1;
-  const su = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
-  const eu = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
-  return Math.max(1, Math.round((eu - su) / 86_400_000) + 1);
+  const su = inventorySessionInclusiveStartDayMsFromIso(startStr);
+  const eu = inventorySessionInclusiveEndDayMsFromIso(endStr);
+  if (su === null || eu === null) {
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1;
+    const su0 = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+    const before = new Date(end.getTime() - 1);
+    const eu0 = Date.UTC(before.getUTCFullYear(), before.getUTCMonth(), before.getUTCDate());
+    const d0 = (eu0 - su0) / 86_400_000;
+    return Math.max(1, Math.floor(d0) + 1);
+  }
+  const dayDiff = (eu - su) / 86_400_000;
+  return Math.max(1, Math.floor(dayDiff) + 1);
 }
 
 const inventoryApi = apiClient;
@@ -196,6 +237,8 @@ export const SESSION_STATUS = {
   Confirmed: 4,
   Due: 5,
   PendingAccountant: 6,
+  /** Display-only: quá hạn (deadline passed, chưa Chờ xử lý / chưa Đã xử lý trên sổ). */
+  Overdue: 7,
 } as const;
 
 export const SESSION_STATUS_LABEL: Record<number, string> = {
@@ -206,6 +249,7 @@ export const SESSION_STATUS_LABEL: Record<number, string> = {
   4: 'Đã xử lý',
   5: 'Đến lịch',
   6: 'Chờ xử lý',
+  7: 'Quá hạn',
 };
 
 export interface InventorySessionListItem {

@@ -16,7 +16,7 @@ public enum AssetStatus
     InMaintenance = 2,
     UnderMaintenance = 2,
     InRepair = 9,
-    Reserved = 3,
+    // Legacy int 3 was Reserved (removed); existing DB values were migrated to Available (0).
     Disposed = 4,
     Lost = 5,
     Liquidated = 6,

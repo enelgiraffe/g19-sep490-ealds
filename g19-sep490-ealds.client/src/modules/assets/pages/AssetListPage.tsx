@@ -6,10 +6,11 @@ import {
   assetInstanceService,
   assetService,
   formatVnd,
+  getAssetInstanceStatusFilterOptions,
   getStatusLabel,
   type AssetCatalogResponse,
   type AssetInstanceResponse,
-  type GetAssetCatalogParams,
+  type GetAssetInstancesParams,
   type AssetTypeItem,
 } from '../services/assetService';
 import { transferRequestService, TRANSFER_REQUEST_TYPE_ID } from '../services/transferRequestService';
@@ -95,9 +96,40 @@ function mapAssetToItem(a: AssetCatalogResponse, instanceCount: number): AssetIt
   };
 }
 
+/** One row per catalog asset, built from instances so list filters match cá thể status (GET /api/assetinstances). */
+function buildCatalogRowsFromInstances(instances: AssetInstanceResponse[]): AssetCatalogResponse[] {
+  const byAsset = new Map<number, AssetInstanceResponse[]>();
+  for (const i of instances) {
+    const list = byAsset.get(i.assetId) ?? [];
+    list.push(i);
+    byAsset.set(i.assetId, list);
+  }
+  const rows: AssetCatalogResponse[] = [];
+  for (const insts of byAsset.values()) {
+    const first = insts[0];
+    rows.push({
+      assetId: first.assetId,
+      code: (first.assetCode?.trim() || first.instanceCode) ?? '—',
+      name: (first.assetName?.trim() || first.instanceCode) ?? '—',
+      assetTypeId: first.assetTypeId,
+      assetTypeName: first.assetTypeName,
+      status: 0,
+      statusName: 'Available',
+      unit: '—',
+      quantity: insts.length,
+      createdBy: 0,
+      inUseDate: null,
+      specification: first.specification ?? null,
+      note: null,
+    });
+  }
+  rows.sort((a, b) => a.code.localeCompare(b.code, 'vi', { sensitivity: 'base' }));
+  return rows;
+}
+
 function mapInstanceToInstanceItem(a: AssetInstanceResponse): InstanceItem {
   const statusName = a.statusName ?? 'Available';
-  const activeStatuses = ['Available', 'InUse', 'InMaintenance', 'Reserved'];
+  const activeStatuses = ['Available', 'InUse', 'InMaintenance'];
   const statusColor: 'green' | 'gray' =
     activeStatuses.includes(statusName) ? 'green' : 'gray';
   return {
@@ -175,6 +207,8 @@ export function AssetListPage() {
   const [pageSize, setPageSize] = useState(25);
   const navigate = useNavigate();
 
+  const instanceStatusFilterOptions = useMemo(() => getAssetInstanceStatusFilterOptions(), []);
+
   const isDeptHead = profile?.isDepartmentHead ?? isDepartmentHeadRoleCode(profile?.role);
   const deptHeadFromId =
     isDeptHead && profile?.departmentId != null && !Number.isNaN(Number(profile.departmentId))
@@ -202,26 +236,18 @@ export function AssetListPage() {
     setLoading(true);
     setError(null);
     try {
-      const params: GetAssetCatalogParams = {
+      const params: GetAssetInstancesParams = {
         keyword: keyword || undefined,
         status: statusFilter,
         assetTypeId: assetTypeFilter,
       };
-      const data = await assetService.getAll(params);
-      setApiAssets(data);
-
-      try {
-        const countParams =
-          assetTypeFilter !== undefined ? { assetTypeId: assetTypeFilter } : undefined;
-        const allInstances = await assetInstanceService.getAll(countParams);
-        const countMap: Record<number, number> = {};
-        for (const inst of allInstances) {
-          countMap[inst.assetId] = (countMap[inst.assetId] ?? 0) + 1;
-        }
-        setInstanceCountByAssetId(countMap);
-      } catch {
-        setInstanceCountByAssetId({});
+      const instances = await assetInstanceService.getAll(params);
+      const countMap: Record<number, number> = {};
+      for (const inst of instances) {
+        countMap[inst.assetId] = (countMap[inst.assetId] ?? 0) + 1;
       }
+      setInstanceCountByAssetId(countMap);
+      setApiAssets(buildCatalogRowsFromInstances(instances));
     } catch (e: any) {
       const status = e?.response?.status;
       const data = e?.response?.data;
@@ -706,14 +732,11 @@ export function AssetListPage() {
               }}
             >
               <option value="">Tất cả trạng thái</option>
-              <option value={0}>Sẵn có</option>
-              <option value={1}>Đang sử dụng</option>
-              <option value={2}>Đang bảo trì</option>
-              <option value={3}>Đã đặt trước</option>
-              <option value={4}>Đã thanh lý</option>
-              <option value={5}>Mất</option>
-              <option value={6}>Đã thanh lý</option>
-              <option value={7}>Đã ghi tăng</option>
+              {instanceStatusFilterOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
             </select>
             <button
               className="asset-filter-reset"

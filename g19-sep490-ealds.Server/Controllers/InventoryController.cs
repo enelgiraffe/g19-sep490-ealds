@@ -61,13 +61,19 @@ public class InventoryController : ControllerBase
         if (departmentId.HasValue)
             query = query.Where(s => s.DepartmentId == departmentId.Value);
 
-        // Director / admin "báo cáo kiểm kê" list: only sessions that need oversight (includes Chờ xử lý / PendingAccountant).
+        // Start of current UTC calendar day (param for EF + overdue comparisons).
+        var startOfCurrentUtcDay = new DateTime(
+            DateTime.UtcNow.Year, DateTime.UtcNow.Month, DateTime.UtcNow.Day, 0, 0, 0, DateTimeKind.Utc);
+
+        // Director / admin "báo cáo kiểm kê" list: oversight states + quá hạn (still Đã lên lịch/Đang thực hiện after EndDate day).
         if (directorInventoryReport && isDirOrAdmin)
         {
             query = query.Where(s =>
                 s.Status == (int)InventorySessionStatus.Completed ||
                 s.Status == (int)InventorySessionStatus.Confirmed ||
-                s.Status == (int)InventorySessionStatus.PendingAccountant);
+                s.Status == (int)InventorySessionStatus.PendingAccountant ||
+                ((s.Status == (int)InventorySessionStatus.Scheduled || s.Status == (int)InventorySessionStatus.InProgress) &&
+                 s.EndDate < startOfCurrentUtcDay));
         }
 
         if (status.HasValue)
@@ -89,6 +95,13 @@ public class InventoryController : ControllerBase
                 query = query.Where(s =>
                     s.Status == (int)InventorySessionStatus.PendingAccountant ||
                     s.Status == (int)InventorySessionStatus.Completed);
+            }
+            // Status 7 ("Quá hạn"): display-only; filter DB rows that become overdue (same rule as GetDisplayStatus 7).
+            else if (status.Value == 7)
+            {
+                query = query.Where(s =>
+                    (s.Status == (int)InventorySessionStatus.Scheduled || s.Status == (int)InventorySessionStatus.InProgress) &&
+                    s.EndDate < startOfCurrentUtcDay);
             }
             else
                 query = query.Where(s => s.Status == status.Value);
@@ -367,11 +380,9 @@ public class InventoryController : ControllerBase
         if (catalogAssetId.HasValue)
             query = query.Where(t => t.AssetInstance.AssetId == catalogAssetId.Value);
 
-        var tasks = await query.ToListAsync();
+        query = query.Where(t => t.AssetInstance.Status == (int)AssetStatus.InUse);
 
-        tasks = tasks
-            .Where(t => !IsExcludedFromInventoryExecution(t.AssetInstance.Status))
-            .ToList();
+        var tasks = await query.ToListAsync();
 
         if (!string.IsNullOrWhiteSpace(keyword))
         {
@@ -447,7 +458,7 @@ public class InventoryController : ControllerBase
         var inst = task.AssetInstance;
         var asset = inst.Asset;
         if (IsExcludedFromInventoryExecution(inst.Status))
-            return NotFound(new { message = "Thể hiện tài sản này không thuộc phạm vi kiểm kê." });
+            return NotFound(new { message = "Chỉ có thể xem cá thể ở trạng thái Đang sử dụng trong kiểm kê." });
 
         var currentLoc = inst.AssetLocations.FirstOrDefault(al => al.IsCurrent);
 
@@ -518,7 +529,7 @@ public class InventoryController : ControllerBase
         var asset = inst.Asset;
         var bookLocation = inst.AssetLocations.FirstOrDefault(al => al.IsCurrent);
         if (IsExcludedFromInventoryExecution(inst.Status))
-            return BadRequest(new { message = "Thể hiện tài sản này không thuộc phạm vi kiểm kê (đã thanh lý / mất / hỏng…)." });
+            return BadRequest(new { message = "Chỉ có thể kiểm kê cá thể ở trạng thái Đang sử dụng." });
 
         if (!Enum.IsDefined(typeof(AssetStatus), dto.ActualStatus))
             return BadRequest(new { message = "Trạng thái tài sản không hợp lệ." });
@@ -706,6 +717,8 @@ public class InventoryController : ControllerBase
             return BadRequest(new { message = "Nhiệm vụ này đã được kiểm kê rồi." });
 
         var inst = task.AssetInstance;
+        if (IsExcludedFromInventoryExecution(inst.Status))
+            return BadRequest(new { message = "Chỉ có thể kiểm kê cá thể ở trạng thái Đang sử dụng." });
         var bookLocation = inst.AssetLocations.FirstOrDefault(al => al.IsCurrent);
         if (bookLocation == null)
             return BadRequest(new { message = "Tài sản không có thông tin vị trí trong hệ thống." });
@@ -848,7 +861,9 @@ public class InventoryController : ControllerBase
         var totalTasks = eligibleTasks.Count;
         var checkedTasks = eligibleTasks.Count(t => t.Status == (int)InventoryTaskStatus.Checked);
 
-        if (totalTasks == 0 || checkedTasks < totalTasks)
+        if (totalTasks == 0)
+            return BadRequest(new { message = "Phiên không có cá thể ở trạng thái Đang sử dụng để kiểm kê. Hãy tạo phiên mới sau khi cập nhật trạng thái tài sản hợp lệ." });
+        if (checkedTasks < totalTasks)
             return BadRequest(new { message = "Cần hoàn tất kiểm kê 100% tài sản trước khi kết thúc phiên." });
 
         session.ProgressPercent = totalTasks > 0
@@ -1128,14 +1143,11 @@ public class InventoryController : ControllerBase
     }
 
     /// <summary>
-    /// POST /api/inventory/sessions/{id}/confirm — Trưởng phòng: Chờ xử lý → Đã xử lý (không bắt buộc giám đốc xác nhận).
+    /// POST /api/inventory/sessions/{id}/confirm — Trưởng phòng (phòng ban phiên), kế toán, hoặc Admin: Chờ xử lý → Đã xử lý (không bắt buộc giám đốc xác nhận).
     /// </summary>
     [HttpPost("sessions/{id:int}/confirm")]
     public async Task<ActionResult> DepartmentHeadFinishInventoryResolution(int id, [FromBody] ReviewInventorySessionDTO dto)
     {
-        var creatorGate = await EnsureInventorySessionCreatorAccessAsync(id);
-        if (creatorGate != null) return creatorGate;
-
         var actorGate = await EnsureDepartmentHeadOrAdminForSessionAsync(id);
         if (actorGate != null) return actorGate;
 
@@ -1171,15 +1183,12 @@ public class InventoryController : ControllerBase
 
     /// <summary>
     /// POST /api/inventory/sessions/{sessionId}/discrepancies/{discrepancyId}/apply-actual —
-    /// Trưởng phòng (phòng ban phiên) hoặc Admin: cập nhật sổ theo kết quả thực tế đã ghi nhận; đánh dấu dòng chênh lệch đã xử lý.
+    /// Trưởng phòng (phòng ban phiên), kế toán, hoặc Admin: cập nhật sổ theo kết quả thực tế đã ghi nhận; đánh dấu dòng chênh lệch đã xử lý.
     /// Chỉ khi phiên ở trạng thái Chờ xử lý.
     /// </summary>
     [HttpPost("sessions/{sessionId:int}/discrepancies/{discrepancyId:int}/apply-actual")]
     public async Task<ActionResult> AccountantApplyDiscrepancyActual(int sessionId, int discrepancyId)
     {
-        var creatorGate = await EnsureInventorySessionCreatorAccessAsync(sessionId);
-        if (creatorGate != null) return creatorGate;
-
         var actorGate = await EnsureDepartmentHeadOrAdminForSessionAsync(sessionId);
         if (actorGate != null) return actorGate;
 
@@ -1320,10 +1329,7 @@ public class InventoryController : ControllerBase
             var instances = await _context.AssetInstances
                 .Where(ai =>
                     ai.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == targetDepartmentId) &&
-                    ai.Status != (int)AssetStatus.Disposed &&
-                    ai.Status != (int)AssetStatus.Lost &&
-                    ai.Status != (int)AssetStatus.Liquidated &&
-                    ai.Status != (int)AssetStatus.Damaged)
+                    ai.Status == (int)AssetStatus.InUse)
                 .AsNoTracking()
                 .ToListAsync();
 
@@ -1633,7 +1639,17 @@ public class InventoryController : ControllerBase
         return codes.Any(IsDirectorRoleCode);
     }
 
-    /// <summary>Creator, or director viewing a session in a post–field-work state (báo cáo / xác nhận).</summary>
+    private async Task<bool> UserIsAccountantAsync(int userId)
+    {
+        var codes = await _context.UserRoles
+            .AsNoTracking()
+            .Where(ur => ur.UserId == userId)
+            .Select(ur => ur.Role.Code)
+            .ToListAsync();
+        return codes.Any(IsAccountantRoleCode);
+    }
+
+    /// <summary>Creator, director, or accountant viewing a session in a post–field-work state (báo cáo / xác nhận).</summary>
     private async Task<ActionResult?> EnsureInventorySessionCreatorOrDirectorReviewAccessAsync(int sessionId)
     {
         if (!TryGetCurrentUserId(out var userId))
@@ -1650,6 +1666,15 @@ public class InventoryController : ControllerBase
 
         if (row.CreatedBy == userId)
             return null;
+
+        if (await UserIsAccountantAsync(userId))
+        {
+            if (row.Status != (int)InventorySessionStatus.Completed
+                && row.Status != (int)InventorySessionStatus.Confirmed
+                && row.Status != (int)InventorySessionStatus.PendingAccountant)
+                return Forbid();
+            return null;
+        }
 
         if (!await UserIsDirectorAsync(userId))
             return Forbid();
@@ -1686,7 +1711,7 @@ public class InventoryController : ControllerBase
         return Forbid();
     }
 
-    /// <summary>Trưởng phòng (đúng phòng ban phiên) hoặc Admin: cập nhật sổ / hoàn tất xử lý chênh lệch kiểm kê.</summary>
+    /// <summary>Trưởng phòng (đúng phòng ban phiên), kế toán, hoặc Admin: cập nhật sổ / hoàn tất xử lý chênh lệch kiểm kê.</summary>
     private async Task<ActionResult?> EnsureDepartmentHeadOrAdminForSessionAsync(int sessionId)
     {
         if (!TryGetCurrentUserId(out var userId))
@@ -1699,6 +1724,9 @@ public class InventoryController : ControllerBase
             .ToListAsync();
 
         if (roleCodes.Any(IsAdminRoleCode))
+            return null;
+
+        if (roleCodes.Any(IsAccountantRoleCode))
             return null;
 
         if (!roleCodes.Any(IsDepartmentHeadRole))
@@ -1766,6 +1794,15 @@ public class InventoryController : ControllerBase
         var c = code.Trim().ToLowerInvariant().Replace(' ', '_');
         return c is "department_head" or "departmenthead" or "dept_head"
             or "trưởng_phòng" or "truong_phong";
+    }
+
+    private static bool IsAccountantRoleCode(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return false;
+        var c = code.Trim().ToLowerInvariant().Replace(' ', '_').Replace('-', '_');
+        return c is "accountant" or "kế_toán" or "ke_toan" or "ketoan"
+            || c.Contains("accountant", StringComparison.Ordinal)
+            || c.Contains("ketoan", StringComparison.Ordinal);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -1938,15 +1975,15 @@ public class InventoryController : ControllerBase
         var instances = await _context.AssetInstances
             .Where(ai =>
                 ai.AssetLocations.Any(al => al.IsCurrent && al.DepartmentId == departmentId) &&
-                ai.Status != (int)AssetStatus.Disposed &&
-                ai.Status != (int)AssetStatus.Lost &&
-                ai.Status != (int)AssetStatus.Liquidated &&
-                ai.Status != (int)AssetStatus.Damaged)
+                ai.Status == (int)AssetStatus.InUse)
             .AsNoTracking()
             .ToListAsync();
 
         if (!instances.Any())
-            return new CreateInventorySessionResult(false, "Không có tài sản hợp lệ nào trong phòng ban này.", null);
+            return new CreateInventorySessionResult(
+                false,
+                "Không có cá thể ở trạng thái Đang sử dụng trong phòng ban này (chỉ cá thể này được đưa vào phiên kiểm kê).",
+                null);
 
         await using var transaction = await _context.Database.BeginTransactionAsync();
         try
@@ -2150,12 +2187,9 @@ public class InventoryController : ControllerBase
         return null;
     }
 
-    /// <summary>Excluded from execution list and from session progress / director checks.</summary>
+    /// <summary>Only in-use instances may be included in execution lists, progress, and field inventory APIs.</summary>
     private static bool IsExcludedFromInventoryExecution(int instanceStatus) =>
-        instanceStatus == (int)AssetStatus.Disposed ||
-        instanceStatus == (int)AssetStatus.Lost ||
-        instanceStatus == (int)AssetStatus.Liquidated ||
-        instanceStatus == (int)AssetStatus.Damaged;
+        instanceStatus != (int)AssetStatus.InUse;
 
     private async Task UpdateSessionProgressPercentForEligibleTasksAsync(InventorySession session)
     {
@@ -2172,14 +2206,24 @@ public class InventoryController : ControllerBase
     }
 
     /// <summary>
-    /// Returns the display status for a session. Status 5 ("Đến lịch") is a computed status:
-    /// the session is scheduled (DB status=0) and today's UTC calendar day falls within the inclusive window.
+    /// Returns the display status. Computed: 5 = "Đến lịch" (scheduled, today in [Start,End]);
+    /// 7 = "Quá hạn" (đã lên lịch or đang thực hiện, past EndDate in UTC calendar days, not Chờ xử lý/Đã xử lý in DB).
     /// </summary>
-    private static int GetDisplayStatus(InventorySession session, DateTime now) =>
-        session.Status == (int)InventorySessionStatus.Scheduled
-            && InventoryScheduleWindow.UtcCalendarDayInInclusiveRange(session.StartDate, session.EndDate, now)
-            ? 5
-            : session.Status;
+    private static int GetDisplayStatus(InventorySession session, DateTime now)
+    {
+        if (session.Status == (int)InventorySessionStatus.Cancelled)
+            return (int)InventorySessionStatus.Cancelled;
+
+        if ((session.Status == (int)InventorySessionStatus.Scheduled || session.Status == (int)InventorySessionStatus.InProgress)
+            && InventoryScheduleWindow.UtcCalendarDayIsAfterEndWindow(session.EndDate, now))
+            return 7;
+
+        if (session.Status == (int)InventorySessionStatus.Scheduled
+            && InventoryScheduleWindow.UtcCalendarDayInInclusiveRange(session.StartDate, session.EndDate, now))
+            return 5;
+
+        return session.Status;
+    }
 
     private static string GetSessionStatusName(int status) => status switch
     {
@@ -2190,6 +2234,7 @@ public class InventoryController : ControllerBase
         4 => "Đã xử lý",
         5 => "Đến lịch",
         6 => "Chờ xử lý",
+        7 => "Quá hạn",
         _ => status.ToString()
     };
 

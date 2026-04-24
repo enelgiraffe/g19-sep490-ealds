@@ -41,10 +41,9 @@ const EN_STATUS_VI_MAP: Record<string, string> = {
   InMaintenance: 'Đang bảo trì / bảo dưỡng',
   UnderMaintenance: 'Đang bảo trì / bảo dưỡng',
   InRepair: 'Đang sửa chữa',
-  Reserved: 'Đã đặt trước',
-  Disposed: 'Đã thanh lý',
+  Disposed: 'Đã loại bỏ',
   Lost: 'Bị mất',
-  Liquidated: 'Đã thanh lý (bán)',
+  Liquidated: 'Đã thanh lý',
   Capitalized: 'Đã vốn hóa',
   Damaged: 'Hư hỏng',
 };

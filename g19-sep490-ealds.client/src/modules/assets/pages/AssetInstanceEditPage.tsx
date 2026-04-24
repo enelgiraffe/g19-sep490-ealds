@@ -4,6 +4,7 @@ import { message } from 'antd';
 import {
   assetService,
   assetInstanceService,
+  isAssetInstanceNonEditableStatus,
   type AssetInstanceResponse,
   type GuaranteeItem,
   type UpdateAssetInstancePayload,
@@ -207,6 +208,16 @@ export function AssetInstanceEditPage() {
         })();
         const allowed = mapBackendRoleToAppRole(profile?.role ?? storedRole) === 'accountant';
         setIsAccountant(allowed);
+
+        if (isAssetInstanceNonEditableStatus(inst.status)) {
+          if (!cancelled) {
+            message.warning(
+              'Không thể chỉnh sửa cá thể ở trạng thái đã loại bỏ, mất, đã thanh lý hoặc đã vốn hóa.'
+            );
+            navigate(`/asset-instances/${parsedInstanceId}`, { replace: true });
+          }
+          return;
+        }
 
         const latestGuarantee = getLatestGuarantee(inst);
         setInstance(inst);
@@ -873,14 +884,13 @@ export function AssetInstanceEditPage() {
                 </select>
               </div>
               <div className="asset-create__field">
-                <label className="asset-create__label">
-                  Ngày mua<span className="asset-create__required">*</span>
-                </label>
+                <label className="asset-create__label">Ngày mua</label>
                 <input
                   type="date"
                   className="asset-create__input"
                   value={purchaseDate}
-                  onChange={(e) => setPurchaseDate(e.target.value)}
+                  readOnly
+                  title="Ngày mua không thể chỉnh sửa"
                 />
               </div>
               <div className="asset-create__field">

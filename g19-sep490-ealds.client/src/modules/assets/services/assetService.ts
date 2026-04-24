@@ -8,7 +8,6 @@ export type AssetStatus =
   | 'InUse'
   | 'InMaintenance'
   | 'InRepair'
-  | 'Reserved'
   | 'Disposed'
   | 'Lost'
   | 'Liquidated'
@@ -360,7 +359,6 @@ export function getStatusLabel(statusName: string): string {
     InMaintenance: 'Đang bảo trì',
     UnderMaintenance: 'Đang bảo trì',
     InRepair: 'Đang sửa chữa',
-    Reserved: 'Đã đặt trước',
     Disposed: 'Đã loại bỏ',
     Lost: 'Mất',
     Liquidated: 'Đã thanh lý',
@@ -371,11 +369,12 @@ export function getStatusLabel(statusName: string): string {
 }
 
 /** Backend `AssetStatus` int → enum member name (see `Status.cs`). */
+// Int 3 was legacy Reserved (DB migrated); still map to Available for any stale response.
 const ASSET_STATUS_INT_TO_NAME: Record<number, string> = {
   0: 'Available',
   1: 'InUse',
   2: 'InMaintenance',
-  3: 'Reserved',
+  3: 'Available',
   4: 'Disposed',
   5: 'Lost',
   6: 'Liquidated',
@@ -392,14 +391,39 @@ export function formatAssetStatusVi(status: number): string {
   return getStatusLabel(assetStatusNameFromValue(status));
 }
 
-/** Select options for inventory execution (all statuses). */
+/** Disposed, Lost, Liquidated, Capitalized — instance must not be edited via PUT / forms. */
+export function isAssetInstanceNonEditableStatus(status: number): boolean {
+  return status === 4 || status === 5 || status === 6 || status === 7;
+}
+
+/** Allowed `AssetStatus` values when recording thực tế during kiểm kê (xử lý chênh lệch tại hiện trường). */
+const INVENTORY_EXECUTION_SELECT_STATUS_VALUES: ReadonlySet<number> = new Set([1, 5]);
+
+/** If book/legacy status is outside the allowed kiểm kê set, default to InUse for the form. */
+export function normalizeInventoryExecutionSelectStatus(status: number): number {
+  return INVENTORY_EXECUTION_SELECT_STATUS_VALUES.has(status) ? status : 1;
+}
+
+/** Select options for inventory execution — Đang sử dụng, Đã loại bỏ, Mất, Đã thanh lý only. */
 export function getInventoryExecutionStatusSelectOptions(): { value: number; label: string }[] {
+  return (
+    [
+      [1, 'InUse'],
+      [5, 'Lost']
+    ] as const
+  ).map(([value, name]) => ({
+    value,
+    label: getStatusLabel(name),
+  }));
+}
+
+/** Cá thể (instance) status — for GET /api/assetinstances?status= and list filters. */
+export function getAssetInstanceStatusFilterOptions(): { value: number; label: string }[] {
   return (
     [
       [0, 'Available'],
       [1, 'InUse'],
       [2, 'InMaintenance'],
-      [3, 'Reserved'],
       [4, 'Disposed'],
       [5, 'Lost'],
       [6, 'Liquidated'],

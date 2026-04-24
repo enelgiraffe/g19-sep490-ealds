@@ -87,7 +87,9 @@ export function InventoryReviewPage() {
   }, [sessionId]);
 
   const canResolveOnBook =
-    currentRole === 'department_head' || currentRole === 'admin';
+    currentRole === 'department_head' ||
+    currentRole === 'accountant' ||
+    currentRole === 'admin';
 
   const showResolveUi =
     summary?.status === SESSION_STATUS.PendingAccountant && canResolveOnBook;
@@ -242,7 +244,8 @@ export function InventoryReviewPage() {
     try {
       const res = await inventoryService.confirmSession(id, {
         reviewedBy: getCurrentUserId(),
-        reviewerRoleId: currentRole === 'admin' ? 1 : 4,
+        reviewerRoleId:
+          currentRole === 'admin' ? 1 : currentRole === 'accountant' ? 3 : 4,
         applyCorrections: false,
       });
       message.success(

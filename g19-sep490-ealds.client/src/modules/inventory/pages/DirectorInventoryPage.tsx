@@ -25,6 +25,7 @@ const DIRECTOR_REVIEWABLE_STATUSES = new Set<number>([
 const DIRECTOR_STATUS_FILTER: { value: number; label: string }[] = [
   { value: SESSION_STATUS.PendingAccountant, label: SESSION_STATUS_LABEL[SESSION_STATUS.PendingAccountant] },
   { value: SESSION_STATUS.Confirmed, label: SESSION_STATUS_LABEL[SESSION_STATUS.Confirmed] },
+  { value: SESSION_STATUS.Overdue, label: SESSION_STATUS_LABEL[SESSION_STATUS.Overdue] },
 ];
 
 const STATUS_COLOR: Record<number, string> = {
@@ -35,6 +36,7 @@ const STATUS_COLOR: Record<number, string> = {
   4: 'success',
   5: 'orange',
   6: 'purple',
+  7: 'magenta',
 };
 
 function inventoryProgressFillColor(percent: number | null | undefined): string {

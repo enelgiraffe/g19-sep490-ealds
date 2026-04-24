@@ -20,6 +20,10 @@ public static class InventoryScheduleWindow
         return nd >= sd && nd <= ed;
     }
 
+    /// <summary>True if <paramref name="utcNow"/>'s UTC calendar day is strictly after the end window's day (deadline has passed).</summary>
+    public static bool UtcCalendarDayIsAfterEndWindow(DateTime endUtc, DateTime utcNow) =>
+        UtcCalendarDay(utcNow) > UtcCalendarDay(endUtc);
+
     /// <summary>
     /// Whether two [start, end] ranges overlap when interpreted by UTC calendar day (inclusive).
     /// </summary>

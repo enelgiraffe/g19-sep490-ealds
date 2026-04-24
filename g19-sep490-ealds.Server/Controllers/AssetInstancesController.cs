@@ -334,6 +334,12 @@ public class AssetInstancesController : ControllerBase
             return NotFound();
         var hadDepreciationPolicy = instance.DepreciationPolicyId.HasValue;
 
+        if (IsInstanceEditBlocked(instance.Status))
+            return BadRequest(new
+            {
+                message = "Cannot edit an asset instance that is disposed, lost, liquidated, or capitalized."
+            });
+
         if (dto.InstanceCode != null)
         {
             if (await _context.AssetInstances.AnyAsync(i => i.InstanceCode == dto.InstanceCode && i.AssetInstanceId != id))
@@ -591,6 +597,12 @@ public class AssetInstancesController : ControllerBase
         if (instance == null)
             return NotFound();
 
+        if (IsInstanceEditBlocked(instance.Status))
+            return BadRequest(new
+            {
+                message = "Cannot change status of an asset instance that is disposed, lost, liquidated, or capitalized."
+            });
+
         instance.Status = (int)dto.Status;
         await _context.SaveChangesAsync();
 
@@ -677,6 +689,12 @@ public class AssetInstancesController : ControllerBase
                 g => g.Key,
                 g => g.OrderByDescending(r => r.Period).ThenByDescending(r => r.CreateDate).First());
     }
+
+    private static bool IsInstanceEditBlocked(int status) =>
+        status == (int)AssetStatus.Disposed ||
+        status == (int)AssetStatus.Lost ||
+        status == (int)AssetStatus.Liquidated ||
+        status == (int)AssetStatus.Capitalized;
 
     private static bool InstanceCreateHasAssignment(CreateAssetInstanceDTO dto) =>
         dto.AssignedDepartmentId.HasValue || dto.ResponsibleEmployeeId.HasValue;
