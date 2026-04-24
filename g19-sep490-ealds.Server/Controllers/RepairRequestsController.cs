@@ -624,15 +624,26 @@ public class RepairRequestsController : ControllerBase
             root["repairCompletion"] = completionNode;
             ar.ProposedData = root.ToJsonString();
 
-            // If return-to-use date is today (or in the past), move asset back to InUse.
-            if (dto.ReturnToUseDate.HasValue && task.AssetInstanceId > 0)
+            // Update asset instance status when repair is completed.
+            // If ReturnToUseDate is today or in the past → InUse.
+            // If ReturnToUseDate is in the future or not provided → Available (remove from InRepair state).
+            if (task.AssetInstanceId > 0)
             {
                 var linkedInstance = await _db.AssetInstances.FindAsync(task.AssetInstanceId);
-                if (linkedInstance != null && dto.ReturnToUseDate.Value.Date <= DateTime.UtcNow.Date)
+                if (linkedInstance != null && linkedInstance.Status == (int)AssetStatus.InRepair)
                 {
                     var oldStatus = linkedInstance.Status;
-                    linkedInstance.Status = (int)AssetStatus.InUse;
-                    linkedInstance.InUseDate = DateOnly.FromDateTime(dto.ReturnToUseDate.Value.Date);
+                    var returnDate = dto.ReturnToUseDate;
+                    if (returnDate.HasValue && returnDate.Value.Date <= DateTime.UtcNow.Date)
+                    {
+                        linkedInstance.Status = (int)AssetStatus.InUse;
+                        linkedInstance.InUseDate = DateOnly.FromDateTime(returnDate.Value.Date);
+                    }
+                    else
+                    {
+                        // Repair done but return date is future or not set → mark Available
+                        linkedInstance.Status = (int)AssetStatus.Available;
+                    }
                     _db.AssetInstances.Update(linkedInstance);
                     _db.AssetLifeCycles.Add(new AssetLifeCycle
                     {
@@ -642,7 +653,7 @@ public class RepairRequestsController : ControllerBase
                         RelatedEntityId = linkedInstance.AssetInstanceId,
                         ActorUserId = dto.CompletedBy,
                         ActorRoleId = completedByRoleId ?? 0,
-                        Description = $"Status changed from {(AssetStatus)oldStatus} to {(AssetStatus)AssetStatus.InUse} (repair completed)",
+                        Description = $"Status changed from {(AssetStatus)oldStatus} to {(AssetStatus)linkedInstance.Status} (repair completed)",
                         OccurredAt = DateTime.UtcNow
                     });
                 }

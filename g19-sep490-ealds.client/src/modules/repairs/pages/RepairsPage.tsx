@@ -837,8 +837,8 @@ export function RepairsPage() {
                         }}
                       />
                       {activeTab === 'need-repair' &&
-                      row.rowSource === 'damaged' &&
-                      !isDeptHead ? (
+                        row.rowSource === 'damaged' &&
+                        !isDeptHead ? (
                         <Button
                           type="link"
                           size="small"
@@ -851,8 +851,8 @@ export function RepairsPage() {
                         </Button>
                       ) : null}
                       {activeTab === 'need-repair' &&
-                      row.rowSource === 'repair' &&
-                      row.status === 'approved' ? (
+                        row.rowSource === 'repair' &&
+                        row.status === 'approved' ? (
                         <Button type="link" size="small" onClick={() => openRepairStart(row)}>
                           Bắt đầu SC
                         </Button>
@@ -983,8 +983,8 @@ export function RepairsPage() {
                         </div>
                       ) : null}
                       {selected.rowSource === 'repair' &&
-                      ['approved', 'inProgress', 'completed'].includes(selected.status) &&
-                      (selected.directorComment?.trim() || selected.directorDecisionDate) ? (
+                        ['approved', 'inProgress', 'completed'].includes(selected.status) &&
+                        (selected.directorComment?.trim() || selected.directorDecisionDate) ? (
                         <div className="repair-detail-info-row">
                           <div className="repair-detail-info-item repair-detail-info-item--full">
                             <label>Ý kiến giám đốc</label>
@@ -999,12 +999,12 @@ export function RepairsPage() {
                       ) : null}
                       <div className="repair-detail-info-row">
                         <div className="repair-detail-info-item">
-                        <label>Phòng ban quản lý</label>
-                        <div className="repair-detail-info-value">{selected.department || '—'}</div>
+                          <label>Phòng ban quản lý</label>
+                          <div className="repair-detail-info-value">{selected.department || '—'}</div>
                         </div>
                         <div className="repair-detail-info-item">
-                        <label>Số lượng</label>
-                        <div className="repair-detail-info-value">{selected.quantity}</div>
+                          <label>Số lượng</label>
+                          <div className="repair-detail-info-value">{selected.quantity}</div>
                         </div>
                       </div>
                     </div>
