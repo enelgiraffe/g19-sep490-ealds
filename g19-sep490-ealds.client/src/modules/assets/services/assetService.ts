@@ -389,9 +389,25 @@ export function isAssetInstanceNonEditableStatus(status: number): boolean {
   return status === 4 || status === 5 || status === 6 || status === 7;
 }
 
-/** Select options for inventory execution (all statuses). */
+/** Allowed `AssetStatus` values when recording thực tế during kiểm kê (xử lý chênh lệch tại hiện trường). */
+const INVENTORY_EXECUTION_SELECT_STATUS_VALUES: ReadonlySet<number> = new Set([1, 5]);
+
+/** If book/legacy status is outside the allowed kiểm kê set, default to InUse for the form. */
+export function normalizeInventoryExecutionSelectStatus(status: number): number {
+  return INVENTORY_EXECUTION_SELECT_STATUS_VALUES.has(status) ? status : 1;
+}
+
+/** Select options for inventory execution — Đang sử dụng, Đã loại bỏ, Mất, Đã thanh lý only. */
 export function getInventoryExecutionStatusSelectOptions(): { value: number; label: string }[] {
-  return getAssetInstanceStatusFilterOptions();
+  return (
+    [
+      [1, 'InUse'],
+      [5, 'Lost']
+    ] as const
+  ).map(([value, name]) => ({
+    value,
+    label: getStatusLabel(name),
+  }));
 }
 
 /** Cá thể (instance) status — for GET /api/assetinstances?status= and list filters. */

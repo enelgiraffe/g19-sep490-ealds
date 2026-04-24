@@ -103,6 +103,12 @@
   border-color: #ffccc7;
 }
 
+.exec-badge--overdue {
+  background: #fff0f6;
+  color: #c41d7f;
+  border-color: #ffadd2;
+}
+
 /* "Hoàn thành kiểm kê" button */
 .exec-complete-btn {
   border: 1px solid #d9d9d9;

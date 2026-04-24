@@ -17,6 +17,7 @@ import {
 import {
   formatAssetStatusVi,
   getInventoryExecutionStatusSelectOptions,
+  normalizeInventoryExecutionSelectStatus,
 } from '../../assets/services/assetService';
 import './PeriodicInventoryExecutionPage.css';
 
@@ -33,6 +34,7 @@ function getSessionBadgeClass(status: number): string {
   if (status === 1) return 'exec-badge--in-progress';
   if (status === 2 || status === 4 || status === 6) return 'exec-badge--completed';
   if (status === 3) return 'exec-badge--cancelled';
+  if (status === 7) return 'exec-badge--overdue';
   return 'exec-badge--default';
 }
 
@@ -46,8 +48,9 @@ function defaultActualsFromDetail(detail: AssetInventoryDetail): {
   status: number;
   locationId: number | null;
 } {
+  const rawStatus = detail.actualStatus ?? detail.bookStatus;
   return {
-    status: detail.actualStatus ?? detail.bookStatus,
+    status: normalizeInventoryExecutionSelectStatus(rawStatus),
     locationId: detail.actualLocationId ?? detail.bookLocationId ?? null,
   };
 }
@@ -325,7 +328,11 @@ export function PeriodicInventoryExecutionPage() {
                       id="exec-actual-status"
                       className="exec-comparison-table__select"
                       value={actualStatus}
-                      onChange={(v) => setActualStatus(v ?? assetDetail.bookStatus)}
+                      onChange={(v) =>
+                        setActualStatus(
+                          v ?? normalizeInventoryExecutionSelectStatus(assetDetail.bookStatus),
+                        )
+                      }
                       placeholder="Chọn trạng thái kiểm kê"
                       options={INVENTORY_STATUS_SELECT_OPTIONS}
                     />
