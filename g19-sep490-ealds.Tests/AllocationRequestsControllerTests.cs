@@ -104,8 +104,7 @@ public class AllocationRequestsControllerTests
         _context.AssetTypes.Add(new AssetType
         {
             AssetTypeId = 1,
-            Name = "Computer",
-            Code = "COMP"
+            Name = "Computer"
         });
 
         // Seed Asset
@@ -124,9 +123,7 @@ public class AllocationRequestsControllerTests
         _context.Warehouses.Add(new Warehouse
         {
             WarehouseId = 1,
-            Name = "Main Warehouse",
-            Code = "WH001",
-            Status = 1
+            Name = "Main Warehouse"
         });
 
         // Seed AssetInstance (available in warehouse)
@@ -145,16 +142,14 @@ public class AllocationRequestsControllerTests
         _context.RequestTypes.Add(new RequestType
         {
             RequestTypeId = 6,
-            WorkflowId = 1,
-            Name = "Allocation Request"
+            WorkflowId = 1
         });
 
         // Seed Workflow
         _context.Workflows.Add(new Workflow
         {
             WorkflowId = 1,
-            Name = "Allocation Workflow",
-            Status = 1
+            Name = "Allocation Workflow"
         });
 
         // Seed WorkflowStep

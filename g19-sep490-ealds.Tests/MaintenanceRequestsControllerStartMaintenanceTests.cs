@@ -157,7 +157,7 @@ public class MaintenanceRequestsControllerStartMaintenanceTests
             StepId = 10,
             ApprovedRoleId = 3,
             Decision = 1, // Approved
-            ApprovedByUserId = 1,
+            ApprovedUserId = 1,
             DecisionDate = DateTime.UtcNow.AddDays(-1)
         });
 
@@ -537,7 +537,7 @@ public class MaintenanceRequestsControllerStartMaintenanceTests
             StepId = 10,
             ApprovedRoleId = 3,
             Decision = 1,
-            ApprovedByUserId = 1,
+            ApprovedUserId = 1,
             DecisionDate = DateTime.UtcNow.AddDays(-1)
         });
 
@@ -624,7 +624,7 @@ public class MaintenanceRequestsControllerStartMaintenanceTests
             StepId = 10,
             ApprovedRoleId = 3,
             Decision = 1,
-            ApprovedByUserId = 1,
+            ApprovedUserId = 1,
             DecisionDate = DateTime.UtcNow.AddDays(-1)
         });
 

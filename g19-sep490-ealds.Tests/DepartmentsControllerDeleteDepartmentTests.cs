@@ -187,8 +187,7 @@ public class DepartmentsControllerDeleteDepartmentTests
             AssetInstanceId = 1,
             DepartmentId = department.DepartmentId,
             IsCurrent = true,
-            CreateDate = DateTime.UtcNow,
-            CreatedBy = 1
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
         });
         await _context.SaveChangesAsync();
 
@@ -217,10 +216,13 @@ public class DepartmentsControllerDeleteDepartmentTests
         _context.InventorySessions.Add(new InventorySession
         {
             DepartmentId = department.DepartmentId,
-            SessionDate = DateTime.UtcNow,
+            StartDate = DateTime.UtcNow,
+            EndDate = DateTime.UtcNow.AddDays(7),
             Status = 1,
             CreateDate = DateTime.UtcNow,
-            CreatedBy = 1
+            CreatedBy = 1,
+            Code = "INV-001",
+            Purpose = "Regular inventory check"
         });
         await _context.SaveChangesAsync();
 
@@ -265,18 +267,20 @@ public class DepartmentsControllerDeleteDepartmentTests
             AssetInstanceId = 1,
             DepartmentId = department.DepartmentId,
             IsCurrent = true,
-            CreateDate = DateTime.UtcNow,
-            CreatedBy = 1
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
         });
 
         // Add inventory session
         _context.InventorySessions.Add(new InventorySession
         {
             DepartmentId = department.DepartmentId,
-            SessionDate = DateTime.UtcNow,
+            StartDate = DateTime.UtcNow,
+            EndDate = DateTime.UtcNow.AddDays(7),
             Status = 1,
             CreateDate = DateTime.UtcNow,
-            CreatedBy = 1
+            CreatedBy = 1,
+            Code = "INV-001",
+            Purpose = "Regular inventory check"
         });
 
         await _context.SaveChangesAsync();

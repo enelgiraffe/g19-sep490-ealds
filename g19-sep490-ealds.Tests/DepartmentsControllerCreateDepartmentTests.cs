@@ -62,9 +62,10 @@ public class DepartmentsControllerCreateDepartmentTests
         var result = _controller.CreateDepartment(dto);
 
         // Assert
-        Assert.IsType<CreatedAtActionResult>(result.Result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
 
-        var createdResult = (CreatedAtActionResult)result.Result!;
+        var actionResult = (Microsoft.AspNetCore.Mvc.ActionResult<DepartmentDTO>)result.Result!;
+        var createdResult = (Microsoft.AspNetCore.Mvc.CreatedAtActionResult)actionResult.Result!;
         Assert.Equal(201, createdResult.StatusCode);
 
         var response = Assert.IsType<DepartmentDTO>(createdResult.Value);
@@ -140,9 +141,10 @@ public class DepartmentsControllerCreateDepartmentTests
         var result = _controller.CreateDepartment(dto);
 
         // Assert
-        Assert.IsType<CreatedAtActionResult>(result.Result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
 
-        var createdResult = (CreatedAtActionResult)result.Result!;
+        var actionResult = (Microsoft.AspNetCore.Mvc.ActionResult<DepartmentDTO>)result.Result!;
+        var createdResult = (Microsoft.AspNetCore.Mvc.CreatedAtActionResult)actionResult.Result!;
         Assert.Equal(201, createdResult.StatusCode);
 
         var response = Assert.IsType<DepartmentDTO>(createdResult.Value);
@@ -171,9 +173,10 @@ public class DepartmentsControllerCreateDepartmentTests
         var result = _controller.CreateDepartment(dto);
 
         // Assert
-        Assert.IsType<CreatedAtActionResult>(result.Result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
 
-        var createdResult = (CreatedAtActionResult)result.Result!;
+        var actionResult = (Microsoft.AspNetCore.Mvc.ActionResult<DepartmentDTO>)result.Result!;
+        var createdResult = (Microsoft.AspNetCore.Mvc.CreatedAtActionResult)actionResult.Result!;
         Assert.Equal(201, createdResult.StatusCode);
 
         var response = Assert.IsType<DepartmentDTO>(createdResult.Value);
@@ -200,9 +203,10 @@ public class DepartmentsControllerCreateDepartmentTests
         var result = _controller.CreateDepartment(dto);
 
         // Assert
-        Assert.IsType<CreatedAtActionResult>(result.Result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
 
-        var createdResult = (CreatedAtActionResult)result.Result!;
+        var actionResult = (Microsoft.AspNetCore.Mvc.ActionResult<DepartmentDTO>)result.Result!;
+        var createdResult = (Microsoft.AspNetCore.Mvc.CreatedAtActionResult)actionResult.Result!;
         Assert.Equal(201, createdResult.StatusCode);
 
         var response = Assert.IsType<DepartmentDTO>(createdResult.Value);
@@ -350,9 +354,11 @@ public class DepartmentsControllerCreateDepartmentTests
         var result = _controller.CreateDepartment(dto);
 
         // Assert
-        Assert.IsType<CreatedAtActionResult>(result.Result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
 
-        var response = Assert.IsType<DepartmentDTO>(((CreatedAtActionResult)result.Result!).Value);
+        var actionResult = (Microsoft.AspNetCore.Mvc.ActionResult<DepartmentDTO>)result.Result!;
+        var createdResult = (Microsoft.AspNetCore.Mvc.CreatedAtActionResult)actionResult.Result!;
+        var response = Assert.IsType<DepartmentDTO>(createdResult.Value);
         Assert.Equal(1, response.Status); // Default value from DTO
     }
 
@@ -429,9 +435,11 @@ public class DepartmentsControllerCreateDepartmentTests
         var result = _controller.CreateDepartment(dto);
 
         // Assert
-        Assert.IsType<CreatedAtActionResult>(result.Result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
 
-        var response = Assert.IsType<DepartmentDTO>(((CreatedAtActionResult)result.Result!).Value);
+        var actionResult = (Microsoft.AspNetCore.Mvc.ActionResult<DepartmentDTO>)result.Result!;
+        var createdResult = (Microsoft.AspNetCore.Mvc.CreatedAtActionResult)actionResult.Result!;
+        var response = Assert.IsType<DepartmentDTO>(createdResult.Value);
         Assert.Equal("IT-004", response.Code);
     }
 
@@ -454,9 +462,11 @@ public class DepartmentsControllerCreateDepartmentTests
         var result = _controller.CreateDepartment(dto);
 
         // Assert
-        Assert.IsType<CreatedAtActionResult>(result.Result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
 
-        var response = Assert.IsType<DepartmentDTO>(((CreatedAtActionResult)result.Result!).Value);
+        var actionResult = (Microsoft.AspNetCore.Mvc.ActionResult<DepartmentDTO>)result.Result!;
+        var createdResult = (Microsoft.AspNetCore.Mvc.CreatedAtActionResult)actionResult.Result!;
+        var response = Assert.IsType<DepartmentDTO>(createdResult.Value);
         Assert.Equal("IT Department", response.Name);
     }
 
@@ -479,7 +489,7 @@ public class DepartmentsControllerCreateDepartmentTests
         var result = _controller.CreateDepartment(dto);
 
         // Assert
-        Assert.IsType<CreatedAtActionResult>(result.Result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
     }
 
     /// <summary>
@@ -502,7 +512,7 @@ public class DepartmentsControllerCreateDepartmentTests
         var result = _controller.CreateDepartment(dto);
 
         // Assert
-        Assert.IsType<CreatedAtResponse>(result.Result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
     }
 
     /// <summary>
@@ -524,7 +534,7 @@ public class DepartmentsControllerCreateDepartmentTests
         var result = _controller.CreateDepartment(dto);
 
         // Assert
-        var createdResult = Assert.IsType<CreatedAtActionResult>(result.Result);
+        var createdResult = Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
         Assert.Equal(nameof(DepartmentsController.GetDepartment), createdResult.ActionName);
         Assert.NotNull(createdResult.RouteValues);
         Assert.True(createdResult.RouteValues.ContainsKey("id"));
@@ -547,9 +557,9 @@ public class DepartmentsControllerCreateDepartmentTests
         var result3 = _controller.CreateDepartment(dto3);
 
         // Assert
-        Assert.IsType<CreatedAtActionResult>(result1.Result);
-        Assert.IsType<CreatedAtActionResult>(result2.Result);
-        Assert.IsType<CreatedAtActionResult>(result3.Result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result1.Result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result2.Result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result3.Result);
 
         Assert.Equal(3, _context.Departments.Count());
     }

@@ -44,8 +44,7 @@ public class MaintenanceTemplateControllerTests
         _context.AssetTypes.Add(new AssetType
         {
             AssetTypeId = 1,
-            Name = "Computer",
-            Code = "COMP"
+            Name = "Computer"
         });
 
         // Seed User

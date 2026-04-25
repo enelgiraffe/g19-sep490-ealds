@@ -1,8 +1,10 @@
 using g19_sep490_ealds.Server.DTO.ResponseDTO.AssetMaintenance;
+using g19_sep490_ealds.Server.Mappers;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Implementation;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using Microsoft.EntityFrameworkCore;
+using Moq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,13 +26,19 @@ public class MaintenanceRecordServiceCostRecordingTests
 
     public MaintenanceRecordServiceCostRecordingTests()
     {
-        // Each test uses an independent in-memory database to ensure data isolation
         var options = new DbContextOptionsBuilder<EaldsDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
             .Options;
 
         _context = new EaldsDbContext(options);
-        _service = new MaintenanceRecordService(_context);
+
+        var mockMapper = new Mock<IMaintenanceRecordMapper>();
+        mockMapper.Setup(m => m.EntityToResponse(It.IsAny<MaintenanceRecord>()))
+            .Returns((MaintenanceRecord r) => new MaintenanceRecordResponseDTO());
+        mockMapper.Setup(m => m.ListEntityToResponse(It.IsAny<IEnumerable<MaintenanceRecord>>()))
+            .Returns((IEnumerable<MaintenanceRecord> r) => r.Select(x => new MaintenanceRecordResponseDTO()));
+
+        _service = new MaintenanceRecordService(mockMapper.Object, _context);
     }
 
     // ========================================
