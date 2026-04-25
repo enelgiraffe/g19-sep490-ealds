@@ -79,12 +79,11 @@ public class SupplierInvoicesControllerTests
         {
             LineId = 1,
             ProcurementId = procurementId,
+            LineIndex = 0,
             AssetId = 1,
             Quantity = 10,
-            Unit = "pcs",
             UnitPrice = 100000m,
-            TotalPrice = 1000000m,
-            Status = 1
+            ReceivedQuantity = 0
         });
 
         await _context.SaveChangesAsync();
@@ -126,9 +125,7 @@ public class SupplierInvoicesControllerTests
         var result = await _controller.Create(dto);
 
         // Assert
-        Assert.IsType<CreatedAtActionResult>(result);
-        var createdResult = (CreatedAtActionResult)result;
-        Assert.Equal(201, createdResult.StatusCode);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
     }
 
     /// <summary>
@@ -146,9 +143,7 @@ public class SupplierInvoicesControllerTests
         var result = await _controller.Create(dto);
 
         // Assert
-        Assert.IsType<NotFoundObjectResult>(result);
-        var notFoundResult = (NotFoundObjectResult)result;
-        Assert.Equal(404, notFoundResult.StatusCode);
+        Assert.IsType<NotFoundObjectResult>(result.Result);
     }
 
     /// <summary>
@@ -166,7 +161,7 @@ public class SupplierInvoicesControllerTests
         var result = await _controller.Create(dto);
 
         // Assert
-        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.IsType<NotFoundObjectResult>(result.Result);
     }
 
     /// <summary>
@@ -189,8 +184,8 @@ public class SupplierInvoicesControllerTests
         var result = await _controller.Create(dto);
 
         // Assert
-        Assert.IsType<BadRequestObjectResult>(result);
-        var badRequestResult = (BadRequestObjectResult)result;
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        var badRequestResult = (BadRequestObjectResult)result.Result!;
         Assert.Equal(400, badRequestResult.StatusCode);
     }
 
@@ -211,8 +206,8 @@ public class SupplierInvoicesControllerTests
         var result = await _controller.Create(dto);
 
         // Assert
-        Assert.IsType<BadRequestObjectResult>(result);
-        var badRequestResult = (BadRequestObjectResult)result;
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        var badRequestResult = (BadRequestObjectResult)result.Result!;
         Assert.Equal(400, badRequestResult.StatusCode);
     }
 
@@ -232,7 +227,7 @@ public class SupplierInvoicesControllerTests
         var result = await _controller.Create(dto);
 
         // Assert
-        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
     /// <summary>
@@ -251,7 +246,7 @@ public class SupplierInvoicesControllerTests
         var result = await _controller.Create(dto);
 
         // Assert
-        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
     /// <summary>
@@ -270,7 +265,7 @@ public class SupplierInvoicesControllerTests
         var result = await _controller.Create(dto);
 
         // Assert
-        Assert.IsType<CreatedAtActionResult>(result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
     }
 
     /// <summary>
@@ -289,7 +284,7 @@ public class SupplierInvoicesControllerTests
         var result = await _controller.Create(dto);
 
         // Assert
-        Assert.IsType<CreatedAtActionResult>(result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
     }
 
     #endregion
@@ -307,7 +302,7 @@ public class SupplierInvoicesControllerTests
         var result = await _controller.Create(null!);
 
         // Assert
-        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
     /// <summary>
@@ -326,7 +321,7 @@ public class SupplierInvoicesControllerTests
         var result = await _controller.Create(dto);
 
         // Assert
-        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
     /// <summary>
@@ -344,8 +339,8 @@ public class SupplierInvoicesControllerTests
         var result = await _controller.Create(dto);
 
         // Assert
-        Assert.IsType<BadRequestObjectResult>(result);
-        var badRequestResult = (BadRequestObjectResult)result;
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        var badRequestResult = (BadRequestObjectResult)result.Result!;
         Assert.Equal(400, badRequestResult.StatusCode);
     }
 
@@ -372,7 +367,7 @@ public class SupplierInvoicesControllerTests
         var result = await _controller.Create(dto2);
 
         // Assert
-        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
     /// <summary>
@@ -391,7 +386,7 @@ public class SupplierInvoicesControllerTests
         var result = await _controller.Create(dto);
 
         // Assert
-        Assert.IsType<UnauthorizedResult>(result);
+        Assert.IsType<UnauthorizedResult>(result.Result);
     }
 
     #endregion

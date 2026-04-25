@@ -79,9 +79,6 @@ export function CreatePurchaseOrderModal({
             return { ...line, assetTypeId: String(found.assetTypeId) };
           }) ?? initialValues.equipment;
         form.setFieldsValue({
-          equipment: [
-            { assetTypeId: undefined, quantity: 1 },
-          ],
           ...initialValues,
           equipment: mappedEquipment,
         });

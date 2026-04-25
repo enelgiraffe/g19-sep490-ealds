@@ -37,7 +37,7 @@ public class GoodsReceiptsControllerTests
 
         _mockMaintenanceService = new Mock<IMaintenanceTemplateService>();
         _mockMaintenanceService
-            .Setup(x => x.EnsureSchedulesForNewInstanceAsync(It.IsAny<int>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.EnsureSchedulesForNewInstanceAsync(It.IsAny<int>(), It.IsAny<int?>()))
             .Returns(Task.CompletedTask);
 
         var configuration = new ConfigurationBuilder()
@@ -73,9 +73,7 @@ public class GoodsReceiptsControllerTests
         _context.Warehouses.Add(new Warehouse
         {
             WarehouseId = 1,
-            Code = "WH001",
-            Name = "Main Warehouse",
-            Status = 1
+            Name = "Main Warehouse"
         });
 
         // Seed Asset

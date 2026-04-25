@@ -65,7 +65,7 @@ public static class DepartmentAssetScope
         int departmentHeadRoleId,
         CancellationToken cancellationToken = default)
     {
-        if (user.Identity?.IsAuthenticated != true)
+        if (user.Identity?.IsAuthenticated != true || user.Identity == null)
             return AssetDepartmentScope.Unrestricted;
 
         var userIdClaim = user.FindFirstValue(ClaimTypes.NameIdentifier);

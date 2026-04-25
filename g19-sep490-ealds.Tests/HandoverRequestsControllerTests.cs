@@ -105,8 +105,7 @@ public class HandoverRequestsControllerTests
         _context.AssetTypes.Add(new AssetType
         {
             AssetTypeId = 1,
-            Name = "Computer",
-            Code = "COMP"
+            Name = "Computer"
         });
 
         // Seed Asset
@@ -125,9 +124,7 @@ public class HandoverRequestsControllerTests
         _context.Warehouses.Add(new Warehouse
         {
             WarehouseId = 1,
-            Name = "Main Warehouse",
-            Code = "WH001",
-            Status = 1
+            Name = "Main Warehouse"
         });
 
         // Seed AssetInstance (assigned to department)
@@ -135,8 +132,7 @@ public class HandoverRequestsControllerTests
         {
             AssetInstanceId = 1,
             AssetId = 1,
-            WarehouseId = null,
-            DepartmentId = 1,
+            WarehouseId = 1,
             InstanceCode = "INS001",
             Status = (int)g19_sep490_ealds.Server.Utils.EnumsStatus.AssetStatus.InUse,
             InUseDate = DateOnly.FromDateTime(DateTime.UtcNow),
@@ -148,16 +144,14 @@ public class HandoverRequestsControllerTests
         _context.RequestTypes.Add(new RequestType
         {
             RequestTypeId = 7,
-            WorkflowId = 1,
-            Name = "Handover Request"
+            WorkflowId = 1
         });
 
         // Seed Workflow
         _context.Workflows.Add(new Workflow
         {
             WorkflowId = 1,
-            Name = "Handover Workflow",
-            Status = 1
+            Name = "Handover Workflow"
         });
 
         // Seed WorkflowStep

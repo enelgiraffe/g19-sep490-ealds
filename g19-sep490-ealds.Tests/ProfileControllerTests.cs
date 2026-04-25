@@ -4,6 +4,8 @@ using g19_sep490_ealds.Server.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using System.Collections.Generic;
 using System.Security.Claims;
 using Xunit;
 
@@ -21,7 +23,16 @@ public class ProfileControllerTests
             .Options;
 
         _context = new EaldsDbContext(options);
-        _controller = new ProfileController(_context);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                { "App:DepartmentHeadRoleId", "4" },
+                { "App:AccountantRoleId", "3" }
+            })
+            .Build();
+
+        _controller = new ProfileController(_context, configuration);
     }
 
     private void SetUserClaim(int userId)

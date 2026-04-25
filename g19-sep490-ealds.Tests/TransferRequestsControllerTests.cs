@@ -137,7 +137,6 @@ public class TransferRequestsControllerTests
         _context.RequestTypes.Add(new RequestType
         {
             RequestTypeId = 3,
-            Name = "Transfer Request",
             WorkflowId = 1
         });
 
@@ -151,8 +150,7 @@ public class TransferRequestsControllerTests
         {
             StepId = 1,
             WorkflowId = 1,
-            StepOrder = 1,
-            Name = "Pending Approval"
+            StepOrder = 1
         });
 
         await _context.SaveChangesAsync();

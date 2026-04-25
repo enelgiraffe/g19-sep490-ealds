@@ -1150,7 +1150,7 @@ public class RepairRequestsControllerCreateRepairRequestTests
     }
 
     /// <summary>
-    /// Test case 1 (Normal): AssetInstanceId = 1, DamageCondition = Valid reason, Status = 0 (Damaged).
+    /// Test case 1 (Normal): AssetInstanceId = 1, DamageCondition = Valid reason.
     /// Expected output: 200 OK
     /// </summary>
     [Fact]
@@ -1163,8 +1163,7 @@ public class RepairRequestsControllerCreateRepairRequestTests
             AssetInstanceId = 1,
             DamageCondition = "Screen broken",
             RepairKind = "Replace screen",
-            CreatedBy = 1,
-            Status = 0
+            CreatedBy = 1
         };
 
         // Act
@@ -1178,7 +1177,7 @@ public class RepairRequestsControllerCreateRepairRequestTests
     }
 
     /// <summary>
-    /// Test case 2 (Abnormal): AssetInstanceId = 0, DamageCondition = Valid reason, Status = 0.
+    /// Test case 2 (Abnormal): AssetInstanceId = 0, DamageCondition = Valid reason.
     /// Expected output: 404 Not Found
     /// </summary>
     [Fact]
@@ -1191,8 +1190,7 @@ public class RepairRequestsControllerCreateRepairRequestTests
             AssetInstanceId = 0,
             DamageCondition = "Screen broken",
             RepairKind = "Replace screen",
-            CreatedBy = 1,
-            Status = 0
+            CreatedBy = 1
         };
 
         // Act
@@ -1203,7 +1201,7 @@ public class RepairRequestsControllerCreateRepairRequestTests
     }
 
     /// <summary>
-    /// Test case 3 (Abnormal): AssetInstanceId = -1, DamageCondition = Valid reason, Status = 0.
+    /// Test case 3 (Abnormal): AssetInstanceId = -1, DamageCondition = Valid reason.
     /// Expected output: 404 Not Found
     /// </summary>
     [Fact]
@@ -1216,8 +1214,7 @@ public class RepairRequestsControllerCreateRepairRequestTests
             AssetInstanceId = -1,
             DamageCondition = "Screen broken",
             RepairKind = "Replace screen",
-            CreatedBy = 1,
-            Status = 0
+            CreatedBy = 1
         };
 
         // Act
@@ -1241,8 +1238,7 @@ public class RepairRequestsControllerCreateRepairRequestTests
             AssetInstanceId = 999,
             DamageCondition = "Screen broken",
             RepairKind = "Replace screen",
-            CreatedBy = 1,
-            Status = 0
+            CreatedBy = 1
         };
 
         // Act
@@ -1253,7 +1249,7 @@ public class RepairRequestsControllerCreateRepairRequestTests
     }
 
     /// <summary>
-    /// Test case 5 (Abnormal): AssetInstanceId = 1, DamageCondition = Empty, Status = 0.
+    /// Test case 5 (Abnormal): AssetInstanceId = 1, DamageCondition = Empty.
     /// Expected output: 400 Bad Request
     /// </summary>
     [Fact]
@@ -1266,8 +1262,7 @@ public class RepairRequestsControllerCreateRepairRequestTests
             AssetInstanceId = 1,
             DamageCondition = "",
             RepairKind = "Replace screen",
-            CreatedBy = 1,
-            Status = 0
+            CreatedBy = 1
         };
 
         // Act
@@ -1295,8 +1290,7 @@ public class RepairRequestsControllerCreateRepairRequestTests
             AssetInstanceId = 1,
             DamageCondition = "Screen broken",
             RepairKind = "Replace screen",
-            CreatedBy = 1,
-            Status = 1
+            CreatedBy = 1
         };
 
         // Act
@@ -1307,7 +1301,7 @@ public class RepairRequestsControllerCreateRepairRequestTests
     }
 
     /// <summary>
-    /// Test case 7 (Abnormal): AssetInstanceId = 1, DamageCondition = Valid reason, Status = 2 (InRepair).
+    /// Test case 7 (Abnormal): AssetInstanceId = 1, DamageCondition = Valid reason, Asset.Status = 2 (InRepair).
     /// Expected output: 400 Bad Request
     /// </summary>
     [Fact]
@@ -1324,8 +1318,7 @@ public class RepairRequestsControllerCreateRepairRequestTests
             AssetInstanceId = 1,
             DamageCondition = "Screen broken",
             RepairKind = "Replace screen",
-            CreatedBy = 1,
-            Status = 2
+            CreatedBy = 1
         };
 
         // Act
@@ -1336,7 +1329,7 @@ public class RepairRequestsControllerCreateRepairRequestTests
     }
 
     /// <summary>
-    /// Test case 8 (Abnormal): AssetInstanceId = 1, DamageCondition = Valid reason, Status = 3 (Reserved).
+    /// Test case 8 (Abnormal): AssetInstanceId = 1, DamageCondition = Valid reason, Asset.Status = 3 (Reserved).
     /// Expected output: 400 Bad Request
     /// </summary>
     [Fact]
@@ -1353,8 +1346,7 @@ public class RepairRequestsControllerCreateRepairRequestTests
             AssetInstanceId = 1,
             DamageCondition = "Screen broken",
             RepairKind = "Replace screen",
-            CreatedBy = 1,
-            Status = 3
+            CreatedBy = 1
         };
 
         // Act
@@ -1365,7 +1357,7 @@ public class RepairRequestsControllerCreateRepairRequestTests
     }
 
     /// <summary>
-    /// Test case 9 (Abnormal): AssetInstanceId = 1, DamageCondition = Valid reason, Status = -1.
+    /// Test case 9 (Abnormal): AssetInstanceId = 1, DamageCondition = Valid reason, Asset.Status = -1.
     /// Expected output: 400 Bad Request
     /// </summary>
     [Fact]
@@ -1382,8 +1374,7 @@ public class RepairRequestsControllerCreateRepairRequestTests
             AssetInstanceId = 1,
             DamageCondition = "Screen broken",
             RepairKind = "Replace screen",
-            CreatedBy = 1,
-            Status = -1
+            CreatedBy = 1
         };
 
         // Act
