@@ -110,7 +110,12 @@ builder.Services.AddScoped<IRepairRecordService, RepairRecordService>();
 builder.Services.AddScoped<IMaintenanceRecordMapper, MaintenanceRecordMapper>();
 builder.Services.AddScoped<IMaintenanceTaskService, MaintenanceTaskService>();
 builder.Services.AddScoped<IInventoryNotificationService, InventoryNotificationService>();
+builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IAssetRequestNotificationService, AssetRequestNotificationService>();
+builder.Services.AddScoped<IAllocationRequestService, AllocationRequestService>();
+builder.Services.AddScoped<IHandoverRequestService, HandoverRequestService>();
+builder.Services.AddScoped<IAllocationsService, AllocationsService>();
+builder.Services.AddScoped<IBudgetAllocationService, BudgetAllocationService>();
 
 // Asset capitalization
 builder.Services.AddScoped<IAssetCapitalizationMapper, AssetCapitalizationMapper>();
