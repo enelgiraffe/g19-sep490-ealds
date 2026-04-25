@@ -54,3 +54,10 @@ public class TransferHandoverRecordItemDto
 
     public string? UserNote { get; set; }
 }
+
+public class CreateTransferResultDTO
+{
+    public int AssetRequestId { get; set; }
+    public int RecordId { get; set; }
+    public bool IncompleteDraft { get; set; }
+}
