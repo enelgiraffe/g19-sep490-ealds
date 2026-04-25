@@ -195,6 +195,53 @@ public class InventoryReviewSummaryDTO
     public List<InventoryDiscrepancyDetailDTO> Discrepancies { get; set; } = new();
 }
 
+public class CreateSessionResultDTO
+{
+    public string Message { get; set; } = null!;
+    public int[] SessionIds { get; set; } = Array.Empty<int>();
+    public int Count { get; set; }
+}
+
+public class SubmitTaskRecordResultDTO
+{
+    public string Message { get; set; } = null!;
+    public bool DiscrepancyDetected { get; set; }
+    public int DiscrepancyType { get; set; }
+    public string DiscrepancyTypeName { get; set; } = null!;
+    public int? ProgressPercent { get; set; }
+}
+
+public class CompleteSessionResultDTO
+{
+    public string Message { get; set; } = null!;
+    public int? ProgressPercent { get; set; }
+    public int CheckedTasks { get; set; }
+    public int TotalTasks { get; set; }
+    public int NewStatus { get; set; }
+    public string StatusName { get; set; } = null!;
+    public bool HasDiscrepancies { get; set; }
+    public int QuantityDiffCount { get; set; }
+    public int LocationChangeCount { get; set; }
+    public int DepartmentChangeCount { get; set; }
+    public int ConditionChangeCount { get; set; }
+}
+
+public class DirectorApproveResultDTO
+{
+    public string Message { get; set; } = null!;
+    public int NewStatus { get; set; }
+    public string StatusName { get; set; } = null!;
+    public bool HasQuantityOrUserDiscrepancy { get; set; }
+}
+
+public class CancelSessionResultDTO
+{
+    public string Message { get; set; } = null!;
+    public int SessionId { get; set; }
+    public string? ReviewNotes { get; set; }
+    public int CancelledChainCount { get; set; }
+}
+
 /// <summary>Discrepancy DTO enriched with the asset info it belongs to.</summary>
 public class InventoryDiscrepancyDetailDTO : InventoryDiscrepancyDTO
 {
