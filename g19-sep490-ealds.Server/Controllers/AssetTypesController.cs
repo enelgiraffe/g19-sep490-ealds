@@ -1,4 +1,3 @@
-using g19_sep490_ealds.Server.DTOs.AssetType;
 using g19_sep490_ealds.Server.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;

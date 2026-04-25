@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using g19_sep490_ealds.Server.Models.DTOs;
 using g19_sep490_ealds.Server.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

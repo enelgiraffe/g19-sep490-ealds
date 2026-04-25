@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using g19_sep490_ealds.Server.Models;
-using g19_sep490_ealds.Server.Models.DTOs;
 using g19_sep490_ealds.Server.Services.Interface;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;

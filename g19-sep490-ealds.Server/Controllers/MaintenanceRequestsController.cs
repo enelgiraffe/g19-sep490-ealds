@@ -4,7 +4,6 @@ using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using g19_sep490_ealds.Server.Models;
-using g19_sep490_ealds.Server.Models.DTOs;
 using g19_sep490_ealds.Server.Services.Interface;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
@@ -498,7 +497,7 @@ public class MaintenanceRequestsController : ControllerBase
     }
 
     [HttpPost("tasks/{taskId}/complete")]
-    public async Task<IActionResult> CompleteMaintenance(int taskId, [FromBody] Models.DTOs.MaintenanceCompleteDto dto)
+    public async Task<IActionResult> CompleteMaintenance(int taskId, [FromBody] MaintenanceCompleteDto dto)
     {
         if (dto == null)
             return BadRequest("Request body is required.");

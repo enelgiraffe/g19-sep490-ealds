@@ -1,0 +1,99 @@
+using System;
+using System.Collections.Generic;
+
+namespace g19_sep490_ealds.Server.DTOs.GoodsReceipts;
+
+public class DocumentAttachmentDto
+{
+    public int DocumentId { get; set; }
+    public string FileUrl { get; set; } = null!;
+}
+
+public class GoodsReceiptCreateLineDto
+{
+    public int ProcurementLineId { get; set; }
+
+    public decimal QuantityReceived { get; set; }
+
+    /// <summary>Override catalog asset for this receipt line; falls back to PO line asset.</summary>
+    public int? AssetId { get; set; }
+
+    /// <summary>Optional serial per generated instance (same count as whole units received).</summary>
+    public List<string?>? InstanceSerialNumbers { get; set; }
+
+    /// <summary>Optional custom instance codes (same count as whole units received). If null/empty, auto-generated.</summary>
+    public List<string?>? InstanceCodes { get; set; }
+}
+
+public class GoodsReceiptCreateDto
+{
+    public int ProcurementId { get; set; }
+
+    public int WarehouseId { get; set; }
+
+    /// <summary>Posting date for the goods receipt (default: today).</summary>
+    public string? PostingDate { get; set; }
+
+    public string? Note { get; set; }
+
+    /// <summary>Public URLs from POST /api/files/upload (stored as Document rows).</summary>
+    public List<string>? AttachmentFileUrls { get; set; }
+
+    public List<GoodsReceiptCreateLineDto> Lines { get; set; } = new();
+}
+
+public class GoodsReceiptListItemDto
+{
+    public int GoodsReceiptId { get; set; }
+    public int ProcurementId { get; set; }
+    public string? ContractNo { get; set; }
+    public string? SupplierName { get; set; }
+    public decimal TotalReceivedQuantity { get; set; }
+    public int Status { get; set; }
+    public DateTime CreatedDate { get; set; }
+}
+
+public class GoodsReceiptListResponseDto
+{
+    public List<GoodsReceiptListItemDto> Items { get; set; } = new();
+    public int Total { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages { get; set; }
+}
+
+public class GoodsReceiptInstanceDto
+{
+    public int AssetInstanceId { get; set; }
+    public string InstanceCode { get; set; } = null!;
+    public string? SerialNumber { get; set; }
+}
+
+public class GoodsReceiptDetailLineDto
+{
+    public int GoodsReceiptLineId { get; set; }
+    public int ProcurementLineId { get; set; }
+    public int? AssetId { get; set; }
+    public string? AssetCode { get; set; }
+    public string? AssetName { get; set; }
+    public decimal OrderedQuantity { get; set; }
+    public decimal QuantityReceivedOnThisReceipt { get; set; }
+    public decimal CumulativeReceivedQuantity { get; set; }
+    public decimal OpenQuantity { get; set; }
+    public List<GoodsReceiptInstanceDto> Instances { get; set; } = new();
+}
+
+public class GoodsReceiptDetailDto
+{
+    public int GoodsReceiptId { get; set; }
+    public int ProcurementId { get; set; }
+    public string? ContractNo { get; set; }
+    public string? SupplierName { get; set; }
+    public DateTime CreatedDate { get; set; }
+    public int Status { get; set; }
+    public string? Note { get; set; }
+
+    public List<DocumentAttachmentDto> Attachments { get; set; } = new();
+
+    public List<GoodsReceiptDetailLineDto> Lines { get; set; } = new();
+}

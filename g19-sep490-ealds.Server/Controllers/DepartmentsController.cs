@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using g19_sep490_ealds.Server.Models;
-using g19_sep490_ealds.Server.Models.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;

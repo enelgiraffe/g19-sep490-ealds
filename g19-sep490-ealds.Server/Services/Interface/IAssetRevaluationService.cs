@@ -1,4 +1,4 @@
-﻿namespace g19_sep490_ealds.Server.Services.Interface;
+namespace g19_sep490_ealds.Server.Services.Interface;
 
 public interface IAssetRevaluationService
 {

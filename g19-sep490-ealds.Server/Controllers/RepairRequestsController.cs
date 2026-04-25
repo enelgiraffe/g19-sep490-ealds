@@ -10,7 +10,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using g19_sep490_ealds.Server.Models;
-using g19_sep490_ealds.Server.Models.DTOs;
 using g19_sep490_ealds.Server.Services.Interface;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
@@ -492,7 +491,7 @@ public class RepairRequestsController : ControllerBase
     }
 
     [HttpPost("tasks/{taskId}/complete")]
-    public async Task<IActionResult> CompleteRepair(int taskId, [FromBody] Models.DTOs.RepairCompleteDto dto)
+    public async Task<IActionResult> CompleteRepair(int taskId, [FromBody] RepairCompleteDto dto)
     {
         if (dto == null)
             return BadRequest("Request body is required.");

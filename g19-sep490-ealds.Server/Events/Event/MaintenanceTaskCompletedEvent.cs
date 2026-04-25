@@ -1,4 +1,3 @@
-using g19_sep490_ealds.Server.DTO.RequestDTO.AssetMaintenance.MaintenanceTask;
 using MediatR;
 
 namespace g19_sep490_ealds.Server.Events.Event;

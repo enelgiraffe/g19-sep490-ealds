@@ -1,5 +1,3 @@
-﻿using g19_sep490_ealds.Server.DTO.RequestDTO.AssetMaintenance.MaintenanceTemplate;
-using g19_sep490_ealds.Server.DTO.ResponseDTO.AssetMaintenance;
 
 namespace g19_sep490_ealds.Server.Services.Interface;
 
@@ -13,6 +11,6 @@ public interface IMaintenanceTemplateService
     Task<bool> HardDeleteTemplateAsync(int id);
     Task<MaintenanceTemplateResponseDTO> FindTemplateByIdAsync(int id);
 
-    /// <summary>Gán lịch bảo dưỡng từ các quy định đang hoạt động cho loại tài sản khi tạo cá thể mới.</summary>
+    /// <summary>G�n l?ch b?o du?ng t? c�c quy d?nh dang ho?t d?ng cho lo?i t�i s?n khi t?o c� th? m?i.</summary>
     Task EnsureSchedulesForNewInstanceAsync(int assetInstanceId, int? actorUserId = null);
 }

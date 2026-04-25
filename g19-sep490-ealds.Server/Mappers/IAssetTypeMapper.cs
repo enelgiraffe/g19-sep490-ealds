@@ -1,5 +1,3 @@
-﻿using g19_sep490_ealds.Server.DTO.RequestDTO.AssetType;
-using g19_sep490_ealds.Server.DTO.ResponseDTO;
 using g19_sep490_ealds.Server.Models;
 
 namespace g19_sep490_ealds.Server.Mappers;

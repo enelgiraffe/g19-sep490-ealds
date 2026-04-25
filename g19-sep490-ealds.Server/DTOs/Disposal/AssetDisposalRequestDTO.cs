@@ -1,0 +1,30 @@
+using System;
+
+namespace g19_sep490_ealds.Server.DTOs.Disposal;
+
+public class AssetDisposalRequestDTO
+{
+    public int UserId { get; set; }
+
+    /// <summary>Catalog asset (optional; derived from instance when omitted).</summary>
+    public int? AssetId { get; set; }
+
+    /// <summary>Physical instance to dispose.</summary>
+    public int? AssetInstanceId { get; set; }
+
+    public int? RequestTypeId { get; set; }
+
+    public string Title { get; set; } = null!;
+
+    public string? Description { get; set; }
+
+    public int CreatedBy { get; set; }
+
+    public int DiposalMethod { get; set; }
+
+    public decimal DiposalValue { get; set; }
+
+    // DiposalDate không nhận từ client – server tự gán khi tạo đề nghị
+
+    public string? Reason { get; set; }
+}

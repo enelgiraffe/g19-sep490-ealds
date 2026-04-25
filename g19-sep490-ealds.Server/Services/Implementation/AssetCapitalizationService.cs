@@ -1,7 +1,5 @@
 using g19_sep490_ealds.Server.Events.Command;
 using g19_sep490_ealds.Server.Mappers;
-using g19_sep490_ealds.Server.Models.DTO.RequestDTO;
-using g19_sep490_ealds.Server.DTO.ResponseDTO;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.ServiceInterface;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;

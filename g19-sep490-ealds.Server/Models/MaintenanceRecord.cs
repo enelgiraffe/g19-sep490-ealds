@@ -1,4 +1,4 @@
-﻿using g19_sep490_ealds.Server.Utils.EnumsStatus;
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace g19_sep490_ealds.Server.Models;

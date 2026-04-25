@@ -1,4 +1,4 @@
-﻿using g19_sep490_ealds.Server.Utils.EnumsStatus;
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace g19_sep490_ealds.Server.Models;
@@ -21,7 +21,7 @@ public partial class MaintenanceTemplate
 
     public bool IsActive { get; set; }
 
-    /// <summary>Ngày bảo dưỡng áp dụng khi <see cref="FrequencyType"/> là một lần.</summary>
+    /// <summary>Ng�y b?o du?ng �p d?ng khi <see cref="FrequencyType"/> l� m?t l?n.</summary>
     public DateTime? OneTimeScheduledDate { get; set; }
 
     public virtual AssetType AssetType { get; set; } = null!;

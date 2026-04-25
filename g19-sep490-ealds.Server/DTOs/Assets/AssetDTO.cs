@@ -1,0 +1,309 @@
+using g19_sep490_ealds.Server.Utils.EnumsStatus;
+
+namespace g19_sep490_ealds.Server.DTOs.Assets;
+
+/// <summary>
+/// DTO for creating an <see cref="Asset"/> (catalog / product definition).
+/// Financial and warehouse fields belong on <see cref="CreateAssetInstanceDTO"/> (or <see cref="CreateAssetDTO.InitialInstance"/>).
+/// </summary>
+public class CreateAssetDTO
+{
+    /// <summary>Catalog code when <see cref="AssetCodePrefix"/> is not used; ignored when prefix is set (server generates <c>Code</c>). Omitted when only <see cref="AssetCodePrefix"/> is sent.</summary>
+    public string? Code { get; set; }
+
+    /// <summary>Optional prefix for generated catalog <c>Code</c>: next sequential number is appended (global max suffix for this prefix among <see cref="Asset"/> rows + 1).</summary>
+    public string? AssetCodePrefix { get; set; }
+
+    public string Name { get; set; } = null!;
+    public int AssetTypeId { get; set; }
+    public string Unit { get; set; } = null!;
+    public int? Quantity { get; set; }
+    public int CreatedBy { get; set; }
+    public DateOnly? InUseDate { get; set; }
+    public string? Specification { get; set; }
+    public string? Note { get; set; }
+
+    /// <summary>
+    /// When <see cref="InitialInstance"/> is set, optional prefix for generated <c>InstanceCode</c> values:
+    /// sequential numbers are appended (global max suffix for this prefix + 1). Required when <see cref="Quantity"/> &gt; 1.
+    /// </summary>
+    public string? InstanceCodePrefix { get; set; }
+
+    /// <summary>Optional first physical row: same transaction as the asset when provided.</summary>
+    public CreateAssetInstanceDTO? InitialInstance { get; set; }
+
+    /// <summary>Optional attachments (URLs from <c>POST /api/files/upload</c>), stored as <see cref="Document"/> rows.</summary>
+    public List<CreateAssetDocumentDTO>? Documents { get; set; }
+}
+
+/// <summary>Payload item for catalog document URLs when creating an <see cref="Asset"/>.</summary>
+public class CreateAssetDocumentDTO
+{
+    public string FileUrl { get; set; } = null!;
+
+    /// <summary>Application-specific type; default <c>20</c> = asset catalog attachment.</summary>
+    public int DocumentType { get; set; } = 20;
+}
+
+/// <summary>Add a document to an existing catalog asset (<c>POST /api/assets/{id}/documents</c>).</summary>
+public class AddAssetDocumentDTO
+{
+    public string FileUrl { get; set; } = null!;
+    public int DocumentType { get; set; } = 20;
+}
+
+/// <summary>
+/// DTO for updating catalog fields on an <see cref="Asset"/>.
+/// </summary>
+public class UpdateAssetDTO
+{
+    public string? Code { get; set; }
+    public string? Name { get; set; }
+    public int? AssetTypeId { get; set; }
+    public AssetStatus? Status { get; set; }
+    public string? Unit { get; set; }
+    public int? Quantity { get; set; }
+    public DateOnly? InUseDate { get; set; }
+    public string? Specification { get; set; }
+    public string? Note { get; set; }
+}
+
+/// <summary>
+/// DTO for accountant-only status change on an <see cref="Asset"/> (<c>PUT /api/assets/{id}/status</c>).
+/// </summary>
+public class ChangeAssetStatusDTO
+{
+    public AssetStatus Status { get; set; }
+    public string? Note { get; set; }
+}
+
+/// <summary>
+/// DTO for delete on an <see cref="Asset"/> (sets catalog status to Disposed, Lost, or Liquidated).
+/// </summary>
+public class DeleteAssetDTO
+{
+    public AssetStatus Status { get; set; }
+    public string? Reason { get; set; }
+}
+
+/// <summary>
+/// Creates or describes a physical <see cref="AssetInstance"/>.
+/// </summary>
+public class CreateAssetInstanceDTO
+{
+    /// <summary>Required when POSTing to <c>/api/assetinstances</c>; omitted when nested under <see cref="CreateAssetDTO.InitialInstance"/>.</summary>
+    public int? AssetId { get; set; }
+
+    public string InstanceCode { get; set; } = null!;
+    public string? SerialNumber { get; set; }
+    public int WarehouseId { get; set; }
+    public DateOnly PurchaseDate { get; set; }
+    public decimal OriginalPrice { get; set; }
+    public decimal CurrentValue { get; set; }
+    public DateOnly? InUseDate { get; set; }
+    public int? DepreciationPolicyId { get; set; }
+    public int? SupplierId { get; set; }
+    public string? ContractNo { get; set; }
+    public string? Condition { get; set; }
+    public string? Note { get; set; }
+
+    /// <summary>Optional assignment (requires ACCOUNTANT).</summary>
+    public int? AssignedDepartmentId { get; set; }
+    public int? ResponsibleEmployeeId { get; set; }
+    public DateOnly? AssignmentEffectiveDate { get; set; }
+}
+
+/// <summary>
+/// DTO for updating an <see cref="AssetInstance"/>.
+/// </summary>
+public class UpdateAssetInstanceDTO
+{
+    public string? InstanceCode { get; set; }
+    public string? SerialNumber { get; set; }
+    public int? WarehouseId { get; set; }
+    public DateOnly? PurchaseDate { get; set; }
+    public decimal? OriginalPrice { get; set; }
+    public decimal? CurrentValue { get; set; }
+    public AssetStatus? Status { get; set; }
+    public DateOnly? InUseDate { get; set; }
+    public int? DepreciationPolicyId { get; set; }
+    public int? SupplierId { get; set; }
+    public string? ContractNo { get; set; }
+    public string? Condition { get; set; }
+    public string? Note { get; set; }
+    public int? WarrantyPeriodValue { get; set; }
+    public string? WarrantyPeriodUnit { get; set; }
+    public string? WarrantyConditions { get; set; }
+    public DateOnly? WarrantyStartDate { get; set; }
+    public DateOnly? WarrantyEndDate { get; set; }
+    public DateOnly? DepreciationPeriod { get; set; }
+    public decimal? DepreciationAmount { get; set; }
+    public decimal? AccumulatedDepreciation { get; set; }
+    public decimal? RemainingValue { get; set; }
+
+    public int? AssignedDepartmentId { get; set; }
+    public int? ResponsibleEmployeeId { get; set; }
+    public DateOnly? AssignmentEffectiveDate { get; set; }
+    public bool ClearDepartmentAssignment { get; set; }
+    public bool ClearResponsibleEmployee { get; set; }
+}
+
+/// <summary>
+/// Accountant status change for an instance (<c>PUT /api/assetinstances/{id}/status</c>).
+/// </summary>
+public class ChangeAssetInstanceStatusDTO
+{
+    public AssetStatus Status { get; set; }
+    public string? Note { get; set; }
+}
+
+/// <summary>
+/// Soft delete / retirement for an instance (<c>DELETE /api/assetinstances/{id}</c>).
+/// </summary>
+public class DeleteAssetInstanceDTO
+{
+    public AssetStatus Status { get; set; }
+    public string? Reason { get; set; }
+}
+
+public class MaintenanceScheduleDTO
+{
+    public int ScheduleId { get; set; }
+    /// <summary>Null = quy định áp dụng chung cho toàn bộ cá thể của tài sản.</summary>
+    public int? AssetInstanceId { get; set; }
+    public string? InstanceCode { get; set; }
+    public int? TemplateId { get; set; }
+    public string? Content { get; set; }
+    public string? TemplateName { get; set; }
+    public int ScheduleType { get; set; }
+    public int? IntervalMonths { get; set; }
+    public int? IntervalHours { get; set; }
+    public int? IntervalValue { get; set; }
+    public int? IntervalUnit { get; set; }
+    public DateTime StartDate { get; set; }
+    public DateTime? NextDueDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    public bool? IsActive { get; set; }
+}
+
+public class AssetDocumentDTO
+{
+    public int DocumentId { get; set; }
+    public int DocumentType { get; set; }
+    public string FileUrl { get; set; } = null!;
+    public DateTime UploadedDate { get; set; }
+}
+
+/// <summary>
+/// Response for catalog <see cref="Asset"/> list/detail (no per-instance financials).
+/// </summary>
+public class AssetResponseDTO
+{
+    public int AssetId { get; set; }
+    public string Code { get; set; } = null!;
+    public string Name { get; set; } = null!;
+    public int AssetTypeId { get; set; }
+    public string? AssetTypeName { get; set; }
+    public AssetStatus Status { get; set; }
+    public string StatusName { get; set; } = null!;
+    public string Unit { get; set; } = null!;
+    public int? Quantity { get; set; }
+    public int CreatedBy { get; set; }
+    public DateOnly? InUseDate { get; set; }
+    public string? Specification { get; set; }
+    public string? Note { get; set; }
+}
+
+/// <summary>
+/// GET /api/assets/{id} — catalog plus schedules, documents, and instance summaries.
+/// </summary>
+public class AssetDetailResponseDTO : AssetResponseDTO
+{
+    public List<MaintenanceScheduleDTO>? MaintenanceSchedules { get; set; }
+    public List<AssetDocumentDTO>? Documents { get; set; }
+    public List<AssetInstanceResponseDTO>? Instances { get; set; }
+}
+
+/// <summary>
+/// Response for a physical <see cref="AssetInstance"/>.
+/// </summary>
+public class AssetInstanceResponseDTO
+{
+    public int AssetInstanceId { get; set; }
+    public int AssetId { get; set; }
+    public int AssetTypeId { get; set; }
+    /// <summary>Display name of the catalog asset type.</summary>
+    public string? AssetTypeName { get; set; }
+    public string? AssetCode { get; set; }
+    public string? AssetName { get; set; }
+    public string? Specification { get; set; }
+    public string InstanceCode { get; set; } = null!;
+    public string? SerialNumber { get; set; }
+    public int WarehouseId { get; set; }
+    public string? WarehouseName { get; set; }
+    public DateOnly PurchaseDate { get; set; }
+    public decimal OriginalPrice { get; set; }
+    public decimal CurrentValue { get; set; }
+    public AssetStatus Status { get; set; }
+    public string StatusName { get; set; } = null!;
+    public DateOnly? InUseDate { get; set; }
+    public int? SupplierId { get; set; }
+    public string? ContractNo { get; set; }
+    public string? Condition { get; set; }
+    public string? Note { get; set; }
+
+    public int? CurrentLocationId { get; set; }
+    public int? CurrentDepartmentId { get; set; }
+    public string? CurrentDepartmentName { get; set; }
+    /// <summary>Note on the current <see cref="AssetLocation"/> row (IsCurrent).</summary>
+    public string? CurrentLocationNote { get; set; }
+    public int? CurrentResponsibleEmployeeId { get; set; }
+    public string? CurrentResponsibleEmployeeName { get; set; }
+    public int? CurrentResponsibleUserId { get; set; }
+
+    public int? DepreciationPolicyId { get; set; }
+    public string? DepreciationPolicyName { get; set; }
+    public int? DepreciationUsefulLifeMonths { get; set; }
+    public decimal? DepreciationSalvageValue { get; set; }
+    public DateOnly? DepreciationPeriod { get; set; }
+    public decimal? DepreciationAmount { get; set; }
+    public decimal? AccumulatedDepreciation { get; set; }
+    public decimal? RemainingValue { get; set; }
+    public List<GuaranteeDTO>? Guarantees { get; set; }
+    public List<AssetUsageHistoryDTO>? UsageHistories { get; set; }
+    public List<DepreciationRecordDTO>? DepreciationRecords { get; set; }
+}
+
+public class DepreciationRecordDTO
+{
+    public int RecordId { get; set; }
+    public DateOnly Period { get; set; }
+    public decimal DepreciationAmount { get; set; }
+    public decimal OriginalValue { get; set; }
+    public decimal RemainingValue { get; set; }
+    public decimal AccumulatedDepreciation { get; set; }
+    public DateTime CreateDate { get; set; }
+    public bool IsPosted { get; set; }
+}
+
+public class GuaranteeDTO
+{
+    public int GuaranteeId { get; set; }
+    public int WarrantyPeriodValue { get; set; }
+    public string WarrantyPeriodUnit { get; set; } = null!;
+    public string? WarrantyConditions { get; set; }
+    public DateOnly StartDate { get; set; }
+    public DateOnly WarrantyEndDate { get; set; }
+}
+
+public class AssetUsageHistoryDTO
+{
+    public int AssetInstanceId { get; set; }
+    public string? InstanceCode { get; set; }
+    public DateOnly ExecutionDate { get; set; }
+    public string? ReportNumber { get; set; }
+    public string? Operation { get; set; }
+    public string? Condition { get; set; }
+    public string? Location { get; set; }
+    public decimal? Value { get; set; }
+}
