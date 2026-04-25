@@ -89,3 +89,8 @@ public class PurchaseOrderListResponseDto
     public int PageSize { get; set; }
     public int TotalPages { get; set; }
 }
+
+public class CancelPurchaseOrderDto
+{
+    public string? Comment { get; set; }
+}

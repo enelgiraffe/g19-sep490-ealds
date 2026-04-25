@@ -116,6 +116,9 @@ builder.Services.AddScoped<IAllocationRequestService, AllocationRequestService>(
 builder.Services.AddScoped<IHandoverRequestService, HandoverRequestService>();
 builder.Services.AddScoped<IAllocationsService, AllocationsService>();
 builder.Services.AddScoped<IBudgetAllocationService, BudgetAllocationService>();
+builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
+builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
+builder.Services.AddScoped<ISupplierInvoiceService, SupplierInvoiceService>();
 
 // Asset capitalization
 builder.Services.AddScoped<IAssetCapitalizationMapper, AssetCapitalizationMapper>();
