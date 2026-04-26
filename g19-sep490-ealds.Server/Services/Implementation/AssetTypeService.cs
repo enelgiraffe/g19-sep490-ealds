@@ -1,4 +1,4 @@
-using g19_sep490_ealds.Server.Mappers;
+using g19_sep490_ealds.Server.DTOs.AssetTypes;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -7,69 +7,165 @@ namespace g19_sep490_ealds.Server.Services.Implementation;
 
 public class AssetTypeService : IAssetTypeService
 {
-    private readonly IAssetTypeMapper _mapper;
     private readonly EaldsDbContext _context;
     private readonly ILogger<AssetTypeService> _logger;
 
-    public AssetTypeService(
-        IAssetTypeMapper mapper,
-        EaldsDbContext context,
-        ILogger<AssetTypeService> logger)
+    public AssetTypeService(EaldsDbContext context, ILogger<AssetTypeService> logger)
     {
-        _mapper = mapper;
         _context = context;
         _logger = logger;
     }
 
-    public async Task<AssetTypeResponseDTO> CreateAssetTypeAsync(AssetTypeCreateDTO create)
+    public async Task<IEnumerable<AssetTypeResponseDto>> GetAllAsync(int? categoryId, string? keyword)
     {
-        if (await _context.AssetTypes.AnyAsync(x => x.Name == create.Name))
+        var query = _context.AssetTypes.AsNoTracking().AsQueryable();
+
+        if (categoryId.HasValue)
+            query = query.Where(t => t.CategoryId == categoryId.Value);
+
+        if (!string.IsNullOrWhiteSpace(keyword))
         {
-            throw new Exception("T�n d� du?c s? d?ng");
+            var kw = keyword.Trim().ToLower();
+            query = query.Where(t => t.Name.ToLower().Contains(kw));
         }
-        AssetType entity = _mapper.CreateToEntity(create);
 
-        await _context.AssetTypes.AddAsync(entity);
-        await _context.SaveChangesAsync();
-
-        return _mapper.EntityToResponse(entity);
+        return await query
+            .OrderBy(t => t.Category.Name)
+            .ThenBy(t => t.Name)
+            .Select(t => new AssetTypeResponseDto
+            {
+                AssetTypeId = t.AssetTypeId,
+                Name = t.Name,
+                CategoryId = t.CategoryId,
+                CategoryName = t.Category.Name,
+                AssetCount = t.Assets.Count
+            })
+            .ToListAsync();
     }
 
-    public async Task<IEnumerable<AssetTypeResponseDTO>> GetAllAssetTypeAsync()
+    public async Task<AssetTypeDetailDto> GetByIdAsync(int id)
     {
-        var type = await _context.AssetTypes.ToListAsync();
-        if (type == null)
+        var assetType = await _context.AssetTypes
+            .AsNoTracking()
+            .Where(t => t.AssetTypeId == id)
+            .Select(t => new AssetTypeDetailDto
+            {
+                AssetTypeId = t.AssetTypeId,
+                Name = t.Name,
+                CategoryId = t.CategoryId,
+                CategoryName = t.Category.Name,
+                AssetCount = t.Assets.Count,
+                InventorySessionCount = t.InventorySessions.Count,
+                MaintenanceTemplateCount = t.MaintenanceTemplates.Count
+            })
+            .FirstOrDefaultAsync();
+
+        if (assetType == null)
+            throw new KeyNotFoundException($"Asset type with id {id} not found.");
+
+        return assetType;
+    }
+
+    public async Task<AssetTypeResponseDto> CreateAsync(CreateAssetTypeDto dto)
+    {
+        var categoryExists = await _context.AssetCategories.AnyAsync(c => c.CategoryId == dto.CategoryId);
+        if (!categoryExists)
+            throw new KeyNotFoundException($"Asset category with id {dto.CategoryId} not found.");
+
+        var nameExists = await _context.AssetTypes.AnyAsync(t =>
+            t.CategoryId == dto.CategoryId &&
+            t.Name.ToLower() == dto.Name.Trim().ToLower());
+        if (nameExists)
+            throw new InvalidOperationException($"Asset type '{dto.Name}' already exists in this category.");
+
+        var assetType = new AssetType
         {
-            throw new Exception("Kh�ng c� b?n ghi n�o");
-        }
-        var response = _mapper.ListEntityToResponse(type);
-        return response;
-    }
+            CategoryId = dto.CategoryId,
+            Name = dto.Name.Trim()
+        };
 
-    public async Task<bool> DeleteAssetTypeAsync(int id)
-    {
-        var type = await _context.AssetTypes.FindAsync(id)
-          ?? throw new KeyNotFoundException($"Kh�ng c� Id {id} t?n t?i!");
-
-        _context.AssetTypes.Remove(type);
+        _context.AssetTypes.Add(assetType);
         await _context.SaveChangesAsync();
-        return true;
+
+        var categoryName = await _context.AssetCategories
+            .AsNoTracking()
+            .Where(c => c.CategoryId == assetType.CategoryId)
+            .Select(c => c.Name)
+            .FirstAsync();
+
+        return new AssetTypeResponseDto
+        {
+            AssetTypeId = assetType.AssetTypeId,
+            Name = assetType.Name,
+            CategoryId = assetType.CategoryId,
+            CategoryName = categoryName,
+            AssetCount = 0
+        };
     }
 
-    public Task<IEnumerable<AssetTypeResponseDTO>> SearchAssetTypeByKeyAsync(string name)
+    public async Task<AssetTypeResponseDto> UpdateAsync(int id, UpdateAssetTypeDto dto)
     {
-        throw new NotImplementedException();
-    }
+        var assetType = await _context.AssetTypes.FindAsync(id);
+        if (assetType == null)
+            throw new KeyNotFoundException($"Asset type with id {id} not found.");
 
-    public async Task<AssetTypeResponseDTO> UpdateAssetTypeAsync(int id, AssetTypeUpdateDTO update)
-    {
-        var type = await _context.AssetTypes.FindAsync(id)
-          ?? throw new KeyNotFoundException($"Kh�ng c� Id {id} t?n t?i!");
+        var categoryExists = await _context.AssetCategories.AnyAsync(c => c.CategoryId == dto.CategoryId);
+        if (!categoryExists)
+            throw new KeyNotFoundException($"Asset category with id {dto.CategoryId} not found.");
 
-        var result = _mapper.UpdateToEntity(update);
-        type.CategoryId = result.CategoryId;
-        type.Name = result.Name;
+        var nameExists = await _context.AssetTypes.AnyAsync(t =>
+            t.CategoryId == dto.CategoryId &&
+            t.Name.ToLower() == dto.Name.Trim().ToLower() &&
+            t.AssetTypeId != id);
+        if (nameExists)
+            throw new InvalidOperationException($"Asset type '{dto.Name}' already exists in this category.");
+
+        assetType.CategoryId = dto.CategoryId;
+        assetType.Name = dto.Name.Trim();
         await _context.SaveChangesAsync();
-        return _mapper.EntityToResponse(type);
+
+        var categoryName = await _context.AssetCategories
+            .AsNoTracking()
+            .Where(c => c.CategoryId == assetType.CategoryId)
+            .Select(c => c.Name)
+            .FirstAsync();
+
+        var assetCount = await _context.Assets.CountAsync(a => a.AssetTypeId == id);
+
+        return new AssetTypeResponseDto
+        {
+            AssetTypeId = assetType.AssetTypeId,
+            Name = assetType.Name,
+            CategoryId = assetType.CategoryId,
+            CategoryName = categoryName,
+            AssetCount = assetCount
+        };
+    }
+
+    public async Task DeleteAsync(int id)
+    {
+        var assetType = await _context.AssetTypes
+            .Include(t => t.Assets)
+            .Include(t => t.InventorySessions)
+            .Include(t => t.MaintenanceTemplates)
+            .FirstOrDefaultAsync(t => t.AssetTypeId == id);
+
+        if (assetType == null)
+            throw new KeyNotFoundException($"Asset type with id {id} not found.");
+
+        var issues = new List<string>();
+        if (assetType.Assets.Count > 0)
+            issues.Add($"{assetType.Assets.Count} asset(s)");
+        if (assetType.InventorySessions.Count > 0)
+            issues.Add($"{assetType.InventorySessions.Count} inventory session(s)");
+        if (assetType.MaintenanceTemplates.Count > 0)
+            issues.Add($"{assetType.MaintenanceTemplates.Count} maintenance template(s)");
+
+        if (issues.Count > 0)
+            throw new InvalidOperationException(
+                $"Cannot delete asset type '{assetType.Name}' because it is linked to {string.Join(", ", issues)}. Remove or reassign them first.");
+
+        _context.AssetTypes.Remove(assetType);
+        await _context.SaveChangesAsync();
     }
 }

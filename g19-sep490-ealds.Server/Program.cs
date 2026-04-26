@@ -131,9 +131,10 @@ builder.Services.AddScoped<IAssetCapitalizationService, AssetCapitalizationServi
 builder.Services.AddScoped<IAssetDepreciationService, AssetDepreciationService>();
 builder.Services.AddScoped<IAssetRevaluationService, AssetRevaluationService>();
 
-// Asset type (controller/service exists)
-builder.Services.AddScoped<IAssetTypeMapper, AssetTypeMapper>();
+// Asset catalog management
 builder.Services.AddScoped<IAssetTypeService, AssetTypeService>();
+builder.Services.AddScoped<IAssetCategoryService, AssetCategoryService>();
+builder.Services.AddScoped<ISupplierService, SupplierService>();
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
