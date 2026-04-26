@@ -139,6 +139,7 @@ builder.Services.AddScoped<IAssetRevaluationService, AssetRevaluationService>();
 builder.Services.AddScoped<IAssetTypeService, AssetTypeService>();
 builder.Services.AddScoped<IAssetCategoryService, AssetCategoryService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
+builder.Services.AddScoped<IDepartmentService, DepartmentService>();
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
