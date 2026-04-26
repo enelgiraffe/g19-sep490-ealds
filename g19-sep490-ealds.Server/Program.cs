@@ -135,6 +135,10 @@ builder.Services.AddScoped<IAssetRevaluationService, AssetRevaluationService>();
 builder.Services.AddScoped<IAssetTypeMapper, AssetTypeMapper>();
 builder.Services.AddScoped<IAssetTypeService, AssetTypeService>();
 
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IProfileService, ProfileService>();
+builder.Services.AddScoped<IUsersService, UsersService>();
+
 builder.Services.AddMediatR(typeof(Program));
 
 //Quarzt chạy job

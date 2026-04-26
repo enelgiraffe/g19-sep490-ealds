@@ -1,12 +1,8 @@
 using System.Security.Claims;
-using System.Security.Cryptography;
 using g19_sep490_ealds.Server.DTOs.Auth;
-using g19_sep490_ealds.Server.Models;
-using g19_sep490_ealds.Server.Services;
-using g19_sep490_ealds.Server.Utils;
+using g19_sep490_ealds.Server.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -14,292 +10,110 @@ namespace g19_sep490_ealds.Server.Controllers;
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
-    private readonly EaldsDbContext _context;
-    private readonly ITokenService _tokenService;
-    private readonly IConfiguration _configuration;
-    private readonly IEmailService _emailService;
+    private readonly IAuthService _authService;
     private readonly IWebHostEnvironment _env;
-    private readonly ILogger<AuthController> _logger;
 
-    public AuthController(EaldsDbContext context, ITokenService tokenService, IConfiguration configuration, IEmailService emailService, IWebHostEnvironment env, ILogger<AuthController> logger)
+    public AuthController(IAuthService authService, IWebHostEnvironment env)
     {
-        _context = context;
-        _tokenService = tokenService;
-        _configuration = configuration;
-        _emailService = emailService;
+        _authService = authService;
         _env = env;
-        _logger = logger;
     }
-
-    private int AccountantRoleId =>
-        _configuration.GetValue("App:AccountantRoleId", 3);
-
-    private const int MaxFailedLoginAttemptsBeforeLockout = 5;
-    private static readonly TimeSpan LoginLockoutDuration = TimeSpan.FromMinutes(30);
 
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
-        var user = await _context.Users
-            .FirstOrDefaultAsync(u => u.Email == request.Email);
-
-        if (user == null)
-            return Unauthorized(new { message = "Email hoặc mật khẩu không đúng." });
-
-        var now = DateTime.UtcNow;
-        if (user.LockoutEnd.HasValue && user.LockoutEnd <= now)
-        {
-            user.LockoutEnd = null;
-            user.AccessFailedCount = 0;
-            await _context.SaveChangesAsync();
-        }
-
-        if (user.Status == 0)
-            return Unauthorized(new { message = "Tài khoản đã bị vô hiệu hóa." });
-
-        if (user.LockoutEnd.HasValue && user.LockoutEnd > now)
-        {
-            var remaining = user.LockoutEnd.Value - now;
-            var minutes = Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes));
-            return Unauthorized(new
-            {
-                message = $"Tài khoản đã bị khóa do đăng nhập sai quá nhiều lần. Vui lòng thử lại sau {minutes} phút."
-            });
-        }
-
-        if (user.Password != request.Password)
-        {
-            user.AccessFailedCount++;
-            if (user.AccessFailedCount >= MaxFailedLoginAttemptsBeforeLockout)
-            {
-                user.LockoutEnd = now.Add(LoginLockoutDuration);
-                user.AccessFailedCount = 0;
-            }
-
-            await _context.SaveChangesAsync();
-            if (user.LockoutEnd.HasValue && user.LockoutEnd > now)
-            {
-                return Unauthorized(new
-                {
-                    message = "Đăng nhập sai quá 5 lần. Tài khoản bị khóa trong 30 phút."
-                });
-            }
-
-            return Unauthorized(new { message = "Email hoặc mật khẩu không đúng." });
-        }
-
-        user.AccessFailedCount = 0;
-        user.LockoutEnd = null;
-
-        var roleRows = await _context.UserRoles
-            .Where(ur => ur.UserId == user.UserId)
-            .Select(ur => new { ur.RoleId, Code = ur.Role != null ? ur.Role.Code : null })
-            .ToListAsync();
-        var acctIdLogin = AccountantRoleId;
-        var roles = roleRows
-            .Select(r => RoleCanonicalization.CanonicalizeRoleCode(r.RoleId, r.Code, acctIdLogin))
-            .Where(r => !string.IsNullOrWhiteSpace(r))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        var employee = await _context.Employees
-            .FirstOrDefaultAsync(e => e.UserId == user.UserId);
-
-        var accessToken = _tokenService.GenerateAccessToken(user, roles);
-        var refreshToken = _tokenService.GenerateRefreshToken();
-
-        var refreshTokenExpirationDays = int.Parse(
-            _configuration["Jwt:RefreshTokenExpirationDays"] ?? "7");
-
-        user.RefreshToken = refreshToken;
-        user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(refreshTokenExpirationDays);
-        await _context.SaveChangesAsync();
-
-        var response = new LoginResponseDto
-        {
-            AccessToken = accessToken,
-            RefreshToken = refreshToken,
-            User = new UserInfoDto
-            {
-                Id = user.UserId.ToString(),
-                Email = user.Email,
-                Name = employee?.Name ?? user.Email,
-                Role = roles.FirstOrDefault() ?? string.Empty
-            }
-        };
-
-        return Ok(response);
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        return await ExecuteAsync(() => _authService.LoginAsync(request));
     }
 
     [HttpPost("logout")]
     [Authorize]
     public async Task<IActionResult> Logout()
     {
-        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!int.TryParse(userIdClaim, out var userId))
-            return Unauthorized();
-
-        var user = await _context.Users.FindAsync(userId);
-        if (user == null)
-            return Unauthorized();
-
-        user.RefreshToken = null;
-        user.RefreshTokenExpiryTime = null;
-        await _context.SaveChangesAsync();
-
-        return Ok(new { message = "Đăng xuất thành công." });
+        if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
+        return await ExecuteAsync(async () =>
+        {
+            await _authService.LogoutAsync(userId);
+            return (object)new { message = "Đăng xuất thành công." };
+        });
     }
 
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequestDto request)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
-        var user = await _context.Users
-            .FirstOrDefaultAsync(u => u.Email == request.Email);
-
-        if (user == null || user.Status == 0)
-            return BadRequest(new { message = "Email không tồn tại trong hệ thống." });
-
-        var otpCode = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
-        var expirationMinutes = int.Parse(
-            _configuration["App:OtpExpirationMinutes"] ?? "10");
-
-        user.ResetPasswordToken = otpCode;
-        user.ResetPasswordTokenExpiryTime = DateTime.UtcNow.AddMinutes(expirationMinutes);
-        await _context.SaveChangesAsync();
-
-        var employee = await _context.Employees
-            .FirstOrDefaultAsync(e => e.UserId == user.UserId);
-        var displayName = employee?.Name ?? user.Email;
-
+        if (!ModelState.IsValid) return BadRequest(ModelState);
         try
         {
-            await _emailService.SendOtpEmailAsync(user.Email, displayName, otpCode, expirationMinutes.ToString());
+            await _authService.ForgotPasswordAsync(request);
+            return Ok(new { message = "Mã OTP đã được gửi đến email của bạn." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send OTP email to {Email}", user.Email);
-
             if (_env.IsDevelopment())
                 return StatusCode(500, new { message = "Gửi email thất bại.", error = ex.Message, detail = ex.InnerException?.Message });
-
             return StatusCode(500, new { message = "Gửi email thất bại. Vui lòng thử lại sau." });
         }
-
-        return Ok(new { message = "Mã OTP đã được gửi đến email của bạn." });
     }
 
     [HttpPost("verify-otp")]
     public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequestDto request)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
-        var user = await _context.Users
-            .FirstOrDefaultAsync(u => u.Email == request.Email);
-
-        if (user == null
-            || user.ResetPasswordToken == null
-            || user.ResetPasswordTokenExpiryTime == null
-            || user.ResetPasswordTokenExpiryTime < DateTime.UtcNow
-            || user.ResetPasswordToken != request.OtpCode)
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        return await ExecuteAsync(async () =>
         {
-            return BadRequest(new { message = "Mã OTP không hợp lệ hoặc đã hết hạn." });
-        }
-
-        var resetToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-        var resetTokenExpirationMinutes = int.Parse(
-            _configuration["App:ResetPasswordTokenExpirationMinutes"] ?? "15");
-
-        user.ResetPasswordToken = resetToken;
-        user.ResetPasswordTokenExpiryTime = DateTime.UtcNow.AddMinutes(resetTokenExpirationMinutes);
-        await _context.SaveChangesAsync();
-
-        return Ok(new { token = resetToken });
+            var token = await _authService.VerifyOtpAsync(request);
+            return (object)new { token };
+        });
     }
 
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto request)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
-        var user = await _context.Users
-            .FirstOrDefaultAsync(u => u.ResetPasswordToken == request.Token);
-
-        if (user == null || user.ResetPasswordTokenExpiryTime == null || user.ResetPasswordTokenExpiryTime < DateTime.UtcNow)
-            return BadRequest(new { message = "Token không hợp lệ hoặc đã hết hạn." });
-
-        if (string.Equals(user.Password, request.NewPassword, StringComparison.Ordinal))
-            return BadRequest(new { message = "Mật khẩu mới không được trùng với mật khẩu cũ." });
-
-        user.Password = request.NewPassword;
-        user.ResetPasswordToken = null;
-        user.ResetPasswordTokenExpiryTime = null;
-
-        // Invalidate any active refresh tokens
-        user.RefreshToken = null;
-        user.RefreshTokenExpiryTime = null;
-
-        await _context.SaveChangesAsync();
-
-        return Ok(new { message = "Mật khẩu đã được đặt lại thành công." });
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        return await ExecuteAsync(async () =>
+        {
+            await _authService.ResetPasswordAsync(request);
+            return (object)new { message = "Mật khẩu đã được đặt lại thành công." };
+        });
     }
 
     [HttpPost("refresh")]
     public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequestDto request)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        return await ExecuteAsync(() => _authService.RefreshTokenAsync(request));
+    }
 
-        var user = await _context.Users
-            .FirstOrDefaultAsync(u => u.RefreshToken == request.RefreshToken);
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
-        if (user == null || user.RefreshTokenExpiryTime == null || user.RefreshTokenExpiryTime < DateTime.UtcNow)
-            return Unauthorized(new { message = "Refresh token không hợp lệ hoặc đã hết hạn." });
+    private bool TryGetCurrentUserId(out int userId)
+    {
+        userId = 0;
+        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return int.TryParse(claim, out userId) && userId > 0;
+    }
 
-        var roleRows = await _context.UserRoles
-            .Where(ur => ur.UserId == user.UserId)
-            .Select(ur => new { ur.RoleId, Code = ur.Role != null ? ur.Role.Code : null })
-            .ToListAsync();
-        var acctId = AccountantRoleId;
-        var roles = roleRows
-            .Select(r => RoleCanonicalization.CanonicalizeRoleCode(r.RoleId, r.Code, acctId))
-            .Where(r => !string.IsNullOrWhiteSpace(r))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        var employee = await _context.Employees
-            .FirstOrDefaultAsync(e => e.UserId == user.UserId);
-
-        var accessToken = _tokenService.GenerateAccessToken(user, roles);
-        var newRefreshToken = _tokenService.GenerateRefreshToken();
-
-        var refreshTokenExpirationDays = int.Parse(
-            _configuration["Jwt:RefreshTokenExpirationDays"] ?? "7");
-
-        user.RefreshToken = newRefreshToken;
-        user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(refreshTokenExpirationDays);
-        await _context.SaveChangesAsync();
-
-        var response = new LoginResponseDto
+    private async Task<ActionResult> ExecuteAsync<T>(Func<Task<T>> action)
+    {
+        try
         {
-            AccessToken = accessToken,
-            RefreshToken = newRefreshToken,
-            User = new UserInfoDto
-            {
-                Id = user.UserId.ToString(),
-                Email = user.Email,
-                Name = employee?.Name ?? user.Email,
-                Role = roles.FirstOrDefault() ?? string.Empty
-            }
-        };
-
-        return Ok(response);
+            return Ok(await action());
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 }
