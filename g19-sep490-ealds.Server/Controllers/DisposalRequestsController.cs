@@ -1,12 +1,9 @@
-using System.Linq;
+using System;
+using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
-using g19_sep490_ealds.Server.Utils.EnumsStatus;
 
 namespace g19_sep490_ealds.Server.Controllers;
 
@@ -14,210 +11,39 @@ namespace g19_sep490_ealds.Server.Controllers;
 [Route("api/Assets/Requests/disposal")]
 public class DisposalRequestsController : ControllerBase
 {
-    private readonly EaldsDbContext _db;
-    private readonly IAssetRequestNotificationService _requestNotifications;
-    private readonly int _disposalRequestTypeId;
-    /// <summary>RoleId Trưởng phòng ban trong bảng Role (seed: 4, giống InventoryNotificationService).</summary>
-    private readonly int _departmentHeadRoleId;
+    private readonly IDisposalRequestService _service;
 
-    public DisposalRequestsController(
-        EaldsDbContext db,
-        IConfiguration configuration,
-        IAssetRequestNotificationService requestNotifications)
+    public DisposalRequestsController(IDisposalRequestService service)
     {
-        _db = db;
-        _requestNotifications = requestNotifications;
-        _disposalRequestTypeId = configuration.GetValue<int>("App:DisposalRequestTypeId", 5);
-        _departmentHeadRoleId = configuration.GetValue<int>("App:DepartmentHeadRoleId", 4);
+        _service = service;
     }
 
-    /// <summary>
-    /// GET /api/Assets/Requests/disposal - Danh sách yêu cầu thanh lý.
-    /// </summary>
+    private bool TryGetCurrentUserId(out int userId) =>
+        int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out userId);
+
+    private async Task<ActionResult> ExecuteAsync<T>(Func<Task<T>> action)
+    {
+        try { return Ok(await action()); }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        catch (Exception ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TransferRequestListItemDTO>>> GetList()
     {
-        var list = await _db.DisposalRecords
-            .AsNoTracking()
-            .Include(d => d.AssetInstance)
-                .ThenInclude(ai => ai.Asset)
-                .ThenInclude(a => a.AssetType)
-            .Include(d => d.AssetInstance)
-                .ThenInclude(ai => ai.AssetLocations)
-                    .ThenInclude(al => al.Department)
-            .Include(d => d.AssetRequest)
-            .Where(d => d.AssetRequest != null && d.AssetRequest.RequestTypeId == _disposalRequestTypeId)
-            .OrderByDescending(d => d.AssetRequest!.CreateDate)
-            .Select(d => new TransferRequestListItemDTO
-            {
-                RecordId = d.DiposalId,
-                AssetRequestId = d.AssetRequestId,
-                Code = "STL" + d.DiposalId,
-                TransferDate = d.DiposalDate,
-                AssetCode = d.AssetInstance.Asset != null ? d.AssetInstance.Asset.Code : string.Empty,
-                AssetName = d.AssetInstance.Asset != null ? d.AssetInstance.Asset.Name : string.Empty,
-                AssetTypeName = d.AssetInstance.Asset != null && d.AssetInstance.Asset.AssetType != null
-                    ? d.AssetInstance.Asset.AssetType.Name
-                    : null,
-                AssetInstanceId = d.AssetInstanceId,
-                InstanceCode = d.AssetInstance.InstanceCode,
-                OriginalPrice = d.AssetInstance.OriginalPrice,
-                CurrentValue = d.AssetInstance.CurrentValue,
-                DisposalDeclaredValue = d.DiposalValue,
-                FromDepartment = d.AssetInstance.AssetLocations
-                    .Where(al => al.IsCurrent)
-                    .Select(al => al.Department != null ? al.Department.Name : string.Empty)
-                    .FirstOrDefault() ?? string.Empty,
-                ToDepartment = string.Empty,
-                Quantity = 1,
-                Status = d.AssetRequest!.Status,
-                StatusName =
-                    d.AssetRequest.Status == 0 ? "Đã gửi" :
-                    d.AssetRequest.Status == 1 ? "Chờ duyệt giám đốc" :
-                    d.AssetRequest.Status == 2 ? "Đã duyệt" :
-                    d.AssetRequest.Status == 3 ? "Từ chối" :
-                    d.AssetRequest.Status == 4 ? "Đã thẩm định" :
-                    d.AssetRequest.Status == 5 ? "Đã thanh lý" :
-                    "Không xác định",
-                Reason = d.Reason,
-                FromDepartmentId = d.AssetInstance.AssetLocations
-                    .Where(al => al.IsCurrent)
-                    .Select(al => al.DepartmentId)
-                    .FirstOrDefault(),
-                ToDepartmentId = 0,
-                CreatedBy = d.AssetRequest.CreatedBy,
-                CreatedByName = _db.Employees
-                    .Where(e => e.UserId == d.AssetRequest.CreatedBy)
-                    .Select(e => e.Name)
-                    .FirstOrDefault(),
-                IsSenderConfirmed = false,
-                IsReceiverConfirmed = false
-            })
-            .ToListAsync();
-
-        return Ok(list);
+        return await ExecuteAsync(() => _service.GetListAsync());
     }
 
     [HttpPost]
     public async Task<IActionResult> CreateDisposalRequest([FromBody] AssetDisposalRequestDTO dto)
     {
-        if (dto == null)
-            return BadRequest("Request body is required.");
-
-        if (string.IsNullOrWhiteSpace(dto.Title))
-            return BadRequest("Title is required.");
-
-        if (!dto.AssetInstanceId.HasValue || dto.AssetInstanceId.Value <= 0)
-            return BadRequest("AssetInstanceId is required.");
-
-        var instance = await _db.AssetInstances
-            .Include(ai => ai.Asset)
-            .FirstOrDefaultAsync(ai => ai.AssetInstanceId == dto.AssetInstanceId.Value);
-        if (instance == null)
-            return NotFound($"Asset instance {dto.AssetInstanceId.Value} not found.");
-
-        var catalogAssetId = instance.AssetId;
-
-        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var actorUserId = int.TryParse(userIdClaim, out var parsedUserId) && parsedUserId > 0
-            ? parsedUserId
-            : dto.CreatedBy;
-
-        var userRoles = await _db.UserRoles
-            .Include(ur => ur.Role)
-            .AsNoTracking()
-            .Where(ur => ur.UserId == actorUserId)
-            .ToListAsync();
-
-        var isDepartmentHead = userRoles.Any(ur => ur.RoleId == _departmentHeadRoleId);
-
-        if (!isDepartmentHead)
+        if (dto == null) return BadRequest("Request body is required.");
+        if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
+        return await ExecuteAsync(async () =>
         {
-            return StatusCode(403, new
-            {
-                message = "Bạn không có quyền gửi yêu cầu thanh lý (chỉ trưởng phòng ban).",
-                actorUserId,
-                requiredRoleId = _departmentHeadRoleId,
-                currentUserRoleIds = userRoles.Select(x => x.RoleId).Distinct().ToArray(),
-                currentUserRoleCodes = userRoles.Select(x => x.Role?.Code).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToArray(),
-                currentUserRoleNames = userRoles.Select(x => x.Role?.Name).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToArray()
-            });
-        }
-
-        var resolvedRequestTypeId = dto.RequestTypeId ?? _disposalRequestTypeId;
-        var requestTypeExists = await _db.RequestTypes
-            .AsNoTracking()
-            .AnyAsync(rt => rt.RequestTypeId == resolvedRequestTypeId);
-        if (!requestTypeExists)
-        {
-            return BadRequest($"RequestTypeId '{resolvedRequestTypeId}' không tồn tại trong bảng RequestType.");
-        }
-        var initialStepId = await _db.RequestTypes
-            .AsNoTracking()
-            .Where(rt => rt.RequestTypeId == resolvedRequestTypeId)
-            .SelectMany(rt => _db.WorkflowSteps.Where(ws => ws.WorkflowId == rt.WorkflowId))
-            .OrderBy(ws => ws.StepOrder)
-            .Select(ws => (int?)ws.StepId)
-            .FirstOrDefaultAsync();
-        if (!initialStepId.HasValue)
-            return BadRequest($"No workflow step configured for RequestTypeId '{resolvedRequestTypeId}'.");
-
-        var assetRequest = new AssetRequest
-        {
-            UserId = actorUserId,
-            RequestTypeId = resolvedRequestTypeId,
-            AssetId = catalogAssetId,
-            AssetInstanceId = dto.AssetInstanceId,
-            Title = dto.Title,
-            Description = dto.Description,
-            ProposedData = null,
-            Status = 0,
-            CreatedBy = actorUserId,
-            CreateDate = DateTime.UtcNow,
-            StepId = initialStepId.Value
-        };
-
-        _db.AssetRequests.Add(assetRequest);
-        await _db.SaveChangesAsync();
-
-        var diposal = new DisposalRecord
-        {
-            AssetRequestId = assetRequest.AssetRequestId,
-            AssetInstanceId = dto.AssetInstanceId.Value,
-            DiposalMethod = dto.DiposalMethod,
-            DiposalValue = dto.DiposalValue,
-            DiposalDate = DateTime.UtcNow,   // Ngày đề nghị do server gán, không nhận từ client
-            Reason = dto.Reason,
-            ExecutedBy = actorUserId
-        };
-
-        _db.DisposalRecords.Add(diposal);
-
-        // NOTE: Asset status is NOT changed to Disposed here.
-        // Status will be updated only after the disposal request is approved/finalized.
-
-        await _db.SaveChangesAsync();
-
-        var userRole = await _db.UserRoles.AsNoTracking().FirstOrDefaultAsync(ur => ur.UserId == actorUserId);
-        var actionRoleId = userRole?.RoleId ?? 1;
-
-        var record = new AssetRequestRecord
-        {
-            AssetRequestId = assetRequest.AssetRequestId,
-            FromStatus = 0,
-            ToStatus = 0,
-            Action = 0,
-            ActionByUserId = actorUserId,
-            ActionRoleId = actionRoleId,
-            Comment = "Submitted disposal request",
-            OccurredAt = DateTime.UtcNow
-        };
-
-        _db.AssetRequestRecords.Add(record);
-        await _db.SaveChangesAsync();
-
-        await _requestNotifications.NotifyFirstApproversAsync(assetRequest.AssetRequestId);
-
-        return Ok(new { assetRequestId = assetRequest.AssetRequestId, diposalId = diposal.DiposalId });
+            var (assetRequestId, diposalId) = await _service.CreateAsync(userId, dto);
+            return new { assetRequestId, diposalId };
+        });
     }
 }

@@ -55,3 +55,10 @@ public class RecordDisposalAppraisalDto
     public string? AppraisalMinutesNo { get; set; }
     public string? AppraisalConclusion { get; set; }
 }
+
+public class DisposalFinalizeResultDTO
+{
+    public int AssetRequestId { get; set; }
+    public int AssetRequestStatus { get; set; }
+    public int AssetInstanceId { get; set; }
+}

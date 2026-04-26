@@ -114,6 +114,8 @@ builder.Services.AddScoped<IInventoryNotificationService, InventoryNotificationS
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IAssetRequestNotificationService, AssetRequestNotificationService>();
 builder.Services.AddScoped<IAssetRequestService, AssetRequestService>();
+builder.Services.AddScoped<IDisposalRequestService, DisposalRequestService>();
+builder.Services.AddScoped<IDisposalExecutionService, DisposalExecutionService>();
 builder.Services.AddScoped<ITransferRequestService, TransferRequestService>();
 builder.Services.AddScoped<IAllocationRequestService, AllocationRequestService>();
 builder.Services.AddScoped<IHandoverRequestService, HandoverRequestService>();
