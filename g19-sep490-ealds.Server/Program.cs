@@ -121,6 +121,10 @@ builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
 builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
 builder.Services.AddScoped<ISupplierInvoiceService, SupplierInvoiceService>();
 
+// Asset catalog and instances
+builder.Services.AddScoped<IAssetService, AssetService>();
+builder.Services.AddScoped<IAssetInstanceService, AssetInstanceService>();
+
 // Asset capitalization
 builder.Services.AddScoped<IAssetCapitalizationMapper, AssetCapitalizationMapper>();
 builder.Services.AddScoped<IAssetCapitalizationService, AssetCapitalizationService>();
