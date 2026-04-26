@@ -107,6 +107,7 @@ builder.Services.AddScoped<IMaintenanceScheduleService, MaintenanceScheduleServi
 builder.Services.AddScoped<IMaintenanceScheduleMapper, MaintenanceScheduleMapper>();
 builder.Services.AddScoped<IMaintenanceRecordService, MaintenanceRecordService>();
 builder.Services.AddScoped<IRepairRecordService, RepairRecordService>();
+builder.Services.AddScoped<IRepairRequestService, RepairRequestService>();
 builder.Services.AddScoped<IMaintenanceRecordMapper, MaintenanceRecordMapper>();
 builder.Services.AddScoped<IMaintenanceTaskService, MaintenanceTaskService>();
 builder.Services.AddScoped<IInventoryNotificationService, InventoryNotificationService>();
