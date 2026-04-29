@@ -4,10 +4,12 @@ import { Button, message } from 'antd';
 import { EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   assetInstanceService,
+  assetService,
   getAssetInstanceStatusFilterOptions,
   getStatusLabel,
   isAssetInstanceNonEditableStatus,
   type AssetInstanceResponse,
+  type AssetTypeItem,
   type GetAssetInstancesParams,
 } from '../../assets/services/assetService';
 import '../../assets/pages/AssetListPage.css';
@@ -69,6 +71,7 @@ export function AccountantAssetListPage() {
   const [expandedAssetId, setExpandedAssetId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [assetTypes, setAssetTypes] = useState<AssetTypeItem[]>([]);
   const navigate = useNavigate();
 
   const instanceStatusFilterOptions = useMemo(
@@ -80,6 +83,18 @@ export function AccountantAssetListPage() {
     const t = setTimeout(() => setKeyword(searchInput.trim()), 400);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  useEffect(() => {
+    async function loadAssetTypes() {
+      try {
+        const items = await assetService.getAssetTypes();
+        setAssetTypes(items);
+      } catch {
+        // Dropdown chỉ hiển thị "Tất cả loại tài sản" nếu API lỗi
+      }
+    }
+    loadAssetTypes();
+  }, []);
 
   useEffect(() => {
     setPage(1);
@@ -206,8 +221,11 @@ export function AccountantAssetListPage() {
                 }}
               >
                 <option value="">Tất cả loại tài sản</option>
-                <option value={1}>Máy móc</option>
-                <option value={2}>Thiết bị</option>
+                {assetTypes.map((t) => (
+                  <option key={t.assetTypeId} value={t.assetTypeId}>
+                    {t.name}
+                  </option>
+                ))}
               </select>
               <select
                 className="asset-filter-select"

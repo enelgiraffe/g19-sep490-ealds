@@ -210,41 +210,51 @@
   color: #6b7280;
 }
 
+/* Pagination footer — aligned with AssetListPage `.asset-card__footer` / `.asset-footer__*` */
 .categories-card__footer {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin-top: 4px;
-  font-size: 12px;
+  align-items: center;
+  padding-top: 16px;
+  font-size: 13px;
   color: #6b7280;
 }
 
+.categories-footer__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .categories-footer__select {
-  margin-left: 4px;
-  border-radius: 999px;
-  border: 1px solid #e5e7eb;
   padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.categories-footer__center {
+  font-size: 13px;
+  color: #6b7280;
 }
 
 .categories-footer__right {
   display: flex;
-  gap: 4px;
+  gap: 6px;
 }
 
 .categories-footer__pager {
-  min-width: 26px;
-  height: 26px;
-  border-radius: 999px;
+  border-radius: 6px;
   border: 1px solid #e5e7eb;
+  padding: 4px 10px;
   background: #ffffff;
+  font-size: 13px;
   cursor: pointer;
-  font-size: 12px;
 }
 
 .categories-footer__pager--active {
-  background: #111827;
+  background: #fe3720;
+  border-color: #fe3720;
   color: #ffffff;
-  border-color: #111827;
 }
 
 .categories-footer__pager:disabled {

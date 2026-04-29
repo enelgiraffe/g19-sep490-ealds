@@ -1,5 +1,5 @@
 import { Button, Input, Select } from 'antd';
-import { DownloadOutlined, FilterOutlined, SearchOutlined } from '@ant-design/icons';
+import { FilterOutlined, SearchOutlined } from '@ant-design/icons';
 
 const { Option } = Select;
 
@@ -64,18 +64,12 @@ export function AssetTypesSection({
         <Button className="categories-filter-reset" icon={<FilterOutlined />} onClick={onResetFilters}>
           Gỡ bộ lọc
         </Button>
-        <Button icon={<DownloadOutlined />} className="categories-export-btn">
-          Export
-        </Button>
       </div>
 
       <div className="asset-table-wrapper categories-table-wrapper">
         <table className="asset-table categories-table">
           <thead>
             <tr>
-              <th className="asset-table__cell asset-table__cell--checkbox">
-                <input type="checkbox" />
-              </th>
               <th>MÃ LOẠI TÀI SẢN</th>
               <th>TÊN LOẠI TÀI SẢN</th>
               <th>NHÓM TÀI SẢN</th>
@@ -87,22 +81,19 @@ export function AssetTypesSection({
           <tbody>
             {isLoadingAssetTypes ? (
               <tr>
-                <td colSpan={7} className="categories-table-empty">
+                <td colSpan={6} className="categories-table-empty">
                   Đang tải dữ liệu...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="categories-table-empty">
+                <td colSpan={6} className="categories-table-empty">
                   Không có dữ liệu.
                 </td>
               </tr>
             ) : (
               rows.map((row) => (
                 <tr key={row.key} className="asset-row">
-                  <td className="asset-table__cell asset-table__cell--checkbox">
-                    <input type="checkbox" />
-                  </td>
                   <td>{row.code}</td>
                   <td>{row.name}</td>
                   <td>{row.group}</td>

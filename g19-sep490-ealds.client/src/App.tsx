@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { initSessionMonitoring } from './shared/services/apiClient';
 import { AppLayout } from './shared/layouts/AppLayout';
 import { HomePlaceholder } from './shared/layouts/HomePlaceholder';
-import { ModulePlaceholder } from './shared/layouts/ModulePlaceholder';
 import { DirectorDashboardPage } from './modules/dashboard/pages/DirectorDashboardPage';
 import { ApprovalDetailPage } from './modules/dashboard/pages/ApprovalDetailPage';
 import { NotificationsPage } from './modules/notifications/pages/NotificationsPage';
@@ -112,12 +111,8 @@ function App() {
           {/* Admin */}
           <Route path="users" element={<UsersPage />} />
           <Route path="users/:id" element={<UserDetailPage />} />
-          <Route path="roles" element={<ModulePlaceholder title="Vai trò" />} />
           <Route path="departments" element={<DepartmentsPage />} />
           <Route path="categories" element={<CategoriesPage />} />
-          <Route path="approval-workflows" element={<ModulePlaceholder title="Quy trình phê duyệt" />} />
-          <Route path="extended-fields" element={<ModulePlaceholder title="Trường mở rộng" />} />
-          <Route path="system-settings" element={<ModulePlaceholder title="Cấu hình hệ thống" />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -376,7 +376,7 @@ export function AssetInstanceEditPage() {
     const method = Number(newPolicyMethod);
     const lifeMonths = Number(newPolicyLifeMonths);
     const salvage = Number(newPolicySalvageValue);
-    const generatedName = `Khấu hao ${getDepreciationMethodName(method)} ${lifeMonths} tháng`;
+    const generatedName = `Khấu hao ${getDepreciationMethodName(method)}`;
     const originalPrice =
       originalPriceInput.trim() !== ''
         ? Number(originalPriceInput)
@@ -1147,6 +1147,7 @@ export function AssetInstanceEditPage() {
                   className="asset-create__select"
                   value={newPolicyMethod}
                   onChange={(e) => setNewPolicyMethod(e.target.value)}
+                  disabled
                 >
                   <option value="1">Đường thẳng</option>
                 </select>

@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Form, Modal, Tabs, message } from 'antd';
+import { Button, Form, Input, Modal, Tabs, message } from 'antd';
 import { isAxiosError } from 'axios';
 import './CategoriesPage.css';
 import { assetCategoryService, type AssetCategoryItem } from '../services/assetCategoryService';
 import { assetTypeService, type AssetTypeListItem } from '../services/assetTypeService';
-import { assetLocationService, type AssetLocationItem } from '../services/assetLocationService';
 import { supplierService, type SupplierItem } from '../services/supplierService';
+import { assetService, type WarehouseItem } from '../../assets/services/assetService';
 import { AssetTypesSection } from '../components/AssetTypesSection';
 import { AssetGroupsSection } from '../components/AssetGroupsSection';
-import {
-  AssetLocationsSection,
-  type AssetLocationRow,
-} from '../components/AssetLocationsSection';
+import { WarehousesSection } from '../components/WarehousesSection';
 import { CategoriesModals } from '../components/CategoriesModals';
 import {
   SuppliersSection,
@@ -68,22 +65,6 @@ const mapCategoryToGroupRow = (item: AssetCategoryItem): AssetGroupRow => ({
   assetTypeCount: item.assetTypeCount,
 });
 
-const mapLocationToRow = (item: AssetLocationItem, index: number): AssetLocationRow => ({
-  key: item.locationId,
-  index: index + 1,
-  name: item.departmentName,
-  parentName: item.assetName,
-  assetCode: item.assetCode,
-  instanceCode: item.instanceCode,
-  assetId: item.assetId,
-  assetInstanceId: item.assetInstanceId,
-  departmentId: item.departmentId,
-  startDate: item.startDate,
-  endDate: item.endDate ?? null,
-  note: item.note ?? null,
-  status: item.isCurrent ? 'tracking' : 'stopped',
-});
-
 const mapSupplierToRow = (item: SupplierItem, index: number): SupplierRow => ({
   key: item.supplierId,
   supplierId: item.supplierId,
@@ -106,7 +87,7 @@ export function CategoriesPage() {
   const [categoryRows, setCategoryRows] = useState<AssetGroupRow[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [isLoadingAssetTypes, setIsLoadingAssetTypes] = useState(false);
-  const [locationRows, setLocationRows] = useState<AssetLocationRow[]>([]);
+  const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
   const [supplierRows, setSupplierRows] = useState<SupplierRow[]>([]);
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
   const [supplierStatusFilter, setSupplierStatusFilter] = useState<'all' | SupplierStatus>('all');
@@ -124,14 +105,14 @@ export function CategoriesPage() {
   const [isCategoryDeleteOpen, setIsCategoryDeleteOpen] = useState(false);
   const [categoryDeleteTarget, setCategoryDeleteTarget] = useState<AssetGroupRow | null>(null);
   const [isDeletingCategory, setIsDeletingCategory] = useState(false);
-  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
-  const [locationModalMode, setLocationModalMode] = useState<'create' | 'edit'>('create');
-  const [editingLocationId, setEditingLocationId] = useState<number | null>(null);
-  const [isSavingLocation, setIsSavingLocation] = useState(false);
-  const [isLoadingLocations, setIsLoadingLocations] = useState(false);
-  const [isLocationDeleteOpen, setIsLocationDeleteOpen] = useState(false);
-  const [locationDeleteTarget, setLocationDeleteTarget] = useState<AssetLocationRow | null>(null);
-  const [isDeletingLocation, setIsDeletingLocation] = useState(false);
+  const [isWarehouseModalOpen, setIsWarehouseModalOpen] = useState(false);
+  const [warehouseModalMode, setWarehouseModalMode] = useState<'create' | 'edit'>('create');
+  const [editingWarehouseId, setEditingWarehouseId] = useState<number | null>(null);
+  const [isSavingWarehouse, setIsSavingWarehouse] = useState(false);
+  const [isLoadingWarehouses, setIsLoadingWarehouses] = useState(false);
+  const [isWarehouseDeleteOpen, setIsWarehouseDeleteOpen] = useState(false);
+  const [warehouseDeleteTarget, setWarehouseDeleteTarget] = useState<WarehouseItem | null>(null);
+  const [isDeletingWarehouse, setIsDeletingWarehouse] = useState(false);
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
   const [supplierModalMode, setSupplierModalMode] = useState<'create' | 'edit'>('create');
   const [editingSupplier, setEditingSupplier] = useState<SupplierRow | null>(null);
@@ -154,14 +135,7 @@ export function CategoriesPage() {
     categoryId?: number;
   }>();
   const [assetCategoryForm] = Form.useForm<{ name: string }>();
-  const [locationForm] = Form.useForm<{
-    assetInstanceId?: number;
-    departmentId?: number;
-    startDate: string;
-    endDate?: string;
-    isCurrent: boolean;
-    note?: string;
-  }>();
+  const [warehouseForm] = Form.useForm<{ name: string; location?: string }>();
 
   const loadAssetTypes = useCallback(async () => {
     if (activeCatalogTab !== 'asset-types' || activeSubTab !== 'type') {
@@ -214,26 +188,26 @@ export function CategoriesPage() {
     void loadAssetCategories();
   }, [loadAssetCategories]);
 
-  const loadLocations = useCallback(async () => {
-    if (activeCatalogTab !== 'asset-locations') {
+  const loadWarehouses = useCallback(async () => {
+    if (activeCatalogTab !== 'warehouses') {
       return;
     }
     try {
-      setIsLoadingLocations(true);
-      const data = await assetLocationService.getAll();
-      setLocationRows(data.map((item, index) => mapLocationToRow(item, index)));
+      setIsLoadingWarehouses(true);
+      const data = await assetService.getWarehouses();
+      setWarehouses(data);
     } catch (error) {
       // eslint-disable-next-line no-console
-      console.error('Failed to load asset locations', error);
-      message.error('Không tải được danh sách vị trí tài sản từ hệ thống.');
+      console.error('Failed to load warehouses', error);
+      message.error('Không tải được danh sách kho.');
     } finally {
-      setIsLoadingLocations(false);
+      setIsLoadingWarehouses(false);
     }
   }, [activeCatalogTab]);
 
   useEffect(() => {
-    void loadLocations();
-  }, [loadLocations]);
+    void loadWarehouses();
+  }, [loadWarehouses]);
 
   const loadSuppliers = async (keyword?: string) => {
     try {
@@ -278,20 +252,18 @@ export function CategoriesPage() {
     });
   }, [categoryRows, searchText]);
 
-  const filteredLocationRows = useMemo(() => {
+  const filteredWarehouseRows = useMemo(() => {
     const kw = searchText.trim().toLowerCase();
-    return locationRows.filter((row) => {
-      const matchStatus = statusFilter === 'all' || row.status === statusFilter;
-      const matchSearch =
-        !kw ||
-        row.name.toLowerCase().includes(kw) ||
-        row.assetCode.toLowerCase().includes(kw) ||
-        row.instanceCode.toLowerCase().includes(kw) ||
-        (row.parentName ?? '').toLowerCase().includes(kw) ||
-        (row.note ?? '').toLowerCase().includes(kw);
-      return matchStatus && matchSearch;
+    return warehouses.filter((w) => {
+      if (!kw) return true;
+      const dn = (w.description ?? '').toLowerCase();
+      return (
+        String(w.warehouseId).includes(kw) ||
+        (w.name ?? '').toLowerCase().includes(kw) ||
+        dn.includes(kw)
+      );
     });
-  }, [locationRows, searchText, statusFilter]);
+  }, [warehouses, searchText]);
 
   const filteredSupplierRows = useMemo(() => {
     return supplierRows.filter((row) => {
@@ -300,114 +272,93 @@ export function CategoriesPage() {
     });
   }, [supplierRows, supplierStatusFilter]);
 
-  const sliceDate = (v: string | null | undefined) => (v ? v.slice(0, 10) : '');
-
-  const handleOpenCreateLocation = () => {
-    setLocationModalMode('create');
-    setEditingLocationId(null);
-    const today = new Date().toISOString().slice(0, 10);
-    locationForm.setFieldsValue({
-      assetInstanceId: undefined,
-      departmentId: undefined,
-      startDate: today,
-      endDate: '',
-      isCurrent: true,
-      note: '',
-    });
-    setIsLocationModalOpen(true);
+  const handleOpenCreateWarehouse = () => {
+    setWarehouseModalMode('create');
+    setEditingWarehouseId(null);
+    warehouseForm.resetFields();
+    warehouseForm.setFieldsValue({ name: '', location: '' });
+    setIsWarehouseModalOpen(true);
   };
 
-  const handleOpenEditLocation = (row: AssetLocationRow) => {
-    setLocationModalMode('edit');
-    setEditingLocationId(row.key);
-    locationForm.setFieldsValue({
-      assetInstanceId: row.assetInstanceId,
-      departmentId: row.departmentId,
-      startDate: sliceDate(row.startDate),
-      endDate: row.endDate ? sliceDate(row.endDate) : '',
-      isCurrent: row.status === 'tracking',
-      note: row.note ?? '',
+  const handleOpenEditWarehouse = (row: WarehouseItem) => {
+    setWarehouseModalMode('edit');
+    setEditingWarehouseId(row.warehouseId);
+    warehouseForm.resetFields();
+    warehouseForm.setFieldsValue({
+      name: row.name,
+      location: row.description ?? '',
     });
-    setIsLocationModalOpen(true);
+    setIsWarehouseModalOpen(true);
   };
 
-  const handleSubmitLocation = async (values: {
-    assetInstanceId?: number;
-    departmentId?: number;
-    startDate: string;
-    endDate?: string;
-    isCurrent: boolean;
-    note?: string;
-  }) => {
-    const endRaw = values.endDate?.trim();
-    const noteTrim = values.note?.trim();
-    setIsSavingLocation(true);
+  const handleSubmitWarehouse = async (values: { name: string; location?: string }) => {
+    const name = values.name?.trim();
+    if (!name) {
+      message.error('Vui lòng nhập tên kho.');
+      return;
+    }
+    setIsSavingWarehouse(true);
     try {
-      if (locationModalMode === 'create') {
-        if (values.assetInstanceId == null || values.departmentId == null) {
-          message.error('Vui lòng chọn bản ghi tài sản và phòng ban.');
-          return;
-        }
-        await assetLocationService.create({
-          assetInstanceId: values.assetInstanceId,
-          departmentId: values.departmentId,
-          startDate: values.startDate,
-          endDate: endRaw && endRaw.length > 0 ? endRaw : null,
-          isCurrent: values.isCurrent,
-          note: noteTrim ? noteTrim : null,
-        });
-        message.success('Tạo vị trí tài sản thành công.');
-      } else if (editingLocationId != null) {
-        if (values.departmentId == null) {
-          message.error('Vui lòng chọn phòng ban.');
-          return;
-        }
-        await assetLocationService.update(editingLocationId, {
-          departmentId: values.departmentId,
-          startDate: values.startDate,
-          endDate: endRaw && endRaw.length > 0 ? endRaw : null,
-          isCurrent: values.isCurrent,
-          note: noteTrim ? noteTrim : null,
-        });
-        message.success('Cập nhật vị trí tài sản thành công.');
+      const payload = {
+        name,
+        description: values.location?.trim() || undefined,
+      };
+      if (warehouseModalMode === 'edit' && editingWarehouseId != null) {
+        await assetService.updateWarehouse(editingWarehouseId, payload);
+        message.success('Đã cập nhật kho.');
+      } else {
+        await assetService.createWarehouse(payload);
+        message.success('Đã tạo kho mới.');
       }
-      setIsLocationModalOpen(false);
-      setEditingLocationId(null);
-      await loadLocations();
+      setIsWarehouseModalOpen(false);
+      setEditingWarehouseId(null);
+      setWarehouseModalMode('create');
+      warehouseForm.resetFields();
+      await loadWarehouses();
     } catch (error) {
       if (isAxiosError(error)) {
         const data = error.response?.data as { message?: string } | undefined;
         if (data?.message) {
           message.error(data.message);
-          return;
+        } else {
+          message.error(
+            warehouseModalMode === 'edit' ? 'Không thể cập nhật kho.' : 'Không thể tạo kho.'
+          );
         }
+      } else {
+        // eslint-disable-next-line no-console
+        console.error('Failed to save warehouse', error);
+        message.error(
+          warehouseModalMode === 'edit' ? 'Không thể cập nhật kho.' : 'Không thể tạo kho.'
+        );
       }
-      // eslint-disable-next-line no-console
-      console.error('Failed to save asset location', error);
-      message.error('Không thể lưu vị trí tài sản.');
+      throw error;
     } finally {
-      setIsSavingLocation(false);
+      setIsSavingWarehouse(false);
     }
   };
 
-  const handleDeleteLocation = (row: AssetLocationRow) => {
-    setLocationDeleteTarget(row);
-    setIsLocationDeleteOpen(true);
+  const handleWarehouseModalOk = () =>
+    warehouseForm.validateFields().then((v) => handleSubmitWarehouse(v as { name: string; location?: string }));
+
+  const handleRequestDeleteWarehouse = (row: WarehouseItem) => {
+    setWarehouseDeleteTarget(row);
+    setIsWarehouseDeleteOpen(true);
   };
 
-  const handleCloseLocationDeleteConfirm = () => {
-    setIsLocationDeleteOpen(false);
-    setLocationDeleteTarget(null);
+  const handleCloseWarehouseDeleteConfirm = () => {
+    setIsWarehouseDeleteOpen(false);
+    setWarehouseDeleteTarget(null);
   };
 
-  const handleConfirmDeleteLocation = async () => {
-    if (!locationDeleteTarget) return;
-    setIsDeletingLocation(true);
+  const handleConfirmDeleteWarehouse = async () => {
+    if (!warehouseDeleteTarget) return;
+    setIsDeletingWarehouse(true);
     try {
-      await assetLocationService.delete(locationDeleteTarget.key);
-      message.success('Đã xóa bản ghi vị trí.');
-      handleCloseLocationDeleteConfirm();
-      await loadLocations();
+      await assetService.deleteWarehouse(warehouseDeleteTarget.warehouseId);
+      message.success('Đã xóa kho.');
+      handleCloseWarehouseDeleteConfirm();
+      await loadWarehouses();
     } catch (error) {
       if (isAxiosError(error)) {
         const data = error.response?.data as { message?: string } | undefined;
@@ -417,10 +368,10 @@ export function CategoriesPage() {
         }
       }
       // eslint-disable-next-line no-console
-      console.error('Failed to delete asset location', error);
-      message.error('Không thể xóa vị trí tài sản.');
+      console.error('Failed to delete warehouse', error);
+      message.error('Không thể xóa kho.');
     } finally {
-      setIsDeletingLocation(false);
+      setIsDeletingWarehouse(false);
     }
   };
 
@@ -788,8 +739,8 @@ export function CategoriesPage() {
               handleOpenCreateAssetCategory();
               return;
             }
-            if (activeCatalogTab === 'asset-locations') {
-              handleOpenCreateLocation();
+            if (activeCatalogTab === 'warehouses') {
+              handleOpenCreateWarehouse();
               return;
             }
             if (activeCatalogTab === 'suppliers') {
@@ -816,8 +767,7 @@ export function CategoriesPage() {
           className="categories-tabs categories-tabs--primary"
           items={[
             { key: 'asset-types', label: 'Danh mục tài sản' },
-            { key: 'asset-locations', label: 'Vị trí tài sản' },
-            { key: 'work-locations', label: 'Vị trí công việc' },
+            { key: 'warehouses', label: 'Kho' },
             { key: 'suppliers', label: 'Nhà cung cấp' },
           ]}
         />
@@ -880,17 +830,14 @@ export function CategoriesPage() {
           />
         )}
 
-        {activeCatalogTab === 'asset-locations' && (
-          <AssetLocationsSection
+        {activeCatalogTab === 'warehouses' && (
+          <WarehousesSection
             searchText={searchText}
             onSearchTextChange={setSearchText}
-            statusFilter={statusFilter}
-            onStatusFilterChange={setStatusFilter}
-            isLoadingLocations={isLoadingLocations}
-            rows={filteredLocationRows}
-            statusLabels={STATUS_LABELS}
-            onOpenEditLocation={handleOpenEditLocation}
-            onDeleteLocation={handleDeleteLocation}
+            isLoadingWarehouses={isLoadingWarehouses}
+            rows={filteredWarehouseRows}
+            onEditWarehouse={handleOpenEditWarehouse}
+            onRequestDeleteWarehouse={handleRequestDeleteWarehouse}
           />
         )}
 
@@ -979,27 +926,53 @@ export function CategoriesPage() {
         cancelText="Hủy"
       >
         <p>
-          Bạn có chắc muốn xóa nhóm tài sản <strong>{categoryDeleteTarget?.name}</strong>? Chỉ xóa được
-          khi nhóm không còn loại tài sản nào.
+          Bạn có chắc muốn xóa nhóm tài sản <strong>{categoryDeleteTarget?.name}</strong>?
         </p>
       </Modal>
 
       <Modal
-        title="Xóa vị trí tài sản"
-        open={isLocationDeleteOpen}
-        onOk={handleConfirmDeleteLocation}
-        onCancel={handleCloseLocationDeleteConfirm}
-        confirmLoading={isDeletingLocation}
+        title="Xóa kho"
+        open={isWarehouseDeleteOpen}
+        onOk={handleConfirmDeleteWarehouse}
+        onCancel={handleCloseWarehouseDeleteConfirm}
+        confirmLoading={isDeletingWarehouse}
         okText="Xóa"
         okButtonProps={{ danger: true }}
         cancelText="Hủy"
       >
         <p>
-          Xóa bản ghi vị trí <strong>#{locationDeleteTarget?.key}</strong> — tài sản{' '}
-          <strong>{locationDeleteTarget?.parentName}</strong> / phòng ban{' '}
-          <strong>{locationDeleteTarget?.name}</strong>? Chỉ xóa được khi không còn tham chiếu kiểm
-          kê hoặc điều chuyển.
+          Bạn có chắc muốn xóa kho <strong>{warehouseDeleteTarget?.name}</strong>?
         </p>
+      </Modal>
+
+      <Modal
+        title={
+          warehouseModalMode === 'create' ? 'Tạo kho mới' : 'Chỉnh sửa kho'
+        }
+        open={isWarehouseModalOpen}
+        onCancel={() => {
+          setIsWarehouseModalOpen(false);
+          setEditingWarehouseId(null);
+          setWarehouseModalMode('create');
+        }}
+        onOk={handleWarehouseModalOk}
+        confirmLoading={isSavingWarehouse}
+        okText={warehouseModalMode === 'create' ? 'Tạo kho' : 'Lưu'}
+        cancelText="Hủy"
+        destroyOnClose
+      >
+        <Form form={warehouseForm} layout="vertical">
+          <Form.Item
+            name="name"
+            label="Tên kho"
+            rules={[{ required: true, message: 'Vui lòng nhập tên kho.' }]}
+          >
+            <Input placeholder="Nhập tên kho" maxLength={200} />
+          </Form.Item>
+          <Form.Item name="location" label="Địa điểm">
+            <Input.TextArea placeholder="Địa chỉ / mô tả (tuỳ chọn)" rows={2} maxLength={500} />
+          </Form.Item>
+        </Form>
       </Modal>
 
       <CategoriesModals
@@ -1017,13 +990,6 @@ export function CategoriesPage() {
         assetCategoryForm={assetCategoryForm}
         onSubmitAssetCategory={handleSubmitAssetCategory}
         isSavingAssetCategory={isSavingAssetCategory}
-        isLocationModalOpen={isLocationModalOpen}
-        setIsLocationModalOpen={setIsLocationModalOpen}
-        locationModalMode={locationModalMode}
-        editingLocationId={editingLocationId}
-        locationForm={locationForm}
-        onSubmitLocation={handleSubmitLocation}
-        isSavingLocation={isSavingLocation}
       />
     </div>
   );

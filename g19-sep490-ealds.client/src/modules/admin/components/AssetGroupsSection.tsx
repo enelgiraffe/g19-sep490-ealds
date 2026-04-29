@@ -1,5 +1,5 @@
 import { Button, Input } from 'antd';
-import { DownloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons';
+import { SearchOutlined, SettingOutlined } from '@ant-design/icons';
 
 export interface AssetGroupRow {
   key: number;
@@ -38,9 +38,6 @@ export function AssetGroupsSection({
           />
           <Button icon={<SettingOutlined />} className="categories-settings-btn" />
         </div>
-        <Button icon={<DownloadOutlined />} className="categories-import-btn">
-          Nhập excel
-        </Button>
       </div>
 
       <div className="asset-table-wrapper categories-table-wrapper">

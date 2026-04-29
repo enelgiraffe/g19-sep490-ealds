@@ -158,6 +158,13 @@ export interface WarehouseItem {
   warehouseId: number;
   name: string;
   description?: string | null;
+  /** False when the warehouse has related asset instances; delete is blocked. */
+  canDelete?: boolean;
+}
+
+export interface CreateWarehousePayload {
+  name: string;
+  description?: string | null;
 }
 
 export interface DepreciationPolicyItem {
@@ -505,6 +512,28 @@ export const assetService = {
   async getWarehouses(): Promise<WarehouseItem[]> {
     const response = await assetApi.get<WarehouseItem[]>('/api/warehouseassets');
     return response.data;
+  },
+
+  async createWarehouse(payload: CreateWarehousePayload): Promise<WarehouseItem> {
+    const loc = payload.description?.trim();
+    const response = await assetApi.post<WarehouseItem>('/api/warehouseassets', {
+      name: payload.name.trim(),
+      location: loc && loc.length > 0 ? loc : undefined,
+    });
+    return response.data;
+  },
+
+  async updateWarehouse(id: number, payload: CreateWarehousePayload): Promise<WarehouseItem> {
+    const loc = payload.description?.trim();
+    const response = await assetApi.put<WarehouseItem>(`/api/warehouseassets/${id}`, {
+      name: payload.name.trim(),
+      location: loc && loc.length > 0 ? loc : undefined,
+    });
+    return response.data;
+  },
+
+  async deleteWarehouse(id: number): Promise<void> {
+    await assetApi.delete(`/api/warehouseassets/${id}`);
   },
 
   async getInstanceCodePrefixes(): Promise<string[]> {

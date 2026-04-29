@@ -25,6 +25,7 @@ export const ROLE_MENU: Record<AppRole, SidebarItem[]> = {
   accountant: [
     // Kế toán dùng màn tài sản riêng
     { key: 'assets', path: '/accountant-assets', label: 'Tài sản', icon: '/icons/sidebar-assets.svg' },
+    { key: 'categories', path: '/categories', label: 'Danh mục', icon: '/icons/sidebar-categories.svg' },
     { key: 'inventory', path: '/inventory', label: 'Kiểm kê', icon: '/icons/sidebar-inventories.svg' },
     { key: 'liquidation', path: '/liquidation', label: 'Thanh lý', icon: '/icons/sidebar-liquidation.svg' },
     { key: 'requests', path: '/requests', label: 'Yêu cầu', icon: '/icons/sidebar-requests.svg' },
@@ -50,12 +51,8 @@ export const ROLE_MENU: Record<AppRole, SidebarItem[]> = {
   ],
   admin: [
     { key: 'users', path: '/users', label: 'Người dùng', icon: '/icons/sidebar-users.svg' },
-    { key: 'roles', path: '/roles', label: 'Vai trò', icon: '/icons/sidebar-roles.svg' },
     { key: 'departments', path: '/departments', label: 'Phòng ban', icon: '/icons/sidebar-departments.svg' },
     { key: 'categories', path: '/categories', label: 'Danh mục', icon: '/icons/sidebar-categories.svg' },
-    { key: 'approval-workflows', path: '/approval-workflows', label: 'Quy trình phê duyệt', icon: '/icons/sidebar-approval-workflows.svg' },
-    { key: 'extended-fields', path: '/extended-fields', label: 'Trường mở rộng', icon: '/icons/sidebar-extended-fields.svg' },
-    { key: 'system-settings', path: '/system-settings', label: 'Cấu hình hệ thống', icon: '/icons/sidebar-system-settings.svg' },
   ],
 };
 
