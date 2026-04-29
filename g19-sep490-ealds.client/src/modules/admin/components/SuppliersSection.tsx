@@ -38,11 +38,6 @@ export interface SupplierFormErrors {
   status?: string;
 }
 
-const SUPPLIER_STATUS_LABELS: Record<SupplierStatus, { label: string; className: string }> = {
-  active: { label: 'Đang hoạt động', className: 'categories-status-pill categories-status-pill--active' },
-  inactive: { label: 'Không hoạt động', className: 'categories-status-pill categories-status-pill--inactive' },
-};
-
 interface SuppliersSectionProps {
   searchText: string;
   onSearchTextChange: (value: string) => void;
@@ -130,20 +125,19 @@ export function SuppliersSection({
               <th>TÊN NHÀ CUNG CẤP</th>
               <th>MST</th>
               <th>SỐ ĐIỆN THOẠI</th>
-              <th>TRẠNG THÁI</th>
               <th className="asset-table__cell asset-table__cell--actions" />
             </tr>
           </thead>
           <tbody>
             {isLoadingSuppliers ? (
               <tr>
-                <td colSpan={7} className="categories-table-empty">
+                <td colSpan={6} className="categories-table-empty">
                   Đang tải dữ liệu...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="categories-table-empty">
+                <td colSpan={6} className="categories-table-empty">
                   Không có dữ liệu.
                 </td>
               </tr>
@@ -155,11 +149,6 @@ export function SuppliersSection({
                   <td>{row.name}</td>
                   <td>{row.taxCode ?? '—'}</td>
                   <td>{row.phone ?? '—'}</td>
-                  <td>
-                    <span className={SUPPLIER_STATUS_LABELS[row.status].className}>
-                      {SUPPLIER_STATUS_LABELS[row.status].label}
-                    </span>
-                  </td>
                   <td className="asset-table__cell asset-table__cell--actions">
                     <button
                       type="button"

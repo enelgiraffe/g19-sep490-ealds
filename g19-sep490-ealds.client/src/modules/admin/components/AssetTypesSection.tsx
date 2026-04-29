@@ -23,7 +23,6 @@ interface AssetTypesSectionProps {
   onResetFilters: () => void;
   isLoadingAssetTypes: boolean;
   rows: CategoryRow[];
-  statusLabels: Record<CategoryStatus, { label: string; className: string }>;
   onEditAssetType: (row: CategoryRow) => void;
   onDeleteAssetType: (row: CategoryRow) => void;
 }
@@ -36,7 +35,6 @@ export function AssetTypesSection({
   onResetFilters,
   isLoadingAssetTypes,
   rows,
-  statusLabels,
   onEditAssetType,
   onDeleteAssetType,
 }: AssetTypesSectionProps) {
@@ -74,20 +72,19 @@ export function AssetTypesSection({
               <th>TÊN LOẠI TÀI SẢN</th>
               <th>NHÓM TÀI SẢN</th>
               <th>SỐ LƯỢNG</th>
-              <th>TRẠNG THÁI</th>
               <th className="asset-table__cell asset-table__cell--actions" />
             </tr>
           </thead>
           <tbody>
             {isLoadingAssetTypes ? (
               <tr>
-                <td colSpan={6} className="categories-table-empty">
+                <td colSpan={5} className="categories-table-empty">
                   Đang tải dữ liệu...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="categories-table-empty">
+                <td colSpan={5} className="categories-table-empty">
                   Không có dữ liệu.
                 </td>
               </tr>
@@ -98,11 +95,6 @@ export function AssetTypesSection({
                   <td>{row.name}</td>
                   <td>{row.group}</td>
                   <td className="asset-align-right">{row.quantityTracking}</td>
-                  <td>
-                    <span className={statusLabels[row.displayStatus].className}>
-                      {statusLabels[row.displayStatus].label}
-                    </span>
-                  </td>
                   <td className="asset-table__cell asset-table__cell--actions">
                     <button
                       type="button"

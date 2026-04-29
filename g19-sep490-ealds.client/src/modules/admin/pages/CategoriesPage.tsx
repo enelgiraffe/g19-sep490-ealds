@@ -37,11 +37,6 @@ interface AssetGroupRow {
   assetTypeCount: number;
 }
 
-const STATUS_LABELS: Record<CategoryStatus, { label: string; className: string }> = {
-  tracking: { label: 'Đang theo dõi', className: 'categories-status-pill categories-status-pill--active' },
-  stopped: { label: 'Ngừng theo dõi', className: 'categories-status-pill categories-status-pill--inactive' },
-};
-
 const SUPPLIER_CODE_MAX_LENGTH = 50;
 const SUPPLIER_NAME_MAX_LENGTH = 200;
 const SUPPLIER_ADDRESS_MAX_LENGTH = 255;
@@ -813,7 +808,6 @@ export function CategoriesPage() {
             }}
             isLoadingAssetTypes={isLoadingAssetTypes}
             rows={filteredRows}
-            statusLabels={STATUS_LABELS}
             onEditAssetType={handleOpenEditAssetType}
             onDeleteAssetType={handleDeleteAssetType}
           />
