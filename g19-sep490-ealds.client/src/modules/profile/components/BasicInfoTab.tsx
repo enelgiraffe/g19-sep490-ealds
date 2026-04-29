@@ -131,8 +131,8 @@ export function BasicInfoTab() {
             <Form.Item label="Email" name="email" className="basic-info-form__item">
               <Input placeholder="Nhập email" disabled />
             </Form.Item>
-            <Form.Item label="Vị trí công việc" name="position" className="basic-info-form__item">
-              <Input placeholder="Nhập vị trí công việc" disabled />
+            <Form.Item label="Vai trò" name="position" className="basic-info-form__item">
+              <Input placeholder="Nhập vai trò" disabled />
             </Form.Item>
           </div>
 

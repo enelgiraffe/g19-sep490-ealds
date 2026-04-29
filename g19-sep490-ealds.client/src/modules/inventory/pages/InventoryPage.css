@@ -23,6 +23,11 @@
 /* Clickable data rows (scheduled rows are not navigable) */
 .asset-table.maintenance-table tbody tr.inventory-table__row--clickable {
   cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.asset-table.maintenance-table tbody tr.inventory-table__row--clickable:hover {
+  background-color: #fff5f5;
 }
 
 /* ── Status tag ── */

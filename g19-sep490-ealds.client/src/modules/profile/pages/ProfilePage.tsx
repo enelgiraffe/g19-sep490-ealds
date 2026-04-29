@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Tabs } from 'antd';
 import { BasicInfoTab } from '../components/BasicInfoTab';
 import { PasswordTab } from '../components/PasswordTab';
-import { ActivityHistoryTab } from '../components/ActivityHistoryTab';
 import './ProfilePage.css';
 
 export function ProfilePage() {
@@ -18,11 +17,6 @@ export function ProfilePage() {
       key: 'password',
       label: 'Đổi mật khẩu',
       children: <PasswordTab />,
-    },
-    {
-      key: 'history',
-      label: 'Lịch sử hoạt động',
-      children: <ActivityHistoryTab />,
     },
   ];
 

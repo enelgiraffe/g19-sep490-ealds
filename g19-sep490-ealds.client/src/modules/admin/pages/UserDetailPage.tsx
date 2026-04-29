@@ -235,7 +235,7 @@ export function UserDetailPage() {
                   <div className="user-detail-value user-detail-value--readonly">{user?.email || '—'}</div>
                 </div>
                 <div className="user-detail-field">
-                  <div className="user-detail-label">Vị trí công việc</div>
+                  <div className="user-detail-label">Vai trò</div>
                   {isEditing ? (
                     <Select
                       className="user-detail-select"
