@@ -23,7 +23,7 @@ export function inventorySessionEndDayForInclusiveDuration(
   executionDaysInclusive: number,
 ): Dayjs {
   const n = Math.max(1, Math.floor(executionDaysInclusive));
-  return start.add(n - 1, 'day');
+  return start.add(n, 'day');
 }
 
 /**
