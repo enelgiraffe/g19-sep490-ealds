@@ -94,6 +94,7 @@ export function TransferAssetModal({
   const [dateError, setDateError] = useState<string | null>(null);
   const [fromError, setFromError] = useState<string | null>(null);
   const [toError, setToError] = useState<string | null>(null);
+  const [departmentRequesterError, setDepartmentRequesterError] = useState<string | null>(null);
   const [assetsError, setAssetsError] = useState<string | null>(null);
   const [isSelectAssetsOpen, setIsSelectAssetsOpen] = useState(false);
   const [selectedAssets, setSelectedAssets] = useState<SelectableAsset[]>([]);
@@ -171,6 +172,7 @@ export function TransferAssetModal({
           setDateError(null);
           setFromError(null);
           setToError(null);
+          setDepartmentRequesterError(null);
           setAssetsError(null);
         } catch {
           if (!cancelled) message.error('Không đọc được bản nháp đã lưu.');
@@ -196,6 +198,7 @@ export function TransferAssetModal({
     setDateError(null);
     setFromError(null);
     setToError(null);
+    setDepartmentRequesterError(null);
     setAssetsError(null);
     setSelectedAssets([]);
     if (fromDepartmentId != null) {
@@ -312,6 +315,38 @@ export function TransferAssetModal({
       setToError(mode === 'department' ? 'Chọn phòng ban đích' : 'Chọn vị trí đích');
       hasError = true;
     }
+
+    if (!hasError) {
+      const myDept =
+        currentUserDepartmentId != null && Number.isFinite(Number(currentUserDepartmentId))
+          ? Number(currentUserDepartmentId)
+          : NaN;
+      const fromDept = Number(fromLocationId);
+      const toDept = Number(toLocationId);
+      if (!Number.isFinite(myDept) || myDept <= 0) {
+        setDepartmentRequesterError(
+          'Không xác định được phòng ban của bạn. Vui lòng cập nhật hồ sơ hoặc liên hệ quản trị.',
+        );
+        hasError = true;
+      } else if (
+        !Number.isFinite(fromDept) ||
+        fromDept <= 0 ||
+        !Number.isFinite(toDept) ||
+        toDept <= 0
+      ) {
+        setDepartmentRequesterError(null);
+      } else if (myDept !== fromDept && myDept !== toDept) {
+        setDepartmentRequesterError(
+          'Chỉ người thuộc phòng ban nguồn hoặc phòng ban đích mới được tạo yêu cầu điều chuyển.',
+        );
+        hasError = true;
+      } else {
+        setDepartmentRequesterError(null);
+      }
+    } else {
+      setDepartmentRequesterError(null);
+    }
+
     return !hasError;
   };
 
@@ -439,6 +474,7 @@ export function TransferAssetModal({
                   onChange={(e) => {
                     setFromLocationId(e.target.value);
                     setFromError(null);
+                    setDepartmentRequesterError(null);
                   }}
                 >
                   <option value="">
@@ -466,6 +502,7 @@ export function TransferAssetModal({
                   onChange={(e) => {
                     setToLocationId(e.target.value);
                     setToError(null);
+                    setDepartmentRequesterError(null);
                   }}
                 >
                   <option value="">
@@ -544,6 +581,9 @@ export function TransferAssetModal({
         </div>
 
         <div className="transfer-modal__footer">
+          {departmentRequesterError && (
+            <div className="transfer-error-text transfer-modal__footer-error">{departmentRequesterError}</div>
+          )}
           <button
             type="button"
             onClick={handleSubmit}

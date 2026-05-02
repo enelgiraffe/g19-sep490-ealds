@@ -211,8 +211,14 @@
 .transfer-modal__footer {
   margin-top: 24px;
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 12px;
+}
+
+.transfer-modal__footer-error {
+  flex-basis: 100%;
+  margin: 0 0 4px;
 }
 
 .transfer-btn-submit {
