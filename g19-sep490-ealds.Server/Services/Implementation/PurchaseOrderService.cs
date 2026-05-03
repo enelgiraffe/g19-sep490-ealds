@@ -271,11 +271,15 @@ public class PurchaseOrderService : IPurchaseOrderService
         entity.AssetRequestId = dto.AssetRequestId;
         entity.Currency = currency;
 
-        if (dto.ContractNo != null)
+        // Validate và cập nhật ContractNo
+        var newContractNo = dto.ContractNo != null ? dto.ContractNo.Trim() : entity.ContractNo;
+        
+        // Nếu đang chuyển từ draft sang created, bắt buộc phải có ContractNo
+        if (!dto.IsDraft && entity.Status == StatusDraft && string.IsNullOrEmpty(newContractNo))
+            throw new InvalidOperationException("Số chứng từ là bắt buộc khi tạo đơn (không phải nháp).");
+
+        if (!string.IsNullOrEmpty(newContractNo))
         {
-            var newContractNo = dto.ContractNo.Trim();
-            if (string.IsNullOrEmpty(newContractNo))
-                throw new InvalidOperationException("Số chứng từ không được để trống.");
             if (newContractNo.Length > 100)
                 throw new InvalidOperationException("Số chứng từ quá dài (tối đa 100 ký tự).");
             var duplicateContract = await _context.Procurements.AsNoTracking()
@@ -283,6 +287,18 @@ public class PurchaseOrderService : IPurchaseOrderService
             if (duplicateContract)
                 throw new InvalidOperationException("Số chứng từ đã tồn tại.");
             entity.ContractNo = newContractNo;
+        }
+
+        // Cập nhật trạng thái dựa trên IsDraft
+        if (dto.IsDraft)
+        {
+            // Giữ hoặc chuyển về draft
+            entity.Status = StatusDraft;
+        }
+        else if (entity.Status == StatusDraft)
+        {
+            // Chuyển từ draft sang created
+            entity.Status = StatusCreated;
         }
 
         if (dto.Lines == null || dto.Lines.Count == 0)

@@ -174,6 +174,9 @@ export function AssetInstanceEditPage() {
   const [newPolicyLifeMonths, setNewPolicyLifeMonths] = useState('');
   const [newPolicySalvageValue, setNewPolicySalvageValue] = useState('');
 
+  const [isFixedAsset, setIsFixedAsset] = useState(false);
+  const [wasAlreadyFixedAsset, setWasAlreadyFixedAsset] = useState(false);
+
   const [isCapitalized, setIsCapitalized] = useState(false);
   const [wasAlreadyCapitalized, setWasAlreadyCapitalized] = useState(false);
 
@@ -258,6 +261,10 @@ export function AssetInstanceEditPage() {
         const capitalized = inst.status === 7;
         setIsCapitalized(capitalized);
         setWasAlreadyCapitalized(capitalized);
+
+        const fixedAsset = inst.isFixedAsset === true;
+        setIsFixedAsset(fixedAsset);
+        setWasAlreadyFixedAsset(fixedAsset);
 
         setSerialNumber(inst.serialNumber ?? '');
         setContractNo(inst.contractNo ?? '');
@@ -629,6 +636,7 @@ export function AssetInstanceEditPage() {
       serialNumber: serialNumber.trim() || null,
       ...sharedAdvancedPayload,
       ...detailOnlyPayload,
+      isFixedAsset: isFixedAsset && !wasAlreadyFixedAsset ? true : undefined,
     };
 
     setSaving(true);
@@ -742,6 +750,22 @@ export function AssetInstanceEditPage() {
 
         <section className="asset-create__section">
           <h2 className="asset-create__section-title">Thông tin cá thể</h2>
+          <label className="asset-create__checkbox-row" style={{ marginBottom: 8 }}>
+            <input
+              type="checkbox"
+              checked={isFixedAsset}
+              disabled={wasAlreadyFixedAsset}
+              onChange={(e) => setIsFixedAsset(e.target.checked)}
+            />
+            <span>
+              Là tài sản cố định
+              {wasAlreadyFixedAsset && (
+                <span style={{ marginLeft: 6, color: '#888', fontStyle: 'italic' }}>
+                  — đã được đánh dấu
+                </span>
+              )}
+            </span>
+          </label>
           <label className="asset-create__checkbox-row" style={{ marginBottom: 8 }}>
             <input
               type="checkbox"
@@ -1000,6 +1024,7 @@ export function AssetInstanceEditPage() {
           </div>
         </section>
 
+        {isFixedAsset && (
         <section className="asset-create__section">
           <h2 className="asset-create__section-title">Thông tin khấu hao</h2>
           <div className="asset-create__grid asset-create__grid--three">
@@ -1113,6 +1138,7 @@ export function AssetInstanceEditPage() {
             </div>
           </div>
         </section>
+        )}
       </form>
 
       {showCreatePolicyModal && (
