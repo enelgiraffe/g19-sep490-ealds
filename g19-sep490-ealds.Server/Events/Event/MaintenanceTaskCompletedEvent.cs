@@ -7,13 +7,12 @@ public class MaintenanceTaskCompletedEvent : INotification
     public int TaskId { get; }
     public int AssetInstanceId { get; }
     public int UserId { get; }
-    public CompleteTaskDTO Data { get; }
+    //public CompleteTaskDTO Data { get; }
 
-    public MaintenanceTaskCompletedEvent(int taskId, int assetInstanceId, int userId, CompleteTaskDTO data)
+    public MaintenanceTaskCompletedEvent(int taskId, int assetInstanceId, int userId)
     {
         TaskId = taskId;
         AssetInstanceId = assetInstanceId;
         UserId = userId;
-        Data = data;
     }
 }

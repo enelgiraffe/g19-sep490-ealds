@@ -40,46 +40,6 @@ public class AssetDepreciationService : IAssetDepreciationService
         await RunDepreciationForPeriod(period, assetInstanceId, now);
     }
 
-    public async Task RecalculateFromPeriod(int assetInstanceId, int year, int month)
-    {
-        // BR-28: tính lại khấu hao từ kỳ phát sinh nâng cấp/đánh giá lại.
-        if (month is < 1 or > 12)
-            throw new Exception("Month must be from 1 to 12");
-        if (year < 2000 || year > 3000)
-            throw new Exception("Year is out of valid range");
-
-        var fromPeriod = new DateOnly(year, month, 1);
-        var now = DateTime.UtcNow + VietnamOffset;
-        var currentPeriod = new DateOnly(now.Year, now.Month, 1);
-        if (fromPeriod > currentPeriod)
-            throw new Exception("Recalculation period cannot be in the future");
-
-        var records = await _context.DepreciationRecords
-            .Where(x => x.AssetInstanceId == assetInstanceId && x.Period >= fromPeriod)
-            .OrderBy(x => x.Period)
-            .ThenBy(x => x.CreateDate)
-            .ToListAsync();
-
-        if (records.Any(x => x.IsPosted || x.IsLocked == true))
-            throw new Exception("Cannot recalculate posted/locked depreciation records");
-
-        if (records.Count > 0)
-            _context.DepreciationRecords.RemoveRange(records);
-
-        var instance = await _context.AssetInstances
-            .Include(x => x.DepreciationPolicy)
-            .Include(x => x.AssetCapitalizations)
-            .FirstOrDefaultAsync(x => x.AssetInstanceId == assetInstanceId)
-            ?? throw new Exception("Asset instance not found");
-
-        for (var period = fromPeriod; period <= currentPeriod; period = period.AddMonths(1))
-        {
-            await ProcessInstance(instance, period, now);
-        }
-
-        await _context.SaveChangesAsync();
-    }
-
     private async Task RunDepreciationForPeriod(DateOnly period, int? assetInstanceId, DateTime runAtLocal)
     {
         var assetsQuery = _context.AssetInstances
@@ -166,40 +126,6 @@ public class AssetDepreciationService : IAssetDepreciationService
         });
 
         assetInstance.CurrentValue = remaining;
-    }
-
-    public async Task UpdateDepreciation(int recordId, decimal newAmount)
-    {
-        // Cập nhật một kỳ được phép sửa và tính lại các kỳ sau.
-        if (newAmount < 0)
-            throw new Exception("Depreciation amount cannot be negative");
-
-        var record = await _context.DepreciationRecords
-            .FirstOrDefaultAsync(x => x.RecordId == recordId)
-            ?? throw new Exception("Record not found");
-
-        if (record.IsPosted)
-            throw new Exception("Cannot modify posted record");
-        if (record.IsLocked == true)
-            throw new Exception("Cannot modify locked record");
-
-        var salvage = await _context.DepreciationPolicies
-            .Where(p => p.PolicyId == record.PolicyId)
-            .Select(p => (decimal?)p.SalvageValue)
-            .FirstOrDefaultAsync() ?? 0m;
-        var adjustedAmount = DepreciationFormula.ClampFinalPeriodAmount(record.OriginalValue, salvage, newAmount);
-
-        record.DepreciationAmount = adjustedAmount;
-        record.RemainingValue = record.OriginalValue - adjustedAmount;
-        record.AccumulatedDepreciation = await RecalculateAccumulatedUntil(
-            record.AssetInstanceId,
-            record.Period,
-            record.RecordId,
-            adjustedAmount);
-
-        await RecalculateNextPeriods(record.AssetInstanceId, record.Period, record.AccumulatedDepreciation);
-
-        await _context.SaveChangesAsync();
     }
 
     public async Task AssignPolicyAsync(int assetInstanceId, int policyId)
