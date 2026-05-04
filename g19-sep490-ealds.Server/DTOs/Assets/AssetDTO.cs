@@ -22,6 +22,7 @@ public class CreateAssetDTO
     public DateOnly? InUseDate { get; set; }
     public string? Specification { get; set; }
     public string? Note { get; set; }
+    public bool IsFixedAsset { get; set; }
 
     /// <summary>
     /// When <see cref="InitialInstance"/> is set, optional prefix for generated <c>InstanceCode</c> values:

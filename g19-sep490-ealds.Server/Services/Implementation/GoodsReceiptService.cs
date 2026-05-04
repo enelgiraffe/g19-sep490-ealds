@@ -10,6 +10,7 @@ public class GoodsReceiptService : IGoodsReceiptService
 {
     public const int StatusPosted = 1;
     private const int DocumentTypeGoodsReceiptAttachment = 50;
+    private const string FixedAssetMarker = "[FIXED_ASSET]";
 
     private readonly EaldsDbContext _context;
     private readonly ILogger<GoodsReceiptService> _logger;
@@ -276,6 +277,7 @@ public class GoodsReceiptService : IGoodsReceiptService
             else
                 purchaseDate = DateOnly.FromDateTime(DateTime.UtcNow);
 
+            var createdInstances = new List<(AssetInstance Instance, bool IsFixedAsset)>();
             for (var i = 0; i < grLines.Count; i++)
             {
                 var grLine = grLines[i];
@@ -323,13 +325,14 @@ public class GoodsReceiptService : IGoodsReceiptService
                 var lineTotal = row.QuantityReceived * pl.UnitPrice;
                 var (values, currents) = SplitValueAcrossInstances(lineTotal, n);
 
+                var isFixedAssetCatalog = IsFixedAssetCatalog(asset.Note);
                 for (var k = 0; k < n; k++)
                 {
                     var serial = row.InstanceSerialNumbers?[k];
                     if (serial != null)
                         serial = string.IsNullOrWhiteSpace(serial) ? null : serial.Trim();
 
-                    _context.AssetInstances.Add(new AssetInstance
+                    var instance = new AssetInstance
                     {
                         AssetId = asset.AssetId,
                         GoodsReceiptLineId = grLine.GoodsReceiptLineId,
@@ -346,7 +349,9 @@ public class GoodsReceiptService : IGoodsReceiptService
                         ContractNo = procurement.ContractNo,
                         Condition = null,
                         Note = null,
-                    });
+                    };
+                    _context.AssetInstances.Add(instance);
+                    createdInstances.Add((instance, isFixedAssetCatalog));
                 }
 
                 pl.ReceivedQuantity += row.QuantityReceived;
@@ -354,6 +359,23 @@ public class GoodsReceiptService : IGoodsReceiptService
 
             ApplyProcurementReceiptStatus(procurement);
             await _context.SaveChangesAsync();
+
+            var fixedAssetInstances = createdInstances.Where(x => x.IsFixedAsset).Select(x => x.Instance).ToList();
+            if (fixedAssetInstances.Count > 0)
+            {
+                foreach (var instance in fixedAssetInstances)
+                {
+                    _context.AssetCapitalizations.Add(new AssetCapitalization
+                    {
+                        AssetInstanceId = instance.AssetInstanceId,
+                        CapitalizedDate = DateTime.UtcNow,
+                        CapitalizedBy = userId,
+                        Note = "Tạo tự động theo danh mục tài sản cố định",
+                        CreateDate = DateTime.UtcNow
+                    });
+                }
+                await _context.SaveChangesAsync();
+            }
 
             var newInstanceIds = await _context.AssetInstances
                 .AsNoTracking()
@@ -465,6 +487,13 @@ public class GoodsReceiptService : IGoodsReceiptService
             p.Status = PurchaseOrderService.StatusPartiallyReceived;
         else
             p.Status = PurchaseOrderService.StatusCreated;
+    }
+
+    private static bool IsFixedAssetCatalog(string? assetNote)
+    {
+        if (string.IsNullOrWhiteSpace(assetNote))
+            return false;
+        return assetNote.TrimStart().StartsWith(FixedAssetMarker, StringComparison.Ordinal);
     }
 
     private sealed record InstanceRow(int GoodsReceiptLineId, int AssetInstanceId, string InstanceCode, string? SerialNumber);

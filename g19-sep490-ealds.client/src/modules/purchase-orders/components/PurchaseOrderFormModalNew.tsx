@@ -160,7 +160,8 @@ export function PurchaseOrderFormModalNew({
       try {
         const requests = await purchaseOrderService.getList();
         if (!cancelled) {
-          setAssetRequestOptions(requests);
+          // Chỉ cho kế toán tạo PO từ các yêu cầu mua đã duyệt.
+          setAssetRequestOptions(requests.filter((req) => req.status === 2));
         }
       } catch {
         if (!cancelled) {

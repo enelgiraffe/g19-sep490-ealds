@@ -51,6 +51,7 @@ export function CreatePurchaseOrderModal({
   const [categories, setCategories] = useState<AssetCategoryItem[]>([]);
   const [addingType, setAddingType] = useState(false);
   const pendingRowIndexRef = useRef<number | null>(null);
+  const hasInitializedFormRef = useRef(false);
 
   useEffect(() => {
     if (!open) return;
@@ -65,31 +66,34 @@ export function CreatePurchaseOrderModal({
   }, [open]);
 
   useEffect(() => {
-    if (open) {
-      form.resetFields();
-      if (initialValues) {
-        const mappedEquipment =
-          initialValues.equipment?.map((line) => {
-            const currentId = String(line.assetTypeId ?? '').trim();
-            if (currentId) return line;
-            const rawName = String((line as { assetTypeName?: string }).assetTypeName ?? '').trim().toLowerCase();
-            if (!rawName) return line;
-            const found = assetTypes.find((t) => t.name.trim().toLowerCase() === rawName);
-            if (!found) return line;
-            return { ...line, assetTypeId: String(found.assetTypeId) };
-          }) ?? initialValues.equipment;
-        form.setFieldsValue({
-          ...initialValues,
-          equipment: mappedEquipment,
-        });
-      } else {
-        form.setFieldsValue({
-          equipment: [
-            { assetTypeId: undefined, quantity: 1 },
-          ],
-        });
-      }
+    if (!open) {
+      hasInitializedFormRef.current = false;
+      return;
     }
+    if (hasInitializedFormRef.current) return;
+
+    form.resetFields();
+    if (initialValues) {
+      const mappedEquipment =
+        initialValues.equipment?.map((line) => {
+          const currentId = String(line.assetTypeId ?? '').trim();
+          if (currentId) return line;
+          const rawName = String((line as { assetTypeName?: string }).assetTypeName ?? '').trim().toLowerCase();
+          if (!rawName) return line;
+          const found = assetTypes.find((t) => t.name.trim().toLowerCase() === rawName);
+          if (!found) return line;
+          return { ...line, assetTypeId: String(found.assetTypeId) };
+        }) ?? initialValues.equipment;
+      form.setFieldsValue({
+        ...initialValues,
+        equipment: mappedEquipment,
+      });
+    } else {
+      form.setFieldsValue({
+        equipment: [{ assetTypeId: undefined, quantity: 1 }],
+      });
+    }
+    hasInitializedFormRef.current = true;
   }, [open, form, initialValues, assetTypes]);
 
   // Build proposedData JSON từ form values

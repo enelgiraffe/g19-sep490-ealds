@@ -250,6 +250,7 @@ export interface CreateAssetPayload {
   inUseDate?: string | null;
   specification?: string | null;
   note?: string | null;
+  isFixedAsset?: boolean;
   /** Prefix for generated instance codes (required when quantity is greater than 1). */
   instanceCodePrefix?: string | null;
   /** Optional first physical row (same request as catalog create) */

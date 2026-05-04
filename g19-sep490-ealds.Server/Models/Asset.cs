@@ -27,6 +27,8 @@ public partial class Asset
 
     public string? Note { get; set; }
 
+    public bool IsFixedAsset { get; set; }
+
     public virtual ICollection<AssetInstance> AssetInstances { get; set; } = new List<AssetInstance>();
 
     public virtual ICollection<AssetRequest> AssetRequests { get; set; } = new List<AssetRequest>();

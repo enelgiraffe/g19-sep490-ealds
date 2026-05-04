@@ -11,6 +11,7 @@ namespace g19_sep490_ealds.Server.Services.Implementation;
 
 public class AssetService : IAssetService
 {
+    private const string FixedAssetMarker = "[FIXED_ASSET]";
     private readonly EaldsDbContext _context;
     private readonly ILogger<AssetService> _logger;
     private readonly IMaintenanceTemplateService _maintenanceTemplates;
@@ -254,7 +255,7 @@ public class AssetService : IAssetService
             CreatedBy = dto.CreatedBy,
             InUseDate = dto.InUseDate,
             Specification = dto.Specification,
-            Note = dto.Note
+            Note = BuildAssetNote(dto.Note, dto.IsFixedAsset || dto.InitialInstance?.IsFixedAsset == true)
         };
 
         _context.Assets.Add(asset);
@@ -325,22 +326,19 @@ public class AssetService : IAssetService
                 _context.AssetInstances.Add(instance);
                 await _context.SaveChangesAsync();
 
-                // Tạo record AssetCapitalization nếu là tài sản cố định
-                _logger.LogInformation($"IsFixedAsset value: {init.IsFixedAsset}, Instance ID: {instance.AssetInstanceId}");
-                if (init.IsFixedAsset)
+                // Tạo record AssetCapitalization nếu là tài sản cố định.
+                var shouldCreateCapitalization = dto.IsFixedAsset || init.IsFixedAsset;
+                if (shouldCreateCapitalization)
                 {
-                    _logger.LogInformation($"Creating AssetCapitalization for instance {instance.AssetInstanceId}");
-                    var capitalization = new AssetCapitalization
+                    _context.AssetCapitalizations.Add(new AssetCapitalization
                     {
                         AssetInstanceId = instance.AssetInstanceId,
                         CapitalizedDate = DateTime.UtcNow,
                         CapitalizedBy = dto.CreatedBy,
                         Note = "Tài sản cố định được tạo tự động",
                         CreateDate = DateTime.UtcNow
-                    };
-                    _context.AssetCapitalizations.Add(capitalization);
+                    });
                     await _context.SaveChangesAsync();
-                    _logger.LogInformation($"AssetCapitalization created successfully for instance {instance.AssetInstanceId}");
                 }
 
                 try
@@ -914,6 +912,29 @@ public class AssetService : IAssetService
         (int)AssetLifeActionType.Updated => "Chỉnh sửa thông tin",
         _ => "Hoạt động khác"
     };
+
+    private static string? BuildAssetNote(string? originalNote, bool isFixedAsset)
+    {
+        var cleaned = StripFixedAssetMarker(originalNote);
+        if (!isFixedAsset)
+            return cleaned;
+
+        return string.IsNullOrWhiteSpace(cleaned)
+            ? FixedAssetMarker
+            : $"{FixedAssetMarker} {cleaned}";
+    }
+
+    private static string? StripFixedAssetMarker(string? note)
+    {
+        var text = note?.Trim();
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        if (!text.StartsWith(FixedAssetMarker, StringComparison.Ordinal))
+            return text;
+
+        var suffix = text[FixedAssetMarker.Length..].Trim();
+        return string.IsNullOrWhiteSpace(suffix) ? null : suffix;
+    }
 
     private async Task<Dictionary<int, List<AssetUsageHistoryDTO>>> BuildUsageHistoriesByInstanceAsync(List<AssetInstance> instances)
     {

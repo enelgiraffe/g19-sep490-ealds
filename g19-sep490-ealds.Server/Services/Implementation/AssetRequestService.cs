@@ -3,6 +3,7 @@ using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
 using g19_sep490_ealds.Server.Utils;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace g19_sep490_ealds.Server.Services.Implementation;
 
@@ -123,7 +124,7 @@ public class AssetRequestService : IAssetRequestService
 
         await PurchaseRequestLineHelper.EnsureLinesAsync(_context, ar);
 
-        return await _context.AssetRequestPurchaseLines
+        var requestLines = await _context.AssetRequestPurchaseLines
             .AsNoTracking()
             .Where(l => l.AssetRequestId == id)
             .OrderBy(l => l.LineIndex)
@@ -142,6 +143,86 @@ public class AssetRequestService : IAssetRequestService
                 AssetName = l.Asset != null ? l.Asset.Name : null,
             })
             .ToListAsync();
+
+        // Không trả về các loại tài sản đã được dùng trong đơn mua trước đó
+        // của cùng một yêu cầu mua (trừ đơn đã hủy).
+        var usedAssetTypeIds = await _context.ProcurementLines
+            .AsNoTracking()
+            .Where(l =>
+                l.Procurement != null &&
+                l.Procurement.AssetRequestId == id &&
+                l.Procurement.Status != 2 &&
+                l.Asset != null)
+            .Select(l => l.Asset!.AssetTypeId)
+            .Distinct()
+            .ToListAsync();
+
+        if (usedAssetTypeIds.Count == 0)
+            return requestLines;
+
+        var requestedTypesByIndex = new Dictionary<int, int>();
+        if (!string.IsNullOrWhiteSpace(ar.ProposedData))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(ar.ProposedData);
+                if (doc.RootElement.TryGetProperty("equipment", out var equipment)
+                    && equipment.ValueKind == JsonValueKind.Array)
+                {
+                    var index = 0;
+                    foreach (var row in equipment.EnumerateArray())
+                    {
+                        if (row.TryGetProperty("assetTypeId", out var typeIdElement))
+                        {
+                            var parsed = typeIdElement.ValueKind switch
+                            {
+                                JsonValueKind.Number => typeIdElement.GetInt32(),
+                                JsonValueKind.String when int.TryParse(typeIdElement.GetString(), out var v) => v,
+                                _ => 0,
+                            };
+                            if (parsed > 0)
+                                requestedTypesByIndex[index] = parsed;
+                        }
+                        index++;
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // Bỏ qua nếu proposedData không phải JSON hợp lệ.
+            }
+        }
+
+        var requestAssetIds = requestLines
+            .Where(l => l.AssetId.HasValue && l.AssetId.Value > 0)
+            .Select(l => l.AssetId!.Value)
+            .Distinct()
+            .ToList();
+
+        var requestLineAssetTypeMap = requestAssetIds.Count == 0
+            ? new Dictionary<int, int>()
+            : await _context.Assets
+                .AsNoTracking()
+                .Where(a => requestAssetIds.Contains(a.AssetId))
+                .Select(a => new { a.AssetId, a.AssetTypeId })
+                .ToDictionaryAsync(x => x.AssetId, x => x.AssetTypeId);
+
+        return requestLines
+            .Where((line, index) =>
+            {
+                if (line.AssetId.HasValue && line.AssetId.Value > 0)
+                {
+                    // Khi dòng đã gắn asset cụ thể thì ưu tiên loại của asset đó.
+                    if (requestLineAssetTypeMap.TryGetValue(line.AssetId.Value, out var assetTypeId))
+                        return !usedAssetTypeIds.Contains(assetTypeId);
+                }
+
+                if (requestedTypesByIndex.TryGetValue(index, out var requestedTypeId))
+                    return !usedAssetTypeIds.Contains(requestedTypeId);
+
+                return true;
+            })
+            .ToList();
     }
 
     public async Task<int> CreateAsync(AssetRequestDTO dto)
