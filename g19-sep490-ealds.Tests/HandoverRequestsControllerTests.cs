@@ -1,12 +1,8 @@
 using g19_sep490_ealds.Server.Controllers;
 using g19_sep490_ealds.Server.DTOs.Allocation;
-using g19_sep490_ealds.Server.Models;
-using g19_sep490_ealds.Server.Services;
 using g19_sep490_ealds.Server.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Moq;
 using System;
 using System.Collections.Generic;
@@ -18,153 +14,13 @@ namespace g19_sep490_ealds.Tests;
 
 public class HandoverRequestsControllerTests
 {
-    private readonly EaldsDbContext _context;
-    private readonly Mock<IAssetRequestNotificationService> _mockNotificationService;
+    private readonly Mock<IHandoverRequestService> _mockService = null!;
     private readonly HandoverRequestsController _controller;
 
     public HandoverRequestsControllerTests()
     {
-        var options = new DbContextOptionsBuilder<EaldsDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        _context = new EaldsDbContext(options);
-
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                { "App:HandoverRequestTypeId", "7" },
-                { "App:DepartmentHeadRoleId", "4" }
-            })
-            .Build();
-
-        _mockNotificationService = new Mock<IAssetRequestNotificationService>();
-        _mockNotificationService
-            .Setup(x => x.NotifyFirstApproversAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-
-        _controller = new HandoverRequestsController(
-            _context,
-            configuration,
-            _mockNotificationService.Object);
-
-        SeedTestData().Wait();
-    }
-
-    private async Task SeedTestData()
-    {
-        // Seed User
-        _context.Users.Add(new User
-        {
-            UserId = 1,
-            Email = "head@test.com",
-            Password = "hashed",
-            Status = 1
-        });
-
-        // Seed Department
-        _context.Departments.Add(new Department
-        {
-            DepartmentId = 1,
-            Name = "IT Department",
-            Code = "IT",
-            Status = 1,
-            CreateDate = DateTime.UtcNow,
-            CreatedBy = 1
-        });
-
-        // Seed Employee with User and Department
-        _context.Employees.Add(new Employee
-        {
-            EmployeeId = 1,
-            UserId = 1,
-            DepartmentId = 1,
-            Name = "Department Head",
-            Code = "EMP001",
-            Status = 1,
-            CreateDate = DateTime.UtcNow,
-            CreatedBy = 1
-        });
-
-        // Seed Role for Department Head
-        _context.Roles.Add(new Role
-        {
-            RoleId = 4,
-            Code = "DEPARTMENT_HEAD",
-            Name = "Department Head"
-        });
-
-        // Seed UserRole for department head
-        _context.UserRoles.Add(new UserRole
-        {
-            UserId = 1,
-            RoleId = 4
-        });
-
-        // Seed AssetType
-        _context.AssetTypes.Add(new AssetType
-        {
-            AssetTypeId = 1,
-            Name = "Computer"
-        });
-
-        // Seed Asset
-        _context.Assets.Add(new Asset
-        {
-            AssetId = 1,
-            AssetTypeId = 1,
-            Code = "PC001",
-            Name = "Desktop PC",
-            Status = 1,
-            Unit = "pcs",
-            CreatedBy = 1
-        });
-
-        // Seed Warehouse
-        _context.Warehouses.Add(new Warehouse
-        {
-            WarehouseId = 1,
-            Name = "Main Warehouse"
-        });
-
-        // Seed AssetInstance (assigned to department)
-        _context.AssetInstances.Add(new AssetInstance
-        {
-            AssetInstanceId = 1,
-            AssetId = 1,
-            WarehouseId = 1,
-            InstanceCode = "INS001",
-            Status = (int)g19_sep490_ealds.Server.Utils.EnumsStatus.AssetStatus.InUse,
-            InUseDate = DateOnly.FromDateTime(DateTime.UtcNow),
-            PurchaseDate = DateOnly.FromDateTime(DateTime.UtcNow),
-            OriginalPrice = 10000000m
-        });
-
-        // Seed RequestType
-        _context.RequestTypes.Add(new RequestType
-        {
-            RequestTypeId = 7,
-            WorkflowId = 1
-        });
-
-        // Seed Workflow
-        _context.Workflows.Add(new Workflow
-        {
-            WorkflowId = 1,
-            Name = "Handover Workflow"
-        });
-
-        // Seed WorkflowStep
-        _context.WorkflowSteps.Add(new WorkflowStep
-        {
-            StepId = 1,
-            WorkflowId = 1,
-            StepOrder = 1,
-            RoleId = 5, // Accountant role
-            IsFinalStep = false
-        });
-
-        await _context.SaveChangesAsync();
+        _mockService = new Mock<IHandoverRequestService>();
+        _controller = new HandoverRequestsController(_mockService.Object);
     }
 
     private void SetUserClaim(int userId)
@@ -189,7 +45,7 @@ public class HandoverRequestsControllerTests
         };
     }
 
-    private CreateDepartmentAllocationRequestDto CreateValidDto()
+    private static CreateDepartmentAllocationRequestDto CreateValidDto()
     {
         return new CreateDepartmentAllocationRequestDto
         {
@@ -218,14 +74,13 @@ public class HandoverRequestsControllerTests
         // Arrange
         SetUserClaim(1);
         var dto = CreateValidDto();
+        _mockService.Setup(s => s.CreateAsync(1, dto)).ReturnsAsync(100);
 
         // Act
         var result = await _controller.Create(dto);
 
         // Assert
         Assert.IsType<OkObjectResult>(result);
-        var okResult = (OkObjectResult)result;
-        Assert.Equal(200, okResult.StatusCode);
     }
 
     /// <summary>
@@ -235,18 +90,15 @@ public class HandoverRequestsControllerTests
     [Fact]
     public async Task Create_EmptyTitle_ReturnsBadRequest()
     {
-        // Arrange
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Title = "";
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentAllocationRequestDto>()))
+            .ThrowsAsync(new ArgumentException("Title is required"));
 
-        // Act
         var result = await _controller.Create(dto);
 
-        // Assert
         Assert.IsType<BadRequestObjectResult>(result);
-        var badRequest = (BadRequestObjectResult)result;
-        Assert.Equal(400, badRequest.StatusCode);
     }
 
     /// <summary>
@@ -256,15 +108,14 @@ public class HandoverRequestsControllerTests
     [Fact]
     public async Task Create_NullTitle_ReturnsBadRequest()
     {
-        // Arrange
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Title = null!;
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentAllocationRequestDto>()))
+            .ThrowsAsync(new ArgumentException("Title is required"));
 
-        // Act
         var result = await _controller.Create(dto);
 
-        // Assert
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
@@ -275,15 +126,14 @@ public class HandoverRequestsControllerTests
     [Fact]
     public async Task Create_WhitespaceTitle_ReturnsBadRequest()
     {
-        // Arrange
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Title = "   ";
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentAllocationRequestDto>()))
+            .ThrowsAsync(new ArgumentException("Title is required"));
 
-        // Act
         var result = await _controller.Create(dto);
 
-        // Assert
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
@@ -294,15 +144,14 @@ public class HandoverRequestsControllerTests
     [Fact]
     public async Task Create_AssetTypeIdZero_ReturnsBadRequest()
     {
-        // Arrange
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Lines[0].AssetTypeId = 0;
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentAllocationRequestDto>()))
+            .ThrowsAsync(new ArgumentException("AssetTypeId must be greater than 0"));
 
-        // Act
         var result = await _controller.Create(dto);
 
-        // Assert
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
@@ -313,15 +162,14 @@ public class HandoverRequestsControllerTests
     [Fact]
     public async Task Create_AssetTypeIdNegative_ReturnsBadRequest()
     {
-        // Arrange
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Lines[0].AssetTypeId = -1;
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentAllocationRequestDto>()))
+            .ThrowsAsync(new ArgumentException("AssetTypeId must be greater than 0"));
 
-        // Act
         var result = await _controller.Create(dto);
 
-        // Assert
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
@@ -332,15 +180,14 @@ public class HandoverRequestsControllerTests
     [Fact]
     public async Task Create_AssetIdZero_ReturnsBadRequest()
     {
-        // Arrange
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Lines[0].AssetId = 0;
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentAllocationRequestDto>()))
+            .ThrowsAsync(new ArgumentException("AssetId must be greater than 0"));
 
-        // Act
         var result = await _controller.Create(dto);
 
-        // Assert
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
@@ -351,15 +198,14 @@ public class HandoverRequestsControllerTests
     [Fact]
     public async Task Create_AssetIdNegative_ReturnsBadRequest()
     {
-        // Arrange
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Lines[0].AssetId = -1;
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentAllocationRequestDto>()))
+            .ThrowsAsync(new ArgumentException("AssetId must be greater than 0"));
 
-        // Act
         var result = await _controller.Create(dto);
 
-        // Assert
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
@@ -370,15 +216,14 @@ public class HandoverRequestsControllerTests
     [Fact]
     public async Task Create_QuantityZero_ReturnsBadRequest()
     {
-        // Arrange
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Lines[0].Quantity = 0;
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentAllocationRequestDto>()))
+            .ThrowsAsync(new ArgumentException("Quantity must be greater than 0"));
 
-        // Act
         var result = await _controller.Create(dto);
 
-        // Assert
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
@@ -389,15 +234,14 @@ public class HandoverRequestsControllerTests
     [Fact]
     public async Task Create_QuantityNegative_ReturnsBadRequest()
     {
-        // Arrange
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Lines[0].Quantity = -1;
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentAllocationRequestDto>()))
+            .ThrowsAsync(new ArgumentException("Quantity must be greater than 0"));
 
-        // Act
         var result = await _controller.Create(dto);
 
-        // Assert
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
@@ -412,18 +256,17 @@ public class HandoverRequestsControllerTests
     [Fact]
     public async Task Create_EmptyLines_ReturnsBadRequest()
     {
-        // Arrange
         SetUserClaim(1);
         var dto = new CreateDepartmentAllocationRequestDto
         {
             Title = "Valid Title",
             Lines = new List<AllocationLineInputDto>()
         };
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentAllocationRequestDto>()))
+            .ThrowsAsync(new ArgumentException("At least one allocation line is required"));
 
-        // Act
         var result = await _controller.Create(dto);
 
-        // Assert
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
@@ -434,18 +277,17 @@ public class HandoverRequestsControllerTests
     [Fact]
     public async Task Create_NullLines_ReturnsBadRequest()
     {
-        // Arrange
         SetUserClaim(1);
         var dto = new CreateDepartmentAllocationRequestDto
         {
             Title = "Valid Title",
             Lines = null!
         };
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentAllocationRequestDto>()))
+            .ThrowsAsync(new ArgumentException("Lines cannot be null"));
 
-        // Act
         var result = await _controller.Create(dto);
 
-        // Assert
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
@@ -456,13 +298,12 @@ public class HandoverRequestsControllerTests
     [Fact]
     public async Task Create_NullDto_ReturnsBadRequest()
     {
-        // Arrange
         SetUserClaim(1);
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentAllocationRequestDto>()))
+            .ThrowsAsync(new ArgumentException("Request body is required"));
 
-        // Act
         var result = await _controller.Create(null!);
 
-        // Assert
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
@@ -492,37 +333,16 @@ public class HandoverRequestsControllerTests
     public async Task Create_UserNotDepartmentHead_ReturnsForbidden()
     {
         // Arrange
-        // Add a user without department head role
-        _context.Users.Add(new User
-        {
-            UserId = 2,
-            Email = "regular@test.com",
-            Password = "hashed",
-            Status = 1
-        });
-        _context.Employees.Add(new Employee
-        {
-            EmployeeId = 2,
-            UserId = 2,
-            DepartmentId = 1,
-            Name = "Regular Employee",
-            Code = "EMP002",
-            Status = 1,
-            CreateDate = DateTime.UtcNow,
-            CreatedBy = 1
-        });
-        await _context.SaveChangesAsync();
-
         SetUserClaim(2);
         var dto = CreateValidDto();
+        _mockService.Setup(s => s.CreateAsync(2, dto))
+            .ThrowsAsync(new UnauthorizedAccessException("Không có quyền trưởng phòng"));
 
         // Act
         var result = await _controller.Create(dto);
 
         // Assert
-        Assert.IsType<ObjectResult>(result);
-        var objectResult = (ObjectResult)result;
-        Assert.Equal(403, objectResult.StatusCode);
+        Assert.IsType<ForbidResult>(result);
     }
 
     /// <summary>
@@ -533,16 +353,10 @@ public class HandoverRequestsControllerTests
     public async Task Create_UserWithoutDepartment_ReturnsBadRequest()
     {
         // Arrange
-        // User 1 exists but remove their employee record
-        var employee = await _context.Employees.FirstOrDefaultAsync(e => e.UserId == 1);
-        if (employee != null)
-        {
-            _context.Employees.Remove(employee);
-            await _context.SaveChangesAsync();
-        }
-
         SetUserClaim(1);
         var dto = CreateValidDto();
+        _mockService.Setup(s => s.CreateAsync(1, dto))
+            .ThrowsAsync(new Exception("Tài khoản chưa gắn phòng ban"));
 
         // Act
         var result = await _controller.Create(dto);

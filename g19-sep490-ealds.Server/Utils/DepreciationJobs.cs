@@ -5,13 +5,13 @@ namespace g19_sep490_ealds.Server.Utils;
 
 public class DepreciationJobs : IJob
 {
-    private readonly IServiceProvider _provider;
     private ILogger<DepreciationJobs> _logger;
+    private readonly IAssetDepreciationService _service;
 
-    public DepreciationJobs(IServiceProvider provider, ILogger<DepreciationJobs> logger)
+    public DepreciationJobs(ILogger<DepreciationJobs> logger, IAssetDepreciationService service)
     {
-        _provider = provider;
         _logger = logger;
+        _service = service;
     }
 
     // Điểm vào Quartz: chạy job khấu hao tự động theo lịch.
@@ -19,12 +19,7 @@ public class DepreciationJobs : IJob
     {
         try
         {
-            using var scope = _provider.CreateScope();
-
-            var service = scope.ServiceProvider
-                .GetRequiredService<IAssetDepreciationService>();
-
-            await service.RunMonthlyDepreciation();
+            await _service.RunMonthlyDepreciation();
 
             _logger.LogInformation("[CRON] Depreciation job run at {RunAtUtc}", DateTime.UtcNow);
         }

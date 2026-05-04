@@ -10,20 +10,21 @@ namespace g19_sep490_ealds.Server.Controllers;
 public class AssetDepreciationController : ControllerBase
 {
     private readonly IAssetDepreciationService _service;
-    private readonly IAssetRevaluationService _serviceRe;
     private readonly EaldsDbContext _context;
 
     public AssetDepreciationController(
         IAssetDepreciationService service,
-        EaldsDbContext context,
-        IAssetRevaluationService serviceRe)
+        EaldsDbContext context)
     {
         _service = service;
         _context = context;
-        _serviceRe = serviceRe;
     }
 
-    /// <summary>GET /api/AssetDepreciation/instance/{instanceId} — Lịch sử khấu hao của một cá thể, sắp xếp mới nhất trước.</summary>
+    /// <summary>
+    /// GET Lịch sử khấu hao của một cá thể
+    /// </summary>
+    /// <param name="instanceId"></param>
+    /// <returns></returns>
     [HttpGet("instance/{instanceId:int}")]
     public async Task<IActionResult> GetByInstanceId(int instanceId)
     {
@@ -49,7 +50,10 @@ public class AssetDepreciationController : ControllerBase
         return Ok(records);
     }
 
-    /// <summary>GET /api/AssetDepreciation/policies — Danh sách chính sách khấu hao đang active.</summary>
+    /// <summary>
+    /// GET Danh sách chính sách khấu hao đang active
+    /// </summary>
+    /// <returns></returns>
     [HttpGet("policies")]
     public async Task<IActionResult> GetPolicies()
     {
@@ -68,6 +72,11 @@ public class AssetDepreciationController : ControllerBase
         return Ok(policies);
     }
 
+    /// <summary>
+    /// Tạo policy
+    /// </summary>
+    /// <param name="dto"></param>
+    /// <returns></returns>
     [HttpPost]
     public async Task<IActionResult> Create(CreatePolicyDTO dto)
     {
@@ -95,15 +104,11 @@ public class AssetDepreciationController : ControllerBase
         return Ok(policy);
     }
 
-    [HttpPost("revaluation")]
-    public async Task<IActionResult> Revaluate([FromBody] RevaluationDTO dto)
-    {
-        // Update carrying value and write revaluation log.
-        await _serviceRe.RevaluateAsync(dto.AssetInstanceId, dto.NewValue);
-
-        return Ok("Revaluation success");
-    }
-
+    /// <summary>
+    /// Gán Policy
+    /// </summary>
+    /// <param name="dto"></param>
+    /// <returns></returns>
     [HttpPut("assign-policy")]
     public async Task<IActionResult> AssignPolicy([FromBody] AssignPolicyDTO dto)
     {
@@ -112,15 +117,11 @@ public class AssetDepreciationController : ControllerBase
         return Ok("Policy assigned");
     }
 
-    [HttpPut("update")]
-    public async Task<IActionResult> UpdateDepreciation([FromBody] UpdateDepreciationDTO dto)
-    {
-        // Manual adjust one depreciation record.
-        await _service.UpdateDepreciation(dto.RecordId, dto.NewAmount);
-        return Ok("Depreciation updated");
-    }
 
-    // Trigger monthly depreciation manually.
+    /// <summary>
+    /// Chạy khấu hao thủ công
+    /// </summary>
+    /// <returns></returns>
     [HttpPost("run")]
     public async Task<IActionResult> RunDepreciation()
     {
@@ -128,22 +129,16 @@ public class AssetDepreciationController : ControllerBase
         return Ok("Depreciation executed");
     }
 
+    /// <summary>
+    /// Chạy khấu hao 1 assetInstance
+    /// </summary>
+    /// <param name="dto"></param>
+    /// <returns></returns>
     [HttpPost("manual-run")]
     public async Task<IActionResult> RunManualDepreciation([FromBody] ManualDepreciationRunDTO dto)
     {
         // Chạy khấu hao thủ công để test theo kỳ/tài sản tùy chọn.
         await _service.RunManualDepreciation(dto.AssetInstanceId, dto.Year, dto.Month);
         return Ok("Manual depreciation executed");
-    }
-
-    [HttpPost("manual-recalculate")]
-    public async Task<IActionResult> RecalculateFromPeriod([FromBody] ManualDepreciationRunDTO dto)
-    {
-        if (!dto.AssetInstanceId.HasValue || !dto.Year.HasValue || !dto.Month.HasValue)
-            return BadRequest("AssetInstanceId, Year, Month are required");
-
-        // Chạy tính lại khấu hao từ kỳ chỉ định để test BR-28.
-        await _service.RecalculateFromPeriod(dto.AssetInstanceId.Value, dto.Year.Value, dto.Month.Value);
-        return Ok("Depreciation recalculated from period");
     }
 }

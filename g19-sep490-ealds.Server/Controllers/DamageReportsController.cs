@@ -41,6 +41,13 @@ public class DamageReportsController : ControllerBase
         if (instance == null)
             return NotFound("Asset instance not found.");
 
+        if (instance.Status == (int)AssetStatus.Disposed)
+            return BadRequest("Không thể báo hỏng tài sản đã thanh lý.");
+        if (instance.Status == (int)AssetStatus.InRepair)
+            return BadRequest("Tài sản đang sửa chữa không thể báo hỏng thêm.");
+        if (instance.Status == (int)AssetStatus.Damaged)
+            return BadRequest("Tài sản này đã được báo hỏng trước đó.");
+
         if (dto.DocumentId.HasValue)
         {
             var doc = await _db.Documents.FindAsync(dto.DocumentId.Value);

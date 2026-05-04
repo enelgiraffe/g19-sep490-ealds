@@ -1,13 +1,13 @@
 using g19_sep490_ealds.Server.Controllers;
-using g19_sep490_ealds.Server.Models;
-using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.DTOs.Departments;
+using g19_sep490_ealds.Server.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Moq;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Security.Claims;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace g19_sep490_ealds.Tests;
@@ -18,17 +18,13 @@ namespace g19_sep490_ealds.Tests;
 /// </summary>
 public class DepartmentsControllerCreateDepartmentTests
 {
-    private readonly EaldsDbContext _context;
+    private readonly Mock<IDepartmentService> _mockService;
     private readonly DepartmentsController _controller;
 
     public DepartmentsControllerCreateDepartmentTests()
     {
-        var options = new DbContextOptionsBuilder<EaldsDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        _context = new EaldsDbContext(options);
-        _controller = new DepartmentsController(_context);
+        _mockService = new Mock<IDepartmentService>();
+        _controller = new DepartmentsController(_mockService.Object);
         SetUser(actorUserId: 1);
     }
 
@@ -42,525 +38,271 @@ public class DepartmentsControllerCreateDepartmentTests
         };
     }
 
-    /// <summary>
-    /// Test case 1 (Normal):
-    /// Code = Valid, Name = Valid, Status = 0.
-    /// Expected output: 201 Created
-    /// </summary>
+    private static DepartmentDTO MakeDto(string code, string name, int status, int id = 1)
+        => new DepartmentDTO { DepartmentId = id, Code = code, Name = name, Status = status };
+
+    // ── Success cases ───────────────────────────────────────────────────────
+
     [Fact]
-    public void CreateDepartment_NormalCase_ValidCodeNameStatusZero_ReturnsCreated()
+    public async Task CreateDepartment_NormalCase_ValidCodeNameStatusZero_ReturnsCreated()
     {
-        // Arrange
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "IT-001",
-            Name = "Information Technology Department",
-            Status = 0
-        };
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ReturnsAsync(MakeDto("IT-001", "Information Technology Department", 0));
 
-        // Act
-        var result = _controller.CreateDepartment(dto);
+        var dto = new CreateDepartmentDTO { Code = "IT-001", Name = "Information Technology Department", Status = 0 };
+        var result = await _controller.CreateDepartment(dto);
 
-        // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
-
-        var actionResult = (Microsoft.AspNetCore.Mvc.ActionResult<DepartmentDTO>)result.Result!;
-        var createdResult = (Microsoft.AspNetCore.Mvc.CreatedAtActionResult)actionResult.Result!;
-        Assert.Equal(201, createdResult.StatusCode);
-
+        var createdResult = Assert.IsType<CreatedAtActionResult>(result);
         var response = Assert.IsType<DepartmentDTO>(createdResult.Value);
         Assert.Equal("IT-001", response.Code);
         Assert.Equal("Information Technology Department", response.Name);
         Assert.Equal(0, response.Status);
-        Assert.True(response.DepartmentId > 0);
     }
 
-    /// <summary>
-    /// Test case 2 (Abnormal):
-    /// Code = Empty, Name = Valid, Status = 0.
-    /// Expected output: 400 Bad Request
-    /// </summary>
     [Fact]
-    public void CreateDepartment_AbnormalCase_EmptyCode_ReturnsBadRequest()
+    public async Task CreateDepartment_NormalCase_ValidCodeNameStatusOne_ReturnsCreated()
     {
-        // Arrange
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "",
-            Name = "Information Technology Department",
-            Status = 0
-        };
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ReturnsAsync(MakeDto("HR-001", "Human Resources Department", 1));
 
-        // Act
-        var result = _controller.CreateDepartment(dto);
+        var dto = new CreateDepartmentDTO { Code = "HR-001", Name = "Human Resources Department", Status = 1 };
+        var result = await _controller.CreateDepartment(dto);
 
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
-    }
-
-    /// <summary>
-    /// Test case 3 (Abnormal):
-    /// Code = Valid, Name = Empty, Status = 0.
-    /// Expected output: 400 Bad Request
-    /// </summary>
-    [Fact]
-    public void CreateDepartment_AbnormalCase_EmptyName_ReturnsBadRequest()
-    {
-        // Arrange
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "IT-001",
-            Name = "",
-            Status = 0
-        };
-
-        // Act
-        var result = _controller.CreateDepartment(dto);
-
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
-    }
-
-    /// <summary>
-    /// Test case 4 (Normal):
-    /// Code = Valid, Name = Valid, Status = 1.
-    /// Expected output: 201 Created
-    /// </summary>
-    [Fact]
-    public void CreateDepartment_NormalCase_ValidCodeNameStatusOne_ReturnsCreated()
-    {
-        // Arrange
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "HR-001",
-            Name = "Human Resources Department",
-            Status = 1
-        };
-
-        // Act
-        var result = _controller.CreateDepartment(dto);
-
-        // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
-
-        var actionResult = (Microsoft.AspNetCore.Mvc.ActionResult<DepartmentDTO>)result.Result!;
-        var createdResult = (Microsoft.AspNetCore.Mvc.CreatedAtActionResult)actionResult.Result!;
-        Assert.Equal(201, createdResult.StatusCode);
-
+        var createdResult = Assert.IsType<CreatedAtActionResult>(result);
         var response = Assert.IsType<DepartmentDTO>(createdResult.Value);
         Assert.Equal("HR-001", response.Code);
         Assert.Equal("Human Resources Department", response.Name);
         Assert.Equal(1, response.Status);
     }
 
-    /// <summary>
-    /// Test case 5 (Abnormal):
-    /// Code = Valid, Name = Valid, Status = 2.
-    /// Expected output: 201 Created (no validation on Status)
-    /// </summary>
     [Fact]
-    public void CreateDepartment_AbnormalCase_StatusTwo_ReturnsCreated()
+    public async Task CreateDepartment_AbnormalCase_StatusTwo_ReturnsCreated()
     {
-        // Arrange
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "FIN-001",
-            Name = "Finance Department",
-            Status = 2
-        };
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ReturnsAsync(MakeDto("FIN-001", "Finance Department", 2));
 
-        // Act
-        var result = _controller.CreateDepartment(dto);
+        var dto = new CreateDepartmentDTO { Code = "FIN-001", Name = "Finance Department", Status = 2 };
+        var result = await _controller.CreateDepartment(dto);
 
-        // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
-
-        var actionResult = (Microsoft.AspNetCore.Mvc.ActionResult<DepartmentDTO>)result.Result!;
-        var createdResult = (Microsoft.AspNetCore.Mvc.CreatedAtActionResult)actionResult.Result!;
-        Assert.Equal(201, createdResult.StatusCode);
-
+        var createdResult = Assert.IsType<CreatedAtActionResult>(result);
         var response = Assert.IsType<DepartmentDTO>(createdResult.Value);
         Assert.Equal(2, response.Status);
     }
 
-    /// <summary>
-    /// Test case 6 (Abnormal):
-    /// Code = Valid, Name = Valid, Status = -1.
-    /// Expected output: 201 Created (no validation on Status)
-    /// </summary>
     [Fact]
-    public void CreateDepartment_AbnormalCase_StatusNegative_ReturnsCreated()
+    public async Task CreateDepartment_AbnormalCase_StatusNegative_ReturnsCreated()
     {
-        // Arrange
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "MKT-001",
-            Name = "Marketing Department",
-            Status = -1
-        };
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ReturnsAsync(MakeDto("MKT-001", "Marketing Department", -1));
 
-        // Act
-        var result = _controller.CreateDepartment(dto);
+        var dto = new CreateDepartmentDTO { Code = "MKT-001", Name = "Marketing Department", Status = -1 };
+        var result = await _controller.CreateDepartment(dto);
 
-        // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
-
-        var actionResult = (Microsoft.AspNetCore.Mvc.ActionResult<DepartmentDTO>)result.Result!;
-        var createdResult = (Microsoft.AspNetCore.Mvc.CreatedAtActionResult)actionResult.Result!;
-        Assert.Equal(201, createdResult.StatusCode);
-
+        var createdResult = Assert.IsType<CreatedAtActionResult>(result);
         var response = Assert.IsType<DepartmentDTO>(createdResult.Value);
         Assert.Equal(-1, response.Status);
     }
 
-    // ─── Additional validation tests ─────────────────────────────────────────
-
-    /// <summary>
-    /// Input:  Code = null
-    /// Expected return: 400 Bad Request
-    /// </summary>
     [Fact]
-    public void CreateDepartment_NullCode_ReturnsBadRequest()
+    public async Task CreateDepartment_DefaultStatus_ReturnsCreated()
     {
-        // Arrange
-        var dto = new CreateDepartmentDTO
-        {
-            Code = null!,
-            Name = "Information Technology Department",
-            Status = 0
-        };
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ReturnsAsync(MakeDto("IT-002", "IT Department", 1));
 
-        // Act
-        var result = _controller.CreateDepartment(dto);
+        var dto = new CreateDepartmentDTO { Code = "IT-002", Name = "IT Department" };
+        var result = await _controller.CreateDepartment(dto);
 
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
-    }
-
-    /// <summary>
-    /// Input:  Name = null
-    /// Expected return: 400 Bad Request
-    /// </summary>
-    [Fact]
-    public void CreateDepartment_NullName_ReturnsBadRequest()
-    {
-        // Arrange
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "IT-001",
-            Name = null!,
-            Status = 0
-        };
-
-        // Act
-        var result = _controller.CreateDepartment(dto);
-
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
-    }
-
-    /// <summary>
-    /// Input:  Code = whitespace only
-    /// Expected return: 400 Bad Request
-    /// </summary>
-    [Fact]
-    public void CreateDepartment_WhitespaceCode_ReturnsBadRequest()
-    {
-        // Arrange
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "   ",
-            Name = "Information Technology Department",
-            Status = 0
-        };
-
-        // Act
-        var result = _controller.CreateDepartment(dto);
-
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
-    }
-
-    /// <summary>
-    /// Input:  Name = whitespace only
-    /// Expected return: 400 Bad Request
-    /// </summary>
-    [Fact]
-    public void CreateDepartment_WhitespaceName_ReturnsBadRequest()
-    {
-        // Arrange
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "IT-001",
-            Name = "   ",
-            Status = 0
-        };
-
-        // Act
-        var result = _controller.CreateDepartment(dto);
-
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
-    }
-
-    /// <summary>
-    /// Input:  Code = "IT001" (duplicate, case-insensitive)
-    /// Expected return: 400 Bad Request
-    /// </summary>
-    [Fact]
-    public void CreateDepartment_DuplicateCodeCaseInsensitive_ReturnsBadRequest()
-    {
-        // Arrange - Create first department
-        _context.Departments.Add(new Department
-        {
-            Code = "IT001",
-            Name = "Information Technology",
-            Status = 1,
-            CreateDate = DateTime.UtcNow,
-            CreatedBy = 1
-        });
-        _context.SaveChanges();
-
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "it001", // Same code, different case
-            Name = "IT Department",
-            Status = 0
-        };
-
-        // Act
-        var result = _controller.CreateDepartment(dto);
-
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
-    }
-
-    /// <summary>
-    /// Input:  Valid department with Status = 1 (default)
-    /// Expected return: 201 Created with Status = 1
-    /// </summary>
-    [Fact]
-    public void CreateDepartment_DefaultStatus_ReturnsCreated()
-    {
-        // Arrange
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "IT-002",
-            Name = "IT Department"
-            // Status not set - should default to 1
-        };
-
-        // Act
-        var result = _controller.CreateDepartment(dto);
-
-        // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
-
-        var actionResult = (Microsoft.AspNetCore.Mvc.ActionResult<DepartmentDTO>)result.Result!;
-        var createdResult = (Microsoft.AspNetCore.Mvc.CreatedAtActionResult)actionResult.Result!;
+        var createdResult = Assert.IsType<CreatedAtActionResult>(result);
         var response = Assert.IsType<DepartmentDTO>(createdResult.Value);
-        Assert.Equal(1, response.Status); // Default value from DTO
+        Assert.Equal(1, response.Status);
     }
 
-    /// <summary>
-    /// Input:  No user authenticated
-    /// Expected return: 401 Unauthorized
-    /// </summary>
     [Fact]
-    public void CreateDepartment_NoUser_ReturnsUnauthorized()
+    public async Task CreateDepartment_CodeWithWhitespace_TrimsCode()
     {
-        // Arrange
-        _controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal() }
-        };
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ReturnsAsync(MakeDto("IT-004", "IT Department", 1));
 
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "IT-001",
-            Name = "Information Technology Department",
-            Status = 0
-        };
+        var dto = new CreateDepartmentDTO { Code = "  IT-004  ", Name = "IT Department", Status = 1 };
+        var result = await _controller.CreateDepartment(dto);
 
-        // Act
-        var result = _controller.CreateDepartment(dto);
-
-        // Assert
-        Assert.IsType<UnauthorizedResult>(result.Result);
-    }
-
-    /// <summary>
-    /// Input:  Valid data, department is persisted to database
-    /// Expected return: Department found in database
-    /// </summary>
-    [Fact]
-    public void CreateDepartment_ValidData_PersistsToDatabase()
-    {
-        // Arrange
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "IT-003",
-            Name = "Information Technology Department",
-            Status = 1
-        };
-
-        // Act
-        _controller.CreateDepartment(dto);
-
-        // Assert
-        var department = _context.Departments.FirstOrDefault(d => d.Code == "IT-003");
-        Assert.NotNull(department);
-        Assert.Equal("Information Technology Department", department.Name);
-        Assert.Equal(1, department.Status);
-        Assert.Equal(1, department.CreatedBy);
-        Assert.True(department.CreateDate <= DateTime.UtcNow);
-    }
-
-    /// <summary>
-    /// Input:  Code with leading/trailing whitespace
-    /// Expected return: 201 Created with trimmed code
-    /// </summary>
-    [Fact]
-    public void CreateDepartment_CodeWithWhitespace_TrimsCode()
-    {
-        // Arrange
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "  IT-004  ",
-            Name = "IT Department",
-            Status = 1
-        };
-
-        // Act
-        var result = _controller.CreateDepartment(dto);
-
-        // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
-
-        var actionResult = (Microsoft.AspNetCore.Mvc.ActionResult<DepartmentDTO>)result.Result!;
-        var createdResult = (Microsoft.AspNetCore.Mvc.CreatedAtActionResult)actionResult.Result!;
+        var createdResult = Assert.IsType<CreatedAtActionResult>(result);
         var response = Assert.IsType<DepartmentDTO>(createdResult.Value);
         Assert.Equal("IT-004", response.Code);
     }
 
-    /// <summary>
-    /// Input:  Name with leading/trailing whitespace
-    /// Expected return: 201 Created with trimmed name
-    /// </summary>
     [Fact]
-    public void CreateDepartment_NameWithWhitespace_TrimsName()
+    public async Task CreateDepartment_NameWithWhitespace_TrimsName()
     {
-        // Arrange
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "IT-005",
-            Name = "  IT Department  ",
-            Status = 1
-        };
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ReturnsAsync(MakeDto("IT-005", "IT Department", 1));
 
-        // Act
-        var result = _controller.CreateDepartment(dto);
+        var dto = new CreateDepartmentDTO { Code = "IT-005", Name = "  IT Department  ", Status = 1 };
+        var result = await _controller.CreateDepartment(dto);
 
-        // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
-
-        var actionResult = (Microsoft.AspNetCore.Mvc.ActionResult<DepartmentDTO>)result.Result!;
-        var createdResult = (Microsoft.AspNetCore.Mvc.CreatedAtActionResult)actionResult.Result!;
+        var createdResult = Assert.IsType<CreatedAtActionResult>(result);
         var response = Assert.IsType<DepartmentDTO>(createdResult.Value);
         Assert.Equal("IT Department", response.Name);
     }
 
-    /// <summary>
-    /// Input:  Unique code with special characters
-    /// Expected return: 201 Created
-    /// </summary>
     [Fact]
-    public void CreateDepartment_CodeWithSpecialChars_ReturnsCreated()
+    public async Task CreateDepartment_CodeWithSpecialChars_ReturnsCreated()
     {
-        // Arrange
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "IT-DEPT_001",
-            Name = "IT Department",
-            Status = 1
-        };
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ReturnsAsync(MakeDto("IT-DEPT_001", "IT Department", 1));
 
-        // Act
-        var result = _controller.CreateDepartment(dto);
+        var dto = new CreateDepartmentDTO { Code = "IT-DEPT_001", Name = "IT Department", Status = 1 };
+        var result = await _controller.CreateDepartment(dto);
 
-        // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
+        Assert.IsType<CreatedAtActionResult>(result);
     }
 
-    /// <summary>
-    /// Input:  Very long Name (within MaxLength)
-    /// Expected return: 201 Created
-    /// </summary>
     [Fact]
-    public void CreateDepartment_LongName_ReturnsCreated()
+    public async Task CreateDepartment_LongName_ReturnsCreated()
     {
-        // Arrange
-        var longName = new string('A', 255); // MaxLength is 255
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "IT-006",
-            Name = longName,
-            Status = 1
-        };
+        var longName = new string('A', 255);
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ReturnsAsync(MakeDto("IT-006", longName, 1));
 
-        // Act
-        var result = _controller.CreateDepartment(dto);
+        var dto = new CreateDepartmentDTO { Code = "IT-006", Name = longName, Status = 1 };
+        var result = await _controller.CreateDepartment(dto);
 
-        // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
+        Assert.IsType<CreatedAtActionResult>(result);
     }
 
-    /// <summary>
-    /// Input:  Response contains correct CreatedAtAction route values
-    /// Expected return: RouteValues contain id and action name
-    /// </summary>
     [Fact]
-    public void CreateDepartment_ResponseHasCorrectRouteValues()
+    public async Task CreateDepartment_ResponseHasCorrectRouteValues()
     {
-        // Arrange
-        var dto = new CreateDepartmentDTO
-        {
-            Code = "IT-007",
-            Name = "IT Department",
-            Status = 1
-        };
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ReturnsAsync(MakeDto("IT-007", "IT Department", 1, id: 42));
 
-        // Act
-        var result = _controller.CreateDepartment(dto);
+        var dto = new CreateDepartmentDTO { Code = "IT-007", Name = "IT Department", Status = 1 };
+        var result = await _controller.CreateDepartment(dto);
 
-        // Assert
-        var createdResult = Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
+        var createdResult = Assert.IsType<CreatedAtActionResult>(result);
         Assert.Equal(nameof(DepartmentsController.GetDepartment), createdResult.ActionName);
         Assert.NotNull(createdResult.RouteValues);
         Assert.True(createdResult.RouteValues.ContainsKey("id"));
     }
 
-    /// <summary>
-    /// Input:  Create multiple departments with unique codes
-    /// Expected return: All departments created successfully
-    /// </summary>
     [Fact]
-    public void CreateDepartment_MultipleUniqueCodes_AllCreated()
+    public async Task CreateDepartment_MultipleUniqueCodes_AllCreated()
     {
-        // Arrange & Act
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ReturnsAsync((int _, CreateDepartmentDTO d) => MakeDto(d.Code, d.Name, d.Status));
+
         var dto1 = new CreateDepartmentDTO { Code = "IT-008", Name = "IT 1", Status = 1 };
         var dto2 = new CreateDepartmentDTO { Code = "IT-009", Name = "IT 2", Status = 1 };
         var dto3 = new CreateDepartmentDTO { Code = "IT-010", Name = "IT 3", Status = 1 };
 
-        var result1 = _controller.CreateDepartment(dto1);
-        var result2 = _controller.CreateDepartment(dto2);
-        var result3 = _controller.CreateDepartment(dto3);
+        var result1 = await _controller.CreateDepartment(dto1);
+        var result2 = await _controller.CreateDepartment(dto2);
+        var result3 = await _controller.CreateDepartment(dto3);
 
-        // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result1.Result);
-        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result2.Result);
-        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result3.Result);
+        Assert.IsType<CreatedAtActionResult>(result1);
+        Assert.IsType<CreatedAtActionResult>(result2);
+        Assert.IsType<CreatedAtActionResult>(result3);
+    }
 
-        Assert.Equal(3, _context.Departments.Count());
+    // ── BadRequest / error cases ────────────────────────────────────────────
+
+    [Fact]
+    public async Task CreateDepartment_AbnormalCase_EmptyCode_ReturnsBadRequest()
+    {
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ThrowsAsync(new ArgumentException("Code is required"));
+
+        var dto = new CreateDepartmentDTO { Code = "", Name = "IT Department", Status = 0 };
+        var result = await _controller.CreateDepartment(dto);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task CreateDepartment_AbnormalCase_EmptyName_ReturnsBadRequest()
+    {
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ThrowsAsync(new ArgumentException("Name is required"));
+
+        var dto = new CreateDepartmentDTO { Code = "IT-001", Name = "", Status = 0 };
+        var result = await _controller.CreateDepartment(dto);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task CreateDepartment_NullCode_ReturnsBadRequest()
+    {
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ThrowsAsync(new ArgumentException("Code is required"));
+
+        var dto = new CreateDepartmentDTO { Code = null!, Name = "IT Department", Status = 0 };
+        var result = await _controller.CreateDepartment(dto);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task CreateDepartment_NullName_ReturnsBadRequest()
+    {
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ThrowsAsync(new ArgumentException("Name is required"));
+
+        var dto = new CreateDepartmentDTO { Code = "IT-001", Name = null!, Status = 0 };
+        var result = await _controller.CreateDepartment(dto);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task CreateDepartment_WhitespaceCode_ReturnsBadRequest()
+    {
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ThrowsAsync(new ArgumentException("Code cannot be empty"));
+
+        var dto = new CreateDepartmentDTO { Code = "   ", Name = "IT Department", Status = 0 };
+        var result = await _controller.CreateDepartment(dto);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task CreateDepartment_WhitespaceName_ReturnsBadRequest()
+    {
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ThrowsAsync(new ArgumentException("Name cannot be empty"));
+
+        var dto = new CreateDepartmentDTO { Code = "IT-001", Name = "   ", Status = 0 };
+        var result = await _controller.CreateDepartment(dto);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task CreateDepartment_DuplicateCode_ReturnsBadRequest()
+    {
+        _mockService.Setup(s => s.CreateAsync(1, It.IsAny<CreateDepartmentDTO>()))
+            .ThrowsAsync(new ArgumentException("Department code already exists"));
+
+        var dto = new CreateDepartmentDTO { Code = "it001", Name = "IT Department", Status = 0 };
+        var result = await _controller.CreateDepartment(dto);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    // ── Unauthorized ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CreateDepartment_NoUser_ReturnsUnauthorized()
+    {
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal() }
+        };
+
+        var dto = new CreateDepartmentDTO { Code = "IT-001", Name = "IT Department", Status = 0 };
+        var result = await _controller.CreateDepartment(dto);
+
+        Assert.IsType<UnauthorizedResult>(result);
     }
 }

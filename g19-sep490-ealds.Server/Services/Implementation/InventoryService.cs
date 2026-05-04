@@ -1546,7 +1546,7 @@ public class InventoryService : IInventoryService
         if (!instances.Any())
             return new CreateInventorySessionResult(
                 false,
-                "Không có cá thể ở trạng thái Đang sử dụng trong phòng ban này (chỉ cá thể này được đưa vào phiên kiểm kê).",
+                "Không có tài sản nào đang được sử dụng trong phòng ban này.",
                 null);
 
         await using var transaction = await _context.Database.BeginTransactionAsync();

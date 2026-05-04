@@ -1,15 +1,11 @@
 using g19_sep490_ealds.Server.Controllers;
 using g19_sep490_ealds.Server.DTOs.Allocation;
-using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Moq;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Security.Claims;
 using Xunit;
 
@@ -17,152 +13,13 @@ namespace g19_sep490_ealds.Tests;
 
 public class AllocationRequestsControllerTests
 {
-    private readonly EaldsDbContext _context;
-    private readonly Mock<IAssetRequestNotificationService> _mockNotificationService;
+    private readonly Mock<IAllocationRequestService> _mockService = null!;
     private readonly AllocationRequestsController _controller;
 
     public AllocationRequestsControllerTests()
     {
-        var options = new DbContextOptionsBuilder<EaldsDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        _context = new EaldsDbContext(options);
-
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                { "App:AllocationRequestTypeId", "6" },
-                { "App:DepartmentHeadRoleId", "4" }
-            })
-            .Build();
-
-        _mockNotificationService = new Mock<IAssetRequestNotificationService>();
-        _mockNotificationService
-            .Setup(x => x.NotifyFirstApproversAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-
-        _controller = new AllocationRequestsController(
-            _context,
-            configuration,
-            _mockNotificationService.Object);
-
-        SeedTestData().Wait();
-    }
-
-    private async Task SeedTestData()
-    {
-        // Seed User
-        _context.Users.Add(new User
-        {
-            UserId = 1,
-            Email = "head@test.com",
-            Password = "hashed",
-            Status = 1
-        });
-
-        // Seed Department
-        _context.Departments.Add(new Department
-        {
-            DepartmentId = 1,
-            Name = "IT Department",
-            Code = "IT",
-            Status = 1,
-            CreateDate = DateTime.UtcNow,
-            CreatedBy = 1
-        });
-
-        // Seed Employee with User and Department
-        _context.Employees.Add(new Employee
-        {
-            EmployeeId = 1,
-            UserId = 1,
-            DepartmentId = 1,
-            Name = "Department Head",
-            Code = "EMP001",
-            Status = 1,
-            CreateDate = DateTime.UtcNow,
-            CreatedBy = 1
-        });
-
-        // Seed Role for Department Head
-        _context.Roles.Add(new Role
-        {
-            RoleId = 4,
-            Code = "DEPARTMENT_HEAD",
-            Name = "Department Head"
-        });
-
-        // Seed UserRole for department head
-        _context.UserRoles.Add(new UserRole
-        {
-            UserId = 1,
-            RoleId = 4
-        });
-
-        // Seed AssetType
-        _context.AssetTypes.Add(new AssetType
-        {
-            AssetTypeId = 1,
-            Name = "Computer"
-        });
-
-        // Seed Asset
-        _context.Assets.Add(new Asset
-        {
-            AssetId = 1,
-            AssetTypeId = 1,
-            Code = "PC001",
-            Name = "Desktop PC",
-            Status = 1,
-            Unit = "pcs",
-            CreatedBy = 1
-        });
-
-        // Seed Warehouse
-        _context.Warehouses.Add(new Warehouse
-        {
-            WarehouseId = 1,
-            Name = "Main Warehouse"
-        });
-
-        // Seed AssetInstance (available in warehouse)
-        _context.AssetInstances.Add(new AssetInstance
-        {
-            AssetInstanceId = 1,
-            AssetId = 1,
-            WarehouseId = 1,
-            InstanceCode = "INS001",
-            Status = (int)g19_sep490_ealds.Server.Utils.EnumsStatus.AssetStatus.Available,
-            PurchaseDate = DateOnly.FromDateTime(DateTime.UtcNow),
-            OriginalPrice = 10000000m
-        });
-
-        // Seed RequestType
-        _context.RequestTypes.Add(new RequestType
-        {
-            RequestTypeId = 6,
-            WorkflowId = 1
-        });
-
-        // Seed Workflow
-        _context.Workflows.Add(new Workflow
-        {
-            WorkflowId = 1,
-            Name = "Allocation Workflow"
-        });
-
-        // Seed WorkflowStep
-        _context.WorkflowSteps.Add(new WorkflowStep
-        {
-            StepId = 1,
-            WorkflowId = 1,
-            StepOrder = 1,
-            RoleId = 5, // Accountant role
-            IsFinalStep = false
-        });
-
-        await _context.SaveChangesAsync();
+        _mockService = new Mock<IAllocationRequestService>();
+        _controller = new AllocationRequestsController(_mockService.Object);
     }
 
     private void SetUserClaim(int userId)
@@ -216,6 +73,9 @@ public class AllocationRequestsControllerTests
         // Arrange
         SetUserClaim(1);
         var dto = CreateValidDto();
+        _mockService
+            .Setup(x => x.CreateAsync(1, dto))
+            .ReturnsAsync(42);
 
         // Act
         var result = await _controller.Create(dto);
@@ -237,6 +97,9 @@ public class AllocationRequestsControllerTests
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Title = "";
+        _mockService
+            .Setup(x => x.CreateAsync(1, dto))
+            .ThrowsAsync(new Exception("Nhập tiêu đề yêu cầu"));
 
         // Act
         var result = await _controller.Create(dto);
@@ -258,6 +121,9 @@ public class AllocationRequestsControllerTests
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Title = null!;
+        _mockService
+            .Setup(x => x.CreateAsync(1, dto))
+            .ThrowsAsync(new Exception("Nhập tiêu đề yêu cầu"));
 
         // Act
         var result = await _controller.Create(dto);
@@ -277,6 +143,9 @@ public class AllocationRequestsControllerTests
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Title = "   ";
+        _mockService
+            .Setup(x => x.CreateAsync(1, dto))
+            .ThrowsAsync(new Exception("Nhập tiêu đề yêu cầu"));
 
         // Act
         var result = await _controller.Create(dto);
@@ -296,6 +165,9 @@ public class AllocationRequestsControllerTests
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Lines[0].AssetTypeId = 0;
+        _mockService
+            .Setup(x => x.CreateAsync(1, dto))
+            .ThrowsAsync(new Exception("Dòng 1: chọn loại, tài sản và số lượng hợp lệ"));
 
         // Act
         var result = await _controller.Create(dto);
@@ -315,6 +187,9 @@ public class AllocationRequestsControllerTests
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Lines[0].AssetTypeId = -1;
+        _mockService
+            .Setup(x => x.CreateAsync(1, dto))
+            .ThrowsAsync(new Exception("Dòng 1: chọn loại, tài sản và số lượng hợp lệ"));
 
         // Act
         var result = await _controller.Create(dto);
@@ -334,6 +209,9 @@ public class AllocationRequestsControllerTests
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Lines[0].AssetId = 0;
+        _mockService
+            .Setup(x => x.CreateAsync(1, dto))
+            .ThrowsAsync(new Exception("Dòng 1: chọn loại, tài sản và số lượng hợp lệ"));
 
         // Act
         var result = await _controller.Create(dto);
@@ -353,6 +231,9 @@ public class AllocationRequestsControllerTests
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Lines[0].AssetId = -1;
+        _mockService
+            .Setup(x => x.CreateAsync(1, dto))
+            .ThrowsAsync(new Exception("Dòng 1: chọn loại, tài sản và số lượng hợp lệ"));
 
         // Act
         var result = await _controller.Create(dto);
@@ -372,6 +253,9 @@ public class AllocationRequestsControllerTests
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Lines[0].Quantity = 0;
+        _mockService
+            .Setup(x => x.CreateAsync(1, dto))
+            .ThrowsAsync(new Exception("Dòng 1: chọn loại, tài sản và số lượng hợp lệ"));
 
         // Act
         var result = await _controller.Create(dto);
@@ -391,6 +275,9 @@ public class AllocationRequestsControllerTests
         SetUserClaim(1);
         var dto = CreateValidDto();
         dto.Lines[0].Quantity = -1;
+        _mockService
+            .Setup(x => x.CreateAsync(1, dto))
+            .ThrowsAsync(new Exception("Dòng 1: chọn loại, tài sản và số lượng hợp lệ"));
 
         // Act
         var result = await _controller.Create(dto);
@@ -417,6 +304,9 @@ public class AllocationRequestsControllerTests
             Title = "Valid Title",
             Lines = new List<AllocationLineInputDto>()
         };
+        _mockService
+            .Setup(x => x.CreateAsync(1, dto))
+            .ThrowsAsync(new Exception("Cần ít nhất một dòng tài sản"));
 
         // Act
         var result = await _controller.Create(dto);
@@ -439,6 +329,9 @@ public class AllocationRequestsControllerTests
             Title = "Valid Title",
             Lines = null!
         };
+        _mockService
+            .Setup(x => x.CreateAsync(1, dto))
+            .ThrowsAsync(new Exception("Cần ít nhất một dòng tài sản"));
 
         // Act
         var result = await _controller.Create(dto);
@@ -456,6 +349,9 @@ public class AllocationRequestsControllerTests
     {
         // Arrange
         SetUserClaim(1);
+        _mockService
+            .Setup(x => x.CreateAsync(1, null!))
+            .ThrowsAsync(new Exception("Nhập tiêu đề yêu cầu"));
 
         // Act
         var result = await _controller.Create(null!);
@@ -490,37 +386,17 @@ public class AllocationRequestsControllerTests
     public async Task Create_UserNotDepartmentHead_ReturnsForbidden()
     {
         // Arrange
-        // Add a user without department head role
-        _context.Users.Add(new User
-        {
-            UserId = 2,
-            Email = "regular@test.com",
-            Password = "hashed",
-            Status = 1
-        });
-        _context.Employees.Add(new Employee
-        {
-            EmployeeId = 2,
-            UserId = 2,
-            DepartmentId = 1,
-            Name = "Regular Employee",
-            Code = "EMP002",
-            Status = 1,
-            CreateDate = DateTime.UtcNow,
-            CreatedBy = 1
-        });
-        await _context.SaveChangesAsync();
-
         SetUserClaim(2);
         var dto = CreateValidDto();
+        _mockService
+            .Setup(x => x.CreateAsync(2, dto))
+            .ThrowsAsync(new UnauthorizedAccessException());
 
         // Act
         var result = await _controller.Create(dto);
 
         // Assert
-        Assert.IsType<ObjectResult>(result);
-        var objectResult = (ObjectResult)result;
-        Assert.Equal(403, objectResult.StatusCode);
+        Assert.IsType<ForbidResult>(result);
     }
 
     /// <summary>
@@ -531,16 +407,11 @@ public class AllocationRequestsControllerTests
     public async Task Create_UserWithoutDepartment_ReturnsBadRequest()
     {
         // Arrange
-        // User 1 exists but remove their employee record
-        var employee = await _context.Employees.FirstOrDefaultAsync(e => e.UserId == 1);
-        if (employee != null)
-        {
-            _context.Employees.Remove(employee);
-            await _context.SaveChangesAsync();
-        }
-
         SetUserClaim(1);
         var dto = CreateValidDto();
+        _mockService
+            .Setup(x => x.CreateAsync(1, dto))
+            .ThrowsAsync(new Exception("Tài khoản chưa gắn phòng ban"));
 
         // Act
         var result = await _controller.Create(dto);

@@ -1,10 +1,9 @@
 using g19_sep490_ealds.Server.Controllers;
 using g19_sep490_ealds.Server.DTOs.Profile;
-using g19_sep490_ealds.Server.Models;
-using Microsoft.AspNetCore.Http;
+using g19_sep490_ealds.Server.Services.Interface;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
+using Moq;
+using System;
 using System.Collections.Generic;
 using System.Security.Claims;
 using Xunit;
@@ -13,103 +12,64 @@ namespace g19_sep490_ealds.Tests;
 
 public class ProfileControllerTests
 {
-    private readonly EaldsDbContext _context;
+    private readonly Mock<IProfileService> _mockService;
     private readonly ProfileController _controller;
 
     public ProfileControllerTests()
     {
-        var options = new DbContextOptionsBuilder<EaldsDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        _context = new EaldsDbContext(options);
-
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                { "App:DepartmentHeadRoleId", "4" },
-                { "App:AccountantRoleId", "3" }
-            })
-            .Build();
-
-        _controller = new ProfileController(_context, configuration);
+        _mockService = new Mock<IProfileService>();
+        _controller = new ProfileController(_mockService.Object);
     }
 
     private void SetUserClaim(int userId)
     {
-        var claims = new List<Claim>
-        {
-            new Claim(ClaimTypes.NameIdentifier, userId.ToString())
-        };
+        var claims = new List<Claim> { new Claim(ClaimTypes.NameIdentifier, userId.ToString()) };
         var identity = new ClaimsIdentity(claims, "TestAuth");
         var principal = new ClaimsPrincipal(identity);
         _controller.ControllerContext = new ControllerContext
         {
-            HttpContext = new DefaultHttpContext { User = principal }
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext { User = principal }
         };
     }
 
-    #region GetProfile Tests
-
-    /// <summary>
-    /// Test case: Get profile with valid user ID
-    /// Expected output: 200 OK with user profile data
-    /// </summary>
-    [Fact]
-    public async Task GetProfile_WithValidUser_ReturnsOk()
+    private void SetNoUser()
     {
-        // Arrange
-        var user = new User
+        _controller.ControllerContext = new ControllerContext
         {
-            UserId = 1,
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext { User = new ClaimsPrincipal() }
+        };
+    }
+
+    private static UserProfileDto MakeProfile(string name = "John Doe", int id = 1)
+        => new UserProfileDto
+        {
+            Id = id,
             Email = "test@example.com",
-            Password = "password123",
-            Status = 1
-        };
-
-        var department = new Department
-        {
-            DepartmentId = 1,
-            Name = "IT Department",
-            Code = "IT",
-            Status = 1,
-            CreateDate = DateTime.UtcNow,
-            CreatedBy = 1,
-            CreatedByNavigation = user
-        };
-
-        var employee = new Employee
-        {
-            EmployeeId = 1,
-            UserId = 1,
-            DepartmentId = 1,
-            Name = "John Doe",
-            Code = "EMP001",
+            Name = name,
+            EmployeeCode = "EMP001",
             Phone = "1234567890",
             Address = "123 Main St",
             Dob = new DateOnly(1990, 1, 1),
             Gender = 1,
-            Status = 1,
-            CreateDate = DateTime.UtcNow,
-            CreatedBy = 1,
-            CreatedByNavigation = user,
-            Department = department
+            ImageUrl = "https://example.com/image.jpg",
+            DepartmentName = "IT Department",
+            DepartmentId = 1,
+            Role = "User",
+            IsDepartmentHead = false
         };
 
-        _context.Users.Add(user);
-        _context.Departments.Add(department);
-        _context.Employees.Add(employee);
-        await _context.SaveChangesAsync();
+    #region GetProfile Tests
+
+    [Fact]
+    public async Task GetProfile_WithValidUser_ReturnsOk()
+    {
+        _mockService.Setup(s => s.GetProfileAsync(1)).ReturnsAsync(MakeProfile());
 
         SetUserClaim(1);
-
-        // Act
         var result = await _controller.GetProfile();
 
-        // Assert
         var okResult = Assert.IsType<OkObjectResult>(result);
         var profile = Assert.IsType<UserProfileDto>(okResult.Value);
-        
         Assert.Equal(1, profile.Id);
         Assert.Equal("test@example.com", profile.Email);
         Assert.Equal("John Doe", profile.Name);
@@ -119,74 +79,46 @@ public class ProfileControllerTests
         Assert.Equal("IT Department", profile.DepartmentName);
     }
 
-    /// <summary>
-    /// Test case: Get profile with user that has no employee record
-    /// Expected output: 200 OK with email as name fallback
-    /// </summary>
     [Fact]
     public async Task GetProfile_WithNoEmployeeRecord_ReturnsOkWithEmailAsName()
     {
-        // Arrange
-        var user = new User
+        _mockService.Setup(s => s.GetProfileAsync(1)).ReturnsAsync(new UserProfileDto
         {
-            UserId = 1,
+            Id = 1,
             Email = "test@example.com",
-            Password = "password123",
-            Status = 1
-        };
-
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
+            Name = "test@example.com",
+            Role = "User"
+        });
 
         SetUserClaim(1);
-
-        // Act
         var result = await _controller.GetProfile();
 
-        // Assert
         var okResult = Assert.IsType<OkObjectResult>(result);
         var profile = Assert.IsType<UserProfileDto>(okResult.Value);
-        
-        Assert.Equal("test@example.com", profile.Name); // Falls back to email
+        Assert.Equal("test@example.com", profile.Name);
         Assert.Null(profile.EmployeeCode);
         Assert.Null(profile.Phone);
         Assert.Null(profile.Address);
     }
 
-    /// <summary>
-    /// Test case: Get profile with non-existent user
-    /// Expected output: 404 Not Found
-    /// </summary>
     [Fact]
     public async Task GetProfile_WithNonExistentUser_ReturnsNotFound()
     {
-        // Arrange - No user in database
-        SetUserClaim(999);
+        _mockService.Setup(s => s.GetProfileAsync(999))
+            .ThrowsAsync(new KeyNotFoundException("User not found"));
 
-        // Act
+        SetUserClaim(999);
         var result = await _controller.GetProfile();
 
-        // Assert
         Assert.IsType<NotFoundObjectResult>(result);
     }
 
-    /// <summary>
-    /// Test case: Get profile without user claim (unauthorized)
-    /// Expected output: 401 Unauthorized
-    /// </summary>
     [Fact]
     public async Task GetProfile_WithoutUserClaim_ReturnsUnauthorized()
     {
-        // Arrange - No claims set
-        _controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal() }
-        };
-
-        // Act
+        SetNoUser();
         var result = await _controller.GetProfile();
 
-        // Assert
         Assert.IsType<UnauthorizedResult>(result);
     }
 
@@ -194,56 +126,24 @@ public class ProfileControllerTests
 
     #region UpdateProfile Tests
 
-    /// <summary>
-    /// Test case: Update profile with valid data
-    /// Expected output: 200 OK with updated profile
-    /// </summary>
     [Fact]
     public async Task UpdateProfile_WithValidData_ReturnsOk()
     {
-        // Arrange
-        var user = new User
-        {
-            UserId = 1,
-            Email = "test@example.com",
-            Password = "password123",
-            Status = 1
-        };
-
-        var department = new Department
-        {
-            DepartmentId = 1,
-            Name = "IT Department",
-            Code = "IT",
-            Status = 1,
-            CreateDate = DateTime.UtcNow,
-            CreatedBy = 1,
-            CreatedByNavigation = user
-        };
-
-        var employee = new Employee
-        {
-            EmployeeId = 1,
-            UserId = 1,
-            DepartmentId = 1,
-            Name = "Old Name",
-            Code = "EMP001",
-            Phone = "0000000000",
-            Address = "Old Address",
-            Status = 1,
-            CreateDate = DateTime.UtcNow,
-            CreatedBy = 1,
-            CreatedByNavigation = user,
-            Department = department
-        };
-
-        _context.Users.Add(user);
-        _context.Departments.Add(department);
-        _context.Employees.Add(employee);
-        await _context.SaveChangesAsync();
+        _mockService.Setup(s => s.UpdateProfileAsync(1, It.IsAny<UpdateProfileRequestDto>()))
+            .ReturnsAsync(new UserProfileDto
+            {
+                Id = 1,
+                Email = "test@example.com",
+                Name = "New Name",
+                Phone = "9876543210",
+                Address = "New Address",
+                Dob = new DateOnly(1995, 5, 15),
+                Gender = 1,
+                ImageUrl = "https://example.com/image.jpg",
+                Role = "User"
+            });
 
         SetUserClaim(1);
-
         var request = new UpdateProfileRequestDto
         {
             Name = "New Name",
@@ -254,216 +154,149 @@ public class ProfileControllerTests
             ImageUrl = "https://example.com/image.jpg"
         };
 
-        // Act
         var result = await _controller.UpdateProfile(request);
 
-        // Assert
         var okResult = Assert.IsType<OkObjectResult>(result);
         var profile = Assert.IsType<UserProfileDto>(okResult.Value);
-        
         Assert.Equal("New Name", profile.Name);
         Assert.Equal("9876543210", profile.Phone);
         Assert.Equal("New Address", profile.Address);
         Assert.Equal(new DateOnly(1995, 5, 15), profile.Dob);
         Assert.Equal(1, profile.Gender);
         Assert.Equal("https://example.com/image.jpg", profile.ImageUrl);
-
-        // Verify database was updated
-        var updatedEmployee = await _context.Employees.FirstOrDefaultAsync(e => e.EmployeeId == 1);
-        Assert.NotNull(updatedEmployee);
-        Assert.Equal("New Name", updatedEmployee.Name);
     }
 
-    /// <summary>
-    /// Test case: Update profile with user that has no employee record
-    /// Expected output: 404 Not Found
-    /// </summary>
     [Fact]
     public async Task UpdateProfile_WithNoEmployeeRecord_ReturnsNotFound()
     {
-        // Arrange
-        var user = new User
-        {
-            UserId = 1,
-            Email = "test@example.com",
-            Password = "password123",
-            Status = 1
-        };
-
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
+        _mockService.Setup(s => s.UpdateProfileAsync(1, It.IsAny<UpdateProfileRequestDto>()))
+            .ThrowsAsync(new KeyNotFoundException("Employee record not found for user"));
 
         SetUserClaim(1);
+        var request = new UpdateProfileRequestDto { Name = "New Name", Phone = "9876543210" };
 
-        var request = new UpdateProfileRequestDto
-        {
-            Name = "New Name",
-            Phone = "9876543210"
-        };
-
-        // Act
         var result = await _controller.UpdateProfile(request);
 
-        // Assert
         Assert.IsType<NotFoundObjectResult>(result);
     }
 
-    /// <summary>
-    /// Test case: Update profile without user claim (unauthorized)
-    /// Expected output: 401 Unauthorized
-    /// </summary>
     [Fact]
     public async Task UpdateProfile_WithoutUserClaim_ReturnsUnauthorized()
     {
-        // Arrange
-        _controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal() }
-        };
+        SetNoUser();
+        var request = new UpdateProfileRequestDto { Name = "New Name" };
 
-        var request = new UpdateProfileRequestDto
-        {
-            Name = "New Name"
-        };
-
-        // Act
         var result = await _controller.UpdateProfile(request);
 
-        // Assert
         Assert.IsType<UnauthorizedResult>(result);
     }
 
-    /// <summary>
-    /// Test case: Update profile with invalid model (empty name)
-    /// Expected output: 400 Bad Request
-    /// </summary>
     [Fact]
     public async Task UpdateProfile_WithInvalidModel_ReturnsBadRequest()
     {
-        // Arrange
-        var user = new User
-        {
-            UserId = 1,
-            Email = "test@example.com",
-            Password = "password123",
-            Status = 1
-        };
-
-        var department = new Department
-        {
-            DepartmentId = 1,
-            Name = "IT Department",
-            Code = "IT",
-            Status = 1,
-            CreateDate = DateTime.UtcNow,
-            CreatedBy = 1,
-            CreatedByNavigation = user
-        };
-
-        var employee = new Employee
-        {
-            EmployeeId = 1,
-            UserId = 1,
-            DepartmentId = 1,
-            Name = "Old Name",
-            Code = "EMP001",
-            Status = 1,
-            CreateDate = DateTime.UtcNow,
-            CreatedBy = 1,
-            CreatedByNavigation = user,
-            Department = department
-        };
-
-        _context.Users.Add(user);
-        _context.Departments.Add(department);
-        _context.Employees.Add(employee);
-        await _context.SaveChangesAsync();
-
         SetUserClaim(1);
-
-        // Add model error to simulate validation failure
         _controller.ModelState.AddModelError("Name", "Name is required.");
 
-        var request = new UpdateProfileRequestDto
-        {
-            Name = "" // Invalid - empty name
-        };
+        var request = new UpdateProfileRequestDto { Name = "" };
 
-        // Act
         var result = await _controller.UpdateProfile(request);
 
-        // Assert
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
-    /// <summary>
-    /// Test case: Update profile with only some fields (partial update)
-    /// Expected output: 200 OK with updated profile
-    /// Note: Non-provided fields will be set to null (not preserved)
-    /// </summary>
     [Fact]
     public async Task UpdateProfile_WithPartialData_ReturnsOk()
     {
-        // Arrange
-        var user = new User
-        {
-            UserId = 1,
-            Email = "test@example.com",
-            Password = "password123",
-            Status = 1
-        };
-
-        var department = new Department
-        {
-            DepartmentId = 1,
-            Name = "IT Department",
-            Code = "IT",
-            Status = 1,
-            CreateDate = DateTime.UtcNow,
-            CreatedBy = 1,
-            CreatedByNavigation = user
-        };
-
-        var employee = new Employee
-        {
-            EmployeeId = 1,
-            UserId = 1,
-            DepartmentId = 1,
-            Name = "Old Name",
-            Code = "EMP001",
-            Phone = "0000000000",
-            Address = "Old Address",
-            Status = 1,
-            CreateDate = DateTime.UtcNow,
-            CreatedBy = 1,
-            CreatedByNavigation = user,
-            Department = department
-        };
-
-        _context.Users.Add(user);
-        _context.Departments.Add(department);
-        _context.Employees.Add(employee);
-        await _context.SaveChangesAsync();
+        _mockService.Setup(s => s.UpdateProfileAsync(1, It.IsAny<UpdateProfileRequestDto>()))
+            .ReturnsAsync(new UserProfileDto
+            {
+                Id = 1,
+                Email = "test@example.com",
+                Name = "Updated Name",
+                Role = "User"
+            });
 
         SetUserClaim(1);
+        var request = new UpdateProfileRequestDto { Name = "Updated Name" };
 
-        var request = new UpdateProfileRequestDto
-        {
-            Name = "Updated Name"
-            // Other fields are null - will be set to null
-        };
-
-        // Act
         var result = await _controller.UpdateProfile(request);
 
-        // Assert
         var okResult = Assert.IsType<OkObjectResult>(result);
         var profile = Assert.IsType<UserProfileDto>(okResult.Value);
-        
         Assert.Equal("Updated Name", profile.Name);
-        // Non-provided fields are set to null
-        Assert.Null(profile.Phone);
-        Assert.Null(profile.Address);
+    }
+
+    #endregion
+
+    #region ChangePassword Tests
+
+    [Fact]
+    public async Task ChangePassword_WithValidData_ReturnsOk()
+    {
+        _mockService.Setup(s => s.ChangePasswordAsync(1, It.IsAny<ChangePasswordRequestDto>()))
+            .Returns(Task.CompletedTask);
+
+        SetUserClaim(1);
+        var request = new ChangePasswordRequestDto
+        {
+            CurrentPassword = "oldpass",
+            NewPassword = "newpass123"
+        };
+
+        var result = await _controller.ChangePassword(request);
+
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task ChangePassword_WithInvalidCurrentPassword_ReturnsBadRequest()
+    {
+        _mockService.Setup(s => s.ChangePasswordAsync(1, It.IsAny<ChangePasswordRequestDto>()))
+            .ThrowsAsync(new Exception("Current password is incorrect"));
+
+        SetUserClaim(1);
+        var request = new ChangePasswordRequestDto
+        {
+            CurrentPassword = "wrongpass",
+            NewPassword = "newpass123"
+        };
+
+        var result = await _controller.ChangePassword(request);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task ChangePassword_WithoutUserClaim_ReturnsUnauthorized()
+    {
+        SetNoUser();
+        var request = new ChangePasswordRequestDto
+        {
+            CurrentPassword = "oldpass",
+            NewPassword = "newpass123"
+        };
+
+        var result = await _controller.ChangePassword(request);
+
+        Assert.IsType<UnauthorizedResult>(result);
+    }
+
+    [Fact]
+    public async Task ChangePassword_WithWeakPassword_ReturnsBadRequest()
+    {
+        _mockService.Setup(s => s.ChangePasswordAsync(1, It.IsAny<ChangePasswordRequestDto>()))
+            .ThrowsAsync(new ArgumentException("Password must be at least 6 characters"));
+
+        SetUserClaim(1);
+        var request = new ChangePasswordRequestDto
+        {
+            CurrentPassword = "oldpass",
+            NewPassword = "123"
+        };
+
+        var result = await _controller.ChangePassword(request);
+
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 
     #endregion

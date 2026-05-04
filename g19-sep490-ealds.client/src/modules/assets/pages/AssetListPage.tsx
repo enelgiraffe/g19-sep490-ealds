@@ -24,6 +24,7 @@ import { MaintenanceProposalModal } from '../components/MaintenanceProposalModal
 import { profileService, type UserProfile } from '../../profile/services/profileService';
 import { allocationRequestApiErrorMessage } from '../../allocations/services/allocationRequestService';
 import { isDepartmentHeadRoleCode } from '../../../shared/utils/departmentHeadRole';
+import { PrintSingleInstanceQRModal } from '../components/PrintSingleInstanceQRModal';
 import axios from 'axios';
 import './AssetListPage.css';
 
@@ -199,8 +200,10 @@ export function AssetListPage() {
   const [isLiquidationModalOpen, setIsLiquidationModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
-  const [selectedAssetInfo, setSelectedAssetInfo] = useState<AssetInfo | null>(null);
+  const [isPrintQRModalOpen, setIsPrintQRModalOpen] = useState(false);
+  const [selectedPrintInstanceId, setSelectedPrintInstanceId] = useState<number | null>(null);
   const [transferAssetInstanceId, setTransferAssetInstanceId] = useState<number | null>(null);
+  const [selectedAssetInfo, setSelectedAssetInfo] = useState<AssetInfo | null>(null);
   const [maintenanceAssetInstanceId, setMaintenanceAssetInstanceId] = useState<number | null>(null);
   const [assetTypes, setAssetTypes] = useState<AssetTypeItem[]>([]);
   const [page, setPage] = useState(1);
@@ -378,6 +381,9 @@ export function AssetListPage() {
         setSelectedAssetInfo(assetInfo);
         setMaintenanceAssetInstanceId(raw.assetInstanceId);
         setIsMaintenanceModalOpen(true);
+      } else if (actionKey === 'print-qr') {
+        setSelectedPrintInstanceId(raw.assetInstanceId);
+        setIsPrintQRModalOpen(true);
       } else {
         console.log('Action', actionKey, 'for instance', instanceId);
       }
@@ -440,6 +446,9 @@ export function AssetListPage() {
       });
       message.success('Đã đánh dấu hỏng. Vào Sửa chữa → Tài sản cần sửa chữa để lập đơn đề nghị sửa chữa.');
       await fetchAssets();
+      if (expandedAssetId) {
+        await fetchInstancesForAsset(expandedAssetId);
+      }
       handleCloseMarkDamagedModal();
     } catch (e: any) {
       const data = e?.response?.data;
@@ -490,6 +499,9 @@ export function AssetListPage() {
       });
       message.success('Gửi yêu cầu thanh lý thành công.');
       await fetchAssets();
+      if (expandedAssetId) {
+        await fetchInstancesForAsset(expandedAssetId);
+      }
       handleCloseLiquidationModal();
     } catch (e: any) {
       const data = e?.response?.data;
@@ -544,6 +556,10 @@ export function AssetListPage() {
         description: values.maintenanceContent || undefined,
       });
       message.success('Gửi đề xuất bảo dưỡng thành công.');
+      await fetchAssets();
+      if (expandedAssetId) {
+        await fetchInstancesForAsset(expandedAssetId);
+      }
       handleCloseMaintenanceModal();
     } catch (e: any) {
       const data = e?.response?.data;
@@ -649,6 +665,10 @@ export function AssetListPage() {
       message.success(
         saveAsDraft ? 'Đã lưu bản nháp điều chuyển.' : 'Gửi yêu cầu điều chuyển thành công.',
       );
+      await fetchAssets();
+      if (expandedAssetId) {
+        await fetchInstancesForAsset(expandedAssetId);
+      }
       handleCloseTransferModal();
     } catch (e: unknown) {
       const fromApi =
@@ -892,26 +912,30 @@ export function AssetListPage() {
                                     </button>
                                     {openMenuId === instance.assetInstanceId && (
                                       <div className="asset-row-menu">
-                                        <button
-                                          className="asset-row-menu__item"
-                                          onClick={() =>
-                                            handleInstanceMenuAction('move', instance.assetInstanceId)
-                                          }
-                                        >
-                                          <span className="asset-row-menu__icon">↔</span>
-                                          <span>Di chuyển</span>
-                                        </button>
-                                        <button
-                                          className="asset-row-menu__item"
-                                          onClick={() =>
-                                            handleInstanceMenuAction('maintenance', instance.assetInstanceId)
-                                          }
-                                        >
-                                          <span className="asset-row-menu__icon">🛠</span>
-                                          <span>Bảo dưỡng</span>
-                                        </button>
+                                        {instance.status === 'Đang sử dụng' && (
+                                          <button
+                                            className="asset-row-menu__item"
+                                            onClick={() =>
+                                              handleInstanceMenuAction('move', instance.assetInstanceId)
+                                            }
+                                          >
+                                            <span className="asset-row-menu__icon">↔</span>
+                                            <span>Di chuyển</span>
+                                          </button>
+                                        )}
+                                        {instance.status !== 'Đã thanh lý' && instance.status !== 'Đã hỏng' && instance.status !== 'Đang sửa chữa' && instance.status !== 'Đang bảo trì' && (
+                                          <button
+                                            className="asset-row-menu__item"
+                                            onClick={() =>
+                                              handleInstanceMenuAction('maintenance', instance.assetInstanceId)
+                                            }
+                                          >
+                                            <span className="asset-row-menu__icon">🛠</span>
+                                            <span>Bảo dưỡng</span>
+                                          </button>
+                                        )}
 
-                                        {instance.status !== 'Đã hỏng' && (
+                                        {instance.status !== 'Đã hỏng' && instance.status !== 'Đang sửa chữa' && instance.status !== 'Đang bảo trì' && instance.status !== 'Đã thanh lý' && (
                                           <button
                                             className="asset-row-menu__item"
                                             onClick={() =>
@@ -923,15 +947,17 @@ export function AssetListPage() {
                                           </button>
                                         )}
 
-                                        <button
-                                          className="asset-row-menu__item"
-                                          onClick={() =>
-                                            handleInstanceMenuAction('liquidate', instance.assetInstanceId)
-                                          }
-                                        >
-                                          <span className="asset-row-menu__icon">$</span>
-                                          <span>Đề nghị thanh lý</span>
-                                        </button>
+                                        {instance.status !== 'Đã thanh lý' && instance.status !== 'Đang sửa chữa' && instance.status !== 'Đang bảo trì' && (
+                                          <button
+                                            className="asset-row-menu__item"
+                                            onClick={() =>
+                                              handleInstanceMenuAction('liquidate', instance.assetInstanceId)
+                                            }
+                                          >
+                                            <span className="asset-row-menu__icon">$</span>
+                                            <span>Đề nghị thanh lý</span>
+                                          </button>
+                                        )}
                                         <button
                                           className="asset-row-menu__item"
                                           onClick={() =>
@@ -940,15 +966,6 @@ export function AssetListPage() {
                                         >
                                           <span className="asset-row-menu__icon">▤</span>
                                           <span>In mã QR</span>
-                                        </button>
-                                        <button
-                                          className="asset-row-menu__item asset-row-menu__item--danger"
-                                          onClick={() =>
-                                            handleInstanceMenuAction('delete', instance.assetInstanceId)
-                                          }
-                                        >
-                                          <span className="asset-row-menu__icon">🗑</span>
-                                          <span>Xóa</span>
                                         </button>
                                       </div>
                                     )}
@@ -1046,6 +1063,12 @@ export function AssetListPage() {
         onSubmit={handleSubmitMaintenance}
         assetInfo={selectedAssetInfo}
         assetInstanceId={maintenanceAssetInstanceId}
+      />
+
+      <PrintSingleInstanceQRModal
+        open={isPrintQRModalOpen}
+        onClose={() => setIsPrintQRModalOpen(false)}
+        assetInstanceId={selectedPrintInstanceId}
       />
     </div>
   );

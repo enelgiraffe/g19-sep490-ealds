@@ -108,8 +108,8 @@ builder.Services.AddScoped<IMaintenanceScheduleMapper, MaintenanceScheduleMapper
 builder.Services.AddScoped<IMaintenanceRecordService, MaintenanceRecordService>();
 builder.Services.AddScoped<IRepairRecordService, RepairRecordService>();
 builder.Services.AddScoped<IRepairRequestService, RepairRequestService>();
+builder.Services.AddScoped<IMaintenanceRequestService, MaintenanceRequestService>();
 builder.Services.AddScoped<IMaintenanceRecordMapper, MaintenanceRecordMapper>();
-builder.Services.AddScoped<IMaintenanceTaskService, MaintenanceTaskService>();
 builder.Services.AddScoped<IInventoryNotificationService, InventoryNotificationService>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IAssetRequestNotificationService, AssetRequestNotificationService>();
@@ -133,7 +133,6 @@ builder.Services.AddScoped<IAssetInstanceService, AssetInstanceService>();
 builder.Services.AddScoped<IAssetCapitalizationMapper, AssetCapitalizationMapper>();
 builder.Services.AddScoped<IAssetCapitalizationService, AssetCapitalizationService>();
 builder.Services.AddScoped<IAssetDepreciationService, AssetDepreciationService>();
-builder.Services.AddScoped<IAssetRevaluationService, AssetRevaluationService>();
 
 // Asset catalog management
 builder.Services.AddScoped<IAssetTypeService, AssetTypeService>();
