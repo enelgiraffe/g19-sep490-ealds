@@ -923,7 +923,7 @@ export function AssetListPage() {
                                             <span>Di chuyển</span>
                                           </button>
                                         )}
-                                        {instance.status !== 'Đã thanh lý' && instance.status !== 'Đang sửa chữa' && (
+                                        {instance.status !== 'Đã thanh lý' && instance.status !== 'Đã hỏng' && instance.status !== 'Đang sửa chữa' && instance.status !== 'Đang bảo trì' && (
                                           <button
                                             className="asset-row-menu__item"
                                             onClick={() =>
@@ -935,7 +935,7 @@ export function AssetListPage() {
                                           </button>
                                         )}
 
-                                        {instance.status !== 'Đã hỏng' && instance.status !== 'Đang sửa chữa' && instance.status !== 'Đã thanh lý' && (
+                                        {instance.status !== 'Đã hỏng' && instance.status !== 'Đang sửa chữa' && instance.status !== 'Đang bảo trì' && instance.status !== 'Đã thanh lý' && (
                                           <button
                                             className="asset-row-menu__item"
                                             onClick={() =>
@@ -947,7 +947,7 @@ export function AssetListPage() {
                                           </button>
                                         )}
 
-                                        {instance.status !== 'Đã thanh lý' && (
+                                        {instance.status !== 'Đã thanh lý' && instance.status !== 'Đang sửa chữa' && instance.status !== 'Đang bảo trì' && (
                                           <button
                                             className="asset-row-menu__item"
                                             onClick={() =>
