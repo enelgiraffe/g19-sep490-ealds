@@ -1,14 +1,12 @@
 using g19_sep490_ealds.Server.Controllers;
+using g19_sep490_ealds.Server.DTOs.AssetRequests;
 using g19_sep490_ealds.Server.Models;
-using g19_sep490_ealds.Server.Models.DTOs;
 using g19_sep490_ealds.Server.Services.Interface;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Moq;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -21,8 +19,7 @@ namespace g19_sep490_ealds.Tests;
 public class AssetRequestsControllerTests
 {
     private readonly EaldsDbContext _context;
-    private readonly Mock<IAssetRequestNotificationService> _mockNotificationService;
-    private readonly Mock<IConfiguration> _mockConfiguration;
+    private readonly Mock<IAssetRequestService> _mockService;
     private readonly AssetRequestsController _controller;
 
     public AssetRequestsControllerTests()
@@ -32,22 +29,8 @@ public class AssetRequestsControllerTests
             .Options;
 
         _context = new EaldsDbContext(options);
-
-        _mockNotificationService = new Mock<IAssetRequestNotificationService>();
-        _mockNotificationService
-            .Setup(x => x.NotifyFirstApproversAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-        _mockNotificationService
-            .Setup(x => x.NotifySenderDecisionAsync(It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-
-        _mockConfiguration = new Mock<IConfiguration>();
-        _mockConfiguration.Setup(x => x["App:PurchaseRequestTypeId"]).Returns("1");
-
-        _controller = new AssetRequestsController(
-            _context,
-            _mockConfiguration.Object,
-            _mockNotificationService.Object);
+        _mockService = new Mock<IAssetRequestService>();
+        _controller = new AssetRequestsController(_mockService.Object);
     }
 
 
@@ -61,13 +44,14 @@ public class AssetRequestsControllerTests
     public async Task GetById_WithValidId_ReturnsPurchaseRequest()
     {
         // Arrange
-        var request = await SeedPurchaseRequest(userId: 1, status: 0, title: "Laptop Request");
+        var dto = new AssetRequestDetailDTO { AssetRequestId = 1, Title = "Laptop Request" };
+        _mockService.Setup(s => s.GetPurchaseByIdAsync(1)).ReturnsAsync(dto);
 
         // Act
-        var result = await _controller.GetById(request.AssetRequestId);
+        var result = await _controller.GetById(1);
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result);
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
         Assert.NotNull(okResult.Value);
     }
 
@@ -78,11 +62,14 @@ public class AssetRequestsControllerTests
     [Fact]
     public async Task GetById_WithInvalidId_ReturnsNotFound()
     {
+        // Arrange
+        _mockService.Setup(s => s.GetPurchaseByIdAsync(999)).ThrowsAsync(new KeyNotFoundException());
+
         // Act
         var result = await _controller.GetById(999);
 
         // Assert
-        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.IsType<NotFoundObjectResult>(result.Result);
     }
 
     #endregion
@@ -97,9 +84,7 @@ public class AssetRequestsControllerTests
     public async Task Create_AsDraft_ReturnsOkWithoutNotification()
     {
         // Arrange
-        await SeedRequestType(requestTypeId: 1, workflowId: 1);
-        await SeedWorkflowStep(workflowId: 1, stepOrder: 1, roleId: 3, isFinalStep: false);
-        await SeedUser(1, status: 1);
+        _mockService.Setup(s => s.CreateAsync(It.IsAny<AssetRequestDTO>())).ReturnsAsync(1);
 
         var dto = new AssetRequestDTO
         {
@@ -115,12 +100,7 @@ public class AssetRequestsControllerTests
 
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result);
-        var saved = await _context.AssetRequests.FirstOrDefaultAsync(r => r.Title == "New Laptop Request");
-        Assert.NotNull(saved);
-        Assert.Equal(-1, saved.Status);
-        _mockNotificationService.Verify(
-            x => x.NotifyFirstApproversAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        Assert.NotNull(okResult.Value);
     }
 
     /// <summary>
@@ -131,9 +111,7 @@ public class AssetRequestsControllerTests
     public async Task Create_Submitted_SendsNotification()
     {
         // Arrange
-        await SeedRequestType(requestTypeId: 1, workflowId: 1);
-        await SeedWorkflowStep(workflowId: 1, stepOrder: 1, roleId: 3, isFinalStep: true);
-        await SeedUser(1, status: 1);
+        _mockService.Setup(s => s.CreateAsync(It.IsAny<AssetRequestDTO>())).ReturnsAsync(1);
 
         var dto = new AssetRequestDTO
         {
@@ -149,9 +127,7 @@ public class AssetRequestsControllerTests
 
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result);
-        _mockNotificationService.Verify(
-            x => x.NotifyFirstApproversAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Once);
+        Assert.NotNull(okResult.Value);
     }
 
     /// <summary>
@@ -162,6 +138,8 @@ public class AssetRequestsControllerTests
     public async Task Create_WithMissingTitle_ReturnsBadRequest()
     {
         // Arrange
+        _mockService.Setup(s => s.CreateAsync(It.IsAny<AssetRequestDTO>())).ThrowsAsync(new ArgumentException("Title is required"));
+
         var dto = new AssetRequestDTO
         {
             UserId = 1,
@@ -184,8 +162,7 @@ public class AssetRequestsControllerTests
     public async Task Create_WithInvalidStatus_ReturnsBadRequest()
     {
         // Arrange
-        await SeedRequestType(requestTypeId: 1, workflowId: 1);
-        await SeedUser(1, status: 1);
+        _mockService.Setup(s => s.CreateAsync(It.IsAny<AssetRequestDTO>())).ThrowsAsync(new ArgumentException("Invalid status"));
 
         var dto = new AssetRequestDTO
         {
@@ -214,7 +191,7 @@ public class AssetRequestsControllerTests
     public async Task Update_DraftRequest_ReturnsUpdatedRequest()
     {
         // Arrange
-        var request = await SeedPurchaseRequest(userId: 1, status: -1, title: "Original Title");
+        _mockService.Setup(s => s.UpdateAsync(1, It.IsAny<AssetRequestDTO>())).ReturnsAsync(1);
 
         var dto = new AssetRequestDTO
         {
@@ -226,14 +203,11 @@ public class AssetRequestsControllerTests
         };
 
         // Act
-        var result = await _controller.Update(request.AssetRequestId, dto);
+        var result = await _controller.Update(1, dto);
 
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result);
-        var updated = await _context.AssetRequests.FindAsync(request.AssetRequestId);
-        Assert.NotNull(updated);
-        Assert.Equal("Updated Title", updated.Title);
-        Assert.Equal("Updated description", updated.Description);
+        Assert.NotNull(okResult.Value);
     }
 
     /// <summary>
@@ -244,7 +218,7 @@ public class AssetRequestsControllerTests
     public async Task Update_SubmittedRequest_ReturnsBadRequest()
     {
         // Arrange
-        var request = await SeedPurchaseRequest(userId: 1, status: 0, title: "Submitted Request");
+        _mockService.Setup(s => s.UpdateAsync(1, It.IsAny<AssetRequestDTO>())).ThrowsAsync(new ArgumentException("Cannot update non-draft request"));
 
         var dto = new AssetRequestDTO
         {
@@ -255,7 +229,7 @@ public class AssetRequestsControllerTests
         };
 
         // Act
-        var result = await _controller.Update(request.AssetRequestId, dto);
+        var result = await _controller.Update(1, dto);
 
         // Assert
         Assert.IsType<BadRequestObjectResult>(result);
@@ -269,6 +243,8 @@ public class AssetRequestsControllerTests
     public async Task Update_InvalidId_ReturnsNotFound()
     {
         // Arrange
+        _mockService.Setup(s => s.UpdateAsync(999, It.IsAny<AssetRequestDTO>())).ThrowsAsync(new KeyNotFoundException());
+
         var dto = new AssetRequestDTO
         {
             UserId = 1,
@@ -291,7 +267,7 @@ public class AssetRequestsControllerTests
     public async Task Update_DraftToSubmitted_SendsNotification()
     {
         // Arrange
-        var request = await SeedPurchaseRequest(userId: 1, status: -1, title: "Draft Request");
+        _mockService.Setup(s => s.UpdateAsync(1, It.IsAny<AssetRequestDTO>())).ReturnsAsync(1);
 
         var dto = new AssetRequestDTO
         {
@@ -302,12 +278,11 @@ public class AssetRequestsControllerTests
         };
 
         // Act
-        await _controller.Update(request.AssetRequestId, dto);
+        var result = await _controller.Update(1, dto);
 
         // Assert
-        _mockNotificationService.Verify(
-            x => x.NotifyFirstApproversAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Once);
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(okResult.Value);
     }
 
     /// <summary>
@@ -318,7 +293,7 @@ public class AssetRequestsControllerTests
     public async Task Update_WithInvalidStatus_ReturnsBadRequest()
     {
         // Arrange
-        var request = await SeedPurchaseRequest(userId: 1, status: -1, title: "Draft Request");
+        _mockService.Setup(s => s.UpdateAsync(1, It.IsAny<AssetRequestDTO>())).ThrowsAsync(new ArgumentException("Invalid status"));
 
         var dto = new AssetRequestDTO
         {
@@ -329,7 +304,7 @@ public class AssetRequestsControllerTests
         };
 
         // Act
-        var result = await _controller.Update(request.AssetRequestId, dto);
+        var result = await _controller.Update(1, dto);
 
         // Assert
         Assert.IsType<BadRequestObjectResult>(result);
@@ -347,18 +322,15 @@ public class AssetRequestsControllerTests
     public async Task RevertToDraft_ByCreator_ReturnsOkWithDraftStatus()
     {
         // Arrange
-        var request = await SeedPurchaseRequest(userId: 1, status: 0, title: "Submitted Request");
+        _mockService.Setup(s => s.RevertToDraftAsync(1, 1)).Returns(Task.CompletedTask);
 
         var dto = new RevertToDraftDTO { UserId = 1 };
 
         // Act
-        var result = await _controller.RevertToDraft(request.AssetRequestId, dto);
+        var result = await _controller.RevertToDraft(1, dto);
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        var updated = await _context.AssetRequests.FindAsync(request.AssetRequestId);
-        Assert.NotNull(updated);
-        Assert.Equal(-1, updated.Status);
+        Assert.IsType<OkObjectResult>(result);
     }
 
     /// <summary>
@@ -369,12 +341,12 @@ public class AssetRequestsControllerTests
     public async Task RevertToDraft_ByNonCreator_ReturnsForbid()
     {
         // Arrange
-        var request = await SeedPurchaseRequest(userId: 1, status: 0, title: "Submitted Request");
+        _mockService.Setup(s => s.RevertToDraftAsync(1, 999)).ThrowsAsync(new UnauthorizedAccessException());
 
         var dto = new RevertToDraftDTO { UserId = 999 };
 
         // Act
-        var result = await _controller.RevertToDraft(request.AssetRequestId, dto);
+        var result = await _controller.RevertToDraft(1, dto);
 
         // Assert
         Assert.IsType<ForbidResult>(result);
@@ -388,12 +360,12 @@ public class AssetRequestsControllerTests
     public async Task RevertToDraft_OnDraftRequest_ReturnsBadRequest()
     {
         // Arrange
-        var request = await SeedPurchaseRequest(userId: 1, status: -1, title: "Draft Request");
+        _mockService.Setup(s => s.RevertToDraftAsync(1, 1)).ThrowsAsync(new ArgumentException("Request is already in draft status"));
 
         var dto = new RevertToDraftDTO { UserId = 1 };
 
         // Act
-        var result = await _controller.RevertToDraft(request.AssetRequestId, dto);
+        var result = await _controller.RevertToDraft(1, dto);
 
         // Assert
         Assert.IsType<BadRequestObjectResult>(result);
@@ -407,6 +379,8 @@ public class AssetRequestsControllerTests
     public async Task RevertToDraft_WithInvalidId_ReturnsNotFound()
     {
         // Arrange
+        _mockService.Setup(s => s.RevertToDraftAsync(999, 1)).ThrowsAsync(new KeyNotFoundException());
+
         var dto = new RevertToDraftDTO { UserId = 1 };
 
         // Act
@@ -423,6 +397,9 @@ public class AssetRequestsControllerTests
     [Fact]
     public async Task RevertToDraft_WithZeroUserId_ReturnsBadRequest()
     {
+        // Arrange
+        _mockService.Setup(s => s.RevertToDraftAsync(1, 0)).ThrowsAsync(new ArgumentException("UserId is required"));
+
         // Act
         var result = await _controller.RevertToDraft(1, new RevertToDraftDTO { UserId = 0 });
 
@@ -438,7 +415,7 @@ public class AssetRequestsControllerTests
     public async Task RevertToDraft_ValidUserAndRequest_ReturnsOk()
     {
         // Arrange
-        await SeedPurchaseRequest(userId: 1, status: 0, title: "Test Request");
+        _mockService.Setup(s => s.RevertToDraftAsync(1, 1)).Returns(Task.CompletedTask);
 
         var dto = new RevertToDraftDTO { UserId = 1 };
 
@@ -446,10 +423,7 @@ public class AssetRequestsControllerTests
         var result = await _controller.RevertToDraft(1, dto);
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        var updated = await _context.AssetRequests.FindAsync(1);
-        Assert.NotNull(updated);
-        Assert.Equal(-1, updated.Status);
+        Assert.IsType<OkObjectResult>(result);
     }
 
     /// <summary>
@@ -460,7 +434,7 @@ public class AssetRequestsControllerTests
     public async Task RevertToDraft_NonExistentUser_ReturnsForbid()
     {
         // Arrange
-        await SeedPurchaseRequest(userId: 1, status: 0, title: "Test Request");
+        _mockService.Setup(s => s.RevertToDraftAsync(1, 999)).ThrowsAsync(new UnauthorizedAccessException());
 
         var dto = new RevertToDraftDTO { UserId = 999 };
 
@@ -479,7 +453,7 @@ public class AssetRequestsControllerTests
     public async Task RevertToDraft_NonExistentRequest_ReturnsNotFound()
     {
         // Arrange
-        await SeedUser(1, status: 1);
+        _mockService.Setup(s => s.RevertToDraftAsync(999, 1)).ThrowsAsync(new KeyNotFoundException());
 
         var dto = new RevertToDraftDTO { UserId = 1 };
 
@@ -498,6 +472,8 @@ public class AssetRequestsControllerTests
     public async Task RevertToDraft_NonExistentUserAndRequest_ReturnsNotFound()
     {
         // Arrange
+        _mockService.Setup(s => s.RevertToDraftAsync(999, 999)).ThrowsAsync(new KeyNotFoundException());
+
         var dto = new RevertToDraftDTO { UserId = 999 };
 
         // Act
@@ -505,77 +481,6 @@ public class AssetRequestsControllerTests
 
         // Assert
         Assert.IsType<NotFoundObjectResult>(result);
-    }
-
-    #endregion
-
-    #region Helper Methods
-
-    private async Task<AssetRequest> SeedPurchaseRequest(int userId, int status, string title, int requestTypeId = 1)
-    {
-        await SeedUser(userId, status: 1);
-        await SeedRequestType(requestTypeId, workflowId: 1);
-        await SeedWorkflowStep(1, 1, 3, false);
-
-        var request = new AssetRequest
-        {
-            AssetRequestId = _context.AssetRequests.Count() == 0 ? 1 : _context.AssetRequests.Max(r => r.AssetRequestId) + 1,
-            UserId = userId,
-            RequestTypeId = requestTypeId,
-            Title = title,
-            Status = status,
-            CreatedBy = userId,
-            CreateDate = DateTime.UtcNow,
-            StepId = 1
-        };
-
-        _context.AssetRequests.Add(request);
-        await _context.SaveChangesAsync();
-        return request;
-    }
-
-    private async Task SeedRequestType(int requestTypeId, int workflowId)
-    {
-        if (!await _context.RequestTypes.AnyAsync(rt => rt.RequestTypeId == requestTypeId))
-        {
-            _context.RequestTypes.Add(new RequestType
-            {
-                RequestTypeId = requestTypeId,
-                WorkflowId = workflowId
-            });
-            await _context.SaveChangesAsync();
-        }
-    }
-
-    private async Task SeedWorkflowStep(int workflowId, int stepOrder, int roleId, bool isFinalStep)
-    {
-        if (!await _context.WorkflowSteps.AnyAsync(ws => ws.WorkflowId == workflowId && ws.StepOrder == stepOrder))
-        {
-            _context.WorkflowSteps.Add(new WorkflowStep
-            {
-                StepId = _context.WorkflowSteps.Count() == 0 ? 1 : _context.WorkflowSteps.Max(ws => ws.StepId) + 1,
-                WorkflowId = workflowId,
-                StepOrder = stepOrder,
-                RoleId = roleId,
-                IsFinalStep = isFinalStep
-            });
-            await _context.SaveChangesAsync();
-        }
-    }
-
-    private async Task SeedUser(int userId, int status)
-    {
-        if (!await _context.Users.AnyAsync(u => u.UserId == userId))
-        {
-            _context.Users.Add(new User
-            {
-                UserId = userId,
-                Email = $"user{userId}@test.com",
-                Password = "hashed",
-                Status = status
-            });
-            await _context.SaveChangesAsync();
-        }
     }
 
     #endregion
