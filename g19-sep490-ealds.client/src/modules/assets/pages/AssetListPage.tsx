@@ -446,6 +446,9 @@ export function AssetListPage() {
       });
       message.success('Đã đánh dấu hỏng. Vào Sửa chữa → Tài sản cần sửa chữa để lập đơn đề nghị sửa chữa.');
       await fetchAssets();
+      if (expandedAssetId) {
+        await fetchInstancesForAsset(expandedAssetId);
+      }
       handleCloseMarkDamagedModal();
     } catch (e: any) {
       const data = e?.response?.data;
@@ -496,6 +499,9 @@ export function AssetListPage() {
       });
       message.success('Gửi yêu cầu thanh lý thành công.');
       await fetchAssets();
+      if (expandedAssetId) {
+        await fetchInstancesForAsset(expandedAssetId);
+      }
       handleCloseLiquidationModal();
     } catch (e: any) {
       const data = e?.response?.data;
@@ -550,6 +556,10 @@ export function AssetListPage() {
         description: values.maintenanceContent || undefined,
       });
       message.success('Gửi đề xuất bảo dưỡng thành công.');
+      await fetchAssets();
+      if (expandedAssetId) {
+        await fetchInstancesForAsset(expandedAssetId);
+      }
       handleCloseMaintenanceModal();
     } catch (e: any) {
       const data = e?.response?.data;
@@ -655,6 +665,10 @@ export function AssetListPage() {
       message.success(
         saveAsDraft ? 'Đã lưu bản nháp điều chuyển.' : 'Gửi yêu cầu điều chuyển thành công.',
       );
+      await fetchAssets();
+      if (expandedAssetId) {
+        await fetchInstancesForAsset(expandedAssetId);
+      }
       handleCloseTransferModal();
     } catch (e: unknown) {
       const fromApi =
@@ -898,24 +912,28 @@ export function AssetListPage() {
                                     </button>
                                     {openMenuId === instance.assetInstanceId && (
                                       <div className="asset-row-menu">
-                                        <button
-                                          className="asset-row-menu__item"
-                                          onClick={() =>
-                                            handleInstanceMenuAction('move', instance.assetInstanceId)
-                                          }
-                                        >
-                                          <span className="asset-row-menu__icon">↔</span>
-                                          <span>Di chuyển</span>
-                                        </button>
-                                        <button
-                                          className="asset-row-menu__item"
-                                          onClick={() =>
-                                            handleInstanceMenuAction('maintenance', instance.assetInstanceId)
-                                          }
-                                        >
-                                          <span className="asset-row-menu__icon">🛠</span>
-                                          <span>Bảo dưỡng</span>
-                                        </button>
+                                        {instance.status === 'Đang sử dụng' && (
+                                          <button
+                                            className="asset-row-menu__item"
+                                            onClick={() =>
+                                              handleInstanceMenuAction('move', instance.assetInstanceId)
+                                            }
+                                          >
+                                            <span className="asset-row-menu__icon">↔</span>
+                                            <span>Di chuyển</span>
+                                          </button>
+                                        )}
+                                        {instance.status !== 'Đã thanh lý' && instance.status !== 'Đang sửa chữa' && (
+                                          <button
+                                            className="asset-row-menu__item"
+                                            onClick={() =>
+                                              handleInstanceMenuAction('maintenance', instance.assetInstanceId)
+                                            }
+                                          >
+                                            <span className="asset-row-menu__icon">🛠</span>
+                                            <span>Bảo dưỡng</span>
+                                          </button>
+                                        )}
 
                                         {instance.status !== 'Đã hỏng' && instance.status !== 'Đang sửa chữa' && instance.status !== 'Đã thanh lý' && (
                                           <button
