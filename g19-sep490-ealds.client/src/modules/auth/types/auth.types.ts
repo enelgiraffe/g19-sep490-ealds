@@ -47,3 +47,4 @@ export function getDefaultLandingPath(appRole: AppRole): string {
       return '/dashboard';
   }
 }
+

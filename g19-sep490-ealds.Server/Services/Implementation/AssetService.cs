@@ -326,8 +326,10 @@ public class AssetService : IAssetService
                 await _context.SaveChangesAsync();
 
                 // Tạo record AssetCapitalization nếu là tài sản cố định
+                _logger.LogInformation($"IsFixedAsset value: {init.IsFixedAsset}, Instance ID: {instance.AssetInstanceId}");
                 if (init.IsFixedAsset)
                 {
+                    _logger.LogInformation($"Creating AssetCapitalization for instance {instance.AssetInstanceId}");
                     var capitalization = new AssetCapitalization
                     {
                         AssetInstanceId = instance.AssetInstanceId,
@@ -338,6 +340,7 @@ public class AssetService : IAssetService
                     };
                     _context.AssetCapitalizations.Add(capitalization);
                     await _context.SaveChangesAsync();
+                    _logger.LogInformation($"AssetCapitalization created successfully for instance {instance.AssetInstanceId}");
                 }
 
                 try

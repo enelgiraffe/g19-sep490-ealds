@@ -92,6 +92,7 @@ export function CreatePurchaseOrderModal({
     }
   }, [open, form, initialValues, assetTypes]);
 
+  // Build proposedData JSON từ form values
   const buildProposedData = (values: CreatePurchaseFormValues): string | undefined => {
     const equipment = values.equipment?.filter(
       (e) => e?.assetTypeId != null && String(e.assetTypeId).trim() !== ''
@@ -141,7 +142,6 @@ export function CreatePurchaseOrderModal({
       setAddingType(false);
     }
   };
-
   const handleSubmitWithStatus = (status: number) => {
     form.validateFields().then((values) => {
       const title = values.title?.trim();
@@ -149,6 +149,7 @@ export function CreatePurchaseOrderModal({
         form.setFields([{ name: 'title', errors: ['Vui lòng nhập tiêu đề'] }]);
         return;
       }
+      // Build description từ reason + needDate
       const needDateText =
         values.needDate && typeof (values.needDate as any).format === 'function'
           ? (values.needDate as Dayjs).format('DD/MM/YYYY')
