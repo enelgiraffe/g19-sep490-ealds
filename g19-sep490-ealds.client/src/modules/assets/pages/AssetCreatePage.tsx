@@ -52,11 +52,6 @@ interface DepreciationForm {
   depreciationPolicyId: string;
 }
 
-interface AllocationForm {
-  allocateNow: boolean;
-  usageTarget: string;
-}
-
 type AssetFormDocRow = {
   id: string;
   fileName: string;
@@ -118,11 +113,6 @@ export function AssetCreatePage() {
     accumulatedDepreciation: '',
     remainingValue: '',
     depreciationPolicyId: '',
-  });
-
-  const [allocation, setAllocation] = useState<AllocationForm>({
-    allocateNow: false,
-    usageTarget: '',
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -406,17 +396,13 @@ export function AssetCreatePage() {
           isAccountant && (deptId != null || managerId != null)
             ? general.purchaseDate || null
             : null,
+        isFixedAsset: general.isFixedAsset,
       },
       documents: documentPayload.length > 0 ? documentPayload : undefined,
     };
 
     try {
       const created = await assetService.create(payload);
-      if (general.isFixedAsset && created.instances && created.instances.length > 0) {
-        await Promise.allSettled(
-          created.instances.map((inst) => assetInstanceService.capitalize(inst.assetInstanceId))
-        );
-      }
       navigate(backToListPath);
     } catch (err: unknown) {
       const msg =
@@ -839,7 +825,7 @@ export function AssetCreatePage() {
         )}
 
         {/* Thông tin khấu hao */}
-        {!onlyMasterAsset && (
+        {!onlyMasterAsset && general.isFixedAsset && (
         <section className="asset-create__section">
           <h2 className="asset-create__section-title">Thông tin khấu hao</h2>
           <div className="asset-create__grid asset-create__grid--three">
@@ -922,36 +908,6 @@ export function AssetCreatePage() {
                 />
                 <span className="asset-create__suffix">Tháng</span>
               </div>
-            </div>
-          </div>
-        </section>
-        )}
-
-        {/* Đã cấp phát */}
-        {!onlyMasterAsset && (
-        <section className="asset-create__section">
-          <h2 className="asset-create__section-title">Đã cấp phát</h2>
-          <div className="asset-create__grid asset-create__grid--two">
-            <label className="asset-create__checkbox-row">
-              <input
-                type="checkbox"
-                checked={allocation.allocateNow}
-                onChange={(e) =>
-                  setAllocation({ ...allocation, allocateNow: e.target.checked })
-                }
-              />
-              <span>Có cấp phát ngay</span>
-            </label>
-
-            <div className="asset-create__field">
-              <label className="asset-create__label">Đối tượng sử dụng</label>
-              <input
-                className="asset-create__input"
-                value={allocation.usageTarget}
-                onChange={(e) =>
-                  setAllocation({ ...allocation, usageTarget: e.target.value })
-                }
-              />
             </div>
           </div>
         </section>

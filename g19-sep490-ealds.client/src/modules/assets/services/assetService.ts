@@ -120,6 +120,7 @@ export interface AssetInstanceResponse {
   currentResponsibleEmployeeId?: number | null;
   currentResponsibleEmployeeName?: string | null;
   currentResponsibleUserId?: number | null;
+  isFixedAsset?: boolean;
   depreciationPolicyId?: number | null;
   depreciationPolicyName?: string | null;
   depreciationUsefulLifeMonths?: number | null;
@@ -222,6 +223,7 @@ export interface CreateAssetInstancePayload {
   contractNo?: string | null;
   condition?: string | null;
   note?: string | null;
+  isFixedAsset?: boolean;
   assignedDepartmentId?: number | null;
   responsibleEmployeeId?: number | null;
   assignmentEffectiveDate?: string | null;
@@ -330,6 +332,7 @@ export interface UpdateAssetInstancePayload {
   depreciationAmount?: number | null;
   accumulatedDepreciation?: number | null;
   remainingValue?: number | null;
+  isFixedAsset?: boolean;
   assignedDepartmentId?: number | null;
   responsibleEmployeeId?: number | null;
   assignmentEffectiveDate?: string | null;

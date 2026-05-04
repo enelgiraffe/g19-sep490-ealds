@@ -122,6 +122,8 @@ export interface PurchaseOrderFormModalNewProps {
     lines: PurchaseOrderLineWrite[];
     isDraft?: boolean;
   }) => Promise<void>;
+  /** Chỉ cần thiết khi mode === 'edit' để biết đơn đang là nháp hay đã tạo */
+  initialStatus?: number;
 }
 
 export function PurchaseOrderFormModalNew({
@@ -130,6 +132,7 @@ export function PurchaseOrderFormModalNew({
   initial,
   onClose,
   onSubmit,
+  initialStatus,
 }: PurchaseOrderFormModalNewProps) {
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierItem | null>(null);
   const [currency, setCurrency] = useState<string>('VND');
@@ -328,20 +331,15 @@ export function PurchaseOrderFormModalNew({
       expectedDeliveryDate: r.expectedDelivery ? r.expectedDelivery.format('YYYY-MM-DD') : null,
     }));
     const kept = payloadLines.filter((l) => l.quantity > 0);
-    if (linkedRequestId != null && expectedRequestRows.length > 0) {
-      if (lines.length !== expectedRequestRows.length) {
-        message.warning('Đơn mua phải giữ đúng số dòng loại tài sản như yêu cầu mua.');
-        return;
-      }
-      for (let i = 0; i < lines.length; i += 1) {
-        const actual = lines[i];
-        const expected = expectedRequestRows[i];
-        if (Number(actual.quantity) !== Number(expected.quantity)) {
-          message.warning('Số lượng từng loại tài sản phải đúng theo yêu cầu mua đã chọn.');
-          return;
-        }
+    
+    // Cảnh báo nhẹ nếu link với yêu cầu mua nhưng không mua đủ
+    if (!isDraft && linkedRequestId != null && expectedRequestRows.length > 0) {
+      if (lines.length < expectedRequestRows.length) {
+        const missing = expectedRequestRows.length - lines.length;
+        message.info(`Lưu ý: Đơn mua chỉ có ${lines.length}/${expectedRequestRows.length} loại tài sản (còn thiếu ${missing} loại).`);
       }
     }
+    
     if (kept.length === 0 && mode !== 'edit' && !isDraft) {
       message.warning('Cần ít nhất một dòng hàng với số lượng lớn hơn 0.');
       return;
@@ -356,7 +354,15 @@ export function PurchaseOrderFormModalNew({
         lines: kept.length > 0 ? kept : [],
         isDraft,
       });
-      message.success(isDraft ? 'Đã lưu nháp đơn mua.' : (mode === 'edit' ? 'Đã cập nhật đơn mua.' : 'Đã tạo đơn mua.'));
+      // Xác định message phù hợp
+      let successMessage = 'Đã tạo đơn mua.';
+      if (isDraft) {
+        successMessage = mode === 'edit' ? 'Đã cập nhật nháp đơn mua.' : 'Đã lưu nháp đơn mua.';
+      } else if (mode === 'edit') {
+        // Khi edit và không phải draft, kiểm tra trạng thái ban đầu
+        successMessage = initialStatus === -1 ? 'Đã tạo đơn mua.' : 'Đã cập nhật đơn mua.';
+      }
+      message.success(successMessage);
       onClose();
     } catch (e: unknown) {
       const err = e as { response?: { data?: string } };
@@ -566,7 +572,6 @@ export function PurchaseOrderFormModalNew({
                             className="po-form-input-number--fixed"
                             style={{ width: '100%', height: '40px' }}
                             value={row.quantity}
-                            disabled={lineFromRequest}
                             onChange={(v) => updateLine(row.key, { quantity: Number(v) || 1 })}
                           />
                         </td>
@@ -581,7 +586,6 @@ export function PurchaseOrderFormModalNew({
                                   className="po-form-select"
                                   style={{ width: '100%', height: '40px' }}
                                   value={selectValue}
-                                  disabled={lineFromRequest}
                                   onChange={(e) => {
                                     const next = e.target.value;
                                     if (next === OTHER_UNIT_VALUE) {
@@ -607,7 +611,6 @@ export function PurchaseOrderFormModalNew({
                                     style={{ marginTop: 6 }}
                                     placeholder="Nhập đơn vị tính"
                                     value={normalized}
-                                    readOnly={lineFromRequest}
                                     onChange={(e) => updateLine(row.key, { unit: e.target.value })}
                                   />
                                 )}
@@ -645,8 +648,9 @@ export function PurchaseOrderFormModalNew({
                             type="text"
                             danger
                             icon={<DeleteOutlined />}
-                            disabled={lineFromRequest || lines.length <= 1}
+                            disabled={lines.length <= 1}
                             onClick={() => setLines((prev) => prev.filter((r) => r.key !== row.key))}
+                            title={lineFromRequest ? "Xóa dòng này (đơn mua có thể không đủ yêu cầu)" : "Xóa dòng"}
                           />
                         </td>
                       </tr>
@@ -659,7 +663,7 @@ export function PurchaseOrderFormModalNew({
         </div>
 
         <div className="po-form-modal__footer">
-          {mode === 'create' && (
+          {(mode === 'create' || (mode === 'edit' && initialStatus === -1)) && (
             <button
               type="button"
               onClick={() => handleSubmit(true)}
@@ -675,7 +679,7 @@ export function PurchaseOrderFormModalNew({
             className="po-form-btn-submit"
             disabled={loading}
           >
-            {mode === 'edit' ? 'Cập nhật' : 'Tạo đơn'}
+            {mode === 'edit' && initialStatus === -1 ? 'Tạo đơn' : mode === 'edit' ? 'Cập nhật' : 'Tạo đơn'}
           </button>
           <button type="button" onClick={onClose} className="po-form-btn-cancel">
             Hủy

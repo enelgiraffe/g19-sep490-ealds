@@ -325,6 +325,21 @@ public class AssetService : IAssetService
                 _context.AssetInstances.Add(instance);
                 await _context.SaveChangesAsync();
 
+                // Tạo record AssetCapitalization nếu là tài sản cố định
+                if (init.IsFixedAsset)
+                {
+                    var capitalization = new AssetCapitalization
+                    {
+                        AssetInstanceId = instance.AssetInstanceId,
+                        CapitalizedDate = DateTime.UtcNow,
+                        CapitalizedBy = dto.CreatedBy,
+                        Note = "Tài sản cố định được tạo tự động",
+                        CreateDate = DateTime.UtcNow
+                    };
+                    _context.AssetCapitalizations.Add(capitalization);
+                    await _context.SaveChangesAsync();
+                }
+
                 try
                 {
                     await _maintenanceTemplates.EnsureSchedulesForNewInstanceAsync(instance.AssetInstanceId, actorUserId);
@@ -473,6 +488,7 @@ public class AssetService : IAssetService
             .Include(a => a.AssetInstances).ThenInclude(i => i.Warehouse)
             .Include(a => a.AssetInstances).ThenInclude(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(a => a.AssetInstances).ThenInclude(i => i.AssetUsages).ThenInclude(u => u.Employee)
+            .Include(a => a.AssetInstances).ThenInclude(i => i.AssetCapitalizations)
             .AsNoTracking()
             .FirstOrDefaultAsync(a => a.AssetId == id);
 
@@ -866,6 +882,7 @@ public class AssetService : IAssetService
                 .Where(u => u.IsCurrent)
                 .Select(u => u.Employee != null ? (int?)u.Employee.UserId : null)
                 .FirstOrDefault(),
+            IsFixedAsset = i.AssetCapitalizations != null && i.AssetCapitalizations.Any(),
             DepreciationPolicyId = i.DepreciationPolicyId,
             UsageHistories = usageHistories
         };

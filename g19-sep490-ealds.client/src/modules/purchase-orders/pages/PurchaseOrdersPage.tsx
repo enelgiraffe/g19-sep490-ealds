@@ -387,6 +387,7 @@ export function PurchaseOrdersPage() {
         open={formOpen}
         mode={formMode}
         initial={formMode === 'edit' ? selected : null}
+        initialStatus={formMode === 'edit' && selected ? selected.status : undefined}
         onClose={() => setFormOpen(false)}
         onSubmit={async (payload) => {
           if (formMode === 'edit') await handleEditSubmit(payload);

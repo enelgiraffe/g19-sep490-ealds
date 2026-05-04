@@ -107,6 +107,9 @@ public class CreateAssetInstanceDTO
     public string? Condition { get; set; }
     public string? Note { get; set; }
 
+    /// <summary>Đánh dấu là tài sản cố định (Fixed Asset) - sẽ tạo record trong AssetCapitalizations.</summary>
+    public bool IsFixedAsset { get; set; }
+
     /// <summary>Optional assignment (requires ACCOUNTANT).</summary>
     public int? AssignedDepartmentId { get; set; }
     public int? ResponsibleEmployeeId { get; set; }
@@ -140,6 +143,9 @@ public class UpdateAssetInstanceDTO
     public decimal? DepreciationAmount { get; set; }
     public decimal? AccumulatedDepreciation { get; set; }
     public decimal? RemainingValue { get; set; }
+
+    /// <summary>Đánh dấu là tài sản cố định - chỉ cho phép set true, không cho bỏ nếu đã là TSCD.</summary>
+    public bool? IsFixedAsset { get; set; }
 
     public int? AssignedDepartmentId { get; set; }
     public int? ResponsibleEmployeeId { get; set; }
@@ -260,6 +266,9 @@ public class AssetInstanceResponseDTO
     public int? CurrentResponsibleEmployeeId { get; set; }
     public string? CurrentResponsibleEmployeeName { get; set; }
     public int? CurrentResponsibleUserId { get; set; }
+
+    /// <summary>Là tài sản cố định - có record trong AssetCapitalizations.</summary>
+    public bool IsFixedAsset { get; set; }
 
     public int? DepreciationPolicyId { get; set; }
     public string? DepreciationPolicyName { get; set; }

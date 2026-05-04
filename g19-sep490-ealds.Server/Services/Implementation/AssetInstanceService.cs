@@ -47,6 +47,7 @@ public class AssetInstanceService : IAssetInstanceService
             .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
             .Include(i => i.Guarantees)
+            .Include(i => i.AssetCapitalizations)
             .AsNoTracking()
             .AsQueryable();
 
@@ -171,6 +172,7 @@ public class AssetInstanceService : IAssetInstanceService
             .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
             .Include(i => i.Guarantees)
+            .Include(i => i.AssetCapitalizations)
             .AsNoTracking()
             .FirstOrDefaultAsync(i => i.AssetInstanceId == id);
 
@@ -265,6 +267,7 @@ public class AssetInstanceService : IAssetInstanceService
             .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
             .Include(i => i.Guarantees)
+            .Include(i => i.AssetCapitalizations)
             .AsNoTracking()
             .FirstAsync(i => i.AssetInstanceId == instance.AssetInstanceId);
 
@@ -330,6 +333,26 @@ public class AssetInstanceService : IAssetInstanceService
         if (dto.ContractNo != null) instance.ContractNo = dto.ContractNo;
         if (dto.Condition != null) instance.Condition = dto.Condition;
         if (dto.Note != null) instance.Note = dto.Note;
+
+        // Handle IsFixedAsset - chỉ cho phép set true, không cho bỏ nếu đã là TSCD
+        if (dto.IsFixedAsset.HasValue && dto.IsFixedAsset.Value)
+        {
+            var existingCapitalization = await _context.AssetCapitalizations
+                .AnyAsync(ac => ac.AssetInstanceId == id);
+            
+            if (!existingCapitalization)
+            {
+                var capitalization = new AssetCapitalization
+                {
+                    AssetInstanceId = id,
+                    CapitalizedDate = DateTime.UtcNow,
+                    CapitalizedBy = actorUserId,
+                    Note = "Đánh dấu là tài sản cố định",
+                    CreateDate = DateTime.UtcNow
+                };
+                _context.AssetCapitalizations.Add(capitalization);
+            }
+        }
 
         if (dto.DepreciationPolicyId.HasValue && !hadDepreciationPolicy)
         {
@@ -494,6 +517,7 @@ public class AssetInstanceService : IAssetInstanceService
             .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
             .Include(i => i.Guarantees)
+            .Include(i => i.AssetCapitalizations)
             .AsNoTracking()
             .FirstAsync(i => i.AssetInstanceId == id);
 
@@ -534,6 +558,7 @@ public class AssetInstanceService : IAssetInstanceService
             .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
             .Include(i => i.Guarantees)
+            .Include(i => i.AssetCapitalizations)
             .AsNoTracking()
             .FirstAsync(i => i.AssetInstanceId == id);
 
@@ -567,6 +592,7 @@ public class AssetInstanceService : IAssetInstanceService
             .Include(i => i.Asset).ThenInclude(a => a!.AssetType)
             .Include(i => i.Warehouse)
             .Include(i => i.Guarantees)
+            .Include(i => i.AssetCapitalizations)
             .AsNoTracking()
             .FirstAsync(i => i.AssetInstanceId == id);
 
