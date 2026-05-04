@@ -1,13 +1,15 @@
 using g19_sep490_ealds.Server.Controllers;
+using g19_sep490_ealds.Server.DTOs.Assets;
 using g19_sep490_ealds.Server.Models;
-using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.Services.Interface;
 using g19_sep490_ealds.Server.Utils.EnumsStatus;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Moq;
+using System.Collections.Generic;
 using System.Security.Claims;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace g19_sep490_ealds.Tests;
@@ -15,6 +17,7 @@ namespace g19_sep490_ealds.Tests;
 public class AssetsControllerTests
 {
     private readonly EaldsDbContext _context;
+    private readonly Mock<IAssetService> _mockService;
     private readonly AssetsController _controller;
     private const int AdminUserId = 1;
 
@@ -26,22 +29,15 @@ public class AssetsControllerTests
 
         _context = new EaldsDbContext(options);
 
-        var inMemorySettings = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                { "App:DepartmentHeadRoleId", "4" }
-            }!)
-            .Build();
+        _mockService = new Mock<IAssetService>();
+        _controller = new AssetsController(_mockService.Object);
 
-        var maintenanceTemplateService = new Mock<g19_sep490_ealds.Server.Services.Interface.IMaintenanceTemplateService>().Object;
-
-        _controller = new AssetsController(_context, inMemorySettings, maintenanceTemplateService);
-
-        SeedTestData().Wait();
         SetUserContext(AdminUserId);
+
+        SeedTestData();
     }
 
-    private async Task SeedTestData()
+    private void SeedTestData()
     {
         _context.Roles.Add(new Role { RoleId = 1, Code = "ADMIN", Name = "Administrator" });
 
@@ -61,7 +57,7 @@ public class AssetsControllerTests
             Name = "IT Department",
             Code = "IT",
             Status = 1,
-            CreateDate = DateTime.UtcNow,
+            CreateDate = System.DateTime.UtcNow,
             CreatedBy = AdminUserId
         });
 
@@ -73,40 +69,42 @@ public class AssetsControllerTests
             Name = "Admin User",
             Code = "ADMIN001",
             Status = 1,
-            CreateDate = DateTime.UtcNow,
+            CreateDate = System.DateTime.UtcNow,
             CreatedBy = AdminUserId
         });
 
-        var assetType = new AssetType
+        _context.AssetTypes.Add(new AssetType
         {
             AssetTypeId = 1,
             CategoryId = 1,
             Name = "Computer"
-        };
+        });
 
-        _context.AssetTypes.Add(assetType);
+        _context.AssetTypes.Add(new AssetType
+        {
+            AssetTypeId = 2,
+            CategoryId = 1,
+            Name = "Monitor"
+        });
 
-        var warehouse = new WarehouseAsset
+        _context.WarehouseAssets.Add(new WarehouseAsset
         {
             WarehouseId = 1,
             Name = "Main Warehouse"
-        };
+        });
 
-        _context.AssetTypes.Add(assetType);
-        _context.WarehouseAssets.Add(warehouse);
-        await _context.SaveChangesAsync();
-
-        var request = new CreateAssetDTO
+        _context.Assets.Add(new Asset
         {
+            AssetId = 1,
             Code = "AST001",
             Name = "Dell Laptop",
             AssetTypeId = 1,
             Unit = "piece",
-            Quantity = 1,
+            Status = (int)AssetStatus.Available,
             CreatedBy = AdminUserId
-        };
+        });
 
-        var result = await _controller.Create(request);
+        _context.SaveChanges();
     }
 
     private void SetUserContext(int userId)
@@ -133,12 +131,18 @@ public class AssetsControllerTests
     public async Task CreateAsset_WithValidData_ReturnsCreated()
     {
         // Arrange
-        var assetType = new AssetType
+        var createdDto = new AssetDetailResponseDTO
         {
+            AssetId = 10,
+            Code = "MON001",
+            Name = "Dell Monitor 24",
             AssetTypeId = 2,
-            CategoryId = 1,
-            Name = "Monitor"
+            Unit = "piece",
+            Status = (int)AssetStatus.Available
         };
+        _mockService
+            .Setup(s => s.CreateAsync(It.IsAny<ClaimsPrincipal>(), It.IsAny<int?>(), It.IsAny<CreateAssetDTO>()))
+            .ReturnsAsync(createdDto);
 
         var request = new CreateAssetDTO
         {
@@ -150,17 +154,12 @@ public class AssetsControllerTests
             CreatedBy = AdminUserId
         };
 
-        _context.AssetTypes.Add(assetType);
-        await _context.SaveChangesAsync();
-
         // Act
         var result = await _controller.Create(request);
 
         // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
-        var createdResult = (Microsoft.AspNetCore.Mvc.CreatedAtActionResult)result.Result!;
+        var createdResult = Assert.IsType<CreatedAtActionResult>(result.Result);
         Assert.Equal(201, createdResult.StatusCode);
-
         var asset = Assert.IsType<AssetDetailResponseDTO>(createdResult.Value);
         Assert.Equal("Dell Monitor 24", asset.Name);
     }
@@ -173,17 +172,9 @@ public class AssetsControllerTests
     public async Task CreateAsset_WithDuplicateCode_ReturnsBadRequest()
     {
         // Arrange
-        var existingAsset = new Asset
-        {
-            Code = "AST001",
-            Name = "Existing Laptop",
-            AssetTypeId = 1,
-            Status = 1,
-            Unit = "piece",
-            CreatedBy = AdminUserId
-        };
-        _context.Assets.Add(existingAsset);
-        await _context.SaveChangesAsync();
+        _mockService
+            .Setup(s => s.CreateAsync(It.IsAny<ClaimsPrincipal>(), It.IsAny<int?>(), It.IsAny<CreateAssetDTO>()))
+            .ThrowsAsync(new ArgumentException("Asset code already exists"));
 
         var request = new CreateAssetDTO
         {
@@ -199,7 +190,7 @@ public class AssetsControllerTests
         var result = await _controller.Create(request);
 
         // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestObjectResult>(result.Result);
+        Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
     /// <summary>
@@ -210,6 +201,20 @@ public class AssetsControllerTests
     public async Task CreateAsset_WithSpecification_ReturnsCreated()
     {
         // Arrange
+        var createdDto = new AssetDetailResponseDTO
+        {
+            AssetId = 11,
+            Code = "HP001",
+            Name = "HP Laptop",
+            AssetTypeId = 1,
+            Unit = "piece",
+            Status = (int)AssetStatus.Available,
+            Specification = "Intel i7, 16GB RAM, 512GB SSD"
+        };
+        _mockService
+            .Setup(s => s.CreateAsync(It.IsAny<ClaimsPrincipal>(), It.IsAny<int?>(), It.IsAny<CreateAssetDTO>()))
+            .ReturnsAsync(createdDto);
+
         var request = new CreateAssetDTO
         {
             Code = "HP001",
@@ -225,8 +230,7 @@ public class AssetsControllerTests
         var result = await _controller.Create(request);
 
         // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
-        var createdResult = (Microsoft.AspNetCore.Mvc.CreatedAtActionResult)result.Result!;
+        var createdResult = Assert.IsType<CreatedAtActionResult>(result.Result);
         var asset = Assert.IsType<AssetDetailResponseDTO>(createdResult.Value);
         Assert.Equal("HP Laptop", asset.Name);
     }
@@ -242,16 +246,16 @@ public class AssetsControllerTests
     [Fact]
     public async Task GetAll_WithNoAssets_ReturnsEmptyList()
     {
-        // Arrange - clear all assets
-        _context.Assets.RemoveRange(_context.Assets);
-        await _context.SaveChangesAsync();
+        // Arrange
+        _mockService
+            .Setup(s => s.GetAllAsync(It.IsAny<ClaimsPrincipal>(), It.IsAny<string?>(), It.IsAny<AssetStatus?>(), It.IsAny<int?>(), It.IsAny<bool>()))
+            .ReturnsAsync(new List<AssetResponseDTO>());
 
         // Act
         var result = await _controller.GetAll(null, null, null);
 
         // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(result.Result);
-        var okResult = (Microsoft.AspNetCore.Mvc.OkObjectResult)result.Result!;
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var assets = Assert.IsAssignableFrom<IEnumerable<AssetResponseDTO>>(okResult.Value);
         Assert.Empty(assets);
     }
@@ -263,14 +267,22 @@ public class AssetsControllerTests
     [Fact]
     public async Task GetAll_WithoutFilters_ReturnsAllAssets()
     {
+        // Arrange
+        var assets = new List<AssetResponseDTO>
+        {
+            new AssetResponseDTO { AssetId = 1, Code = "AST001", Name = "Dell Laptop", AssetTypeId = 1, Status = (int)AssetStatus.Available }
+        };
+        _mockService
+            .Setup(s => s.GetAllAsync(It.IsAny<ClaimsPrincipal>(), It.IsAny<string?>(), It.IsAny<AssetStatus?>(), It.IsAny<int?>(), It.IsAny<bool>()))
+            .ReturnsAsync(assets);
+
         // Act
         var result = await _controller.GetAll(null, null, null);
 
         // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(result.Result);
-        var okResult = (Microsoft.AspNetCore.Mvc.OkObjectResult)result.Result!;
-        var assets = Assert.IsAssignableFrom<IEnumerable<AssetResponseDTO>>(okResult.Value);
-        Assert.True(assets.Count() > 0);
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var returnedAssets = Assert.IsAssignableFrom<IEnumerable<AssetResponseDTO>>(okResult.Value);
+        Assert.Single(returnedAssets);
     }
 
     /// <summary>
@@ -280,14 +292,22 @@ public class AssetsControllerTests
     [Fact]
     public async Task GetAll_WithKeywordNameSearch_ReturnsMatchingAssets()
     {
+        // Arrange
+        var assets = new List<AssetResponseDTO>
+        {
+            new AssetResponseDTO { AssetId = 1, Code = "AST001", Name = "Dell Laptop", AssetTypeId = 1, Status = (int)AssetStatus.Available }
+        };
+        _mockService
+            .Setup(s => s.GetAllAsync(It.IsAny<ClaimsPrincipal>(), "Dell", null, null, false))
+            .ReturnsAsync(assets);
+
         // Act
         var result = await _controller.GetAll("Dell", null, null);
 
         // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(result.Result);
-        var okResult = (Microsoft.AspNetCore.Mvc.OkObjectResult)result.Result!;
-        var assets = Assert.IsAssignableFrom<IEnumerable<AssetResponseDTO>>(okResult.Value);
-        Assert.All(assets, a => Assert.Contains("Dell", a.Name));
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var returnedAssets = Assert.IsAssignableFrom<IEnumerable<AssetResponseDTO>>(okResult.Value);
+        Assert.All(returnedAssets, a => Assert.Contains("Dell", a.Name));
     }
 
     /// <summary>
@@ -297,14 +317,22 @@ public class AssetsControllerTests
     [Fact]
     public async Task GetAll_WithKeywordSearch_ReturnsMatchingAssets()
     {
+        // Arrange
+        var assets = new List<AssetResponseDTO>
+        {
+            new AssetResponseDTO { AssetId = 1, Code = "AST001", Name = "Dell Laptop", AssetTypeId = 1, Status = (int)AssetStatus.Available }
+        };
+        _mockService
+            .Setup(s => s.GetAllAsync(It.IsAny<ClaimsPrincipal>(), "AST001", null, null, false))
+            .ReturnsAsync(assets);
+
         // Act
         var result = await _controller.GetAll("AST001", null, null);
 
         // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(result.Result);
-        var okResult = (Microsoft.AspNetCore.Mvc.OkObjectResult)result.Result!;
-        var assets = Assert.IsAssignableFrom<IEnumerable<AssetResponseDTO>>(okResult.Value);
-        Assert.True(assets.Count() > 0);
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var returnedAssets = Assert.IsAssignableFrom<IEnumerable<AssetResponseDTO>>(okResult.Value);
+        Assert.True(returnedAssets.Count() > 0);
     }
 
     /// <summary>
@@ -314,14 +342,22 @@ public class AssetsControllerTests
     [Fact]
     public async Task GetAll_WithAssetTypeFilter_ReturnsFilteredAssets()
     {
+        // Arrange
+        var assets = new List<AssetResponseDTO>
+        {
+            new AssetResponseDTO { AssetId = 1, Code = "AST001", Name = "Dell Laptop", AssetTypeId = 1, Status = (int)AssetStatus.Available }
+        };
+        _mockService
+            .Setup(s => s.GetAllAsync(It.IsAny<ClaimsPrincipal>(), It.IsAny<string?>(), It.IsAny<AssetStatus?>(), 1, false))
+            .ReturnsAsync(assets);
+
         // Act
         var result = await _controller.GetAll(null, null, 1);
 
         // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(result.Result);
-        var okResult = (Microsoft.AspNetCore.Mvc.OkObjectResult)result.Result!;
-        var assets = Assert.IsAssignableFrom<IEnumerable<AssetResponseDTO>>(okResult.Value);
-        Assert.All(assets, a => Assert.Equal(1, a.AssetTypeId));
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var returnedAssets = Assert.IsAssignableFrom<IEnumerable<AssetResponseDTO>>(okResult.Value);
+        Assert.All(returnedAssets, a => Assert.Equal(1, a.AssetTypeId));
     }
 
     /// <summary>
@@ -331,14 +367,22 @@ public class AssetsControllerTests
     [Fact]
     public async Task GetAll_WithStatusFilter_ReturnsFilteredAssets()
     {
+        // Arrange
+        var assets = new List<AssetResponseDTO>
+        {
+            new AssetResponseDTO { AssetId = 1, Code = "AST001", Name = "Dell Laptop", AssetTypeId = 1, Status = (int)AssetStatus.Available }
+        };
+        _mockService
+            .Setup(s => s.GetAllAsync(It.IsAny<ClaimsPrincipal>(), It.IsAny<string?>(), AssetStatus.Available, It.IsAny<int?>(), false))
+            .ReturnsAsync(assets);
+
         // Act
         var result = await _controller.GetAll(null, AssetStatus.Available, null);
 
         // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(result.Result);
-        var okResult = (Microsoft.AspNetCore.Mvc.OkObjectResult)result.Result!;
-        var assets = Assert.IsAssignableFrom<IEnumerable<AssetResponseDTO>>(okResult.Value);
-        Assert.All(assets, a => Assert.Equal(AssetStatus.Available, a.Status));
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var returnedAssets = Assert.IsAssignableFrom<IEnumerable<AssetResponseDTO>>(okResult.Value);
+        Assert.All(returnedAssets, a => Assert.Equal(AssetStatus.Available, a.Status));
     }
 
     #endregion

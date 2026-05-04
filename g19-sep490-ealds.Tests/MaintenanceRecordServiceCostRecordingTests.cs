@@ -1,4 +1,4 @@
-using g19_sep490_ealds.Server.DTO.ResponseDTO.AssetMaintenance;
+using g19_sep490_ealds.Server.DTOs.Maintenance;
 using g19_sep490_ealds.Server.Mappers;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Implementation;

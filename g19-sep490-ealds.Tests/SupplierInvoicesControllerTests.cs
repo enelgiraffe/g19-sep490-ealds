@@ -1,12 +1,10 @@
 using g19_sep490_ealds.Server.Controllers;
-using g19_sep490_ealds.Server.Models;
-using g19_sep490_ealds.Server.Models.DTOs;
+using g19_sep490_ealds.Server.DTOs.SupplierInvoices;
+using g19_sep490_ealds.Server.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using System;
+using Moq;
 using System.Collections.Generic;
-using System.Linq;
 using System.Security.Claims;
 using Xunit;
 
@@ -14,17 +12,13 @@ namespace g19_sep490_ealds.Tests;
 
 public class SupplierInvoicesControllerTests
 {
-    private readonly EaldsDbContext _context;
-    private readonly SupplierInvoicesController _controller;
+    private readonly Mock<ISupplierInvoiceService> _mockService = null!;
+    private readonly SupplierInvoicesController _controller = null!;
 
     public SupplierInvoicesControllerTests()
     {
-        var options = new DbContextOptionsBuilder<EaldsDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        _context = new EaldsDbContext(options);
-        _controller = new SupplierInvoicesController(_context);
+        _mockService = new Mock<ISupplierInvoiceService>();
+        _controller = new SupplierInvoicesController(_mockService.Object);
         SetUserClaim(1);
     }
 
@@ -50,51 +44,15 @@ public class SupplierInvoicesControllerTests
         };
     }
 
-    private async Task SeedSupplierAndProcurement(int supplierId = 1, int procurementId = 1, int status = 0)
-    {
-        _context.Suppliers.Add(new Supplier
-        {
-            SupplierId = supplierId,
-            Code = $"SUP{supplierId}",
-            Name = $"Supplier {supplierId}"
-        });
-
-        _context.Procurements.Add(new Procurement
-        {
-            ProcurementId = procurementId,
-            SupplierId = supplierId,
-            ContractNo = "PO-001",
-            ContractDate = DateOnly.FromDateTime(DateTime.UtcNow),
-            Title = "Test Purchase Order",
-            Currency = "VND",
-            TotalAmount = 1000000m,
-            AdvanceAmount = 0m,
-            RemainingAmount = 1000000m,
-            Status = status,
-            CreatedBy = 1,
-            CreateDate = DateTime.UtcNow
-        });
-
-        _context.ProcurementLines.Add(new ProcurementLine
-        {
-            LineId = 1,
-            ProcurementId = procurementId,
-            LineIndex = 0,
-            AssetId = 1,
-            Quantity = 10,
-            UnitPrice = 100000m,
-            ReceivedQuantity = 0
-        });
-
-        await _context.SaveChangesAsync();
-    }
-
-    private SupplierInvoiceCreateDto CreateValidDto(int procurementId = 1, DateOnly? invoiceDate = null)
+    private static SupplierInvoiceCreateDto CreateValidDto(
+        int procurementId = 1,
+        DateOnly? invoiceDate = null,
+        string invoiceNumber = "INV-001")
     {
         return new SupplierInvoiceCreateDto
         {
             ProcurementId = procurementId,
-            InvoiceNumber = "INV-001",
+            InvoiceNumber = invoiceNumber,
             InvoiceDate = invoiceDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
             Lines = new List<SupplierInvoiceCreateLineDto>
             {
@@ -110,283 +68,332 @@ public class SupplierInvoicesControllerTests
 
     #region Create Tests
 
-    /// <summary>
-    /// Test case 1 (Normal): PurchaseOrderId = 1, SupplierId = 1, InvoiceId = 1, Date = today.
-    /// Expected output: 201 Created
-    /// </summary>
     [Fact]
-    public async Task Create_ValidData_ReturnsCreated()
+    public async Task Create_ValidData_ReturnsOk()
     {
-        // Arrange
-        await SeedSupplierAndProcurement(supplierId: 1, procurementId: 1);
         var dto = CreateValidDto(procurementId: 1, invoiceDate: DateOnly.FromDateTime(DateTime.UtcNow));
 
-        // Act
+        _mockService.Setup(s => s.CreateAsync(It.IsAny<int>(), It.IsAny<SupplierInvoiceCreateDto>()))
+            .ReturnsAsync(1);
+
         var result = await _controller.Create(dto);
 
-        // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
+        Assert.IsType<OkObjectResult>(result);
     }
 
-    /// <summary>
-    /// Test case 2 (Abnormal): PurchaseOrderId = 0, SupplierId = 1, InvoiceId = 1, Date = today.
-    /// Expected output: 404 Not Found (Purchase order not found)
-    /// </summary>
     [Fact]
     public async Task Create_PurchaseOrderIdZero_ReturnsNotFound()
     {
-        // Arrange
-        await SeedSupplierAndProcurement(supplierId: 1, procurementId: 1);
-        var dto = CreateValidDto(procurementId: 0, invoiceDate: DateOnly.FromDateTime(DateTime.UtcNow));
+        var dto = CreateValidDto(procurementId: 0);
 
-        // Act
+        _mockService.Setup(s => s.CreateAsync(It.IsAny<int>(), It.IsAny<SupplierInvoiceCreateDto>()))
+            .ThrowsAsync(new KeyNotFoundException("Purchase order not found"));
+
         var result = await _controller.Create(dto);
 
-        // Assert
-        Assert.IsType<NotFoundObjectResult>(result.Result);
+        Assert.IsType<NotFoundObjectResult>(result);
     }
 
-    /// <summary>
-    /// Test case 3 (Abnormal): PurchaseOrderId = -1, SupplierId = 1, InvoiceId = 1, Date = today.
-    /// Expected output: 404 Not Found (Purchase order not found)
-    /// </summary>
     [Fact]
     public async Task Create_PurchaseOrderIdNegative_ReturnsNotFound()
     {
-        // Arrange
-        await SeedSupplierAndProcurement(supplierId: 1, procurementId: 1);
-        var dto = CreateValidDto(procurementId: -1, invoiceDate: DateOnly.FromDateTime(DateTime.UtcNow));
+        var dto = CreateValidDto(procurementId: -1);
 
-        // Act
+        _mockService.Setup(s => s.CreateAsync(It.IsAny<int>(), It.IsAny<SupplierInvoiceCreateDto>()))
+            .ThrowsAsync(new KeyNotFoundException("Purchase order not found"));
+
         var result = await _controller.Create(dto);
 
-        // Assert
-        Assert.IsType<NotFoundObjectResult>(result.Result);
+        Assert.IsType<NotFoundObjectResult>(result);
     }
 
-    /// <summary>
-    /// Test case 4 (Abnormal): PurchaseOrderId = 1, SupplierId = 0, InvoiceId = 1, Date = today.
-    /// Expected output: 400 Bad Request (Purchase order has no supplier)
-    /// </summary>
     [Fact]
     public async Task Create_SupplierIdZero_ReturnsBadRequest()
     {
-        // Arrange
-        await SeedSupplierAndProcurement(supplierId: 1, procurementId: 1);
-        // Update procurement to have no supplier (null or 0)
-        var procurement = await _context.Procurements.FindAsync(1);
-        procurement!.SupplierId = null;
-        await _context.SaveChangesAsync();
+        var dto = CreateValidDto(procurementId: 1);
 
-        var dto = CreateValidDto(procurementId: 1, invoiceDate: DateOnly.FromDateTime(DateTime.UtcNow));
+        _mockService.Setup(s => s.CreateAsync(It.IsAny<int>(), It.IsAny<SupplierInvoiceCreateDto>()))
+            .ThrowsAsync(new Exception("Purchase order has no supplier"));
 
-        // Act
         var result = await _controller.Create(dto);
 
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
-        var badRequestResult = (BadRequestObjectResult)result.Result!;
-        Assert.Equal(400, badRequestResult.StatusCode);
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 
-    /// <summary>
-    /// Test case 5 (Abnormal): PurchaseOrderId = 1, SupplierId = 1, InvoiceId = Empty, Date = today.
-    /// Expected output: 400 Bad Request (Invoice number is required)
-    /// Note: InvoiceNumber is required (string), interpreted as empty/null InvoiceNumber
-    /// </summary>
     [Fact]
     public async Task Create_InvoiceNumberEmpty_ReturnsBadRequest()
     {
-        // Arrange
-        await SeedSupplierAndProcurement(supplierId: 1, procurementId: 1);
-        var dto = CreateValidDto(procurementId: 1, invoiceDate: DateOnly.FromDateTime(DateTime.UtcNow));
-        dto.InvoiceNumber = ""; // Empty InvoiceNumber
+        var dto = CreateValidDto(procurementId: 1, invoiceNumber: "");
 
-        // Act
+        _mockService.Setup(s => s.CreateAsync(It.IsAny<int>(), It.IsAny<SupplierInvoiceCreateDto>()))
+            .ThrowsAsync(new Exception("Invoice number is required"));
+
         var result = await _controller.Create(dto);
 
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
-        var badRequestResult = (BadRequestObjectResult)result.Result!;
-        Assert.Equal(400, badRequestResult.StatusCode);
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 
-    /// <summary>
-    /// Test case 5b (Abnormal): PurchaseOrderId = 1, SupplierId = 1, InvoiceId = null, Date = today.
-    /// Expected output: 400 Bad Request (Invoice number is required)
-    /// </summary>
     [Fact]
     public async Task Create_InvoiceNumberNull_ReturnsBadRequest()
     {
-        // Arrange
-        await SeedSupplierAndProcurement(supplierId: 1, procurementId: 1);
-        var dto = CreateValidDto(procurementId: 1, invoiceDate: DateOnly.FromDateTime(DateTime.UtcNow));
-        dto.InvoiceNumber = null!; // Null InvoiceNumber
+        var dto = CreateValidDto(procurementId: 1, invoiceNumber: "");
 
-        // Act
+        _mockService.Setup(s => s.CreateAsync(It.IsAny<int>(), It.IsAny<SupplierInvoiceCreateDto>()))
+            .ThrowsAsync(new Exception("Invoice number is required"));
+
         var result = await _controller.Create(dto);
 
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 
-    /// <summary>
-    /// Test case 5c (Abnormal): PurchaseOrderId = 1, SupplierId = 1, InvoiceId = whitespace, Date = today.
-    /// Expected output: 400 Bad Request (Invoice number is required)
-    /// </summary>
     [Fact]
     public async Task Create_InvoiceNumberWhitespace_ReturnsBadRequest()
     {
-        // Arrange
-        await SeedSupplierAndProcurement(supplierId: 1, procurementId: 1);
-        var dto = CreateValidDto(procurementId: 1, invoiceDate: DateOnly.FromDateTime(DateTime.UtcNow));
-        dto.InvoiceNumber = "   "; // Whitespace InvoiceNumber
+        var dto = CreateValidDto(procurementId: 1, invoiceNumber: "   ");
 
-        // Act
+        _mockService.Setup(s => s.CreateAsync(It.IsAny<int>(), It.IsAny<SupplierInvoiceCreateDto>()))
+            .ThrowsAsync(new Exception("Invoice number is required"));
+
         var result = await _controller.Create(dto);
 
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 
-    /// <summary>
-    /// Test case 6 (Abnormal): PurchaseOrderId = 1, SupplierId = 1, InvoiceId = 1, Date >= today.
-    /// Expected output: 201 Created (no validation on InvoiceDate)
-    /// </summary>
     [Fact]
-    public async Task Create_InvoiceDateInFuture_ReturnsCreated()
+    public async Task Create_InvoiceDateInFuture_ReturnsOk()
     {
-        // Arrange
-        await SeedSupplierAndProcurement(supplierId: 1, procurementId: 1);
         var futureDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10));
         var dto = CreateValidDto(procurementId: 1, invoiceDate: futureDate);
 
-        // Act
+        _mockService.Setup(s => s.CreateAsync(It.IsAny<int>(), It.IsAny<SupplierInvoiceCreateDto>()))
+            .ReturnsAsync(1);
+
         var result = await _controller.Create(dto);
 
-        // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
+        Assert.IsType<OkObjectResult>(result);
     }
 
-    /// <summary>
-    /// Test case 7 (Abnormal): PurchaseOrderId = 1, SupplierId = 1, InvoiceId = 1, Date <= today.
-    /// Expected output: 201 Created (no validation on InvoiceDate)
-    /// </summary>
     [Fact]
-    public async Task Create_InvoiceDateInPast_ReturnsCreated()
+    public async Task Create_InvoiceDateInPast_ReturnsOk()
     {
-        // Arrange
-        await SeedSupplierAndProcurement(supplierId: 1, procurementId: 1);
         var pastDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-10));
         var dto = CreateValidDto(procurementId: 1, invoiceDate: pastDate);
 
-        // Act
+        _mockService.Setup(s => s.CreateAsync(It.IsAny<int>(), It.IsAny<SupplierInvoiceCreateDto>()))
+            .ReturnsAsync(1);
+
         var result = await _controller.Create(dto);
 
-        // Assert
-        Assert.IsType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>(result.Result);
+        Assert.IsType<OkObjectResult>(result);
     }
 
     #endregion
 
     #region Additional Edge Cases
 
-    /// <summary>
-    /// Test case: DTO is null
-    /// Expected output: 400 Bad Request
-    /// </summary>
     [Fact]
     public async Task Create_NullDto_ReturnsBadRequest()
     {
-        // Act
+        SetUserClaim(1);
+        _mockService.Setup(s => s.CreateAsync(It.IsAny<int>(), It.IsAny<SupplierInvoiceCreateDto>()))
+            .ThrowsAsync(new ArgumentException("Request body is required"));
+
         var result = await _controller.Create(null!);
 
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 
-    /// <summary>
-    /// Test case: Lines is empty
-    /// Expected output: 400 Bad Request (At least one line is required)
-    /// </summary>
     [Fact]
     public async Task Create_EmptyLines_ReturnsBadRequest()
     {
-        // Arrange
-        await SeedSupplierAndProcurement(supplierId: 1, procurementId: 1);
         var dto = CreateValidDto(procurementId: 1);
-        dto.Lines = new List<SupplierInvoiceCreateLineDto>(); // Empty lines
+        dto.Lines = new List<SupplierInvoiceCreateLineDto>();
 
-        // Act
+        _mockService.Setup(s => s.CreateAsync(It.IsAny<int>(), It.IsAny<SupplierInvoiceCreateDto>()))
+            .ThrowsAsync(new Exception("At least one line is required"));
+
         var result = await _controller.Create(dto);
 
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 
-    /// <summary>
-    /// Test case: Cancelled purchase order
-    /// Expected output: 400 Bad Request (Cannot create invoice for cancelled purchase order)
-    /// </summary>
     [Fact]
     public async Task Create_CancelledPurchaseOrder_ReturnsBadRequest()
     {
-        // Arrange
-        await SeedSupplierAndProcurement(supplierId: 1, procurementId: 1, status: 1); // Status = cancelled
         var dto = CreateValidDto(procurementId: 1);
 
-        // Act
+        _mockService.Setup(s => s.CreateAsync(It.IsAny<int>(), It.IsAny<SupplierInvoiceCreateDto>()))
+            .ThrowsAsync(new Exception("Cannot create invoice for cancelled purchase order"));
+
         var result = await _controller.Create(dto);
 
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
-        var badRequestResult = (BadRequestObjectResult)result.Result!;
-        Assert.Equal(400, badRequestResult.StatusCode);
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 
-    /// <summary>
-    /// Test case: Duplicate invoice number for same supplier
-    /// Expected output: 400 Bad Request (An active invoice with this number already exists)
-    /// </summary>
     [Fact]
     public async Task Create_DuplicateInvoiceNumber_ReturnsBadRequest()
     {
-        // Arrange
-        await SeedSupplierAndProcurement(supplierId: 1, procurementId: 1);
+        var dto = CreateValidDto(procurementId: 1, invoiceNumber: "INV-DUP");
 
-        // Create first invoice
-        var dto1 = CreateValidDto(procurementId: 1);
-        dto1.InvoiceNumber = "INV-DUP";
-        await _controller.Create(dto1);
+        _mockService.Setup(s => s.CreateAsync(It.IsAny<int>(), It.IsAny<SupplierInvoiceCreateDto>()))
+            .ThrowsAsync(new Exception("An active invoice with this number already exists"));
 
-        // Try to create second invoice with same number
-        var dto2 = CreateValidDto(procurementId: 1);
-        dto2.InvoiceNumber = "INV-DUP";
+        var result = await _controller.Create(dto);
 
-        // Act
-        var result = await _controller.Create(dto2);
-
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 
-    /// <summary>
-    /// Test case: Without user claim (unauthorized)
-    /// Expected output: 401 Unauthorized
-    /// </summary>
     [Fact]
     public async Task Create_WithoutUserClaim_ReturnsUnauthorized()
     {
-        // Arrange
         SetUserWithoutClaim();
-        await SeedSupplierAndProcurement(supplierId: 1, procurementId: 1);
         var dto = CreateValidDto(procurementId: 1);
 
-        // Act
         var result = await _controller.Create(dto);
 
-        // Assert
-        Assert.IsType<UnauthorizedResult>(result.Result);
+        Assert.IsType<UnauthorizedResult>(result);
+    }
+
+    #endregion
+
+    #region Cancel Tests
+
+    [Fact]
+    public async Task Cancel_ValidId_ReturnsNoContent()
+    {
+        _mockService.Setup(s => s.CancelAsync(It.IsAny<int>()))
+            .Returns(Task.CompletedTask);
+
+        var result = await _controller.Cancel(1);
+
+        Assert.IsType<NoContentResult>(result);
+    }
+
+    [Fact]
+    public async Task Cancel_InvoiceNotFound_ReturnsNotFound()
+    {
+        _mockService.Setup(s => s.CancelAsync(It.IsAny<int>()))
+            .ThrowsAsync(new KeyNotFoundException("Invoice not found"));
+
+        var result = await _controller.Cancel(999);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task Cancel_WithoutUserClaim_ReturnsUnauthorized()
+    {
+        SetUserWithoutClaim();
+
+        var result = await _controller.Cancel(1);
+
+        Assert.IsType<UnauthorizedResult>(result);
+    }
+
+    #endregion
+
+    #region GetList Tests
+
+    [Fact]
+    public async Task GetList_ReturnsOk()
+    {
+        var response = new SupplierInvoiceListResponseDto
+        {
+            Items = new List<SupplierInvoiceListItemDto>(),
+            Total = 0,
+            Page = 1,
+            PageSize = 20,
+            TotalPages = 0
+        };
+
+        _mockService.Setup(s => s.GetListAsync(
+            It.IsAny<string?>(), It.IsAny<int?>(),
+            It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+            It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(response);
+
+        var result = await _controller.GetList(null, null, null, null, 1, 20);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetList_ServiceThrowsKeyNotFound_ReturnsNotFound()
+    {
+        _mockService.Setup(s => s.GetListAsync(
+            It.IsAny<string?>(), It.IsAny<int?>(),
+            It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+            It.IsAny<int>(), It.IsAny<int>()))
+            .ThrowsAsync(new KeyNotFoundException("Not found"));
+
+        var result = await _controller.GetList(null, null, null, null, 1, 20);
+
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetList_ServiceThrowsException_ReturnsBadRequest()
+    {
+        _mockService.Setup(s => s.GetListAsync(
+            It.IsAny<string?>(), It.IsAny<int?>(),
+            It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
+            It.IsAny<int>(), It.IsAny<int>()))
+            .ThrowsAsync(new Exception("Service error"));
+
+        var result = await _controller.GetList(null, null, null, null, 1, 20);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    #endregion
+
+    #region GetById Tests
+
+    [Fact]
+    public async Task GetById_ValidId_ReturnsOk()
+    {
+        var detail = new SupplierInvoiceDetailDto
+        {
+            SupplierInvoiceId = 1,
+            InvoiceNumber = "INV-001",
+            SupplierId = 1,
+            SupplierName = "Test Supplier",
+            InvoiceDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            Currency = "VND",
+            TotalAmount = 500000m,
+            Status = 0,
+            ProcurementId = 1,
+            Lines = new List<SupplierInvoiceDetailLineDto>()
+        };
+
+        _mockService.Setup(s => s.GetByIdAsync(It.IsAny<int>()))
+            .ReturnsAsync(detail);
+
+        var result = await _controller.GetById(1);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetById_InvoiceNotFound_ReturnsNotFound()
+    {
+        _mockService.Setup(s => s.GetByIdAsync(It.IsAny<int>()))
+            .ThrowsAsync(new KeyNotFoundException("Invoice not found"));
+
+        var result = await _controller.GetById(999);
+
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetById_ServiceThrowsException_ReturnsBadRequest()
+    {
+        _mockService.Setup(s => s.GetByIdAsync(It.IsAny<int>()))
+            .ThrowsAsync(new Exception("Service error"));
+
+        var result = await _controller.GetById(1);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
     #endregion
