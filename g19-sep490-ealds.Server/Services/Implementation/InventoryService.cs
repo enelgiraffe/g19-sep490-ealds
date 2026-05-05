@@ -779,6 +779,9 @@ public class InventoryService : IInventoryService
             .ToListAsync();
 
         var hasDiscrepancies = discrepancies.Count > 0;
+        var abandonPeriodicChain = session.IsPeriodic &&
+            InventoryScheduleWindow.UtcCalendarDayIsAfterEndWindow(session.EndDate, DateTime.UtcNow);
+
         session.Status = hasDiscrepancies
             ? (int)InventorySessionStatus.PendingAccountant
             : (int)InventorySessionStatus.Confirmed;
@@ -786,7 +789,7 @@ public class InventoryService : IInventoryService
         await _context.SaveChangesAsync();
 
         if (!hasDiscrepancies)
-            await TryCreateNextPeriodicSessionIfApplicableAsync(session);
+            await TryCreateNextPeriodicSessionIfApplicableAsync(session, abandonPeriodicChain);
 
         var displayStatus = GetDisplayStatus(session, DateTime.UtcNow);
 
@@ -895,6 +898,8 @@ public class InventoryService : IInventoryService
                 !IsExcludedFromInventoryExecution(t.AssetInstance.Status) &&
                 t.Status == (int)InventoryTaskStatus.Checked),
             ProgressPercent = session.ProgressPercent,
+            IsPeriodic = session.IsPeriodic,
+            PeriodDays = session.PeriodDays,
             TotalDiscrepancies = detailList.Count,
             AssetNotFoundCount = discrepancies.Count(d => (d.DiscrepancyType & (int)DiscrepancyType.AssetNotFound) != 0),
             QuantityMismatchCount = discrepancies.Count(d => (d.DiscrepancyType & (int)DiscrepancyType.QuantityMismatch) != 0),
@@ -947,6 +952,12 @@ public class InventoryService : IInventoryService
                 .Any(t => t.InventoryDiscrepancies.Any(d => d.ResolvedAt == null));
         }
 
+        var utcNowApprove = DateTime.UtcNow;
+        var abandonPeriodicChain = session.IsPeriodic &&
+            (session.Status == (int)InventorySessionStatus.PendingAccountant ||
+             session.Status == (int)InventorySessionStatus.Completed) &&
+            InventoryScheduleWindow.UtcCalendarDayIsAfterEndWindow(session.EndDate, utcNowApprove);
+
         session.Status = hasMismatch
             ? (int)InventorySessionStatus.PendingAccountant
             : (int)InventorySessionStatus.Confirmed;
@@ -954,7 +965,7 @@ public class InventoryService : IInventoryService
         await _context.SaveChangesAsync();
 
         if (!hasMismatch)
-            await TryCreateNextPeriodicSessionIfApplicableAsync(session);
+            await TryCreateNextPeriodicSessionIfApplicableAsync(session, abandonPeriodicChain);
 
         await SafeNotifyAsync(
             () => _inventoryNotifications.NotifyAfterDirectorApprovalAsync(session, hasMismatch),
@@ -1025,11 +1036,15 @@ public class InventoryService : IInventoryService
         if (unresolved > 0)
             throw new InvalidOperationException("Còn chênh lệch chưa cập nhật lên sổ. Vui lòng xử lý hết trước khi hoàn tất.");
 
+        var utcNowFinish = DateTime.UtcNow;
+        var abandonPeriodicChain = session.IsPeriodic &&
+            InventoryScheduleWindow.UtcCalendarDayIsAfterEndWindow(session.EndDate, utcNowFinish);
+
         session.Status = (int)InventorySessionStatus.Confirmed;
 
         await _context.SaveChangesAsync();
 
-        await TryCreateNextPeriodicSessionIfApplicableAsync(session);
+        await TryCreateNextPeriodicSessionIfApplicableAsync(session, abandonPeriodicChain);
     }
 
     public async Task AccountantApplyDiscrepancyActualAsync(int userId, int sessionId, int discrepancyId)
@@ -1238,6 +1253,9 @@ public class InventoryService : IInventoryService
             throw new InvalidOperationException("Chỉ có thể hủy phiên ở trạng thái Đã lên lịch hoặc Đang thực hiện.");
 
         var wasScheduled = session.Status == (int)InventorySessionStatus.Scheduled;
+        var overdueOpen = session.IsPeriodic &&
+            session.Status == (int)InventorySessionStatus.InProgress &&
+            InventoryScheduleWindow.UtcCalendarDayIsAfterEndWindow(session.EndDate, DateTime.UtcNow);
 
         session.Status = (int)InventorySessionStatus.Cancelled;
 
@@ -1258,7 +1276,7 @@ public class InventoryService : IInventoryService
         }
 
         int cancelledChainCount = 0;
-        if (session.IsPeriodic && wasScheduled)
+        if (session.IsPeriodic && (wasScheduled || overdueOpen))
         {
             var futurePeriodicSessions = await _context.InventorySessions
                 .Where(s =>
@@ -1591,8 +1609,13 @@ public class InventoryService : IInventoryService
         }
     }
 
-    private async Task TryCreateNextPeriodicSessionIfApplicableAsync(InventorySession closedSession)
+    private async Task TryCreateNextPeriodicSessionIfApplicableAsync(
+        InventorySession closedSession,
+        bool abandonPeriodicChain)
     {
+        if (abandonPeriodicChain)
+            return;
+
         if (!closedSession.IsPeriodic || closedSession.PeriodDays is not int periodDays || periodDays <= 0)
             return;
 
@@ -1709,13 +1732,14 @@ public class InventoryService : IInventoryService
         DateTime horizonEndUtc,
         CancellationToken cancellationToken = default)
     {
+        var utcNow = DateTime.UtcNow;
         var rows = await _context.InventorySessions
             .AsNoTracking()
             .Where(s =>
                 s.DepartmentId == departmentId &&
                 s.Status != (int)InventorySessionStatus.Cancelled &&
                 s.Status != (int)InventorySessionStatus.Confirmed)
-            .Select(s => new { s.SessionId, s.StartDate, s.EndDate, s.IsPeriodic, s.PeriodDays })
+            .Select(s => new { s.SessionId, s.Status, s.StartDate, s.EndDate, s.IsPeriodic, s.PeriodDays })
             .ToListAsync(cancellationToken);
 
         var windows = new List<(DateTime Start, DateTime End)>(rows.Count * 4);
@@ -1723,6 +1747,12 @@ public class InventoryService : IInventoryService
         foreach (var s in rows)
         {
             if (excludeSessionId.HasValue && s.SessionId == excludeSessionId.Value)
+                continue;
+
+            // Periodic + same "Quá hạn" rule as list UI: do not block scheduling (or future repeats).
+            if (s.IsPeriodic &&
+                (s.Status == (int)InventorySessionStatus.Scheduled || s.Status == (int)InventorySessionStatus.InProgress) &&
+                InventoryScheduleWindow.UtcCalendarDayIsAfterEndWindow(s.EndDate, utcNow))
                 continue;
 
             windows.Add((s.StartDate, s.EndDate));

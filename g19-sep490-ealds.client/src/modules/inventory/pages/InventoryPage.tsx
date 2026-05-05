@@ -14,6 +14,7 @@ import {
   inventorySessionEndDayForInclusiveDuration,
   inventorySessionEndOfDayUtcIso,
   inventorySessionInclusiveDayCount,
+  formatInventoryPeriodCycleLabel,
   SESSION_STATUS,
   type DropdownItem,
   type InventorySessionListItem,
@@ -48,11 +49,6 @@ function formatDate(dateStr: string | null | undefined): string {
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return '-';
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-}
-
-function execDurationLabel(startStr: string | null | undefined, endStr: string | null | undefined): string {
-  if (!startStr || !endStr) return '-';
-  return `${inventorySessionInclusiveDayCount(startStr, endStr)} ngày`;
 }
 
 export function InventoryPage() {
@@ -327,7 +323,8 @@ export function InventoryPage() {
               <tr>
                 <th>NGÀY BẮT ĐẦU</th>
                 <th>MỤC ĐÍCH</th>
-                <th>THỜI GIAN THỰC HIỆN</th>
+                <th>HẠN HOÀN THÀNH</th>
+                <th>CHU KỲ</th>
                 <th>PHÒNG BAN</th>
                 <th>TRẠNG THÁI</th>
                 <th>TIẾN ĐỘ</th>
@@ -337,13 +334,13 @@ export function InventoryPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="maintenance-table-empty">
+                  <td colSpan={8} className="maintenance-table-empty">
                     <Spin size="large" />
                   </td>
                 </tr>
               ) : paginatedSessions.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="maintenance-table-empty">
+                  <td colSpan={8} className="maintenance-table-empty">
                     Không có dữ liệu.
                   </td>
                 </tr>
@@ -353,10 +350,6 @@ export function InventoryPage() {
                   const canStartInWindow = row.status === SESSION_STATUS.Due;
                   const openSession = () => {
                     if (isScheduled) return;
-                    if (row.status === SESSION_STATUS.Overdue) {
-                      navigate(`/inventory/${row.sessionId}`);
-                      return;
-                    }
                     if (row.status === SESSION_STATUS.InProgress) {
                       navigate(`/inventory/${row.sessionId}`);
                       return;
@@ -371,7 +364,8 @@ export function InventoryPage() {
                     >
                       <td>{formatDate(row.startDate)}</td>
                       <td>{row.purpose}</td>
-                      <td>{execDurationLabel(row.startDate, row.endDate)}</td>
+                      <td>{formatDate(row.endDate)}</td>
+                      <td>{formatInventoryPeriodCycleLabel(row.isPeriodic, row.periodDays)}</td>
                       <td>{row.departmentName}</td>
                       <td>
                         <Tag

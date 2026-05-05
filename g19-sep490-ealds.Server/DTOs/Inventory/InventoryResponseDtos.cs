@@ -185,6 +185,8 @@ public class InventoryReviewSummaryDTO
     public int TotalTasks { get; set; }
     public int CompletedTasks { get; set; }
     public int? ProgressPercent { get; set; }
+    public bool IsPeriodic { get; set; }
+    public int? PeriodDays { get; set; }
     public int TotalDiscrepancies { get; set; }
     public int AssetNotFoundCount { get; set; }
     public int QuantityMismatchCount { get; set; }

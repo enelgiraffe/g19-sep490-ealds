@@ -7,6 +7,7 @@ import { ArrowLeftOutlined, SyncOutlined, CheckCircleOutlined } from '@ant-desig
 import {
   inventoryService,
   getCurrentUserId,
+  formatInventoryPeriodCycleLabel,
   SESSION_STATUS,
   type InventoryDiscrepancyDetail,
   type InventoryReviewSummary,
@@ -47,6 +48,7 @@ const STATUS_COLOR: Record<number, string> = {
   4: 'success',
   5: 'orange',
   6: 'purple',
+  7: 'magenta',
 };
 
 export function InventoryReviewPage() {
@@ -300,6 +302,10 @@ export function InventoryReviewPage() {
           <div>
             <span className="inv-review__label">Thời gian</span>
             {formatDate(summary.startDate)} — {formatDate(summary.endDate)}
+          </div>
+          <div>
+            <span className="inv-review__label">Chu kỳ</span>
+            {formatInventoryPeriodCycleLabel(summary.isPeriodic, summary.periodDays)}
           </div>
         </div>
       </div>

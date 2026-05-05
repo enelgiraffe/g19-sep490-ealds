@@ -219,6 +219,8 @@ export interface InventoryReviewSummary {
   totalTasks: number;
   completedTasks: number;
   progressPercent: number | null;
+  isPeriodic: boolean;
+  periodDays: number | null;
   totalDiscrepancies: number;
   assetNotFoundCount: number;
   quantityMismatchCount: number;
@@ -240,6 +242,15 @@ export const SESSION_STATUS = {
   /** Display-only: quá hạn (deadline passed, chưa Chờ xử lý / chưa Đã xử lý trên sổ). */
   Overdue: 7,
 } as const;
+
+/** One-off session vs periodic: null / non-periodic → "1 lần". */
+export function formatInventoryPeriodCycleLabel(
+  isPeriodic: boolean,
+  periodDays: number | null | undefined,
+): string {
+  if (!isPeriodic || periodDays == null || periodDays <= 0) return '1 lần';
+  return `${periodDays} ngày`;
+}
 
 export const SESSION_STATUS_LABEL: Record<number, string> = {
   0: 'Đã lên lịch',
