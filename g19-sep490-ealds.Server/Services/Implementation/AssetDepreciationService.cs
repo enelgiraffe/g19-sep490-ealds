@@ -16,12 +16,12 @@ public class AssetDepreciationService : IAssetDepreciationService
         _context = context;
     }
 
-    public async Task RunMonthlyDepreciation()
+    public async Task RunMonthlyDepreciation(DateTime? scheduledFireTimeUtc = null)
     {
-        // Chạy một chu kỳ khấu hao cho tháng hiện tại.
-        var now = DateTime.UtcNow + VietnamOffset;
+        // Chạy một chu kỳ khấu hao cho tháng hiện tại (hoặc tháng dự kiến chạy nếu bị misfire).
+        var now = (scheduledFireTimeUtc ?? DateTime.UtcNow) + VietnamOffset;
         var period = new DateOnly(now.Year, now.Month, 1);
-        await RunDepreciationForPeriod(period, null, now);
+        await RunDepreciationForPeriod(period, null, DateTime.UtcNow + VietnamOffset);
     }
 
     public async Task RunManualDepreciation(int? assetInstanceId, int? year, int? month)
