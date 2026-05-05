@@ -24,6 +24,12 @@ public class CreateAssetDTO
     public string? Note { get; set; }
 
     /// <summary>
+    /// Đánh dấu TSCD ở cấp danh mục (ghi chú nội bộ). Bản ghi <c>AssetCapitalization</c> chỉ tạo khi đã có
+    /// <see cref="Models.AssetInstance"/> (ví dụ gửi <see cref="InitialInstance"/>, nhập kho tạo cá thể).
+    /// </summary>
+    public bool IsFixedAsset { get; set; }
+
+    /// <summary>
     /// When <see cref="InitialInstance"/> is set, optional prefix for generated <c>InstanceCode</c> values:
     /// sequential numbers are appended (global max suffix for this prefix + 1). Required when <see cref="Quantity"/> &gt; 1.
     /// </summary>
@@ -107,7 +113,7 @@ public class CreateAssetInstanceDTO
     public string? Condition { get; set; }
     public string? Note { get; set; }
 
-    /// <summary>Đánh dấu là tài sản cố định (Fixed Asset) - sẽ tạo record trong AssetCapitalizations.</summary>
+    /// <summary>Đánh dấu TSCD: khi tạo cá thể trong cùng request, hệ thống thêm bản ghi <c>AssetCapitalization</c> cho cá thể đó.</summary>
     public bool IsFixedAsset { get; set; }
 
     /// <summary>Optional assignment (requires ACCOUNTANT).</summary>
@@ -267,7 +273,7 @@ public class AssetInstanceResponseDTO
     public string? CurrentResponsibleEmployeeName { get; set; }
     public int? CurrentResponsibleUserId { get; set; }
 
-    /// <summary>Là tài sản cố định - có record trong AssetCapitalizations.</summary>
+    /// <summary>True nếu cá thể này đã có ít nhất một bản ghi <c>AssetCapitalization</c>.</summary>
     public bool IsFixedAsset { get; set; }
 
     public int? DepreciationPolicyId { get; set; }

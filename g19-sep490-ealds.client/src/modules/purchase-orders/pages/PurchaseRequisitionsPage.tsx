@@ -11,7 +11,7 @@ import './PurchaseOrdersPage.css';
 
 const { Option } = Select;
 
-/** Backend status: -1=Nháp, 0=Đã gửi (kế toán), 1=Chờ duyệt (giám đốc), 2=Duyệt, 3=Từ chối, 4=Chờ ngân sách, 5=Đã ghi tăng */
+/** Backend status: -1=Nháp, 0=Đã gửi (kế toán), 1=Chờ duyệt (giám đốc), 2=Duyệt, 3=Từ chối, 5=Đã ghi tăng */
 const STATUS_MAP: Record<number, { label: string; color: string }> = {
   [-1]: { label: 'Nháp', color: 'default' },
   0: { label: 'Đã gửi', color: 'processing' },

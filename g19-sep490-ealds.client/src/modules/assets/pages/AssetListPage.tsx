@@ -25,6 +25,7 @@ import { profileService, type UserProfile } from '../../profile/services/profile
 import { allocationRequestApiErrorMessage } from '../../allocations/services/allocationRequestService';
 import { isDepartmentHeadRoleCode } from '../../../shared/utils/departmentHeadRole';
 import { PrintSingleInstanceQRModal } from '../components/PrintSingleInstanceQRModal';
+import { resolveInstanceDisplayedRemainingValue } from '../utils/depreciationPreview';
 import axios from 'axios';
 import './AssetListPage.css';
 
@@ -42,6 +43,7 @@ interface InstanceItem {
   serialNumber: string;
   status: string;
   originalPrice: string;
+  /** Giá trị còn lại sau khấu hao (remainingValue); chưa có dữ liệu KH thì — */
   currentValue: string;
   statusColor: 'green' | 'gray';
 }
@@ -133,13 +135,14 @@ function mapInstanceToInstanceItem(a: AssetInstanceResponse): InstanceItem {
   const activeStatuses = ['Available', 'InUse', 'InMaintenance'];
   const statusColor: 'green' | 'gray' =
     activeStatuses.includes(statusName) ? 'green' : 'gray';
+  const bookRemaining = resolveInstanceDisplayedRemainingValue(a);
   return {
     assetInstanceId: a.assetInstanceId,
     instanceCode: a.instanceCode,
     serialNumber: a.serialNumber ?? '—',
     status: getStatusLabel(statusName),
     originalPrice: formatVnd(a.originalPrice),
-    currentValue: formatVnd(a.currentValue),
+    currentValue: bookRemaining != null ? formatVnd(bookRemaining) : '—',
     statusColor,
   };
 }
@@ -160,6 +163,7 @@ function instanceToAssetInfo(
         }, null)
       : null);
 
+  const bookRemaining = resolveInstanceDisplayedRemainingValue(a);
   return {
     assetInstanceId: a.assetInstanceId,
     assetId: a.assetId,
@@ -170,8 +174,8 @@ function instanceToAssetInfo(
     specification: catalog?.specification ?? '—',
     purchaseDate: formatDate(a.purchaseDate),
     warrantyExpiry: formatDate(latestWarrantyEndDate),
-    currentValue: formatVnd(a.currentValue),
-    remainingValue: formatVnd(a.remainingValue ?? a.currentValue),
+    currentValue: bookRemaining != null ? formatVnd(bookRemaining) : '—',
+    remainingValue: bookRemaining != null ? formatVnd(bookRemaining) : '—',
     location: a.warehouseName ?? a.currentDepartmentName ?? '—',
     status: getStatusLabel(a.statusName),
     admissionDate: formatDate(a.inUseDate),

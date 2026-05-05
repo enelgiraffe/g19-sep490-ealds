@@ -13,6 +13,7 @@ import {
   type GetAssetInstancesParams,
 } from '../../assets/services/assetService';
 import '../../assets/pages/AssetListPage.css';
+import { resolveInstanceDisplayedRemainingValue } from '../../assets/utils/depreciationPreview';
 import './AccountantAssetListPage.css';
 
 interface AccountantAssetItem {
@@ -31,6 +32,7 @@ interface AccountantInstanceItem {
   /** Raw numeric status (matches backend) — used to hide edit for terminal states. */
   statusValue: number;
   originalPrice: string;
+  /** Giá trị còn lại sau khấu hao (remainingValue). */
   currentValue: string;
   statusColor: 'green' | 'gray';
 }
@@ -49,6 +51,7 @@ function mapInstanceToItem(a: AssetInstanceResponse): AccountantInstanceItem {
   const activeStatuses = ['Available', 'InUse', 'InMaintenance'];
   const statusColor: 'green' | 'gray' =
     activeStatuses.includes(statusName) ? 'green' : 'gray';
+  const bookRemaining = resolveInstanceDisplayedRemainingValue(a);
   return {
     assetInstanceId: a.assetInstanceId,
     instanceCode: a.instanceCode,
@@ -56,7 +59,7 @@ function mapInstanceToItem(a: AssetInstanceResponse): AccountantInstanceItem {
     status: getStatusLabel(statusName),
     statusValue: a.status,
     originalPrice: formatVnd(a.originalPrice),
-    currentValue: formatVnd(a.currentValue),
+    currentValue: bookRemaining != null ? formatVnd(bookRemaining) : '—',
     statusColor,
   };
 }

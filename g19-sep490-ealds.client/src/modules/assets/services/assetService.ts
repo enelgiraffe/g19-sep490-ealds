@@ -190,19 +190,19 @@ export interface GetAssetCatalogParams {
   assetTypeId?: number;
 }
 
-/** Query params for GET /api/assetinstances (physical rows; supports former asset list filters) */
+/** Query params for GET /api/assetinstances */
 export interface GetAssetInstancesParams {
   keyword?: string;
   status?: number;
   assetTypeId?: number;
   warehouseId?: number;
-  /** Filter to instances whose current AssetLocation is in this department (e.g. transfer “from” department). */
+  /** Filter to instances whose current AssetLocation is in this department */
   currentDepartmentId?: number;
   minPrice?: number;
   maxPrice?: number;
   fromDate?: string;
   toDate?: string;
-  /** When true, department heads see instances in all departments (server: GET /api/assetinstances). */
+  /** When true, department heads see instances in all departments */
   forTransferSelection?: boolean;
 }
 
@@ -250,6 +250,7 @@ export interface CreateAssetPayload {
   inUseDate?: string | null;
   specification?: string | null;
   note?: string | null;
+  isFixedAsset?: boolean;
   /** Prefix for generated instance codes (required when quantity is greater than 1). */
   instanceCodePrefix?: string | null;
   /** Optional first physical row (same request as catalog create) */

@@ -2,52 +2,7 @@ import { useEffect, useState } from 'react';
 import './App.css';
 import './modules/assets/pages/AssetListPage.css';
 
-const MOCK_ASSETS = [
-  {
-    id: 1,
-    code: 'MCS',
-    name: 'Máy cắt sắt',
-    type: 'Cơ khí',
-    quantity: 1,
-    price: '910,000,000 đ',
-    status: 'Đang sử dụng',
-    statusColor: 'green',
-    depreciation: '810,000,000 đ',
-  },
-  {
-    id: 2,
-    code: 'MUV',
-    name: 'Máy uốn vòm',
-    type: 'Cơ khí',
-    quantity: 1,
-    price: '500,000,000 đ',
-    status: 'Đang sử dụng',
-    statusColor: 'green',
-    depreciation: '400,000,000 đ',
-  },
-  {
-    id: 3,
-    code: 'FSF90',
-    name: 'Ôtô Ferrari SF90',
-    type: 'Máy móc',
-    quantity: 1,
-    price: '34,000,500,000 đ',
-    status: 'Đang sử dụng',
-    statusColor: 'green',
-    depreciation: '34,000,000,000,000 đ',
-  },
-  {
-    id: 4,
-    code: 'MEG',
-    name: 'Máy ép góc',
-    type: 'Cơ khí',
-    quantity: 1,
-    price: '500,000,000 đ',
-    status: 'Chưa sử dụng',
-    statusColor: 'gray',
-    depreciation: '450,000,000 đ',
-  },
-];
+
 
 function App() {
   const [assets] = useState(MOCK_ASSETS);

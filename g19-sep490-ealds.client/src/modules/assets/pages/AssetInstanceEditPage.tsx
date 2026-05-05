@@ -14,6 +14,10 @@ import { transferRequestService, type AssetLocationOption } from '../services/tr
 import { profileService } from '../../profile/services/profileService';
 import { mapBackendRoleToAppRole } from '../../auth/types/auth.types';
 import { useAppStore } from '../../../stores/appStore';
+import {
+  computeDepreciationPreview,
+  getDepreciationPeriodDate,
+} from '../utils/depreciationPreview';
 import './AssetCreatePage.css';
 
 function toDateOnly(value: string): string | undefined {
@@ -84,24 +88,6 @@ function fromDisplayDate(display: string): string {
   const d = m[1].padStart(2, '0');
   const mo = m[2].padStart(2, '0');
   return `${m[3]}-${mo}-${d}`;
-}
-
-function monthDiff(fromDate: Date, toDate: Date): number {
-  const diff = (toDate.getFullYear() - fromDate.getFullYear()) * 12 + (toDate.getMonth() - fromDate.getMonth());
-  return Math.max(0, diff);
-}
-
-function roundAwayFromZero(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  if (value === 0) return 0;
-  return Math.sign(value) * Math.round(Math.abs(value));
-}
-
-function getPeriodDate(value: string): Date | null {
-  if (!value.trim()) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
 function getLatestGuarantee(instance: AssetInstanceResponse): GuaranteeItem | null {
@@ -176,9 +162,6 @@ export function AssetInstanceEditPage() {
 
   const [isFixedAsset, setIsFixedAsset] = useState(false);
   const [wasAlreadyFixedAsset, setWasAlreadyFixedAsset] = useState(false);
-
-  const [isCapitalized, setIsCapitalized] = useState(false);
-  const [wasAlreadyCapitalized, setWasAlreadyCapitalized] = useState(false);
 
   useEffect(() => {
     if (!parsedInstanceId || Number.isNaN(parsedInstanceId)) {
@@ -258,10 +241,6 @@ export function AssetInstanceEditPage() {
           }
         }
 
-        const capitalized = inst.status === 7;
-        setIsCapitalized(capitalized);
-        setWasAlreadyCapitalized(capitalized);
-
         const fixedAsset = inst.isFixedAsset === true;
         setIsFixedAsset(fixedAsset);
         setWasAlreadyFixedAsset(fixedAsset);
@@ -270,7 +249,13 @@ export function AssetInstanceEditPage() {
         setContractNo(inst.contractNo ?? '');
         setPurchaseDate(toDateInput(inst.purchaseDate));
         setOriginalPriceInput(inst.originalPrice != null ? String(inst.originalPrice) : '');
-        setCurrentValueInput(inst.currentValue != null ? String(inst.currentValue) : '');
+        setCurrentValueInput(
+          inst.remainingValue != null
+            ? String(inst.remainingValue)
+            : inst.currentValue != null
+              ? String(inst.currentValue)
+              : ''
+        );
         setCondition(inst.condition ?? '');
         setNote(inst.note ?? '');
 
@@ -438,37 +423,24 @@ export function AssetInstanceEditPage() {
   const depreciationPreview = useMemo(() => {
     if (!instance) return null;
     const policy = selectedDepreciationPolicy;
-    const periodDate = getPeriodDate(depreciationPeriod);
-    if (!policy || !periodDate || policy.usefullLifeMonths <= 0) return null;
+    if (!policy || policy.usefullLifeMonths <= 0) return null;
+    const periodDate = getDepreciationPeriodDate(depreciationPeriod);
+    if (!periodDate) return null;
 
-    const records = [...(instance.depreciationRecords ?? [])]
-      .filter((r) => {
-        const recordDate = getPeriodDate(String(r.period));
-        return recordDate != null && recordDate < periodDate;
-      })
-      .sort((a, b) => String(a.period).localeCompare(String(b.period)));
-    const lastRecord = records.length > 0 ? records[records.length - 1] : null;
+    const originalPrice =
+      originalPriceInput.trim() !== ''
+        ? Number(originalPriceInput)
+        : Number(instance.originalPrice || 0);
 
-    const openingValue = lastRecord?.remainingValue ?? Number(originalPriceInput || instance.originalPrice || 0);
-    const salvageValue = Number(policy.salvageValue || 0);
-    const inUseBase = getPeriodDate(instance.inUseDate ?? purchaseDate) ?? getPeriodDate(purchaseDate);
-    const elapsedMonths = inUseBase ? monthDiff(inUseBase, periodDate) : 0;
-    const remainingMonths = Math.max(1, policy.usefullLifeMonths - elapsedMonths);
-
-    const depreciableBase = openingValue - salvageValue;
-    const monthly = depreciableBase > 0 ? roundAwayFromZero(depreciableBase / remainingMonths) : 0;
-    const maxAllowed = Math.max(0, openingValue - salvageValue);
-    const amount = Math.min(monthly, maxAllowed);
-    const accumulated = (lastRecord?.accumulatedDepreciation ?? 0) + amount;
-    const remainingValue = openingValue - amount;
-    const remainingLifeMonths = Math.max(0, policy.usefullLifeMonths - elapsedMonths - 1);
-
-    return {
-      amount,
-      accumulated,
-      remainingValue,
-      remainingLifeMonths,
-    };
+    return computeDepreciationPreview({
+      policyUsefulLifeMonths: policy.usefullLifeMonths,
+      policySalvageValue: policy.salvageValue,
+      depreciationPeriodYyyyMmDd: depreciationPeriod,
+      originalPrice,
+      inUseDate: instance.inUseDate,
+      purchaseDate,
+      depreciationRecords: [...(instance.depreciationRecords ?? [])],
+    });
   }, [
     depreciationPeriod,
     depreciationPolicyId,
@@ -507,7 +479,9 @@ export function AssetInstanceEditPage() {
     if (!Number.isFinite(currentValue)) return 'Vui lòng nhập giá trị hiện tại hợp lệ.';
     if (currentValue > originalPrice) return 'Giá trị hiện tại không được lớn hơn giá gốc.';
     if (!warehouseId || Number(warehouseId) <= 0) return 'Vui lòng chọn kho.';
-    if (isAccountant && (!departmentId || Number(departmentId) <= 0)) {
+    
+    // Chỉ require phòng ban khi không phải trạng thái "Sẵn có" (Available = 0)
+    if (isAccountant && instance && instance.status !== 0 && (!departmentId || Number(departmentId) <= 0)) {
       return 'Vui lòng chọn vị trí tài sản (phòng ban).';
     }
 
@@ -606,6 +580,18 @@ export function AssetInstanceEditPage() {
       depreciationPreview?.remainingValue ??
       (remainingValueInput.trim() ? Number(remainingValueInput) : undefined);
 
+    /** Lưu kỳ + số liệu vào DepreciationRecord. Đã có lịch sử: gửi như trước (nhóm KH có dữ liệu). Chưa có: chỉ gửi khi có preview/số để tạo bản ghi đầu. */
+    const shouldPersistDepreciationSnapshot =
+      hasDepreciationGroup &&
+      selectedPolicyId != null &&
+      depreciationPeriod.trim().length > 0 &&
+      (hasExistingDepRecord ||
+        (!hasExistingDepRecord &&
+          (depreciationPreview != null ||
+            effectiveDepAmount !== undefined ||
+            effectiveAccumulated !== undefined ||
+            effectiveRemainingValue !== undefined)));
+
     const detailOnlyPayload: UpdateAssetInstancePayload = {
       depreciationPolicyId: selectedPolicyId,
       ...(depreciationPeriod.trim()
@@ -622,7 +608,7 @@ export function AssetInstanceEditPage() {
             warrantyEndDate: toDateOnly(warrantyEndDate),
           }
         : {}),
-      ...(hasDepreciationGroup && hasExistingDepRecord
+      ...(shouldPersistDepreciationSnapshot
         ? {
             depreciationPeriod: toDateOnly(depreciationPeriod),
             depreciationAmount: effectiveDepAmount,
@@ -643,13 +629,6 @@ export function AssetInstanceEditPage() {
     setError(null);
     try {
       await assetInstanceService.update(instance.assetInstanceId, payload);
-      if (isCapitalized && !wasAlreadyCapitalized) {
-        try {
-          await assetInstanceService.capitalize(instance.assetInstanceId);
-        } catch {
-          message.warning('Cập nhật thành công nhưng không thể vốn hoá tài sản. Vui lòng thử lại.');
-        }
-      }
       if (advancedEditing) {
         const assetDetail = await assetService.getById(instance.assetId);
         const siblingIds = (assetDetail.instances ?? [])
@@ -750,7 +729,7 @@ export function AssetInstanceEditPage() {
 
         <section className="asset-create__section">
           <h2 className="asset-create__section-title">Thông tin cá thể</h2>
-          <label className="asset-create__checkbox-row" style={{ marginBottom: 8 }}>
+          <label className="asset-create__checkbox-row" style={{ marginBottom: 12 }}>
             <input
               type="checkbox"
               checked={isFixedAsset}
@@ -761,23 +740,7 @@ export function AssetInstanceEditPage() {
               Là tài sản cố định
               {wasAlreadyFixedAsset && (
                 <span style={{ marginLeft: 6, color: '#888', fontStyle: 'italic' }}>
-                  — đã được đánh dấu
-                </span>
-              )}
-            </span>
-          </label>
-          <label className="asset-create__checkbox-row" style={{ marginBottom: 8 }}>
-            <input
-              type="checkbox"
-              checked={isCapitalized}
-              disabled={wasAlreadyCapitalized}
-              onChange={(e) => setIsCapitalized(e.target.checked)}
-            />
-            <span>
-              Là tài sản cố định (vốn hoá)
-              {wasAlreadyCapitalized && (
-                <span style={{ marginLeft: 6, color: '#888', fontStyle: 'italic' }}>
-                  — đã được vốn hoá
+                  — đã được đánh dấu, không thể bỏ
                 </span>
               )}
             </span>

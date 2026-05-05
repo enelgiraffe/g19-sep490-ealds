@@ -3,7 +3,6 @@ import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   assetService,
-  assetInstanceService,
   ASSET_CATALOG_DOCUMENT_TYPE,
   ASSET_MEASUREMENT_UNITS,
   type CreateAssetPayload,
@@ -300,6 +299,7 @@ export function AssetCreatePage() {
           createdBy: actorUserId > 0 ? actorUserId : 0,
           specification: general.specification?.trim() || null,
           note: general.note?.trim() || null,
+          isFixedAsset: general.isFixedAsset,
           inUseDate: null,
           documents: documentPayload.length > 0 ? documentPayload : undefined,
         });
@@ -376,6 +376,7 @@ export function AssetCreatePage() {
       inUseDate: general.purchaseDate || null,
       specification: general.specification?.trim() || null,
       note: general.note?.trim() || null,
+      isFixedAsset: general.isFixedAsset,
       initialInstance: {
         instanceCode: '_',
         serialNumber: qty === 1 ? general.serialNumber?.trim() || null : null,
@@ -396,13 +397,13 @@ export function AssetCreatePage() {
           isAccountant && (deptId != null || managerId != null)
             ? general.purchaseDate || null
             : null,
-        isFixedAsset: general.isFixedAsset,
+        isFixedAsset: general.isFixedAsset === true,
       },
       documents: documentPayload.length > 0 ? documentPayload : undefined,
     };
 
     try {
-      const created = await assetService.create(payload);
+      await assetService.create(payload);
       navigate(backToListPath);
     } catch (err: unknown) {
       const msg =

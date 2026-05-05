@@ -1474,16 +1474,20 @@ public class InventoryService : IInventoryService
         if (roleCodes.Any(IsAdminRoleCode) || roleCodes.Any(IsAccountantRoleCode))
             return;
 
-        if (!roleCodes.Any(IsDepartmentHeadRole))
-            throw new UnauthorizedAccessException();
-
-        var sessionDeptId = await _context.InventorySessions
+        var sessionRow = await _context.InventorySessions
             .AsNoTracking()
             .Where(s => s.SessionId == sessionId)
-            .Select(s => (int?)s.DepartmentId)
+            .Select(s => new { s.DepartmentId, s.CreatedBy })
             .FirstOrDefaultAsync();
-        if (!sessionDeptId.HasValue)
+
+        if (sessionRow == null)
             throw new KeyNotFoundException("Phiên kiểm kê không tồn tại.");
+
+        if (sessionRow.CreatedBy == userId)
+            return;
+
+        if (!roleCodes.Any(IsDepartmentHeadRole))
+            throw new UnauthorizedAccessException();
 
         var userDeptId = await _context.Employees
             .AsNoTracking()
@@ -1491,7 +1495,7 @@ public class InventoryService : IInventoryService
             .Select(e => (int?)e.DepartmentId)
             .FirstOrDefaultAsync();
 
-        if (!userDeptId.HasValue || userDeptId.Value != sessionDeptId.Value)
+        if (!userDeptId.HasValue || userDeptId.Value != sessionRow.DepartmentId)
             throw new UnauthorizedAccessException();
     }
 
