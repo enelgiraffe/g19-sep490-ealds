@@ -531,7 +531,6 @@ export function AssetDetailPage() {
                   <th>ĐƠN VỊ SỬA CHỮA</th>
                   <th>TÌNH TRẠNG TRƯỚC</th>
                   <th>TÌNH TRẠNG SAU</th>
-                  <th>GHI CHÚ KỸ THUẬT</th>
                   <th>TRẠNG THÁI</th>
                   <th>THAO TÁC</th>
                 </tr>
@@ -553,7 +552,6 @@ export function AssetDetailPage() {
                       </td>
                       <td>{record.conditionBefore || '—'}</td>
                       <td>{record.conditionAfter || '—'}</td>
-                      <td>{record.technicalNote || '—'}</td>
                       <td>{getMaintenanceRecordStatusLabel(record.status)}</td>
                       <td>
                         <button
@@ -578,7 +576,7 @@ export function AssetDetailPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={10} className="asset-detail__empty">
+                    <td colSpan={9} className="asset-detail__empty">
                       Chưa có lịch sử bảo trì/bảo dưỡng cho tài sản này.
                     </td>
                   </tr>
@@ -770,15 +768,6 @@ export function AssetDetailPage() {
                         </label>
                         <div className="asset-detail__record-info-value">
                           {selectedMaintenanceRecord.conditionAfter || '—'}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="asset-detail__record-info-row asset-detail__record-info-row--single">
-                      <div className="asset-detail__record-info-item">
-                        <label>Ghi chú kỹ thuật</label>
-                        <div className="asset-detail__record-info-value">
-                          {selectedMaintenanceRecord.technicalNote || '—'}
                         </div>
                       </div>
                     </div>
