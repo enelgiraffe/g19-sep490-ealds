@@ -19,9 +19,14 @@ public class DepreciationJobs : IJob
     {
         try
         {
-            await _service.RunMonthlyDepreciation();
+            // Lấy thời gian LẼ RA Job phải chạy (ScheduledFireTimeUtc) để phòng trường hợp Misfire
+            // Ví dụ: Server sập lúc 23:59 ngày 31/01, boot lại lúc 00:05 ngày 01/02.
+            // Nếu dùng UtcNow thì sẽ bị tính nhầm sang tháng 2 và bỏ sót tháng 1.
+            var scheduledTime = context.ScheduledFireTimeUtc?.UtcDateTime;
+            await _service.RunMonthlyDepreciation(scheduledTime);
 
-            _logger.LogInformation("[CRON] Depreciation job run at {RunAtUtc}", DateTime.UtcNow);
+            _logger.LogInformation("[CRON] Depreciation job run for scheduled time {ScheduledTime} at actual time {ActualTime}", 
+                scheduledTime, DateTime.UtcNow);
         }
         catch (Exception ex)
         {
