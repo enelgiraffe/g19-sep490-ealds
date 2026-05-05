@@ -173,7 +173,6 @@ public partial class EaldsDbContext : DbContext
             entity.HasIndex(e => e.Code, "UQ__Asset__A25C5AA7870F74A4").IsUnique();
 
             entity.Property(e => e.Code).HasMaxLength(100);
-            entity.Property(e => e.IsFixedAsset).HasDefaultValue(false);
             entity.Property(e => e.Name).HasMaxLength(255);
             entity.Property(e => e.Unit).HasMaxLength(50);
 

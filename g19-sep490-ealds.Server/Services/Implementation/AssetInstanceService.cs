@@ -44,6 +44,7 @@ public class AssetInstanceService : IAssetInstanceService
         var query = _context.AssetInstances
             .Include(i => i.Asset).ThenInclude(a => a!.AssetType)
             .Include(i => i.Warehouse)
+            .Include(i => i.DepreciationPolicy)
             .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
             .Include(i => i.Guarantees)
@@ -169,6 +170,7 @@ public class AssetInstanceService : IAssetInstanceService
         var instance = await _context.AssetInstances
             .Include(i => i.Asset).ThenInclude(a => a!.AssetType)
             .Include(i => i.Warehouse)
+            .Include(i => i.DepreciationPolicy)
             .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
             .Include(i => i.Guarantees)
@@ -264,6 +266,7 @@ public class AssetInstanceService : IAssetInstanceService
         var reloaded = await _context.AssetInstances
             .Include(i => i.Asset).ThenInclude(a => a!.AssetType)
             .Include(i => i.Warehouse)
+            .Include(i => i.DepreciationPolicy)
             .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
             .Include(i => i.Guarantees)
@@ -465,6 +468,26 @@ public class AssetInstanceService : IAssetInstanceService
                 if (dto.RemainingValue.HasValue)
                     latestDepToUpdate.RemainingValue = dto.RemainingValue.Value;
             }
+            else if (instance.DepreciationPolicyId.HasValue && dto.DepreciationPeriod.HasValue)
+            {
+                var amount = dto.DepreciationAmount ?? 0m;
+                var accumulated = dto.AccumulatedDepreciation ?? 0m;
+                var remaining = dto.RemainingValue ??
+                    Math.Max(0m, instance.OriginalPrice - amount);
+
+                _context.DepreciationRecords.Add(new DepreciationRecord
+                {
+                    AssetInstanceId = id,
+                    PolicyId = instance.DepreciationPolicyId.Value,
+                    Period = dto.DepreciationPeriod.Value,
+                    DepreciationAmount = amount,
+                    OriginalValue = instance.OriginalPrice,
+                    RemainingValue = remaining,
+                    AccumulatedDepreciation = accumulated,
+                    CreateDate = DateTime.UtcNow,
+                    IsPosted = false
+                });
+            }
         }
 
         await ApplyUpdateAssignmentAsync(id, dto);
@@ -514,6 +537,7 @@ public class AssetInstanceService : IAssetInstanceService
         var reloaded = await _context.AssetInstances
             .Include(i => i.Asset).ThenInclude(a => a!.AssetType)
             .Include(i => i.Warehouse)
+            .Include(i => i.DepreciationPolicy)
             .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
             .Include(i => i.Guarantees)
@@ -555,6 +579,7 @@ public class AssetInstanceService : IAssetInstanceService
         var reloaded = await _context.AssetInstances
             .Include(i => i.Asset).ThenInclude(a => a!.AssetType)
             .Include(i => i.Warehouse)
+            .Include(i => i.DepreciationPolicy)
             .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
             .Include(i => i.Guarantees)
@@ -591,6 +616,7 @@ public class AssetInstanceService : IAssetInstanceService
         var reloaded = await _context.AssetInstances
             .Include(i => i.Asset).ThenInclude(a => a!.AssetType)
             .Include(i => i.Warehouse)
+            .Include(i => i.DepreciationPolicy)
             .Include(i => i.Guarantees)
             .Include(i => i.AssetCapitalizations)
             .AsNoTracking()
@@ -842,6 +868,7 @@ public class AssetInstanceService : IAssetInstanceService
             ContractNo = i.ContractNo,
             Condition = i.Condition,
             Note = i.Note,
+            IsFixedAsset = i.AssetCapitalizations != null && i.AssetCapitalizations.Count > 0,
             CurrentLocationId = i.AssetLocations
                 .Where(al => al.IsCurrent)
                 .Select(al => (int?)al.LocationId)
@@ -897,13 +924,22 @@ public class AssetInstanceService : IAssetInstanceService
         if (latestDep != null)
         {
             dto.DepreciationPolicyId = latestDep.PolicyId;
-            dto.DepreciationPolicyName = latestDep.Policy?.Name;
-            dto.DepreciationUsefulLifeMonths = latestDep.Policy?.UsefullLifeMonths;
-            dto.DepreciationSalvageValue = latestDep.Policy?.SalvageValue;
+            dto.DepreciationPolicyName = latestDep.Policy?.Name ?? i.DepreciationPolicy?.Name;
+            dto.DepreciationUsefulLifeMonths = latestDep.Policy?.UsefullLifeMonths
+                ?? i.DepreciationPolicy?.UsefullLifeMonths;
+            dto.DepreciationSalvageValue = latestDep.Policy?.SalvageValue
+                ?? i.DepreciationPolicy?.SalvageValue;
             dto.DepreciationPeriod = latestDep.Period;
             dto.DepreciationAmount = latestDep.DepreciationAmount;
             dto.AccumulatedDepreciation = latestDep.AccumulatedDepreciation;
             dto.RemainingValue = latestDep.RemainingValue;
+        }
+        else if (i.DepreciationPolicy != null)
+        {
+            dto.DepreciationPolicyId = i.DepreciationPolicy.PolicyId;
+            dto.DepreciationPolicyName = i.DepreciationPolicy.Name;
+            dto.DepreciationUsefulLifeMonths = i.DepreciationPolicy.UsefullLifeMonths;
+            dto.DepreciationSalvageValue = i.DepreciationPolicy.SalvageValue;
         }
 
         return dto;

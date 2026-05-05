@@ -184,6 +184,8 @@ public class AssetService : IAssetService
         var query = _context.AssetInstances
             .Include(i => i.Asset).ThenInclude(a => a!.AssetType)
             .Include(i => i.Warehouse)
+            .Include(i => i.DepreciationPolicy)
+            .Include(i => i.AssetCapitalizations)
             .Include(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(i => i.AssetUsages).ThenInclude(u => u.Employee)
             .AsNoTracking()
@@ -487,6 +489,7 @@ public class AssetService : IAssetService
             .Include(a => a.MaintenanceSchedules).ThenInclude(s => s.Template)
             .Include(a => a.AssetInstances).ThenInclude(i => i.MaintenanceSchedules).ThenInclude(s => s.Template)
             .Include(a => a.AssetInstances).ThenInclude(i => i.Warehouse)
+            .Include(a => a.AssetInstances).ThenInclude(i => i.DepreciationPolicy)
             .Include(a => a.AssetInstances).ThenInclude(i => i.AssetLocations).ThenInclude(al => al.Department)
             .Include(a => a.AssetInstances).ThenInclude(i => i.AssetUsages).ThenInclude(u => u.Employee)
             .Include(a => a.AssetInstances).ThenInclude(i => i.AssetCapitalizations)
@@ -502,7 +505,21 @@ public class AssetService : IAssetService
 
         var instanceList = visibleInstances.OrderBy(i => i.InstanceCode).ToList();
         var instanceIds = instanceList.Select(i => i.AssetInstanceId).ToList();
-        var latestDepsByInstance = await LoadLatestDepreciationByInstanceAsync(instanceIds);
+        var depRows = instanceIds.Count == 0
+            ? new List<DepreciationRecord>()
+            : await _context.DepreciationRecords
+                .Include(r => r.Policy)
+                .AsNoTracking()
+                .Where(r => instanceIds.Contains(r.AssetInstanceId))
+                .ToListAsync();
+        var latestDepsByInstance = depRows
+            .GroupBy(r => r.AssetInstanceId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(r => r.Period).ThenByDescending(r => r.CreateDate).First());
+        var allDepreciationByInstance = depRows
+            .GroupBy(r => r.AssetInstanceId)
+            .ToDictionary(g => g.Key, g => g.ToList());
         var usageHistoriesByInstance = await BuildUsageHistoriesByInstanceAsync(instanceList);
 
         var documents = await _context.Documents
@@ -561,7 +578,9 @@ public class AssetService : IAssetService
                 .Select(i => ToAssetInstanceResponseDTO(
                     i,
                     latestDepsByInstance.GetValueOrDefault(i.AssetInstanceId),
-                    usageHistoriesByInstance.GetValueOrDefault(i.AssetInstanceId)))
+                    usageHistoriesByInstance.GetValueOrDefault(i.AssetInstanceId),
+                    null,
+                    allDepreciationByInstance.GetValueOrDefault(i.AssetInstanceId)))
                 .ToList()
         };
     }
@@ -830,7 +849,8 @@ public class AssetService : IAssetService
         AssetInstance i,
         DepreciationRecord? latestDep,
         List<AssetUsageHistoryDTO>? usageHistories,
-        AssetStatus? forcedStatus = null)
+        AssetStatus? forcedStatus = null,
+        List<DepreciationRecord>? allDepreciationRecords = null)
     {
         var effectiveStatus = forcedStatus ?? (AssetStatus)i.Status;
         var dto = new AssetInstanceResponseDTO
@@ -885,19 +905,39 @@ public class AssetService : IAssetService
                 .FirstOrDefault(),
             IsFixedAsset = i.AssetCapitalizations != null && i.AssetCapitalizations.Any(),
             DepreciationPolicyId = i.DepreciationPolicyId,
-            UsageHistories = usageHistories
+            UsageHistories = usageHistories,
+            DepreciationRecords = allDepreciationRecords?.Select(r => new DepreciationRecordDTO
+            {
+                RecordId = r.RecordId,
+                Period = r.Period,
+                DepreciationAmount = r.DepreciationAmount,
+                OriginalValue = r.OriginalValue,
+                RemainingValue = r.RemainingValue,
+                AccumulatedDepreciation = r.AccumulatedDepreciation,
+                CreateDate = r.CreateDate,
+                IsPosted = r.IsPosted
+            }).ToList()
         };
 
         if (latestDep != null)
         {
             dto.DepreciationPolicyId = latestDep.PolicyId;
-            dto.DepreciationPolicyName = latestDep.Policy?.Name;
-            dto.DepreciationUsefulLifeMonths = latestDep.Policy?.UsefullLifeMonths;
-            dto.DepreciationSalvageValue = latestDep.Policy?.SalvageValue;
+            dto.DepreciationPolicyName = latestDep.Policy?.Name ?? i.DepreciationPolicy?.Name;
+            dto.DepreciationUsefulLifeMonths = latestDep.Policy?.UsefullLifeMonths
+                ?? i.DepreciationPolicy?.UsefullLifeMonths;
+            dto.DepreciationSalvageValue = latestDep.Policy?.SalvageValue
+                ?? i.DepreciationPolicy?.SalvageValue;
             dto.DepreciationPeriod = latestDep.Period;
             dto.DepreciationAmount = latestDep.DepreciationAmount;
             dto.AccumulatedDepreciation = latestDep.AccumulatedDepreciation;
             dto.RemainingValue = latestDep.RemainingValue;
+        }
+        else if (i.DepreciationPolicy != null)
+        {
+            dto.DepreciationPolicyId = i.DepreciationPolicy.PolicyId;
+            dto.DepreciationPolicyName = i.DepreciationPolicy.Name;
+            dto.DepreciationUsefulLifeMonths = i.DepreciationPolicy.UsefullLifeMonths;
+            dto.DepreciationSalvageValue = i.DepreciationPolicy.SalvageValue;
         }
 
         return dto;

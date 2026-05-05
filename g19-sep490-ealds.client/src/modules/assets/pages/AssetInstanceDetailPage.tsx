@@ -1,13 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import {
   assetInstanceService,
+  assetService,
   depreciationRecordService,
   formatVnd,
   getStatusLabel,
   type AssetInstanceResponse,
+  type DepreciationPolicyItem,
   type DepreciationRecordItem,
 } from '../services/assetService';
+import {
+  computeDepreciationPreview,
+  formatDepreciationPolicySelectLabel,
+  resolveInstanceDisplayedRemainingValue,
+  toDepreciationPeriodInput,
+} from '../utils/depreciationPreview';
 import {
   getMaintenanceRecordStatusLabel,
   isRepairMaintenanceRecord,
@@ -69,7 +77,6 @@ function formatDepreciationPeriod(dateStr?: string | null): string {
   if (m) return `Tháng ${parseInt(m[2])}, ${m[1]}`;
   return formatDate(dateStr);
 }
-
 
 function formatCalendarDateOnly(value?: string | null): string {
   if (!value?.trim()) return '—';
@@ -192,6 +199,7 @@ export function AssetInstanceDetailPage() {
   );
   const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecordResponse[]>([]);
   const [depreciationRecords, setDepreciationRecords] = useState<DepreciationRecordItem[]>([]);
+  const [depreciationPolicies, setDepreciationPolicies] = useState<DepreciationPolicyItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -222,7 +230,7 @@ export function AssetInstanceDetailPage() {
     setError(null);
     async function load() {
       try {
-        const [instRes, profileRes, scheduleRes, recordRes, repairRes, depRecords] =
+        const [instRes, profileRes, scheduleRes, recordRes, repairRes, depRecords, policies] =
           await Promise.all([
             assetInstanceService.getById(instanceId),
             profileService.getProfile().catch(() => null),
@@ -230,6 +238,7 @@ export function AssetInstanceDetailPage() {
             maintenanceRecordService.getByInstanceId(instanceId).catch(() => []),
             repairRecordService.getByInstanceId(instanceId).catch(() => []),
             depreciationRecordService.getByInstanceId(instanceId).catch(() => []),
+            assetService.getDepreciationPolicies().catch(() => []),
           ]);
         if (cancelled) return;
         setInstance(instRes);
@@ -237,6 +246,7 @@ export function AssetInstanceDetailPage() {
         setMaintenanceSchedules(scheduleRes);
         setMaintenanceRecords(mergeMaintenanceAndRepairHistory(recordRes, repairRes));
         setDepreciationRecords(depRecords);
+        setDepreciationPolicies(Array.isArray(policies) ? policies : []);
       } catch {
         if (!cancelled) setError('Không tải được thông tin cá thể.');
       } finally {
@@ -248,6 +258,110 @@ export function AssetInstanceDetailPage() {
       cancelled = true;
     };
   }, [instanceId]);
+
+  const depreciationDisplay = useMemo(() => {
+    if (!instance) {
+      return {
+        policyLabel: '—',
+        periodLabel: '—',
+        amount: null as number | null,
+        accumulated: null as number | null,
+        remainingValue: null as number | null,
+        remainingMonths: null as number | null,
+        usefulLifeMonths: null as number | null,
+      };
+    }
+
+    const embedded = instance.depreciationRecords ?? [];
+    const sortedAsc = [...embedded].sort((a, b) => String(a.period).localeCompare(String(b.period)));
+    const earliestDepRecord = sortedAsc[0];
+    const latest = embedded.length === 0 ? null : sortedAsc[sortedAsc.length - 1];
+    // Cùng chuỗi fallback khi load form chỉnh sửa: kỳ đầu → snapshot API → ngày đưa vào SD
+    const periodRaw =
+      earliestDepRecord?.period ??
+      instance.depreciationPeriod ??
+      instance.inUseDate ??
+      instance.purchaseDate ??
+      null;
+    const periodInput = toDepreciationPeriodInput(periodRaw);
+
+    const policyRow =
+      depreciationPolicies.find((p) => p.policyId === instance.depreciationPolicyId) ?? null;
+    const usefulLife = policyRow?.usefullLifeMonths ?? instance.depreciationUsefulLifeMonths ?? 0;
+    const salvage = policyRow?.salvageValue ?? instance.depreciationSalvageValue ?? 0;
+
+    const preview =
+      instance.isFixedAsset === true &&
+      usefulLife > 0 &&
+      periodInput.trim().length > 0
+        ? computeDepreciationPreview({
+            policyUsefulLifeMonths: usefulLife,
+            policySalvageValue: salvage,
+            depreciationPeriodYyyyMmDd: periodInput,
+            originalPrice: Number(instance.originalPrice ?? 0),
+            inUseDate: instance.inUseDate,
+            purchaseDate: instance.purchaseDate,
+            depreciationRecords: embedded,
+          })
+        : null;
+
+    const policyLabel = policyRow
+      ? formatDepreciationPolicySelectLabel(policyRow.name, policyRow.usefullLifeMonths)
+      : instance.depreciationPolicyName?.trim() && usefulLife > 0
+        ? formatDepreciationPolicySelectLabel(instance.depreciationPolicyName.trim(), usefulLife)
+        : instance.depreciationPolicyName?.trim() ||
+          (instance.depreciationPolicyId
+            ? `(Chính sách #${instance.depreciationPolicyId})`
+            : '') ||
+          '—';
+
+    const remainingMonths =
+      preview != null
+        ? preview.remainingLifeMonths
+        : usefulLife > 0
+          ? Math.max(0, usefulLife - embedded.length)
+          : null;
+
+    const amount =
+      preview?.amount ?? instance.depreciationAmount ?? latest?.depreciationAmount ?? null;
+    const accumulated =
+      preview?.accumulated ??
+      instance.accumulatedDepreciation ??
+      latest?.accumulatedDepreciation ??
+      null;
+    const remainingValue =
+      preview?.remainingValue ?? instance.remainingValue ?? latest?.remainingValue ?? null;
+
+    const periodLabel = periodInput
+      ? formatCalendarDateOnly(periodInput)
+      : periodRaw
+        ? formatDate(String(periodRaw))
+        : '—';
+
+    return {
+      policyLabel,
+      periodLabel,
+      amount,
+      accumulated,
+      remainingValue,
+      remainingMonths,
+      usefulLifeMonths: usefulLife > 0 ? usefulLife : null,
+    };
+  }, [instance, depreciationPolicies]);
+
+  const displayedBookRemaining = useMemo(
+    () =>
+      instance ? resolveInstanceDisplayedRemainingValue(instance, depreciationPolicies) : null,
+    [instance, depreciationPolicies]
+  );
+
+  const depreciationHistoryRows = useMemo(
+    () =>
+      depreciationRecords.length > 0
+        ? depreciationRecords
+        : instance?.depreciationRecords ?? [],
+    [depreciationRecords, instance]
+  );
 
   if (loading) {
     return (
@@ -374,7 +488,9 @@ export function AssetInstanceDetailPage() {
               </div>
               <div className="asset-detail__info-row">
                 <span className="label">Giá trị hiện tại</span>
-                <span className="value">{formatVnd(instance.currentValue)}</span>
+                <span className="value">
+                  {displayedBookRemaining != null ? formatVnd(displayedBookRemaining) : '—'}
+                </span>
               </div>
               <div className="asset-detail__info-row">
                 <span className="label">Số hợp đồng</span>
@@ -431,44 +547,81 @@ export function AssetInstanceDetailPage() {
 
             <div className="asset-detail__info-col">
               <h3 className="asset-detail__subsection-title">Thông tin khấu hao</h3>
-              <div className="asset-detail__info-row">
-                <span className="label">Chính sách</span>
-                <span className="value">{instance.depreciationPolicyName ?? '—'}</span>
-              </div>
-              <div className="asset-detail__info-row">
-                <span className="label">Thời gian hữu ích (tháng)</span>
-                <span className="value">
-                  {instance.depreciationUsefulLifeMonths != null
-                    ? String(instance.depreciationUsefulLifeMonths)
-                    : '—'}
-                </span>
-              </div>
-              <div className="asset-detail__info-row">
-                <span className="label">Kỳ khấu hao</span>
-                <span className="value">
-                  {instance.depreciationPeriod ? formatDate(instance.depreciationPeriod) : '—'}
-                </span>
-              </div>
-              <div className="asset-detail__info-row">
-                <span className="label">Mức khấu hao kỳ gần nhất</span>
-                <span className="value">
-                  {instance.depreciationAmount != null ? formatVnd(instance.depreciationAmount) : '—'}
-                </span>
-              </div>
-              <div className="asset-detail__info-row">
-                <span className="label">Lũy kế</span>
-                <span className="value">
-                  {instance.accumulatedDepreciation != null
-                    ? formatVnd(instance.accumulatedDepreciation)
-                    : '—'}
-                </span>
-              </div>
-              <div className="asset-detail__info-row">
-                <span className="label">Giá trị còn lại (KH)</span>
-                <span className="value">
-                  {instance.remainingValue != null ? formatVnd(instance.remainingValue) : '—'}
-                </span>
-              </div>
+              {instance.isFixedAsset === true ? (
+                <>
+                  <div className="asset-detail__info-row">
+                    <span className="label">Mức khấu hao kỳ gần nhất</span>
+                    <span className="value">
+                      {depreciationDisplay.amount != null ? formatVnd(depreciationDisplay.amount) : '—'}
+                    </span>
+                  </div>
+                  <div className="asset-detail__info-row">
+                    <span className="label">Thời gian còn lại</span>
+                    <span className="value">
+                      {depreciationDisplay.remainingMonths != null
+                        ? `${depreciationDisplay.remainingMonths} tháng`
+                        : '—'}
+                    </span>
+                  </div>
+                  <div className="asset-detail__info-row">
+                    <span className="label">Ngày bắt đầu khấu hao</span>
+                    <span className="value">{depreciationDisplay.periodLabel}</span>
+                  </div>
+                  <div className="asset-detail__info-row">
+                    <span className="label">Khấu hao lũy kế</span>
+                    <span className="value">
+                      {depreciationDisplay.accumulated != null
+                        ? formatVnd(depreciationDisplay.accumulated)
+                        : '—'}
+                    </span>
+                  </div>
+                  <div className="asset-detail__info-row">
+                    <span className="label">Thời gian khấu hao</span>
+                    <span className="value">
+                      {depreciationDisplay.usefulLifeMonths != null
+                        ? `${depreciationDisplay.usefulLifeMonths} tháng`
+                        : '—'}
+                    </span>
+                  </div>
+                  <div className="asset-detail__info-row asset-detail__info-row--multiline">
+                    <span className="label">Chính sách khấu hao</span>
+                    <span className="value">{depreciationDisplay.policyLabel}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="asset-detail__info-row">
+                    <span className="label">Chính sách</span>
+                    <span className="value">{depreciationDisplay.policyLabel}</span>
+                  </div>
+                  <div className="asset-detail__info-row">
+                    <span className="label">Thời gian hữu ích (tháng)</span>
+                    <span className="value">
+                      {depreciationDisplay.usefulLifeMonths != null
+                        ? String(depreciationDisplay.usefulLifeMonths)
+                        : '—'}
+                    </span>
+                  </div>
+                  <div className="asset-detail__info-row">
+                    <span className="label">Kỳ khấu hao</span>
+                    <span className="value">{depreciationDisplay.periodLabel}</span>
+                  </div>
+                  <div className="asset-detail__info-row">
+                    <span className="label">Mức khấu hao kỳ gần nhất</span>
+                    <span className="value">
+                      {depreciationDisplay.amount != null ? formatVnd(depreciationDisplay.amount) : '—'}
+                    </span>
+                  </div>
+                  <div className="asset-detail__info-row">
+                    <span className="label">Lũy kế</span>
+                    <span className="value">
+                      {depreciationDisplay.accumulated != null
+                        ? formatVnd(depreciationDisplay.accumulated)
+                        : '—'}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -488,8 +641,8 @@ export function AssetInstanceDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {depreciationRecords.length > 0 ? (
-                  depreciationRecords.map((rec) => (
+                {depreciationHistoryRows.length > 0 ? (
+                  depreciationHistoryRows.map((rec) => (
                     <tr key={rec.recordId}>
                       <td>{formatDepreciationPeriod(rec.period)}</td>
                       <td>{formatVnd(rec.originalValue)}</td>

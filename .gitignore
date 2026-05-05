@@ -178,7 +178,7 @@ build_ef_out/
 **/build_ef_out/
 
 g19-sep490-ealds.Server/Mappers/IAssetTypeMapper.cs
-/_build_verify2
+/_build_verify*
 /_agent_build_verify
 /_bld
 g19-sep490-ealds.client/vite.config.js
