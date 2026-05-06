@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using g19_sep490_ealds.Server.Models;
 using g19_sep490_ealds.Server.Services.Interface;
@@ -405,7 +405,23 @@ public class MaintenanceRequestService : IMaintenanceRequestService
         var executionDate = dto.CompletionDate ?? dto.ExecutionDate ?? DateTime.UtcNow;
         var totalCost = dto.ActualCost ?? dto.TotalCost;
         var workPerformed = dto.MaintenanceContent ?? dto.WorkPerformed ?? string.Empty;
-        var conditionBefore = dto.ConditionBefore ?? string.Empty;
+        // Tình trạng / mô tả trước bảo dưỡng: ưu tiên mô tả trên yêu cầu (AssetRequest.Description),
+        // sau đó payload từ client, cuối cùng tình trạng ghi trên cá thể (AssetInstance.Condition).
+        var fromRequestDescription =
+            linkedRequest != null && !string.IsNullOrWhiteSpace(linkedRequest.Description)
+                ? linkedRequest.Description.Trim()
+                : null;
+        var fromDto = string.IsNullOrWhiteSpace(dto.ConditionBefore) ? null : dto.ConditionBefore.Trim();
+        string? fromInstanceCondition = null;
+        if (fromRequestDescription == null && fromDto == null && task.AssetInstanceId > 0)
+        {
+            var instRow = await _db.AssetInstances.AsNoTracking()
+                .FirstOrDefaultAsync(i => i.AssetInstanceId == task.AssetInstanceId);
+            if (!string.IsNullOrWhiteSpace(instRow?.Condition))
+                fromInstanceCondition = instRow!.Condition!.Trim();
+        }
+
+        var conditionBefore = fromRequestDescription ?? fromDto ?? fromInstanceCondition ?? string.Empty;
         var conditionAfter = dto.DetailedDescription ?? dto.ConditionAfter ?? string.Empty;
 
         var mr = new MaintenanceRecord

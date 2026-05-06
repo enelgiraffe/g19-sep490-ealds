@@ -248,6 +248,9 @@ export function MaintenancePage() {
   const [completeReportNumber, setCompleteReportNumber] = useState('');
   const [completeMaintenanceDateLabel, setCompleteMaintenanceDateLabel] = useState('');
   const [completeMaintenanceStartDateRaw, setCompleteMaintenanceStartDateRaw] = useState('');
+  const [completeMaintenanceProvider, setCompleteMaintenanceProvider] = useState('');
+  /** Tình trạng trước BD: từ AssetRequest.Description / danh sách / cá thể — gửi kèm khi hoàn thành. */
+  const [completeConditionBefore, setCompleteConditionBefore] = useState('');
   const [completeCompletionDate, setCompleteCompletionDate] = useState('');
   const [completeReturnDate, setCompleteReturnDate] = useState('');
   const [completeActualCost, setCompleteActualCost] = useState<number | null>(null);
@@ -599,9 +602,10 @@ export function MaintenancePage() {
       if (row.assetRequestId > 0) {
         det = await assetRequestService.getById(row.assetRequestId);
       }
+      let loadedInstance: AssetInstanceResponse | null = null;
       if (row.assetInstanceId && row.assetInstanceId > 0) {
-        const instance = await assetInstanceService.getById(row.assetInstanceId);
-        setCompleteAsset(instance);
+        loadedInstance = await assetInstanceService.getById(row.assetInstanceId);
+        setCompleteAsset(loadedInstance);
       } else {
         setCompleteAsset(null);
       }
@@ -611,6 +615,7 @@ export function MaintenancePage() {
       let rep = '';
       let contentFromStart = '';
       let detailFromStart = '';
+      let providerFromStart = '';
       let prefillCompletionDate = toTodayInputDate();
       if (det?.proposedData) {
         try {
@@ -622,6 +627,7 @@ export function MaintenancePage() {
           if (typeof pd.reportNumber === 'string') rep = pd.reportNumber;
           if (typeof pd.maintenanceContent === 'string') contentFromStart = pd.maintenanceContent;
           if (typeof pd.detailedDescription === 'string') detailFromStart = pd.detailedDescription;
+          if (typeof pd.maintenanceProvider === 'string') providerFromStart = pd.maintenanceProvider;
           if (pd.expectedCompletionDate) {
             const expDate = dayjs(String(pd.expectedCompletionDate));
             if (expDate.isValid()) prefillCompletionDate = expDate.format('YYYY-MM-DD');
@@ -632,6 +638,13 @@ export function MaintenancePage() {
       }
       setCompleteMaintenanceDateLabel(maintLabel);
       setCompleteMaintenanceStartDateRaw(maintDateRaw);
+      setCompleteMaintenanceProvider(providerFromStart);
+      const conditionBeforePrefill =
+        det?.description?.trim() ||
+        row.purpose?.trim() ||
+        loadedInstance?.condition?.trim() ||
+        '';
+      setCompleteConditionBefore(conditionBeforePrefill);
       setCompleteReportNumber(rep);
       setCompleteCompletionDate(prefillCompletionDate);
       setCompleteReturnDate(prefillCompletionDate);
@@ -695,6 +708,7 @@ export function MaintenancePage() {
         totalCost: completeActualCost,
         maintenanceContent: completeMaintenanceContent.trim() || null,
         detailedDescription: completeDetailedDescription.trim() || null,
+        conditionBefore: completeConditionBefore.trim() || null,
         attachmentUrls: null,
       };
 
@@ -1777,6 +1791,12 @@ export function MaintenancePage() {
                       {completeAsset?.currentDepartmentName ?? '—'}
                     </div>
                   </div>
+                  <div className="maintenance-form-modal__info-item">
+                    <label>Đơn vị bảo dưỡng</label>
+                    <div className="maintenance-form-modal__info-value">
+                      {completeMaintenanceProvider.trim() || '—'}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1829,12 +1849,12 @@ export function MaintenancePage() {
                   <input
                     className="maintenance-form-modal__input"
                     value={completeMaintenanceContent}
-                    onChange={(e) => setCompleteMaintenanceContent(e.target.value)}
-                    placeholder="VD: Thay dầu"
+                    readOnly
+                    placeholder="Tự động lấy từ bước bắt đầu bảo dưỡng"
                   />
                 </div>
                 <div className="maintenance-form-modal__form-grid-full">
-                  <div className="maintenance-form-modal__label">Mô tả chi tiết</div>
+                  <div className="maintenance-form-modal__label">Tình trạng sau bảo dưỡng</div>
                   <textarea
                     className="maintenance-form-modal__textarea"
                     value={completeDetailedDescription}
